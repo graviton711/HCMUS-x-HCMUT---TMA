@@ -1,0 +1,7 @@
+[project]
+name = "mlai"
+version = "0.1.0"
+description = "Decision Intelligence Challenge — lớp ứng dụng trí tuệ hỗ trợ ra quyết định cho người Việt"
+readme = "AGENTS.md"
+requires-python = ">=3.12"
+dependencies = []

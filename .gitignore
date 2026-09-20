@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# uv / venv — giữ uv.lock + .python-version, bỏ venv
+.venv/
+venv/
+env/
+.uv/
+
+# Env / secrets
+.env
+.env.*
+*.key
+*.pem
+*.p12
+
+# Node / Web Demo (dự phòng frontend)
+node_modules/
+.next/
+out/
+dist/
+.vite/
+*.local
+AGENTS.md
+
+# Data / ML artifacts (giữ code, bỏ dữ liệu nặng)
+data/
+datasets/
+*.csv
+*.parquet
+*.jsonl
+models/
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.onnx
+*.safetensors
+mlruns/
+wandb/
+runs/
+lightning_logs/
+.ipynb_checkpoints/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
