@@ -34,7 +34,6 @@ out/
 dist/
 .vite/
 *.local
-AGENTS.md
 
 # Data / ML artifacts (giữ code, bỏ dữ liệu nặng)
 data/
