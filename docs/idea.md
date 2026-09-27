@@ -1,41 +1,68 @@
-# Ý tưởng sản phẩm: Hỗ trợ quyết định chọn tour
+# Proposal: Hỗ trợ quyết định chọn tour
 
-## Bài toán
+**Trạng thái:** Bản đề xuất để team review  
+**Định vị:** Decision support cho người Việt chọn tour và nhà cung cấp; không phải công cụ lập kế hoạch chuyến đi.
 
-Giúp người dùng ở Việt Nam đánh giá và tự chọn giữa các tour du lịch dựa trên nhu cầu cá nhân và thông tin có thể kiểm chứng. Đây là bài toán hỗ trợ ra quyết định, không phải công cụ tự lập kế hoạch chuyến đi hay chatbot chỉ gợi ý tour.
+## Tóm tắt
 
-## Người dùng nhập
+Hệ thống giúp người dùng thu thập, xác minh và so sánh các tour phù hợp với nhu cầu cá nhân. Kết quả nêu rõ dữ liệu, nguồn, thời điểm ghi nhận, lợi ích, hạn chế và rủi ro của từng lựa chọn để người dùng tự quyết định.
 
-Một trong hai dạng:
+## Phân tích bài toán
 
-1. Mong muốn/ràng buộc chuyến đi: điểm đến, ngày hoặc khoảng thời gian, nơi khởi hành, ngân sách, số người/độ tuổi và sở thích hay giới hạn quan trọng.
-2. Các tour đang cân nhắc: tên tour hoặc URL của một hay nhiều tour.
+- **Người dùng mục tiêu:** Người ở Việt Nam đang cân nhắc tour trọn gói, cần chọn giữa nhiều tour hoặc công ty lữ hành.
+- **Quyết định cần hỗ trợ:** Tour/nhà cung cấp nào phù hợp với ngân sách, thời gian, điểm đi, sở thích và mức rủi ro người dùng chấp nhận?
+- **Vấn đề hiện tại (giả thuyết cần kiểm chứng):** Thông tin nằm rải rác trên website nhà cung cấp và nguồn đánh giá; tên gọi, cách trình bày và mức độ cập nhật không đồng nhất. Người dùng khó so sánh cùng tiêu chí và phân biệt thông tin quảng bá với thông tin đã xác minh.
+- **Giá trị cần tạo:** Giảm công sức tìm và đối chiếu; làm lộ rõ đánh đổi và dữ liệu còn thiếu, thay vì đưa ra một gợi ý không giải thích được.
 
-Người dùng có thể nhập tự nhiên; hệ thống cần làm rõ các ràng buộc còn thiếu trước khi so sánh.
+## Luồng người dùng và kết quả
 
-## Hệ thống trả về
+Người dùng có thể:
 
-- Các tour hoặc lựa chọn mà dữ liệu nguồn xác nhận phù hợp với đầu vào.
-- Bảng so sánh giá và dịch vụ, điểm phù hợp, hạn chế, điều kiện và rủi ro.
-- Bằng chứng theo từng nhận định: nguồn/URL, thời điểm ghi nhận và nội dung liên quan.
-- Nêu rõ trường nào thiếu, cũ hoặc chưa xác minh; không tự bịa để lấp dữ liệu.
+1. Nhập nhu cầu/ràng buộc: điểm đến, ngày hoặc độ linh hoạt, nơi khởi hành, ngân sách, số người/độ tuổi, sở thích và điều kiện quan trọng.
+2. Đưa vào các tour hoặc URL đang cân nhắc để hệ thống đối chiếu trực tiếp.
 
-Người dùng giữ quyền lựa chọn cuối cùng. Hệ thống không đặt tour thay người dùng.
+Hệ thống lọc theo ràng buộc cứng, sau đó so sánh các lựa chọn còn lại theo độ phù hợp, tổng giá/dịch vụ, điều kiện tour và tín hiệu rủi ro nhà cung cấp. Kết quả cần có bảng so sánh, giải thích trade-off, dữ liệu chưa biết/chưa xác minh và bằng chứng cho từng nhận định. Không tự chọn thay người dùng.
 
-## Phân biệt dữ liệu
+## Phân biệt với recommendation và lập kế hoạch
 
-- **Tour**: thông tin tương đối ổn định như tuyến, lịch trình khung, phương tiện, dịch vụ bao gồm/không bao gồm, chính sách và nhà cung cấp.
-- **Lượt khởi hành/offer**: ngày đi, giá theo cấu hình, tình trạng chỗ và phụ thu; đây là dữ liệu biến động, phải lưu thời điểm quan sát và không khẳng định là thời gian thực nếu nguồn không đảm bảo.
-- **Hồ sơ nhà cung cấp**: tên pháp nhân, giấy phép/phạm vi hoạt động và bằng chứng uy tín từ nguồn riêng; giấy phép không đồng nghĩa với chất lượng dịch vụ.
+- **Decision support:** Truy xuất dữ liệu nguồn, kiểm tra mức độ tin cậy, so sánh theo tiêu chí minh bạch và giải thích vì sao các lựa chọn khác nhau.
+- **Recommendation thuần túy:** Đưa ra một gợi ý mà không chứng minh bằng dữ liệu và trade-off cụ thể — không phải mục tiêu sản phẩm.
+- **Lập kế hoạch du lịch:** Tạo lịch trình cá nhân từ đầu — ngoài phạm vi.
 
-Mọi dữ liệu so sánh phải giữ nguồn gốc và độ mới. Chỉ thu thập/tái sử dụng theo quyền truy cập và điều khoản phù hợp của từng nguồn.
+AI có thể giúp hiểu yêu cầu ngôn ngữ tự nhiên và trình bày so sánh; không được dùng để bịa hoặc lấp dữ liệu tour còn thiếu.
+
+## Dữ liệu và độ tin cậy
+
+- **Hồ sơ tour:** Tuyến, thời lượng, lịch trình, phương tiện, dịch vụ bao gồm/không bao gồm và chính sách.
+- **Lượt khởi hành/offer:** Ngày, giá, phụ thu và tình trạng chỗ; các trường này biến động, phải lưu `observed_at` và không gọi là thời gian thực nếu nguồn không bảo đảm.
+- **Hồ sơ nhà cung cấp:** Tên pháp nhân, giấy phép/phạm vi hoạt động, đánh giá và tín hiệu rủi ro. Tách rõ nội dung nhà cung cấp tự khai báo với thông tin xác minh từ nguồn độc lập.
+- Mỗi dữ kiện hiển thị phải có nguồn, thời điểm lấy và trạng thái xác minh. Không tìm thấy dữ liệu thì ghi rõ chưa có; không suy diễn từ nội dung chung của trang.
+
+## Nguyên tắc thu thập
+
+Ưu tiên dữ liệu có cấu trúc (JSON-LD/JSON/API được phép truy cập). Kiểm tra robots.txt và điều khoản nguồn trước khi gọi endpoint. Không dùng matching trên toàn bộ text trang cho field quyết định như giá, ngày khởi hành hay điểm xuất phát. Nếu nguồn không cung cấp dữ liệu đủ sạch hoặc không cho phép truy cập, đánh dấu thiếu/không hỗ trợ thay vì coi kết quả phỏng đoán là dữ kiện.
 
 ## Ngoài phạm vi
 
-- Tự tạo lịch trình du lịch cá nhân từ đầu.
-- Xếp hạng/gợi ý không giải thích bằng dữ liệu và tiêu chí rõ ràng.
-- Đặt tour, thanh toán hoặc cam kết giá/tồn chỗ thay nhà cung cấp.
+- Tự tạo lịch trình và đặt tour/thanh toán thay người dùng.
+- Xếp hạng bằng điểm số bí mật hoặc gợi ý không kèm lý do, nguồn và trade-off.
+- Khẳng định nhà cung cấp uy tín, có giấy phép hoặc còn chỗ nếu chưa có bằng chứng phù hợp.
+- Cam kết giá và tình trạng chỗ luôn mới theo thời gian thực.
 
-## Trạng thái
+## Tiêu chí thành công sơ bộ
 
-Đây là khóa phạm vi ý tưởng ban đầu để team review. Danh sách nguồn được phép dùng, schema chi tiết, cách chấm điểm và kiến trúc triển khai chưa được chốt trong tài liệu này.
+1. Có thể so sánh ít nhất một nhóm tour theo cùng tiêu chí, đồng thời giữ nguyên nguồn gốc và thời điểm của từng dữ kiện.
+2. Giá/ngày/tình trạng chỗ cũ hoặc chưa xác minh được hiển thị cảnh báo; dữ liệu thiếu không bị tự điền.
+3. Người dùng hiểu được vì sao các lựa chọn khác nhau và có thể tự chọn dựa trên trade-off.
+4. Đánh giá crawler trên bộ trang được gán nhãn thủ công; đo độ chính xác theo field và tỷ lệ nguồn đủ điều kiện, không chỉ đo số trang crawl được.
+
+## Rủi ro và giả định cần kiểm chứng
+
+- Mỗi nhà cung cấp có cấu trúc và mức độ công khai dữ liệu khác nhau; không mặc định một parser/API dùng được cho tất cả.
+- Một số endpoint bị robots chặn hoặc không cung cấp dữ liệu đủ chi tiết; cần quyết định nguồn nào thực sự đủ điều kiện cho sản phẩm.
+- Đánh giá uy tín/giấy phép cần nguồn độc lập đáng tin cậy; không thể suy ra chỉ từ website bán tour.
+- Cần kiểm chứng với người dùng xem bảng so sánh và trade-off có giúp họ quyết định tốt hơn quy trình tìm tour hiện tại hay không.
+
+## Phạm vi tài liệu liên quan
+
+Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Thiết kế kiến trúc, wireframe, schema dữ liệu chuẩn hóa và tiêu chí đánh giá chi tiết sẽ được mô tả riêng sau khi team review proposal. Crawler khảo sát nguồn hiện tại được mô tả tại `src/crawler/README.md`.
