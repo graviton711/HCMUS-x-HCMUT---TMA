@@ -2,6 +2,8 @@
 
 **Trạng thái:** Bản bố cục để review, chưa phải UI final. Mục tiêu là làm rõ quyết định và bằng chứng, không tối ưu visual design.
 
+**Phạm vi MVP:** Ưu tiên luồng “So sánh URL tour” với 2–3 URL. Luồng “Tìm theo nhu cầu” vẫn là hướng sản phẩm, nhưng chưa thuộc lát cắt tích hợp đầu tiên.
+
 ## 1. Nhập nhu cầu hoặc tour cần so sánh
 
 ```text

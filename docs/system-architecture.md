@@ -2,6 +2,10 @@
 
 **Trạng thái:** Kiến trúc mục tiêu cho team review. Repo hiện mới có crawler khảo sát nguồn; các module còn lại chưa implement.
 
+## Lát cắt MVP
+
+MVP đầu tiên nhận 2–3 URL tour để so sánh. Backend và frontend tích hợp bằng fixture `Tour`/`Offer` chuẩn hóa trước; tìm tour theo mô tả nhu cầu và truy vấn nguồn thật sẽ phát triển sau. Hợp đồng field/evidence và request/response nằm ở [data contract](data-contract.md). Crawler hiện tại chỉ audit khả năng trích xuất của website, không phải kho dữ liệu tour runtime.
+
 ## Sơ đồ tổng quan
 
 ```mermaid
@@ -18,7 +22,7 @@ flowchart LR
     end
 
     subgraph DATA[Lớp nguồn và dữ liệu]
-        REG[Danh mục nhà cung cấp<br/>và capability đã kiểm tra]
+        REG[Danh mục versioned<br/>data/providers.toml]
         ADAPTER[Source adapters<br/>JSON-LD → JSON/API được phép]
         VALID[Chuẩn hóa + kiểm tra<br/>provenance và observed_at]
         STORE[Tour, offer, nhà cung cấp<br/>và snapshot nguồn]
@@ -62,7 +66,7 @@ flowchart TD
 |---|---|
 | Web UI | Nhận nhu cầu/URL; hiển thị bảng so sánh, dữ liệu thiếu và evidence. |
 | API / điều phối | Chọn luồng truy vấn, nguồn đủ điều kiện và điều phối các bước xử lý. |
-| Danh mục nhà cung cấp | Lưu domain, URL khởi đầu, capability dữ liệu, trạng thái crawlability và giới hạn truy cập. Danh mục được kiểm tra/cập nhật có chủ đích, không dò toàn bộ Internet. |
+| Danh mục nhà cung cấp | `data/providers.toml` là nguồn chuẩn trong Git: domain, URL mẫu, quyền crawl, capability dữ liệu, field có/thiếu, giới hạn và ngày kiểm tra. Danh mục được cập nhật có chủ đích, không dò toàn bộ Internet. |
 | Source adapters | Ưu tiên JSON-LD/JSON/API được phép; chỉ bổ sung adapter theo nguồn khi định dạng khác nhau. Không lấy matching toàn trang làm dữ kiện quyết định. |
 | Chuẩn hóa và kiểm tra | Ánh xạ field vào schema chung, giữ giá trị gốc, nguồn, phương pháp, trạng thái xác minh và thời điểm quan sát; từ chối field không đạt kiểm tra. |
 | Kho dữ liệu | Lưu hồ sơ nhà cung cấp, hồ sơ tour ổn định và snapshot offer biến động riêng biệt. |
@@ -73,13 +77,14 @@ flowchart TD
 
 - Hồ sơ/capability nhà cung cấp có thể được khảo sát và làm mới trước.
 - Tour và offer chỉ lấy theo nhu cầu hoặc URL đang so sánh; không crawl trước toàn bộ tour.
+- Trong MVP, bộ so sánh dùng fixture chuẩn hóa theo data contract; adapter/crawl runtime có thể thay fixture sau mà không đổi giao diện frontend.
 - Giá, ngày khởi hành, tình trạng chỗ và phụ thu luôn gắn `observed_at`. Có thể dùng cache khi triển khai, nhưng phải hiển thị thời điểm và cảnh báo dữ liệu cũ; chưa chốt TTL.
 - Nếu nguồn bị robots/điều khoản chặn hoặc không trả field sạch, không gọi endpoint đó; trả trạng thái không hỗ trợ/thiếu dữ liệu thay vì suy đoán.
 - Mọi kết luận hiển thị phải truy ngược được về field và nguồn chứng minh.
 
 ## Giả định và quyết định còn mở
 
-- Phạm vi là web demo; chưa chốt framework UI, API, database hay hosting.
-- Danh mục nguồn do team kiểm tra và duyệt. Google Sheets có thể là công cụ vận hành danh mục ở giai đoạn đầu, không phải dependency của luồng quyết định cho người dùng.
+- Phạm vi là web demo; contract API dùng JSON, nhưng framework UI/backend, database và hosting chưa chốt.
+- Danh mục nguồn hiện được team quản lý trong `data/providers.toml`; không có bản Google Sheets song song. Nếu sau này cần giao diện cho người không quen Git, phải chuyển nguồn chuẩn thay vì duy trì hai bản.
 - Cách đo độ phù hợp, trọng số tiêu chí, độ tin cậy nguồn và chính sách freshness cần chốt sau khi có bộ dữ liệu mẫu và wireframe được review.
 - Phải kiểm tra quyền truy cập và khả năng trích xuất theo từng nguồn trước khi đưa nguồn vào luồng so sánh.
