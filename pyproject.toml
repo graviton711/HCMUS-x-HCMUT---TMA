@@ -15,9 +15,6 @@ dev = [
     "ruff>=0.11",
 ]
 
-[project.scripts]
-supplier-crawler = "crawler.cli:main"
-
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

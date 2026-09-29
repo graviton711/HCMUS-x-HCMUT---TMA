@@ -1,6 +1,6 @@
 # Kiến trúc hệ thống
 
-**Trạng thái:** Kiến trúc mục tiêu cho team review. Repo hiện mới có crawler khảo sát nguồn; các module còn lại chưa implement.
+**Trạng thái:** Kiến trúc mục tiêu cho team review. Repo hiện chưa có module nào được implement.
 
 ## Lát cắt MVP
 

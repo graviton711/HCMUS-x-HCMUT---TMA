@@ -13,7 +13,7 @@ flowchart LR
     R --> U
 ```
 
-Đây là kiến trúc mục tiêu; hiện repo mới có crawler khảo sát nguồn, chưa có ứng dụng decision support hoàn chỉnh.
+Đây là kiến trúc mục tiêu; repo hiện chưa có implementation, các tài liệu dưới đây là bản review.
 
 - [Proposal và phân tích bài toán](docs/idea.md)
 - [Kiến trúc hệ thống](docs/system-architecture.md)
@@ -21,14 +21,10 @@ flowchart LR
 - [Phân công và quy ước Git](docs/team-workflow.md)
 - [Wireframe](docs/wireframes.md)
 - [Quy ước danh mục nhà cung cấp](docs/provider-registry.md)
-- [Danh mục nguồn hiện tại](data/providers.toml)
-- [Crawler khảo sát nguồn](src/crawler/README.md)
 
-## Phát triển crawler
+## Phát triển
 
 ```powershell
 uv sync
-uv run pytest
 uv run ruff check .
-uv run supplier-crawler inspect <url> --output .local/crawl-reports/report.json
 ```

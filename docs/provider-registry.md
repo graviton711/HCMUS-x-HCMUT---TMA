@@ -1,6 +1,6 @@
 # Danh mục nhà cung cấp
 
-**Nguồn chuẩn:** [`data/providers.toml`](../data/providers.toml). Team sửa file này qua Git; không duy trì bản Google Sheets hoặc Markdown chứa cùng danh sách.
+**Trạng thái:** Tài liệu đặc tả định dạng registry. File `data/providers.toml` đã bị xóa trong đợt dọn code, cần tạo lại trước khi dùng làm nguồn chuẩn.
 
 ## Mục đích
 
