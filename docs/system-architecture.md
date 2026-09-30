@@ -22,7 +22,7 @@ flowchart LR
     end
 
     subgraph DATA[Lớp nguồn và dữ liệu]
-        REG[Danh mục versioned<br/>data/providers.toml]
+        REG[Danh mục versioned<br/>configs/profiles/*.yaml]
         ADAPTER[Source adapters<br/>JSON-LD → JSON/API được phép]
         VALID[Chuẩn hóa + kiểm tra<br/>provenance và observed_at]
         STORE[Tour, offer, nhà cung cấp<br/>và snapshot nguồn]
@@ -66,7 +66,7 @@ flowchart TD
 |---|---|
 | Web UI | Nhận nhu cầu/URL; hiển thị bảng so sánh, dữ liệu thiếu và evidence. |
 | API / điều phối | Chọn luồng truy vấn, nguồn đủ điều kiện và điều phối các bước xử lý. |
-| Danh mục nhà cung cấp | `data/providers.toml` là nguồn chuẩn trong Git: domain, URL mẫu, quyền crawl, capability dữ liệu, field có/thiếu, giới hạn và ngày kiểm tra. Danh mục được cập nhật có chủ đích, không dò toàn bộ Internet. |
+| Danh mục nhà cung cấp | `configs/profiles/<nguồn>.yaml` là nguồn chuẩn trong Git: origin, sitemaps, pattern URL tour, alias field và pattern lọc. Kết quả khảo sát nguồn (quyền crawl, field có/thiếu, giới hạn, ngày kiểm tra) ghi theo [provider registry](provider-registry.md). Danh mục được cập nhật có chủ đích, không dò toàn bộ Internet. |
 | Source adapters | Ưu tiên JSON-LD/JSON/API được phép; chỉ bổ sung adapter theo nguồn khi định dạng khác nhau. Không lấy matching toàn trang làm dữ kiện quyết định. |
 | Chuẩn hóa và kiểm tra | Ánh xạ field vào schema chung, giữ giá trị gốc, nguồn, phương pháp, trạng thái xác minh và thời điểm quan sát; từ chối field không đạt kiểm tra. |
 | Kho dữ liệu | Lưu hồ sơ nhà cung cấp, hồ sơ tour ổn định và snapshot offer biến động riêng biệt. |
@@ -85,6 +85,6 @@ flowchart TD
 ## Giả định và quyết định còn mở
 
 - Phạm vi là web demo; contract API dùng JSON, nhưng framework UI/backend, database và hosting chưa chốt.
-- Danh mục nguồn hiện được team quản lý trong `data/providers.toml`; không có bản Google Sheets song song. Nếu sau này cần giao diện cho người không quen Git, phải chuyển nguồn chuẩn thay vì duy trì hai bản.
+- Danh mục nguồn hiện được team quản lý trong Git (`configs/profiles/*.yaml` và kết quả khảo sát ở `docs/provider-registry.md`); không có bản Google Sheets song song. Nếu sau này cần giao diện cho người không quen Git, phải chuyển nguồn chuẩn thay vì duy trì hai bản.
 - Cách đo độ phù hợp, trọng số tiêu chí, độ tin cậy nguồn và chính sách freshness cần chốt sau khi có bộ dữ liệu mẫu và wireframe được review.
 - Phải kiểm tra quyền truy cập và khả năng trích xuất theo từng nguồn trước khi đưa nguồn vào luồng so sánh.

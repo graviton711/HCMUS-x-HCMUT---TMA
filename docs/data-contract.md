@@ -1,22 +1,23 @@
 # Hợp đồng dữ liệu và API
 
-**Trạng thái:** Contract MVP để frontend, backend và phần crawl/data làm song song.
+**Trạng thái:** Contract MVP. Định nghĩa bộ field chuẩn cho mọi tour từ mọi nhà cung cấp.
 
-## Phạm vi MVP
+## Nguyên tắc
 
-- Người dùng nhập 2–3 URL tour để so sánh trực tiếp. Tìm tour từ mô tả nhu cầu là bước sau.
-- Backend bắt đầu bằng các fixture `Tour`/`Offer` chuẩn hóa; thay nguồn fixture bằng adapter khi data thật sẵn sàng.
-- Crawler audit hiện tại mô tả website cung cấp được gì; report audit không phải bản ghi tour đầu vào của bộ so sánh.
+1. **Một bộ field chuẩn duy nhất** cho mọi nguồn. Engine không branch theo tên nguồn.
+2. **Field luôn có mặt.** Không lấy được → `value: null`, `status: "not_observed"`, `evidence: []`. Không bỏ cột, không bịa.
+3. **Hai tầng xử lý:** field cứng so bằng code, field mềm so bằng LLM. Ranh giới này quyết định required policy và cách chấm điểm.
+4. **Crawler chỉ lấy nguyên văn + đúng nguồn.** Không tóm tắt, không diễn giải field mềm.
 
-## Dữ liệu chuẩn hóa
+## Wrapper field
 
-Tách thông tin tương đối ổn định của tour khỏi `Offer` biến động theo ngày khởi hành. Mỗi field dùng cùng wrapper:
+Mọi field trong cả ba entity dùng cùng wrapper:
 
 ```json
 {
   "value": "Hà Nội",
   "raw_value": "Ha Noi",
-  "status": "found",
+  "status": "observed",
   "evidence": [
     {
       "source_url": "https://example.test/tour/123",
@@ -28,30 +29,100 @@ Tách thông tin tương đối ổn định của tour khỏi `Offer` biến đ
 }
 ```
 
-- `value` là giá trị đã chuẩn hóa để so sánh; `raw_value` giữ giá trị nguồn khi có biến đổi.
-- `status` là `found` hoặc `not_observed`; thiếu dữ liệu biểu diễn bằng `value: null`, không tự điền.
-- `verification_status` là `provider_claimed` hoặc `independently_verified`; nội dung trên website nhà cung cấp mặc định là tự khai báo, không phải xác minh độc lập.
-- `observed_at` ghi thời điểm thu thập, không có nghĩa dữ liệu là thời gian thực. Gắn timestamp riêng cho từng field offer như giá, ngày khởi hành và tình trạng chỗ.
+- `value`: giá trị đã chuẩn hoá để so sánh; `raw_value` giữ giá trị nguồn khi có biến đổi.
+- `status`: `observed` | `partial` | `not_observed`.
+- `verification_status`: `provider_claimed` hoặc `independently_verified`. Nội dung trên website nhà cung cấp mặc định là tự khai báo.
+- `observed_at` ghi thời điểm thu thập, không có nghĩa dữ liệu là thời gian thực.
 
-`Provider` là hồ sơ nhà cung cấp; `Tour` tham chiếu nhà cung cấp và giữ các field có ích để đối chiếu; `Offer` tách từng lựa chọn khởi hành và thông tin biến động. Mỗi giá trị trong cả ba entity có evidence riêng.
+## Cấu trúc entity
 
-Khóa chuẩn:
+```
+Provider { id, fields }
+Tour     { url, canonical_url, provider, fields, offers: [Offer] }
+Offer    { fields }
+```
 
-- `Provider.fields`: `display_name`, `legal_name`, `description`, `email`, `phone`, `address`, `website`, `license_claims`.
-- `Tour.fields`: `tour_code`, `title`, `description`, `route`, `duration`, `departure_city`, `transport`, `itinerary_by_day`, `included`, `excluded`, `policies`.
-- `Offer.fields`: `offer_code`, `departure_date`, `valid_from`, `valid_through`, `price`, `availability`, `supplements`.
-- Không coi `valid_from` là `departure_date` nếu nguồn không nói rõ đó là ngày khởi hành.
-- Mỗi `Provider` có `id` và `fields`; mỗi `Tour` có `url`, `provider` (một `Provider`), `fields` và danh sách `offers`; mỗi `Offer` có `fields` riêng theo cùng wrapper. Field chưa thấy vẫn có mặt với `value: null`, `status: "not_observed"` và `evidence: []`.
+- `Tour` là hồ sơ tương đối ổn định; `Offer` là lựa chọn khởi hành biến động theo ngày.
+- `Offer` tồn tại kể cả khi tour có giá cố định (khi đó chỉ có một phần tử).
+
+## Provider.fields
+
+| Field | Kiểu | Bắt buộc |
+|---|---|---|
+| `display_name` | str | ✅ |
+| `legal_name` | str | |
+| `website` | str | |
+| `description` | text | |
+| `license_claims` | text | |
+| `contact` | text | |
+
+`Provider` không bắt buộc điền đầy đủ: đa số website tour không công bố thông tin pháp nhân. Tín hiệu rủi ro cần nguồn độc lập, không suy từ trang bán tour.
+
+## Tour.fields — hard (code lọc/so nhanh)
+
+| Field | Kiểu | Bắt buộc | Ghi chú |
+|---|---|---|---|
+| `tour_name` | str | ✅ | |
+| `departure_city` | str | ✅ | một giá trị, điểm khởi hành |
+| `destinations` | list[str] | ✅ | điểm đến thật, đã chuẩn hoá, dùng để lọc |
+| `route` | list[str] | | toàn bộ hành trình theo thứ tự, gồm cả transit |
+| `duration_days` | int | ✅ | chuẩn hoá từ "3 ngày 4 đêm" / `P3D` |
+| `duration_nights` | int | | |
+| `price` | int | ✅ | giá tham chiếu (thấp nhất đã quan sát), đơn vị theo `currency` |
+| `currency` | str | ✅ | ISO 4217, ví dụ `VND` |
+| `price_type` | enum | | `fixed` \| `from` \| `contact` |
+| `departure_pattern` | str | | "hàng tuần", "theo yêu cầu" khi không có ngày cụ thể |
+
+## Tour.fields — soft (LLM so sánh)
+
+| Field | Kiểu | Bắt buộc | Ghi chú |
+|---|---|---|---|
+| `itinerary` | text | ✅ | nguyên văn, không tóm tắt |
+| `inclusions` | text | ✅ | nguyên văn |
+| `exclusions` | text | ✅ | nguyên văn |
+| `cancellation_policy` | text | | cho phép fallback chính sách site-wide, phải ghi rõ nguồn |
+
+## Offer.fields
+
+| Field | Kiểu | Bắt buộc | Ghi chú |
+|---|---|---|---|
+| `departure_date` | date | ✅ | ISO 8601 |
+| `price` | int | ✅ | giá của đúng ngày khởi hành này |
+| `price_type` | enum | | `fixed` \| `from` \| `contact` |
+| `availability` | enum | | `available` \| `sold_out` \| `unknown` |
+| `supplements` | text | | phụ thu phòng đơn, trẻ em... |
+
+- Mỗi ngày khởi hành có giá riêng: giá thật để so nằm ở `Offer`, không ở `Tour`.
+- Không gọi `valid_from` là `departure_date` nếu nguồn không nói rõ đó là ngày khởi hành.
+- Khi nguồn không công bố ngày cụ thể: ghi `departure_pattern` ở `Tour.fields` kèm `status: partial`, và `offers` để rỗng.
+
+## Required policy
+
+| Mức | Field | Thiếu thì |
+|---|---|---|
+| Bắt buộc | `tour_name`, `url`, `departure_city`, `destinations`, `duration_days`, `price`, `currency`, `itinerary`, `inclusions`, `exclusions` | FAIL nguồn |
+| Cho phép thiếu | `canonical_url`, `route`, `duration_nights`, `price_type`, `departure_pattern`, `cancellation_policy`, `availability`, `departure_date` | cảnh báo, không FAIL |
+| Không bắt buộc | toàn bộ `Provider.fields` | bỏ qua |
+
+`status: partial` vẫn dùng được để so, nhưng phải gắn cảnh báo trong kết quả hiển thị.
+
+## Chuẩn hoá giá trị
+
+- `currency`: `đ`, `VNĐ`, `VND` → `VND`.
+- `duration_days` / `duration_nights`: parse từ "3 ngày 4 đêm" hoặc ISO 8601 duration `P3D`.
+- `departure_date`: chỉ nhận ngày có ngữ cảnh lịch khởi hành; không nhận chuỗi ngày nằm ngoài cửa sổ quanh từ khoá khởi hành/lịch.
+- `price`: bỏ dấu phân cách nghìn, giữ phần số.
+- `destinations`: chỉ lấy từ chỗ nguồn đã phân loại sẵn (category, breadcrumb, location của structured data). Không suy từ tên tour.
 
 ## Giao diện backend–frontend
 
-Backend cung cấp `POST /api/compare` với JSON body:
+Backend cung cấp `POST /api/compare`:
 
 ```json
 { "tour_urls": ["https://example.test/tour/123", "https://example.test/tour/456"] }
 ```
 
-Response JSON có cấu trúc:
+Response:
 
 ```json
 {
@@ -68,14 +139,15 @@ Response JSON có cấu trúc:
 }
 ```
 
-`status` là `completed` khi đã xử lý được tất cả URL; `partial` khi một phần URL lỗi nhưng vẫn có tour để so sánh; `error` khi request không hợp lệ hoặc không có tour nào xử lý được. Field tùy chọn bị thiếu không tự làm hỏng request: vẫn trả bản ghi với `not_observed`. Mỗi trade-off phải tham chiếu field/evidence làm căn cứ; không trả thứ hạng bí mật hay kết luận không có nguồn. `issues` chứa lỗi theo URL, như URL không lấy được hoặc nguồn chưa hỗ trợ.
-
-Mỗi phần tử `trade_offs` có dạng:
+- `status`: `completed` | `partial` | `error`.
+- `partial`: một phần URL lỗi nhưng vẫn có tour so sánh được.
+- Field tuỳ chọn thiếu không làm hỏng request: vẫn trả bản ghi với `not_observed`.
+- Mỗi trade-off phải tham chiếu field/evidence làm căn cứ; không trả thứ hạng bí mật.
 
 ```json
 {
   "criterion": "price",
-  "summary": "Tour A rẻ hơn theo mức giá quan sát được; cần kiểm tra phụ thu còn thiếu.",
+  "summary": "Tour A rẻ hơn theo giá quan sát được; cần kiểm tra phụ thu còn thiếu.",
   "references": [
     {"tour_url": "https://example.test/tour/123", "field": "offers[].price"},
     {"tour_url": "https://example.test/tour/456", "field": "offers[].price"}
@@ -83,4 +155,6 @@ Mỗi phần tử `trade_offs` có dạng:
 }
 ```
 
-Ở giai đoạn fixture, request vẫn dùng URL để frontend tích hợp với đúng luồng; backend ánh xạ các URL mẫu sang bản ghi fixture. Chưa khóa framework, database hay cách triển khai crawler runtime.
+## Ngoài phạm vi contract
+
+Đã cắt khỏi bộ field chuẩn vì không tạo giá trị so sánh: `tour_code` (user dùng `url` để xem trực tiếp), `route` dạng string gộp, `transport` tách riêng, license claims ép buộc.
