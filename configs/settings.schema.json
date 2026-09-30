@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mlai.local/schemas/settings.schema.json",
+  "title": "Tour crawler global settings",
+  "type": "object",
+  "properties": {
+    "fetch": {
+      "type": "object",
+      "properties": {
+        "timeout_s": {"type": "number"},
+        "max_bytes": {"type": "integer"},
+        "delay_s": {"type": "number"},
+        "user_agent": {"type": "string"}
+      },
+      "additionalProperties": true
+    },
+    "browser": {
+      "type": "object",
+      "properties": {
+        "timeout_ms": {"type": "integer"},
+        "max_tabs": {"type": "integer"},
+        "max_rows_per_tab": {"type": "integer"},
+        "wait_response_ms": {"type": "integer"},
+        "tab_growth_wait_ms": {"type": "integer"}
+      },
+      "additionalProperties": true
+    },
+    "logging": {
+      "type": "object",
+      "properties": {"level": {"type": "string"}},
+      "additionalProperties": true
+    },
+    "batch": {
+      "type": "object",
+      "properties": {
+        "max_consecutive_failures": {"type": "integer"},
+        "delay_s": {"type": "number"}
+      },
+      "additionalProperties": true
+    },
+    "output": {
+      "type": "object",
+      "properties": {"dir": {"type": "string"}},
+      "additionalProperties": true
+    },
+    "clean": {
+      "type": "object",
+      "properties": {
+        "min_visible_chars": {"type": "integer"},
+        "boilerplate_short_words": {"type": "integer"},
+        "boilerplate_short_run": {"type": "integer"},
+        "flight_short_run": {"type": "integer"}
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
