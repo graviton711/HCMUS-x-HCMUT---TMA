@@ -1,6 +1,6 @@
 # Kiến trúc hệ thống
 
-**Trạng thái:** Kiến trúc mục tiêu cho team review. Repo hiện mới có crawler khảo sát nguồn; các module còn lại chưa implement.
+**Trạng thái:** Kiến trúc mục tiêu cho team review. Repo hiện chưa có module nào được implement.
 
 ## Sơ đồ tổng quan
 
@@ -18,7 +18,7 @@ flowchart LR
     end
 
     subgraph DATA[Lớp nguồn và dữ liệu]
-        REG[Danh mục nhà cung cấp<br/>và capability đã kiểm tra]
+        REG[Danh mục versioned<br/>configs/profiles/*.yaml]
         ADAPTER[Source adapters<br/>JSON-LD → JSON/API được phép]
         VALID[Chuẩn hóa + kiểm tra<br/>provenance và observed_at]
         STORE[Tour, offer, nhà cung cấp<br/>và snapshot nguồn]
@@ -62,7 +62,7 @@ flowchart TD
 |---|---|
 | Web UI | Nhận nhu cầu/URL; hiển thị bảng so sánh, dữ liệu thiếu và evidence. |
 | API / điều phối | Chọn luồng truy vấn, nguồn đủ điều kiện và điều phối các bước xử lý. |
-| Danh mục nhà cung cấp | Lưu domain, URL khởi đầu, capability dữ liệu, trạng thái crawlability và giới hạn truy cập. Danh mục được kiểm tra/cập nhật có chủ đích, không dò toàn bộ Internet. |
+| Danh mục nhà cung cấp | `configs/profiles/<nguồn>.yaml` là nguồn chuẩn trong Git: origin, sitemaps, pattern URL tour, alias field và pattern lọc. Kết quả khảo sát nguồn (quyền crawl, field có/thiếu, giới hạn, ngày kiểm tra) ghi theo [provider registry](provider-registry.md). Danh mục được cập nhật có chủ đích, không dò toàn bộ Internet. |
 | Source adapters | Ưu tiên JSON-LD/JSON/API được phép; chỉ bổ sung adapter theo nguồn khi định dạng khác nhau. Không lấy matching toàn trang làm dữ kiện quyết định. |
 | Chuẩn hóa và kiểm tra | Ánh xạ field vào schema chung, giữ giá trị gốc, nguồn, phương pháp, trạng thái xác minh và thời điểm quan sát; từ chối field không đạt kiểm tra. |
 | Kho dữ liệu | Lưu hồ sơ nhà cung cấp, hồ sơ tour ổn định và snapshot offer biến động riêng biệt. |
@@ -79,7 +79,7 @@ flowchart TD
 
 ## Giả định và quyết định còn mở
 
-- Phạm vi là web demo; chưa chốt framework UI, API, database hay hosting.
-- Danh mục nguồn do team kiểm tra và duyệt. Google Sheets có thể là công cụ vận hành danh mục ở giai đoạn đầu, không phải dependency của luồng quyết định cho người dùng.
+- Phạm vi là web demo; contract API dùng JSON, nhưng framework UI/backend, database và hosting chưa chốt.
+- Danh mục nguồn hiện được team quản lý trong Git (`configs/profiles/*.yaml` và kết quả khảo sát ở `docs/provider-registry.md`); không có bản Google Sheets song song. Nếu sau này cần giao diện cho người không quen Git, phải chuyển nguồn chuẩn thay vì duy trì hai bản.
 - Cách đo độ phù hợp, trọng số tiêu chí, độ tin cậy nguồn và chính sách freshness cần chốt sau khi có bộ dữ liệu mẫu và wireframe được review.
 - Phải kiểm tra quyền truy cập và khả năng trích xuất theo từng nguồn trước khi đưa nguồn vào luồng so sánh.
