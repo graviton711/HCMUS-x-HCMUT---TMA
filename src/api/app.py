@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import ValidationError
 from sqlalchemy import select
 
@@ -36,7 +36,9 @@ class Limits:
             raise AppError("RATE_LIMITED", "Có quá nhiều yêu cầu; hãy thử lại sau.", 429, retryable=True)
         window.append(timestamp)
         if len(self.windows) > 10000:
-            self.windows = defaultdict(deque, {k: v for k, v in self.windows.items() if v and v[-1] >= timestamp - 60})
+            self.windows = defaultdict(
+                deque, {k: v for k, v in self.windows.items() if v and v[-1] >= timestamp - 60}
+            )
 
 
 def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> FastAPI:
@@ -54,6 +56,7 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
             store.recover()
             store.purge()
             task = asyncio.create_task(worker.run()) if settings.worker_enabled else None
+            app.state.worker_task = task
             yield
         finally:
             if task:
@@ -65,20 +68,30 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
 
     app = FastAPI(title="Tour Decision Backend", version="0.1.0", lifespan=lifespan)
     app.state.store, app.state.worker, app.state.gateway = store, worker, gateway
-    app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
-                       allow_methods=["GET", "POST", "PATCH"], allow_headers=["Authorization", "Content-Type", "Idempotency-Key"])
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH"],
+        allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
+    )
 
     @app.exception_handler(AppError)
     async def app_error(request, exc):
-        return JSONResponse({"error": exc.payload()}, status_code=exc.status,
-                            headers={"Retry-After": "60"} if exc.status == 429 else None)
+        return JSONResponse(
+            {"error": exc.payload()},
+            status_code=exc.status,
+            headers={"Retry-After": "60"} if exc.status == 429 else None,
+        )
 
     @app.exception_handler(RequestValidationError)
     @app.exception_handler(ValidationError)
     async def validation_error(request, exc):
         error = AppError("INVALID_INPUT", "Dữ liệu không đúng contract; kiểm tra field và kiểu dữ liệu.")
         payload = error.payload()
-        payload["details"] = {"fields": [{"path": ".".join(map(str, e["loc"])), "type": e["type"]} for e in exc.errors()[:20]]}
+        payload["details"] = {
+            "fields": [{"path": ".".join(map(str, e["loc"])), "type": e["type"]} for e in exc.errors()[:20]]
+        }
         return JSONResponse({"error": payload}, status_code=422)
 
     @app.middleware("http")
@@ -86,12 +99,18 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
         if request.method in {"POST", "PATCH"}:
             length = request.headers.get("content-length")
             if length and (not length.isdigit() or int(length) > 65536):
-                return JSONResponse({"error": AppError("INPUT_TOO_LARGE", "Request vượt 64 KB.", 413).payload()}, status_code=413)
+                return JSONResponse(
+                    {"error": AppError("INPUT_TOO_LARGE", "Request vượt 64 KB.", 413).payload()},
+                    status_code=413,
+                )
             size, parts = 0, []
             async for part in request.stream():
                 size += len(part)
                 if size > 65536:
-                    return JSONResponse({"error": AppError("INPUT_TOO_LARGE", "Request vượt 64 KB.", 413).payload()}, status_code=413)
+                    return JSONResponse(
+                        {"error": AppError("INPUT_TOO_LARGE", "Request vượt 64 KB.", 413).payload()},
+                        status_code=413,
+                    )
                 parts.append(part)
             request._body = b"".join(parts)
         return await call_next(request)
@@ -107,10 +126,55 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
         code, result = store.mutate(owner_id, key, {"route": route, "body": body}, callback)
         return JSONResponse(result, status_code=code)
 
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    async def home():
+        return HTMLResponse("""<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Tour Decision — Backend</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 48px 24px;
+           color: #173047; background: #f4f7fa; line-height: 1.6; }
+    main { max-width: 640px; margin: auto; }
+    h1 { line-height: 1.2; }
+    a { color: #075a9c; }
+    nav { display: flex; flex-wrap: wrap; gap: 16px; margin: 24px 0; }
+    nav a { padding: 12px 18px; border: 1px solid #075a9c; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Tour Decision Backend</h1>
+    <p>Bạn đã kết nối được tới máy chủ API.</p>
+    <p>Mở tài liệu API để thử nhập nhu cầu và so sánh tour.
+       Giao diện dành cho người dùng sẽ được kết nối từ frontend.</p>
+    <nav aria-label="Công cụ backend">
+      <a href="docs">Mở tài liệu và thử API</a>
+      <a href="health">Kiểm tra trạng thái</a>
+    </nav>
+    <p>Trong tài liệu API, tạo phiên bằng <code>POST /v1/sessions</code>,
+       rồi dùng token nhận được ở ô <code>authorization</code>
+       theo dạng <code>Bearer &lt;token&gt;</code> khi gọi các API còn lại.</p>
+  </main>
+</body>
+</html>""")
+
     @app.get("/health")
     async def health():
-        return {"status": "ok", "data_origin": "synthetic" if settings.data_provider == "fixture" else "source",
-                "worker_enabled": settings.worker_enabled, "schema_version": "1.0"}
+        task = getattr(app.state, "worker_task", None)
+        healthy = not settings.worker_enabled or (task is not None and not task.done())
+        return JSONResponse(
+            {
+                "status": "ok" if healthy else "degraded",
+                "data_origin": "synthetic" if settings.data_provider == "fixture" else "source",
+                "worker_enabled": settings.worker_enabled,
+                "schema_version": "1.0",
+            },
+            status_code=200 if healthy else 503,
+        )
 
     @app.post("/v1/sessions", status_code=201)
     async def session(request: Request):
@@ -119,23 +183,47 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
 
     @app.get("/v1/sources")
     async def sources(owner_id: str = Depends(owner)):
-        return {"origin": "synthetic" if settings.data_provider == "fixture" else "source",
-                "sources": [s.model_dump() for s in gateway.registry]}
+        return {
+            "origin": "synthetic" if settings.data_provider == "fixture" else "source",
+            "sources": [s.model_dump() for s in gateway.registry],
+        }
 
     @app.post("/v1/requirements")
-    async def create_requirement(body: CreateRequirement, owner_id: str = Depends(owner), idempotency_key: str | None = Header(default=None)):
+    async def create_requirement(
+        body: CreateRequirement,
+        owner_id: str = Depends(owner),
+        idempotency_key: str | None = Header(default=None),
+    ):
         def action(c):
             rid = uid("req")
             targets = [Target(target_id=uid("target"), url=url) for url in body.urls]
             store.add_resource(c, owner_id, rid, "requirement", {})
             if body.text is not None:
                 message = Message(id=uid("msg"), text=body.text, received_at=now().isoformat())
-                jid = store.add_job(c, owner_id, rid, "parse", {"expected_revision": 0, "message": message.model_dump(),
-                    "mode": body.mode, "timezone": body.timezone, "targets": [t.model_dump() for t in targets]})
+                jid = store.add_job(
+                    c,
+                    owner_id,
+                    rid,
+                    "parse",
+                    {
+                        "expected_revision": 0,
+                        "message": message.model_dump(),
+                        "mode": body.mode,
+                        "timezone": body.timezone,
+                        "targets": [t.model_dump() for t in targets],
+                    },
+                )
                 return [202, {"requirement_id": rid, "revision": 0, "job_id": jid, "status": "queued"}]
-            requirement = form_requirement(body.form or Form(), requirement_id=rid, mode=body.mode, timezone=body.timezone, targets=targets)
+            requirement = form_requirement(
+                body.form or Form(),
+                requirement_id=rid,
+                mode=body.mode,
+                timezone=body.timezone,
+                targets=targets,
+            )
             store.add_revision(c, owner_id, requirement, 0)
             return [201, requirement.model_dump(mode="json")]
+
         return mutate(owner_id, idempotency_key, "create_requirement", body.model_dump(mode="json"), action)
 
     @app.get("/v1/requirements/{resource_id}")
@@ -146,42 +234,94 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
         return {**store.revision(owner_id, resource_id).model_dump(mode="json"), "status": resource["status"]}
 
     @app.patch("/v1/requirements/{resource_id}")
-    async def patch_requirement(resource_id: str, body: PatchRequirement, owner_id: str = Depends(owner), idempotency_key: str | None = Header(default=None)):
+    async def patch_requirement(
+        resource_id: str,
+        body: PatchRequirement,
+        owner_id: str = Depends(owner),
+        idempotency_key: str | None = Header(default=None),
+    ):
         def action(c):
             previous = store.revision(owner_id, resource_id, connection=c)
             if previous.revision != body.expected_revision:
                 raise AppError("REVISION_CONFLICT", "Revision đã thay đổi; tải lại trước khi sửa.", 409)
             if body.text is not None:
                 message = Message(id=uid("msg"), text=body.text, received_at=now().isoformat())
-                jid = store.add_job(c, owner_id, resource_id, "parse", {"expected_revision": body.expected_revision,
-                    "message": message.model_dump(), "mode": previous.mode, "timezone": previous.timezone,
-                    "targets": [t.model_dump() for t in previous.targets]})
-                return [202, {"requirement_id": resource_id, "revision": previous.revision, "job_id": jid, "status": "queued"}]
+                jid = store.add_job(
+                    c,
+                    owner_id,
+                    resource_id,
+                    "parse",
+                    {
+                        "expected_revision": body.expected_revision,
+                        "message": message.model_dump(),
+                        "mode": previous.mode,
+                        "timezone": previous.timezone,
+                        "targets": [t.model_dump() for t in previous.targets],
+                    },
+                )
+                return [
+                    202,
+                    {
+                        "requirement_id": resource_id,
+                        "revision": previous.revision,
+                        "job_id": jid,
+                        "status": "queued",
+                    },
+                ]
             edits = body.edits if body.edits is not None else answer_edits(previous, body.answers)
             requirement = apply_edits(previous, edits)
             store.add_revision(c, owner_id, requirement, previous.revision)
             return [200, requirement.model_dump(mode="json")]
+
         return mutate(owner_id, idempotency_key, f"patch:{resource_id}", body.model_dump(mode="json"), action)
 
     @app.post("/v1/comparisons")
-    async def create_comparison(body: CreateComparison, owner_id: str = Depends(owner), idempotency_key: str | None = Header(default=None)):
+    async def create_comparison(
+        body: CreateComparison,
+        owner_id: str = Depends(owner),
+        idempotency_key: str | None = Header(default=None),
+    ):
         def action(c):
             requirement = store.revision(owner_id, body.requirement_id, body.revision, c)
             if not requirement.readiness.can_collect_data:
-                raise AppError("REQUIREMENT_NOT_READY", "Cần làm rõ phạm vi tìm kiếm trước khi thu thập.", 409)
+                raise AppError(
+                    "REQUIREMENT_NOT_READY", "Cần làm rõ phạm vi tìm kiếm trước khi thu thập.", 409
+                )
             if body.reuse_comparison_id:
                 prior = store.resource(owner_id, body.reuse_comparison_id, c, "comparison")
                 payload = json.loads(prior["payload"])
-                if prior["status"] not in {"succeeded", "partial"} or payload["result"]["requirement_id"] != requirement.id:
-                    raise AppError("OFFER_SELECTION_INVALID", "Comparison cũ chưa hoàn tất hoặc thuộc nhu cầu khác.", 409)
+                if (
+                    prior["status"] not in {"succeeded", "partial"}
+                    or payload["result"]["requirement_id"] != requirement.id
+                ):
+                    raise AppError(
+                        "OFFER_SELECTION_INVALID", "Comparison cũ chưa hoàn tất hoặc thuộc nhu cầu khác.", 409
+                    )
+                if requirement.mode == "discover" and payload["result"]["revision"] != requirement.revision:
+                    raise AppError(
+                        "OFFER_SELECTION_INVALID",
+                        "Discovery đã đổi revision; cần thu thập lại để bảo đảm phạm vi tìm kiếm.",
+                        409,
+                    )
                 old_targets = {t["target_id"]: t["url"] for t in payload["result"]["targets"]}
                 if old_targets != {t.target_id: t.url for t in requirement.targets}:
                     raise AppError("OFFER_SELECTION_INVALID", "Targets đã đổi; cần thu thập lại.", 409)
             cid = uid("comparison")
-            store.add_resource(c, owner_id, cid, "comparison", body.model_dump(mode="json"), revision=body.revision)
+            store.add_resource(
+                c, owner_id, cid, "comparison", body.model_dump(mode="json"), revision=body.revision
+            )
             jid = store.add_job(c, owner_id, cid, "comparison", body.model_dump(mode="json"))
-            return [202, {"comparison_id": cid, "job_id": jid, "requirement_id": requirement.id,
-                          "revision": requirement.revision, "status": "queued"}]
+            return [
+                202,
+                {
+                    "comparison_id": cid,
+                    "job_id": jid,
+                    "requirement_id": requirement.id,
+                    "revision": requirement.revision,
+                    "status": "queued",
+                },
+            ]
+
         return mutate(owner_id, idempotency_key, "create_comparison", body.model_dump(mode="json"), action)
 
     @app.get("/v1/jobs/{job_id}")
@@ -189,8 +329,16 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
         return store.job(owner_id, job_id)
 
     @app.post("/v1/jobs/{job_id}/cancel")
-    async def cancel_job(job_id: str, owner_id: str = Depends(owner), idempotency_key: str | None = Header(default=None)):
-        return mutate(owner_id, idempotency_key, f"cancel:{job_id}", {}, lambda c: [200, store.cancel(c, owner_id, job_id)])
+    async def cancel_job(
+        job_id: str, owner_id: str = Depends(owner), idempotency_key: str | None = Header(default=None)
+    ):
+        return mutate(
+            owner_id,
+            idempotency_key,
+            f"cancel:{job_id}",
+            {},
+            lambda c: [200, store.cancel(c, owner_id, job_id)],
+        )
 
     @app.get("/v1/comparisons/{resource_id}")
     async def get_comparison(resource_id: str, owner_id: str = Depends(owner)):
@@ -201,8 +349,13 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
     @app.get("/v1/evidence/{evidence_id}")
     async def get_evidence(evidence_id: str, owner_id: str = Depends(owner)):
         with store.engine.connect() as c:
-            rows = c.execute(select(resources.c.payload).where(resources.c.owner == owner_id, resources.c.kind == "comparison",
-                                                               resources.c.status.in_(["succeeded", "partial"]))).scalars()
+            rows = c.execute(
+                select(resources.c.payload).where(
+                    resources.c.owner == owner_id,
+                    resources.c.kind == "comparison",
+                    resources.c.status.in_(["succeeded", "partial"]),
+                )
+            ).scalars()
             for row in rows:
                 for evidence in json.loads(row).get("crawl", {}).get("evidence", []):
                     if evidence["id"] == evidence_id:

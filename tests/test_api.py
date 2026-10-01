@@ -14,9 +14,21 @@ class FakeNim:
         if "timeout" in message.text:
             raise AppError("LLM_TIMEOUT", "Synthetic timeout", 504)
         if previous:
-            return Extraction(operations=[Operation(op="remove", target_id="hotel", quote=message.text)]), {"synthetic": True}
-        return Extraction(conditions=[RawCondition(id="dest", field="destinations", operator="contains",
-            raw_values=["Nhật"], quote="Nhật", strength="hard")]), {"synthetic": True}
+            return Extraction(operations=[Operation(op="remove", target_id="hotel", quote=message.text)]), {
+                "synthetic": True
+            }
+        return Extraction(
+            conditions=[
+                RawCondition(
+                    id="dest",
+                    field="destinations",
+                    operator="contains",
+                    raw_values=["Nhật"],
+                    quote="Nhật",
+                    strength="hard",
+                )
+            ]
+        ), {"synthetic": True}
 
 
 @pytest.fixture
@@ -33,11 +45,38 @@ def client(app):
 
 
 def discovery_form():
-    return {"mode": "discover", "form": {"conditions": [
-        {"id": "dest", "field": "destinations", "operator": "contains_any", "value": {"kind": "set", "items": ["country:jp", "country:kr"]}},
-        {"id": "budget", "field": "estimated_cost", "operator": "lte", "value": {"kind": "budget", "amount": 30000000, "currency": "VND", "basis": "group_total"}},
-        {"id": "hotel", "field": "hotel_stars_min", "operator": "gte", "strength": "soft", "value": {"kind": "number", "amount": 4}},
-    ], "party": {"adults": 2, "children": [{"id": "kid", "age": 8}]}}}
+    return {
+        "mode": "discover",
+        "form": {
+            "conditions": [
+                {
+                    "id": "dest",
+                    "field": "destinations",
+                    "operator": "contains_any",
+                    "value": {"kind": "set", "items": ["country:jp", "country:kr"]},
+                },
+                {
+                    "id": "budget",
+                    "field": "estimated_cost",
+                    "operator": "lte",
+                    "value": {
+                        "kind": "budget",
+                        "amount": 30000000,
+                        "currency": "VND",
+                        "basis": "group_total",
+                    },
+                },
+                {
+                    "id": "hotel",
+                    "field": "hotel_stars_min",
+                    "operator": "gte",
+                    "strength": "soft",
+                    "value": {"kind": "number", "amount": 4},
+                },
+            ],
+            "party": {"adults": 2, "children": [{"id": "kid", "age": 8}]},
+        },
+    }
 
 
 def complete(app):
@@ -63,20 +102,33 @@ def test_discover_full_flow_and_evidence(client, app):
     assert client.get(f"/v1/evidence/{evidence_id}").status_code == 200
     token = client.post("/v1/sessions").json()["token"]
     other = {"Authorization": f"Bearer {token}"}
-    for url in (f"/v1/requirements/{requirement['id']}", f"/v1/comparisons/{job['comparison_id']}", f"/v1/jobs/{job['job_id']}", f"/v1/evidence/{evidence_id}"):
+    for url in (
+        f"/v1/requirements/{requirement['id']}",
+        f"/v1/comparisons/{job['comparison_id']}",
+        f"/v1/jobs/{job['job_id']}",
+        f"/v1/evidence/{evidence_id}",
+    ):
         assert client.get(url, headers=other).status_code == 404
 
 
 def test_compare_urls_keeps_unapproved_target(client, app):
-    created = client.post("/v1/requirements", json={"mode": "compare_urls", "urls": [
-        "https://tour-demo.invalid/tour-a", "http://127.0.0.1/private"]})
+    created = client.post(
+        "/v1/requirements",
+        json={
+            "mode": "compare_urls",
+            "urls": ["https://tour-demo.invalid/tour-a", "http://127.0.0.1/private"],
+        },
+    )
     assert created.status_code == 201
     r = created.json()
     assert r["readiness"]["can_collect_data"]
     job = client.post("/v1/comparisons", json={"requirement_id": r["id"], "revision": 1}).json()
     complete(app)
     result = client.get(f"/v1/comparisons/{job['comparison_id']}").json()["result"]
-    assert [t["url"] for t in result["targets"]] == ["https://tour-demo.invalid/tour-a", "http://127.0.0.1/private"]
+    assert [t["url"] for t in result["targets"]] == [
+        "https://tour-demo.invalid/tour-a",
+        "http://127.0.0.1/private",
+    ]
     assert result["targets"][1]["reason_code"] == "SOURCE_NOT_APPROVED"
     assert not result["filter_applied"]
 
@@ -96,18 +148,35 @@ def test_idempotency_and_revision_conflict(client):
     first = client.post("/v1/requirements", json=body, headers={"Idempotency-Key": "key1"})
     again = client.post("/v1/requirements", json=body, headers={"Idempotency-Key": "key1"})
     assert first.json() == again.json()
-    assert client.post("/v1/requirements", json={"mode": "discover", "text": "Đi Nhật"}, headers={"Idempotency-Key": "key1"}).status_code == 409
+    assert (
+        client.post(
+            "/v1/requirements",
+            json={"mode": "discover", "text": "Đi Nhật"},
+            headers={"Idempotency-Key": "key1"},
+        ).status_code
+        == 409
+    )
     rid = first.json()["id"]
-    patch = {"expected_revision": 1, "edits": [{"op": "replace", "target": "conditions.budget.value.amount", "value": 35000000}]}
+    patch = {
+        "expected_revision": 1,
+        "edits": [{"op": "replace", "target": "conditions.budget.value.amount", "value": 35000000}],
+    }
     assert client.patch(f"/v1/requirements/{rid}", json=patch).status_code == 200
     assert client.patch(f"/v1/requirements/{rid}", json=patch).status_code == 409
 
 
 def test_queued_patch_cannot_overwrite_newer_revision(client, app):
     rid = client.post("/v1/requirements", json=discovery_form()).json()["id"]
-    queued = client.patch(f"/v1/requirements/{rid}", json={"expected_revision": 1, "text": "Bỏ khách sạn"}).json()
-    updated = client.patch(f"/v1/requirements/{rid}", json={"expected_revision": 1, "edits": [
-        {"op": "replace", "target": "conditions.budget.value.amount", "value": 35000000}]}).json()
+    queued = client.patch(
+        f"/v1/requirements/{rid}", json={"expected_revision": 1, "text": "Bỏ khách sạn"}
+    ).json()
+    updated = client.patch(
+        f"/v1/requirements/{rid}",
+        json={
+            "expected_revision": 1,
+            "edits": [{"op": "replace", "target": "conditions.budget.value.amount", "value": 35000000}],
+        },
+    ).json()
     assert updated["revision"] == 2
     complete(app)
     job = client.get(f"/v1/jobs/{queued['job_id']}").json()
@@ -152,23 +221,134 @@ def test_late_result_cannot_revive_cancelled_job(client, app):
 
 
 def test_field_failure_vs_acquisition_failure(client, app):
-    r = client.post("/v1/requirements", json={"mode": "compare_urls", "urls": [
-        "https://tour-demo.invalid/tour-a", "https://tour-demo.invalid/no-tour"]}).json()
+    r = client.post(
+        "/v1/requirements",
+        json={
+            "mode": "compare_urls",
+            "urls": ["https://tour-demo.invalid/tour-a", "https://tour-demo.invalid/no-tour"],
+        },
+    ).json()
     created = client.post("/v1/comparisons", json={"requirement_id": r["id"], "revision": 1}).json()
     complete(app)
     assert client.get(f"/v1/jobs/{created['job_id']}").json()["status"] == "partial"
-    r2 = client.post("/v1/requirements", json={"mode": "compare_urls", "urls": [
-        "https://tour-demo.invalid/no-a", "https://tour-demo.invalid/no-b"]}).json()
+    r2 = client.post(
+        "/v1/requirements",
+        json={
+            "mode": "compare_urls",
+            "urls": ["https://tour-demo.invalid/no-a", "https://tour-demo.invalid/no-b"],
+        },
+    ).json()
     second = client.post("/v1/comparisons", json={"requirement_id": r2["id"], "revision": 1}).json()
     complete(app)
     assert client.get(f"/v1/jobs/{second['job_id']}").json()["error"]["code"] == "SOURCES_UNAVAILABLE"
 
 
 def test_invalid_input_no_sensitive_echo(client):
-    response = client.post("/v1/requirements", json={"mode": "discover", "text": "private", "extra": "secret"})
+    response = client.post(
+        "/v1/requirements", json={"mode": "discover", "text": "private", "extra": "secret"}
+    )
     assert response.status_code == 422
     assert "secret" not in response.text and "private" not in response.text
     assert client.post("/v1/requirements", content="a" * 66000).status_code == 413
+    assert (
+        client.post(
+            "/v1/requirements", json={"mode": "discover", "text": "Đi Nhật", "timezone": "not/a/zone"}
+        ).status_code
+        == 422
+    )
+
+
+def test_explicit_form_coverage_overrides_default(client):
+    body = discovery_form()
+    body["form"]["conditions"][1]["value"]["coverage"] = "trip_total"
+    r = client.post("/v1/requirements", json=body).json()
+    budget = next(c for c in r["conditions"] if c["field"] == "estimated_cost")
+    assert budget["value"]["coverage_origin"] == "explicit"
+    assert not any(s["kind"] == "system_default" for s in budget["sources"])
+
+
+def test_target_edits_preserve_ids_and_order(client):
+    r = client.post(
+        "/v1/requirements",
+        json={
+            "mode": "compare_urls",
+            "urls": ["https://tour-demo.invalid/tour-a", "https://tour-demo.invalid/tour-b"],
+        },
+    ).json()
+    first, second = r["targets"]
+    updated = client.patch(
+        f"/v1/requirements/{r['id']}",
+        json={
+            "expected_revision": 1,
+            "edits": [
+                {"op": "remove", "target": f"targets.{first['target_id']}"},
+                {"op": "add", "target": "targets", "value": {"url": "https://tour-demo.invalid/tour-c"}},
+            ],
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["targets"][0] == second
+
+
+def test_retention_preserves_pending_job_dependencies(client, app):
+    from api.store import resources
+
+    r = client.post("/v1/requirements", json=discovery_form()).json()
+    client.post("/v1/comparisons", json={"requirement_id": r["id"], "revision": 1})
+    with app.state.store.transaction() as c:
+        c.execute(
+            resources.update().where(resources.c.id == r["id"]).values(created_at="2000-01-01T00:00:00+00:00")
+        )
+    assert app.state.store.purge()["resources_deleted"] == 0
+    assert client.get(f"/v1/requirements/{r['id']}").status_code == 200
+
+
+def test_changed_discovery_scope_cannot_reuse_narrow_results(client, app):
+    r = client.post("/v1/requirements", json=discovery_form()).json()
+    comparison = client.post("/v1/comparisons", json={"requirement_id": r["id"], "revision": 1}).json()
+    complete(app)
+    client.patch(
+        f"/v1/requirements/{r['id']}",
+        json={
+            "expected_revision": 1,
+            "edits": [{"op": "replace", "target": "conditions.dest.value.items", "value": ["country:th"]}],
+        },
+    )
+    response = client.post(
+        "/v1/comparisons",
+        json={"requirement_id": r["id"], "revision": 2, "reuse_comparison_id": comparison["comparison_id"]},
+    )
+    assert response.status_code == 409
+
+
+def test_url_offer_selection_reuses_owned_snapshot(client, app):
+    r = client.post(
+        "/v1/requirements",
+        json={
+            "mode": "compare_urls",
+            "urls": ["https://tour-demo.invalid/tour-a", "https://tour-demo.invalid/tour-b"],
+        },
+    ).json()
+    comparison = client.post("/v1/comparisons", json={"requirement_id": r["id"], "revision": 1}).json()
+    complete(app)
+    result = client.get(f"/v1/comparisons/{comparison['comparison_id']}").json()["result"]
+    target = result["targets"][0]
+    next_job = client.post(
+        "/v1/comparisons",
+        json={
+            "requirement_id": r["id"],
+            "revision": 1,
+            "reuse_comparison_id": comparison["comparison_id"],
+            "offer_selections": [
+                {
+                    "target_id": target["target_id"],
+                    "offer_snapshot_id": target["offer_options"][0]["offer_snapshot_id"],
+                }
+            ],
+        },
+    ).json()
+    complete(app)
+    assert client.get(f"/v1/jobs/{next_job['job_id']}").json()["status"] == "succeeded"
 
 
 def test_request_limits_and_auth(client):
@@ -194,6 +374,28 @@ def test_clarification_answer_and_stale_answer(client):
 def test_queued_deadline_becomes_failed(client, app):
     created = client.post("/v1/requirements", json={"mode": "discover", "text": "Đi Nhật"}).json()
     with app.state.store.transaction() as c:
-        c.execute(jobs.update().where(jobs.c.id == created["job_id"]).values(deadline_at="2000-01-01T00:00:00+00:00"))
+        c.execute(
+            jobs.update()
+            .where(jobs.c.id == created["job_id"])
+            .values(deadline_at="2000-01-01T00:00:00+00:00")
+        )
     assert asyncio.run(app.state.worker.run_once()) is False
     assert client.get(f"/v1/jobs/{created['job_id']}").json()["error"]["code"] == "JOB_DEADLINE_EXCEEDED"
+
+
+def test_lifespan_worker_processes_queued_jobs(settings):
+    import time
+
+    settings.worker_enabled = True
+    settings.worker_poll_seconds = 0.01
+    app = create_app(settings, nim=FakeNim())
+    with TestClient(app) as client:
+        client.headers["Authorization"] = f"Bearer {client.post('/v1/sessions').json()['token']}"
+        assert client.get("/health").status_code == 200
+        created = client.post("/v1/requirements", json={"mode": "discover", "text": "Đi Nhật"}).json()
+        for _ in range(100):
+            job = client.get(f"/v1/jobs/{created['job_id']}").json()
+            if job["status"] not in {"queued", "running"}:
+                break
+            time.sleep(0.01)
+        assert job["status"] == "succeeded"

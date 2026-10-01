@@ -36,5 +36,11 @@ class AppError(Exception):
         self.retryable = retryable
 
     def payload(self) -> dict:
-        return {"code": self.code, "message": self.message, "retryable": self.retryable,
-                "field_path": None, "trace_id": uid("trace"), "details": {}}
+        return {
+            "code": self.code,
+            "message": self.message,
+            "retryable": self.retryable,
+            "field_path": None,
+            "trace_id": uid("trace"),
+            "details": {},
+        }

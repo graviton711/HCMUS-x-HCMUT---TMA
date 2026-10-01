@@ -14,22 +14,45 @@ from domain.requirements import Budget, Child, NumberValue, Party, QuerySpec, Se
 @pytest.fixture
 def data():
     r = requirement()
-    return fixture_result(CrawlRequest(request_id="crawl", mode="discover", source_ids=["demo"],
-        query=QuerySpec.from_requirement(r), targets=[], deadline_at=(now() + timedelta(minutes=2)).isoformat()))
+    return fixture_result(
+        CrawlRequest(
+            request_id="crawl",
+            mode="discover",
+            source_ids=["demo"],
+            query=QuerySpec.from_requirement(r),
+            targets=[],
+            deadline_at=(now() + timedelta(minutes=2)).isoformat(),
+        )
+    )
 
 
-@pytest.mark.parametrize("kind,states,want", [
-    ("all", ["pass", "unknown"], "unknown"), ("all", ["fail", "unknown"], "fail"),
-    ("all", ["pass", "pass"], "pass"), ("any", ["pass", "unknown"], "pass"),
-    ("any", ["fail", "unknown"], "unknown"), ("any", ["fail", "fail"], "fail"),
-])
+@pytest.mark.parametrize(
+    "kind,states,want",
+    [
+        ("all", ["pass", "unknown"], "unknown"),
+        ("all", ["fail", "unknown"], "fail"),
+        ("all", ["pass", "pass"], "pass"),
+        ("any", ["pass", "unknown"], "pass"),
+        ("any", ["fail", "unknown"], "unknown"),
+        ("any", ["fail", "fail"], "fail"),
+    ],
+)
 def test_three_valued_logic(kind, states, want):
     tree = Tree(kind=kind, children=[Tree(kind="predicate", condition_id=f"c{i}") for i in range(2)])
     assert fold_tree(tree, {f"c{i}": s for i, s in enumerate(states)}) == want
 
 
-@pytest.mark.parametrize("op,lo,hi,want", [("lte", 30, 30, "pass"), ("lt", 30, 30, "fail"),
-    ("lte", 20, None, "unknown"), ("lte", 31, None, "fail"), ("gte", 30, None, "pass"), ("gt", 30, 30, "fail")])
+@pytest.mark.parametrize(
+    "op,lo,hi,want",
+    [
+        ("lte", 30, 30, "pass"),
+        ("lt", 30, 30, "fail"),
+        ("lte", 20, None, "unknown"),
+        ("lte", 31, None, "fail"),
+        ("gte", 30, None, "pass"),
+        ("gt", 30, 30, "fail"),
+    ],
+)
 def test_budget_bounds(op, lo, hi, want):
     assert compare_interval(op, Decimal(lo), Decimal(hi) if hi is not None else None, Decimal(30)) == want
 
@@ -61,6 +84,14 @@ def test_partial_itinerary_does_not_prove_absence(data, timestamp):
     assert result["status"] == "unknown"
 
 
+def test_optional_shopping_not_hidden_by_mandatory_only_scope(data, timestamp):
+    data.tours[0].fields["shopping_stops"].scope = "mandatory_only"
+    c = condition("shopping_stops", NumberValue(amount=0))
+    result = evaluate(c, data.tours[0], None, Party(), fixture_registry()[0], timestamp, True)
+    assert result["status"] == "unknown"
+    assert result["reason_code"] == "FIELD_SCOPE_INCOMPATIBLE"
+
+
 def test_stale_price_not_eligible(data):
     c = condition("estimated_cost", Budget(amount=20000000, currency="VND", basis="per_adult"), "lte")
     later = (now() + timedelta(days=2)).isoformat()
@@ -76,6 +107,7 @@ def test_multiple_offers_do_not_mix_prices(data, timestamp):
     r.update(mode="compare_urls", targets=[t, u])
     from domain.requirements import Requirement
     from requirements.service import finalize
+
     r = finalize(Requirement.model_validate(r))
     duplicate = data.offers[0].model_copy(update={"snapshot_id": "second"})
     # Pure engine input already validated by gateway; focus selection behavior here.
@@ -104,6 +136,8 @@ def test_soft_preference_does_not_exclude(data, timestamp):
 
 def test_cross_offer_evidence_rejected(data):
     body = data.model_dump()
-    body["offers"][0]["price_quotes"][0]["evidence_ids"] = body["offers"][1]["price_quotes"][0]["evidence_ids"]
+    body["offers"][0]["price_quotes"][0]["evidence_ids"] = body["offers"][1]["price_quotes"][0][
+        "evidence_ids"
+    ]
     with pytest.raises(ValueError, match="snapshot mismatch"):
         CrawlResult.model_validate(body)

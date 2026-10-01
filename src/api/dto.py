@@ -41,6 +41,7 @@ class CreateRequirement(Model):
         for url in self.urls:
             Target(target_id="check", url=url)
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
         try:
             ZoneInfo(self.timezone)
         except (ZoneInfoNotFoundError, ValueError) as exc:

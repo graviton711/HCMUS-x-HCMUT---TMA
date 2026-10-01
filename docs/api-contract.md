@@ -1,6 +1,6 @@
 # HTTP contract v1 để frontend tích hợp
 
-**Trạng thái:** Đề xuất, chưa có endpoint chạy. Payload examples không phải dữ liệu tour thật.
+**Trạng thái:** Endpoints v1 đã implement và kiểm thử với temporary SQLite/fixture/NIM stub. Request schemas ở [contracts](../contracts/README.md), ví dụ chạy ở [examples](../examples/README.md). Dữ liệu tour mặc định là synthetic.
 
 ## Tạo và sửa nhu cầu
 
@@ -55,7 +55,7 @@ Response 202: `{comparison_id, job_id, requirement_id, revision, status: "queued
 
 `GET /v1/jobs/{id}` trả kind, status, timestamps, phase, source progress, error và resource ref. Trạng thái: `queued → running → succeeded/partial/failed/cancelled`. Frontend dừng polling ở trạng thái terminal. Phase/number sources đã xử lý không được trình bày là % hoàn thành đáng tin cậy nếu chưa có cơ sở.
 
-`POST /v1/jobs/{id}/cancel` đặt cancel_requested cho job chưa terminal; worker kiểm tra trước commit và kết thúc cancelled. Job đã terminal trả trạng thái hiện có. Đóng tab chỉ dừng polling, không mặc định hủy job trên server.
+`POST /v1/jobs/{id}/cancel` đánh dấu cancelled atomically cho job chưa terminal; worker kiểm tra trạng thái trước commit và không ghi đè bằng response đến muộn. Lượt gọi upstream đang chạy có thể tiếp tục đến deadline. Job đã terminal trả trạng thái hiện có. Đóng tab chỉ dừng polling, không mặc định hủy job trên server.
 
 `GET /v1/comparisons/{id}` trả trạng thái khi chưa xong; khi xong có:
 
@@ -72,7 +72,7 @@ Response 202: `{comparison_id, job_id, requirement_id, revision, status: "queued
 
 Multiple offers chưa chọn: ô phụ thuộc offer trả reason `MULTIPLE_OFFERS_UNSELECTED`; dữ liệu tour tĩnh vẫn hiện. Chỉ sort khi user chọn criterion và có dữ liệu comparable; tie-break theo stable id, không theo điểm AI.
 
-`GET /v1/evidence/{id}` trả field/value/raw quote, URL, snapshot ref, observed_at, verification và provenance method. Không trả HTML/script gốc hoặc secret. Evidence id phải thuộc resource/session user được phép xem.
+`GET /v1/evidence/{id}` trả raw quote, URL, locator, snapshot ref, publisher, observed_at và provenance method. Typed values/verification nằm trong sourced fields của comparison. Không trả HTML/script gốc hoặc secret. Evidence id phải thuộc resource/session user được phép xem.
 
 ## Error và trạng thái một phần
 
@@ -80,7 +80,7 @@ Error shape: `{error: {code, message, field_path, retryable, trace_id, details}}
 
 | Nhóm | HTTP / code chính |
 |---|---|
-| DTO/type/URL syntax/version sai | 422: `INVALID_INPUT`, `INVALID_URL`, `UNSUPPORTED_SCHEMA_VERSION` |
+| DTO/type/URL syntax/version sai | 422: `INVALID_INPUT` (chi tiết field/type, không echo input) |
 | Revision/state/offer selection cũ | 409: `REVISION_CONFLICT`, `REQUIREMENT_NOT_PARSED`, `OFFER_SELECTION_INVALID` |
 | Resource không tìm thấy/không thuộc session | 404; không tiết lộ ownership của user khác |
 | Rate limit ở API | 429, Retry-After khi có |
@@ -89,4 +89,14 @@ Error shape: `{error: {code, message, field_path, retryable, trace_id, details}}
 
 Không có tour hoặc không có tour đạt là business result, không phải HTTP 500. Nguồn lỗi nhưng còn kết quả dùng được → job partial; field thiếu bình thường → job succeeded với unknown cells. Tất cả source attempts lỗi và không có usable snapshot → job failed `SOURCES_UNAVAILABLE`. Targets bị loại ngay bởi access/capability validation → succeeded với target statuses/empty_reason `NO_SUPPORTED_TARGETS`; không gọi cả hai trường hợp là “không có tour trên thị trường”.
 
-Mutation nhận `Idempotency-Key`; cùng session/key/body trả resource cũ, key dùng lại với body khác trả 409. Job có deadline, giới hạn retry, lease/recovery và cancellation flag. Giới hạn input, concurrency, CORS/auth/retention chốt theo hosting; không xuất key NIM cho frontend.
+Mutation nhận `Idempotency-Key`; cùng session/key/body trả resource cũ, key dùng lại với body khác trả 409. Job có deadline, giới hạn retry, lease/recovery và terminal cancellation state. Giới hạn input, concurrency, CORS/auth/retention chốt theo hosting; không xuất key NIM cho frontend.
+
+## Bootstrap và chi tiết response v1
+
+- `POST /v1/sessions` trả session_id/token/token_type/expires_at; session mới chưa yêu cầu Authorization.
+- Mọi `/v1/*` khác dùng `Authorization: Bearer <token>`; `/` (trang chào HTML), `/health` và `/docs` công khai trên local app.
+- Form condition gửi id/field/operator/value/strength, backend tạo provenance. Ví dụ hoàn chỉnh ở `examples/discover-form.json`; không gửi source quotes tự chế từ frontend.
+- GET comparison trả `{id, status, result}`. `result` null nếu chưa hoàn tất; đọc lỗi ở job. GET job dùng `id` và `resource_id`, không trả payload nội bộ.
+- Clarification thiếu năm nhận answer value là integer year; field currency/basis/strength nhận string enum; unresolved value khác nhận typed Value qua answer hoặc edits. Search scope/mâu thuẫn cần sửa conditions trực tiếp.
+- Nguồn lỗi kiểm tra khi worker chạy xuất hiện ở `job.error`, không đổi HTTP 202 đã trả thành 409/502. Poll dừng ở mọi terminal status.
+- Source progress v1 ở kết quả cuối; chưa streaming từng source. Không có endpoint đăng nhập account hoặc đặt tour.

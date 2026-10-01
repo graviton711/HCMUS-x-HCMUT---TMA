@@ -1,6 +1,6 @@
 # Hai luồng backend và chính sách hiểu yêu cầu
 
-**Trạng thái:** Đang triển khai cả hai luồng. User chốt ngày 01/10/2026: budget coverage mặc định tour_price.
+**Trạng thái:** Đã triển khai cả hai luồng với fixture; crawler thật chưa tích hợp. User chốt ngày 01/10/2026: budget coverage mặc định tour_price.
 
 ## Discover: nhập nhu cầu
 

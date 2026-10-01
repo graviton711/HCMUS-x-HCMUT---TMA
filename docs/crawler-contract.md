@@ -1,6 +1,6 @@
 # Crawler ↔ backend: contract v1 đề xuất
 
-**Trạng thái:** Crawler chưa có mẫu JSON. Đây là contract để người crawl review; ví dụ chỉ là dữ liệu mô phỏng, chưa có schema/code chạy.
+**Trạng thái:** Backend đã có CrawlRequest/CrawlResult models, JSON Schema, fixture gateway và HTTP gateway. Crawler thật chưa có mẫu và chưa tích hợp. Ví dụ dưới chỉ là dữ liệu mô phỏng.
 
 ## Request và capability
 

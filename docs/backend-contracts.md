@@ -1,6 +1,6 @@
 # Backend contracts — bản nháp
 
-**Trạng thái:** Contract v1 được đề xuất để team review, chưa phải JSON Schema đã implement. Crawler chưa có schema; backend cung cấp điểm xuất phát chung. Ví dụ payload ở [crawler-contract.md](crawler-contract.md), [api-contract.md](api-contract.md); quy tắc hai luồng ở [backend-flows.md](backend-flows.md).
+**Trạng thái:** Domain v1 đã implement; JSON Schema được xuất ở [contracts](../contracts/README.md). Crawler thật chưa tích hợp; người crawl cần đối chiếu schema với mẫu thật. Ví dụ payload ở [crawler-contract.md](crawler-contract.md), [api-contract.md](api-contract.md); quy tắc hai luồng ở [backend-flows.md](backend-flows.md).
 
 ## 1. Yêu cầu người dùng
 
@@ -8,7 +8,7 @@
 |---|---|
 | `RequirementRevision` | `schema_version`, id, revision, mode `discover/compare_urls`, URL targets nếu có, messages/form input, reference timestamps, timezone, party, conditions, hard tree, preferences, unresolved, readiness, policy version |
 | `Party` | Số người lớn; trẻ em/infant theo tuổi hoặc age chưa biết. Phân loại tính giá cuối cùng theo chính sách offer; không tự coi trẻ em bằng người lớn |
-| `Budget` | Amount/range, currency, basis `per_adult/per_person/group_total`, coverage `tour_price/trip_total/unspecified`. Coverage không được nói dùng tour_price theo policy đã chốt, ghi system_default; basis/currency chưa rõ vẫn hỏi trước khi lọc |
+| `Budget` | Amount/range, currency, basis `per_adult/per_person/group_total`, coverage `tour_price/trip_total`. Coverage không được nói dùng tour_price theo policy đã chốt, ghi system_default; basis/currency chưa rõ vẫn hỏi trước khi lọc |
 | `Condition` | id, field, operator, typed value, strength `hard/soft/unresolved`, source references. Chỉ field/operator trong catalog được phép chạy |
 | `SourceReference` | Text: message id + quote + span; form: field path + submitted value. Giá trị derived giữ reference gốc và tên normalization rule |
 | `Clarification` | id, field path/condition id, reason code, question, suggested options nếu có, blocking flag |

@@ -139,16 +139,29 @@ class Condition(Model):
     def compatible(self):
         if self.field not in FIELDS or self.operator not in FIELDS[self.field]:
             raise ValueError("Unknown field/operator")
+        if self.field == "unsupported" and not isinstance(self.value, UnresolvedValue):
+            raise ValueError("Unsupported conditions must keep unresolved values")
         if isinstance(self.value, UnresolvedValue):
             return self
-        expected = Budget if self.field == "estimated_cost" else (
-            SetValue if self.field in SET_FIELDS else DateValue if self.field in DATE_FIELDS else NumberValue)
+        expected = (
+            Budget
+            if self.field == "estimated_cost"
+            else (
+                SetValue
+                if self.field in SET_FIELDS
+                else DateValue
+                if self.field in DATE_FIELDS
+                else NumberValue
+            )
+        )
         if not isinstance(self.value, expected):
             raise ValueError("Field/value type mismatch")
         if self.operator in SOFT_OPERATORS and self.strength != "soft":
             raise ValueError("Preference operator cannot be hard")
         if self.operator == "between" and getattr(self.value, "upper", None) is None:
             raise ValueError("Between requires upper bound")
+        if self.operator != "between" and getattr(self.value, "upper", None) is not None:
+            raise ValueError("A value range requires the between operator")
         if isinstance(self.value, NumberValue):
             if self.field in {"duration_days", "duration_nights"} and self.value.amount < 1:
                 raise ValueError("Duration must be positive")
@@ -261,7 +274,9 @@ class Requirement(Model):
             raise ValueError("Discover cannot have URL targets")
         if self.mode == "compare_urls" and not 2 <= len(self.targets) <= 5:
             raise ValueError("Compare needs 2..5 URL targets")
-        if len({t.url for t in self.targets}) != len(self.targets) or len({t.target_id for t in self.targets}) != len(self.targets):
+        if len({t.url for t in self.targets}) != len(self.targets) or len(
+            {t.target_id for t in self.targets}
+        ) != len(self.targets):
             raise ValueError("Duplicate targets")
         by_id = {c.id: c for c in self.conditions}
         if len(by_id) != len(self.conditions):
@@ -288,7 +303,7 @@ class Requirement(Model):
         for source in [s for c in self.conditions for s in c.sources] + self.party.sources:
             if source.kind == "text":
                 text = messages.get(source.message_id, "")
-                if text[source.start:source.end] != source.quote:
+                if text[source.start : source.end] != source.quote:
                     raise ValueError("Ungrounded source quote")
         return self
 
@@ -305,10 +320,27 @@ class QuerySpec(Model):
     @classmethod
     def from_requirement(cls, r: Requirement):
         # Exclude raw messages and text provenance from upstream payloads.
-        conditions = [c.model_copy(update={"sources": [SourceReference(
-            kind="form", field_path=f"conditions.{c.id}", rule="validated_query")],
-            **({"value": c.value.model_copy(update={"raw": ""})} if isinstance(c.value, UnresolvedValue) else {})})
-            for c in r.conditions]
-        return cls(requirement_id=r.id, revision=r.revision, mode=r.mode, conditions=conditions,
-                   hard_tree=r.hard_tree, preference_tree=r.preference_tree,
-                   party=r.party.model_copy(update={"sources": []}))
+        conditions = [
+            c.model_copy(
+                update={
+                    "sources": [
+                        SourceReference(kind="form", field_path=f"conditions.{c.id}", rule="validated_query")
+                    ],
+                    **(
+                        {"value": c.value.model_copy(update={"raw": ""})}
+                        if isinstance(c.value, UnresolvedValue)
+                        else {}
+                    ),
+                }
+            )
+            for c in r.conditions
+        ]
+        return cls(
+            requirement_id=r.id,
+            revision=r.revision,
+            mode=r.mode,
+            conditions=conditions,
+            hard_tree=r.hard_tree,
+            preference_tree=r.preference_tree,
+            party=r.party.model_copy(update={"sources": []}),
+        )

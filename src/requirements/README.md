@@ -1,6 +1,6 @@
 # Requirements — hiểu và chuẩn hóa nhu cầu
 
-**Trạng thái:** Đang triển khai theo contracts; tình trạng kiểm tra cuối cùng ở [backend-runtime.md](../../docs/backend-runtime.md).
+**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
 
 ## Trách nhiệm và input/output
 
@@ -15,8 +15,8 @@ Input: text/form, mode, timestamp/timezone của lượt nhập, revision trư�
 3. Rules normalize đơn vị tiền, date, alias đã biết và typed values; đối chiếu quote với input. Giá trị không được nói/không có derivation hợp lệ không vào QuerySpec.
 4. Kiểm tra field/operator, basis/coverage, ranges, nhóm khách, phủ định/AND-OR và mâu thuẫn có thể chứng minh. Các điều kiện chưa được hỗ trợ giữ nguyên và báo rõ.
 5. Merge theo `add/replace/remove` gắn condition id hoặc field path; lưu revision và thay đổi. Expected revision cũ trả conflict; không parse lại text cuối rồi mất điều kiện từ lượt trước.
-6. Tính readiness theo mode/capability. Tạo câu hỏi có target và reason từ validator; ưu tiên câu ảnh hưởng kết quả, không bắt user điền mọi field tùy chọn.
-7. Trả bản tóm tắt để frontend hiển thị/sửa, hard tree, preferences và unresolved; compile QuerySpec chỉ khi không còn blocker cho luồng được chọn.
+6. Tính readiness theo mode và search scope; gateway kiểm tra capability nguồn thực tế ở bước collection. Tạo câu hỏi có target và reason từ validator; ưu tiên câu ảnh hưởng kết quả, không bắt user điền mọi field tùy chọn.
+7. Trả bản tóm tắt để frontend hiển thị/sửa, hard tree, preferences và unresolved; QuerySpec cho collection giữ markers unresolved nhưng loại raw text; decision giữ mọi blocker, không tuyên bố eligible khi chưa rõ nghĩa.
 
 Sửa form/answer đã có cấu trúc đi thẳng qua normalize/validation, không cần thêm lượt LLM. Lượt mới có ngày tương đối dùng timestamp lượt mới; các condition cũ giữ reference time cũ.
 
@@ -51,6 +51,6 @@ Mỗi request NIM chỉ xử lý một requirement với context của chính n�
 
 ## Interface và đánh giá
 
-`api` gọi parse/update service; `domain` cung cấp schema/catalog; `data_access` cung cấp capability đã kiểm tra cho readiness; `decision` chỉ nhận QuerySpec đã validate. LLM provider nằm sau một gateway thay được bằng stub trong kiểm tra.
+`api` gọi parse/update service; `domain` cung cấp schema/catalog; `data_access` kiểm tra capability khi collection; `decision` nhận Requirement đã validate cùng snapshots để đánh giá. LLM provider nằm sau một gateway thay được bằng stub trong kiểm tra.
 
 Bộ gold specification gồm 50 câu + 15 chuỗi ở [requirements-evaluation.md](../../docs/requirements-evaluation.md); sau này fixtures `.json` lưu input/context, expected conditions, clarification targets và patch result. Đo semantic field accuracy, hard-soft, negation/groups, false-ready, invented fields, preservation sau patch và unsupported detection. Không dùng JSON hợp lệ hoặc exact wording của câu trả lời làm thước đo chính.

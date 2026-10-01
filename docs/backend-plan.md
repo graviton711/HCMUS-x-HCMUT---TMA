@@ -1,13 +1,13 @@
 # Backend: kế hoạch phát triển
 
-**Trạng thái:** IMPLEMENTATION — user đã yêu cầu bắt đầu và chốt ngân sách mặc định là giá tour. Hai luồng discover/compare_urls dùng chung backend; crawler thật chưa có mẫu. Tiến độ và lệnh chạy ở [backend-runtime.md](backend-runtime.md).
+**Trạng thái:** Backend v1 đã triển khai cho discover/compare_urls. User chốt ngân sách mặc định là giá tour. Crawler thật chưa có mẫu; phạm vi kiểm tra và lệnh chạy ở [backend-runtime.md](backend-runtime.md).
 
 ## Kết luận từ docs hiện tại
 
 - Sản phẩm hỗ trợ chọn tour: nhận nhu cầu/URL → thu thập dữ liệu → lọc điều kiện cứng → so sánh và giải thích có bằng chứng. Không tự tạo lịch trình hoặc đặt tour.
 - AI hiểu yêu cầu và có thể diễn đạt kết quả; dữ kiện tour và việc đạt ràng buộc phải được kiểm tra bằng dữ liệu, không giao cho LLM tự phán đoán.
 - Tour ổn định, offer biến động và thông tin nhà cung cấp phải tách nhau; evidence nằm ở từng field.
-- Checkout chưa có crawler/backend. Các mô tả đã có crawler trong docs được sửa cho đúng trạng thái này.
+- Checkout có backend v1 và fixture gateway; chưa có crawler thật. Không coi fixture là dữ liệu đã crawl.
 - Kết quả tách `eligible`, `ineligible`, `needs_verification`; chỉ gắn nhãn đã đạt khi dữ liệu đủ cho điều kiện được xét.
 - Docs hiện yêu cầu lấy tour/offer theo nhu cầu hoặc URL. Nếu crawler dự định crawl trước toàn bộ catalog, đây là thay đổi cần team review; chưa mặc định thay kiến trúc.
 

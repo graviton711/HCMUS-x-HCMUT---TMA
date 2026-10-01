@@ -2,6 +2,8 @@
 
 **Trạng thái:** Gold specification thủ công để review; chưa phải test suite hoặc kết quả accuracy. Khi có parser sẽ chuyển thành fixtures `.json` có expected DTO/patch/clarification targets.
 
+Smoke set có thể chạy: `tests/fixtures/requirements-smoke.json` kiểm tra một tập con quan trọng, độc lập mỗi request. `uv run tour-backend evaluate-nim --output data/evaluation.local.json` gọi NIM thật, so normalized fields/readiness/patch preservation và ghi latency. Đây chưa phải full gold 50+15, không dùng kết quả smoke để tuyên bố độ chính xác tổng quát.
+
 Reference cho date tương đối: 01/10/2026 10:00 tại Asia/Ho_Chi_Minh. Cases độc lập, không đặt nhiều case không liên quan trong cùng prompt NIM. Hard/soft theo policy đề xuất ở [backend-flows.md](backend-flows.md).
 
 ## 50 câu một lượt

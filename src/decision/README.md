@@ -1,6 +1,6 @@
 # Decision
 
-**Trạng thái:** Đang triển khai theo contracts; tình trạng kiểm tra cuối cùng ở [backend-runtime.md](../../docs/backend-runtime.md).
+**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
 
 ## Trách nhiệm / input-output
 

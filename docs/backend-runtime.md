@@ -1,45 +1,67 @@
-# Backend runtime
+# Backend v1: chạy và tích hợp
 
-**Trạng thái:** Đang triển khai; các mục dưới là phạm vi cần kiểm tra trước khi bàn giao.
+**Trạng thái 02/10/2026:** Có implementation, 82 tests offline đạt và hai luồng chạy qua ASGI API với worker thật. NIM live smoke đạt 8/8 ca đã chọn, gồm 2 lượt sửa hội thoại. Crawler thật chưa có dữ liệu để kiểm chứng.
 
-## Phạm vi
+## Chạy local
 
-- Python/FastAPI/Pydantic, SQLAlchemy + SQLite local; modules ở `src/domain`, `src/requirements`, `src/data_access`, `src/decision`, `src/api`.
-- Text extraction dùng NVIDIA NIM từ `.env` ở root, không log/expose key. Structured form/answers/edits đi qua cùng semantic validators nhưng không cần model.
-- Durable parse/comparison jobs chạy trong worker của cùng app, có deadline, cancellation và conditional revision/lease commits.
-- Session bearer token ngẫu nhiên do backend cấp; chỉ lưu hash, resources bị giới hạn theo owner. Đây là session demo, chưa có account/password/login.
-- Data provider mặc định fixture, output luôn `origin=synthetic`. HTTP crawler provider gọi một endpoint do server cấu hình và registry đã duyệt; không crawl website trong backend.
+Từ root repo, Python >=3.12:
 
-## Settings và policy
+```powershell
+uv sync
+uv run tour-backend serve
+```
 
-`.env` hiện tại giữ nguyên `NVIDIA_NIM_API`, `NVIDIA_NIM_MODEL`. Settings khác có default/configuration riêng: database local, data provider, crawler URL/registry path, CORS origins, NIM reasoning/timeout, worker concurrency và job deadlines. Env ưu tiên trên file; thiếu key không ngăn structured flow nhưng text job trả lỗi cấu hình rõ.
+Mở `http://127.0.0.1:8000/` để thấy trang chào và liên kết vào Swagger `/docs`, health `/health`. Đây là backend API; giao diện sản phẩm do frontend phụ trách. CLI mặc định bind loopback. Dùng `--port 8001` nếu port đang bận.
 
-Cấu hình reasoning cần chọn qua đánh giá từng case độc lập, so sánh chất lượng và độ trễ; probe hiện tại chưa đủ để chọn profile mặc định. Native schema output vẫn được validate/ground từng quote. Không batch context khác nhau trong một request.
+`Application startup complete` nghĩa là server đã chạy. CLI không tự reload khi sửa code: nhấn Ctrl+C rồi chạy lại `uv run tour-backend serve` để nạp bản mới.
 
-Freshness cho fixtures là policy mô phỏng công khai. Với nguồn thật, TTL volatile phải cấu hình theo source; chưa có policy thì unknown và không chứng minh hard price/date/availability. Supplier-published facts không mang nhãn independently verified.
+`.env` hiện có được giữ nguyên: `NVIDIA_NIM_API`, `NVIDIA_NIM_MODEL=nvidia/nemotron-3-super-120b-a12b`. Environment variables ưu tiên hơn file. Không có credential trong schema, response, source control hay log mặc định.
 
-## HTTP bổ sung cho bootstrap/tích hợp
+## Luồng frontend
 
-- `POST /v1/sessions`: tạo session và trả bearer token một lần.
-- `GET /health`: readiness cơ bản + data origin, không có secrets.
-- `GET /v1/sources`: registry/capabilities công khai cho session.
-- Schema JSON crawler/requirements được xuất từ models thật để crawler/frontend dùng; CLI có lệnh export contracts.
+1. `POST /v1/sessions` lấy token; gửi `Authorization: Bearer <token>` cho `/v1/*` còn lại.
+2. `POST /v1/requirements`: text trả 202 + parse job; form hoặc URL-only trả 201 + revision 1.
+3. Poll `/v1/jobs/{id}`; khi parse succeeded, GET requirement để lấy conditions, defaults, clarifications/readiness.
+4. PATCH bằng `expected_revision` và đúng một nhóm text/answers/edits; response 409 nghĩa phải tải state mới.
+5. POST comparison với requirement id/revision; poll job rồi GET comparison/evidence.
 
-Các endpoints requirement/comparison/job/evidence và semantics theo [api-contract.md](api-contract.md). DTO formal trong OpenAPI/models là nguồn chính sau khi implement; ví dụ draft sẽ được cập nhật để khớp.
+Xem [payload chạy được](../examples/README.md), [HTTP contract](api-contract.md) và [schemas](../contracts/README.md). Session demo có hạn 24 giờ; chưa có tài khoản/password. Lỗi NIM không commit revision mới. Idempotency keys có phạm vi session và body/path; hết hạn sau 24 giờ.
 
-## Kiểm tra bắt buộc
+Budget coverage thiếu → `tour_price` + provenance `system_default`, theo quyết định user. Giá trị explicit `trip_total` vẫn được giữ. Currency/basis không được suy đoán. Thiếu tuổi chỉ chặn phép đánh giá chi phí cần tuổi, không chặn đối chiếu tour tĩnh.
 
-Meaningful unit/integration tests cho semantic validation, grounding, patch preservation, three-valued filtering, price bounds/coverage/party, partial data/evidence binding, session isolation, revision conflict, idempotency, jobs/cancellation/recovery và hai luồng API. NIM transport dùng mock trong tests; kiểm tra live riêng có giới hạn, không gọi model trong mỗi test mặc định.
+## Dữ liệu và crawler
 
-Không tuyên bố gold accuracy chỉ vì test suite chạy. 50 câu + 15 chuỗi là bộ specification; đánh giá model trên toàn bộ bộ đó được báo riêng nếu thực sự chạy.
+Mặc định `DATA_PROVIDER=fixture`: ba tour giả tại `https://tour-demo.invalid/tour-a`, `tour-b`, `tour-c`; không fetch các URL này. Kết quả mang `origin=synthetic`. Ví dụ discover với 2 người lớn + bé 8 tuổi và trần giá tour 30 triệu có một tour đạt, một tour thiếu giá trẻ, một tour vượt trần.
 
-## Quyết định triển khai v1
+Kết nối crawler: cấu hình `DATA_PROVIDER=http`, `CRAWLER_URL`, `CRAWLER_REGISTRY_PATH`, tùy chọn `CRAWLER_API_KEY`. [Registry mẫu](../examples/source-registry.json) chưa duyệt nguồn nào. Crawler nhận POST CrawlRequest và trả CrawlResult; URL fetch/redirect/DNS checks thuộc crawler. Backend chỉ gọi endpoint server cấu hình, không fetch URL người dùng.
 
-- Budget coverage mặc định `tour_price` (user chốt); provenance `system_default` khác với giá trị được nói rõ. Currency/basis vẫn không suy đoán.
-- DTO Pydantic strict, field catalog và tree kiểm tra ở domain. NIM trả raw values/quotes/operations; backend tự chuẩn hóa tiền, địa danh, ngày. Unsupported giữ blocker.
-- HTTP dùng bearer session demo; worker lưu job trong SQLite, một tiến trình/worker cho local. Restart đánh dấu job running bị gián đoạn thành failed; queued tiếp tục nếu còn deadline. Đây là recovery xác định, không hứa chạy lại request upstream đã gửi.
-- Snapshot/evidence lưu nguyên envelope đã validate trong comparison, requirement revisions bất biến trong bảng riêng. Ownership truy theo comparison. Reuse snapshot chỉ trong cùng requirement và registry hiện được duyệt; freshness vẫn đánh giá lại.
-- Schema khởi tạo v1 bằng SQLAlchemy; khi đổi version database phải migration rõ, không tự phá database cũ. Chưa có triển khai PostgreSQL/public multi-worker.
-- Crawler HTTP URL do server cấu hình, không lấy từ user; nguồn thật phải có registry và TTL do team cấu hình. Gateway không tự fetch URL tour. Payload quá lớn, correlation sai, source/evidence binding sai bị từ chối; invalid field được cách ly với issue nếu envelope vẫn có thể dùng.
-- `GET /health`, `POST /v1/sessions`, `GET /v1/sources`, CLI export schema; CLI kiểm tra NIM dùng câu giả lập, không log credential/raw upstream error.
-- API có giới hạn input/job/session và CORS explicit. Session demo có expiry; dữ liệu local cần lệnh purge theo retention, không phải auth account production.
+Backend kiểm tra correlation, whitelist nguồn, snapshot/evidence bindings, types và thời điểm. Field tĩnh sai được cách ly với issue; envelope/provenance/giá không hợp lệ bị từ chối. Với nguồn thật, TTL cho `price`, `departure_date`, `return_date`, `availability` do registry cấu hình; thiếu TTL thì freshness unknown, không chứng minh điều kiện biến động. `pricing_complete` là sourced boolean chứng minh mọi phụ thu/giảm giá bắt buộc đã được phản ánh; thiếu thì không xác nhận tổng tiền.
+
+URL comparison giữ mọi target và thứ tự. Có nhiều offers thì yêu cầu chọn bằng snapshot id từ comparison cũ; không lấy giá rẻ nhất tự động. Reuse cùng requirement/targets/nguồn được duyệt và đánh giá freshness lại. Discovery đổi revision phải thu thập lại để không dùng nhầm phạm vi search cũ. Chưa có cache tìm kiếm dùng chung giữa các requirement.
+
+## Runtime và giới hạn
+
+- FastAPI/Pydantic, SQLAlchemy + SQLite tại `data/backend.db`; OS lock chỉ cho một process/worker dùng database. Schema v1 được tạo tự động, không tự migration phá dữ liệu. PostgreSQL/multi-host chưa triển khai.
+- Jobs lưu bền, deadline mặc định 180 giây. Running khi restart → failed `JOB_INTERRUPTED`; queued còn hạn tiếp tục. Cancellation terminal được commit ngay; upstream có thể tiếp tục đến deadline nhưng kết quả đến muộn không ghi đè.
+- NIM timeout 90 giây, tối đa một repair schema/grounding trong tổng deadline, không đổi model âm thầm. `NIM_REASONING=none` là baseline vận hành hiện tại, chưa phải kết luận tốt nhất từ full gold.
+- Input tối đa 64 KB, text 8.000 ký tự, 50 conditions, URL 2–5, giới hạn session/job/request. CORS có danh sách origins cụ thể. Session/auth này dành cho demo local; chưa phải auth người dùng cho deployment public.
+- Lưu revisions và validated crawl envelopes bất biến theo comparison để replay. Purge lúc startup hoặc `uv run tour-backend purge` khi server đã dừng; mặc định giữ 7 ngày, bảo vệ dependencies của jobs đang chờ.
+- Catalog alias hiện gồm một số điểm đến phổ biến; địa danh/chỉ tiêu ngoài catalog giữ unresolved/unsupported. Không bảo đảm hiểu mọi cách nói tiếng Việt. Số viết bằng chữ, yêu cầu vận động/uy tín chưa có metric cần user làm rõ hoặc sửa form.
+- JSON Schema/OpenAPI mô tả request/domain; còn invariants nghiệp vụ ở Python. Chưa có streaming progress theo từng nguồn hay tự tổng hợp điểm xếp hạng.
+
+Settings đầy đủ ở [settings.py](../src/api/settings.py), mẫu env không chứa key thật ở [backend.env.example](../examples/backend.env.example).
+
+## Kiểm tra
+
+```powershell
+uv run pytest -q
+uv run ruff check src tests
+uv run ruff format --check src tests
+uv run tour-backend export-schemas
+```
+
+82 tests kiểm tra normalization/defaults/patches, AND/OR, giá nhóm/bounds/completeness, ownership, revisions/idempotency, cancellation/restart/deadline và hai luồng API. Có một deprecation warning của Starlette TestClient/httpx; suite vẫn đạt trên dependencies đã khóa.
+
+Live riêng: `uv run tour-backend probe-nim`, hoặc `uv run tour-backend evaluate-nim --output data/evaluation.local.json`. Đây là các lượt gọi provider thật với câu giả lập; không chạy trong pytest mặc định. Smoke cuối đạt 8/8 ca + kiểm tra 2 patch; 10 responses hợp lệ có latency 1,453–13,422 giây và một ca cần repair. Đây không phải latency end-to-end benchmark. **Chưa chạy full gold 50 câu/15 chuỗi hoặc held-out set**, nên không suy ra accuracy ngoài bộ này.
+
+Luồng kiểm tra ASGI dùng NIM thật đã nhận đủ destination/origin/duration/budget/hotel, readiness ready; discovery trả một eligible, một ineligible, một needs_verification; URL-only giữ đủ ba targets và `filter_applied=false`. Tour data trong kiểm tra vẫn là synthetic.

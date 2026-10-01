@@ -99,6 +99,7 @@ class ExtraCharge(Model):
 
 def validate_fields(fields: dict[str, Fact[JsonValue]], *, offer: bool):
     from datetime import date
+
     static = set(FIELDS) - {"estimated_cost", "unsupported", *DATE_FIELDS}
     allowed = {*DATE_FIELDS, "availability"} if offer else static
     for name, fact in fields.items():
@@ -197,6 +198,7 @@ class CrawlResult(Model):
             if len(out) != len(items):
                 raise ValueError(f"Duplicate {attr}")
             return out
+
         suppliers = unique(self.suppliers, "supplier_id")
         tours = unique(self.tours, "snapshot_id")
         offers = unique(self.offers, "snapshot_id")
@@ -224,13 +226,19 @@ class CrawlResult(Model):
                 if snapshot.pricing_complete:
                     facts.append(snapshot.pricing_complete)
             for fact in facts:
-                if any(eid not in evidence or evidence[eid].snapshot_id != snapshot.snapshot_id
-                       for eid in fact.evidence_ids):
+                if any(
+                    eid not in evidence or evidence[eid].snapshot_id != snapshot.snapshot_id
+                    for eid in fact.evidence_ids
+                ):
                     raise ValueError("Fact/evidence snapshot mismatch")
         for result in self.source_results:
-            if any(x not in tours for x in result.tour_snapshot_ids) or any(x not in offers for x in result.offer_snapshot_ids):
+            if any(x not in tours for x in result.tour_snapshot_ids) or any(
+                x not in offers for x in result.offer_snapshot_ids
+            ):
                 raise ValueError("Source result has dangling snapshots")
-            if any(offers[x].tour_snapshot_id not in result.tour_snapshot_ids for x in result.offer_snapshot_ids):
+            if any(
+                offers[x].tour_snapshot_id not in result.tour_snapshot_ids for x in result.offer_snapshot_ids
+            ):
                 raise ValueError("Source result offer/tour mismatch")
         return self
 

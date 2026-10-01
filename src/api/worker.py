@@ -24,33 +24,67 @@ class Worker:
             timeout = max(0.001, (instant(row["deadline_at"]) - now()).total_seconds())
             async with asyncio.timeout(timeout):
                 if row["kind"] == "parse":
-                    previous = self.store.revision(row["owner"], row["resource_id"], payload["expected_revision"]) if payload["expected_revision"] else None
+                    previous = (
+                        self.store.revision(row["owner"], row["resource_id"], payload["expected_revision"])
+                        if payload["expected_revision"]
+                        else None
+                    )
                     message = Message.model_validate(payload["message"])
-                    r, metrics = await parse_validated(self.nim, message, previous, requirement_id=row["resource_id"],
-                        mode=payload["mode"], timezone=payload["timezone"],
-                        targets=[Target.model_validate(t) for t in payload["targets"]])
+                    r, metrics = await parse_validated(
+                        self.nim,
+                        message,
+                        previous,
+                        requirement_id=row["resource_id"],
+                        mode=payload["mode"],
+                        timezone=payload["timezone"],
+                        targets=[Target.model_validate(t) for t in payload["targets"]],
+                    )
                     self.store.commit_job(row, self.id, r=r, metrics=metrics)
                 else:
                     r = self.store.revision(row["owner"], payload["requirement_id"], payload["revision"])
                     if payload.get("reuse_comparison_id"):
-                        previous = json.loads(self.store.resource(row["owner"], payload["reuse_comparison_id"], kind="comparison")["payload"])
+                        previous = json.loads(
+                            self.store.resource(
+                                row["owner"], payload["reuse_comparison_id"], kind="comparison"
+                            )["payload"]
+                        )
                         crawl = CrawlResult.model_validate(previous["crawl"])
                         # Check current access policy before reusing any previous source.
-                        approved = {s.source_id for s in self.gateway.registry if s.access_status == "approved"}
-                        if any(s.source_id not in approved for s in crawl.source_results if s.tour_snapshot_ids):
-                            raise AppError("SOURCE_BLOCKED", "Nguồn đã bị chặn; không thể dùng lại snapshot.", 409)
+                        approved = {
+                            s.source_id for s in self.gateway.registry if s.access_status == "approved"
+                        }
+                        if any(
+                            s.source_id not in approved for s in crawl.source_results if s.tour_snapshot_ids
+                        ):
+                            raise AppError(
+                                "SOURCE_BLOCKED", "Nguồn đã bị chặn; không thể dùng lại snapshot.", 409
+                            )
                     else:
                         crawl = await self.gateway.collect(r, row["deadline_at"])
-                    result = compare(r, crawl, self.gateway.registry, now().isoformat(), payload.get("offer_selections"))
+                    result = compare(
+                        r, crawl, self.gateway.registry, now().isoformat(), payload.get("offer_selections")
+                    )
                     attempted_failures = [s for s in crawl.source_results if s.status in {"error", "timeout"}]
                     if attempted_failures and not result["candidates"]:
-                        raise AppError("SOURCES_UNAVAILABLE", "Các nguồn được gọi chưa trả dữ liệu dùng được.", 502, retryable=True)
-                    comparison = {"result": result, "crawl": crawl.model_dump(),
-                                  "job_status": "partial" if attempted_failures else "succeeded"}
+                        raise AppError(
+                            "SOURCES_UNAVAILABLE",
+                            "Các nguồn được gọi chưa trả dữ liệu dùng được.",
+                            502,
+                            retryable=True,
+                        )
+                    comparison = {
+                        "result": result,
+                        "crawl": crawl.model_dump(),
+                        "job_status": "partial" if attempted_failures else "succeeded",
+                    }
                     self.store.commit_job(row, self.id, comparison=comparison)
         except asyncio.CancelledError:
             with self.store.transaction() as c:
-                self.store.fail(c, row, AppError("JOB_INTERRUPTED", "Backend dừng khi job đang chạy.", 503, retryable=True))
+                self.store.fail(
+                    c,
+                    row,
+                    AppError("JOB_INTERRUPTED", "Backend dừng khi job đang chạy.", 503, retryable=True),
+                )
             raise
         except Exception as exc:
             if isinstance(exc, TimeoutError):
@@ -58,8 +92,11 @@ class Worker:
             elif isinstance(exc, AppError):
                 error = exc
             elif isinstance(exc, ValidationError):
-                error = AppError("LLM_INVALID_OUTPUT" if row["kind"] == "parse" else "CRAWLER_INVALID_OUTPUT",
-                                 "Dữ liệu upstream không hợp lệ.", 502)
+                error = AppError(
+                    "LLM_INVALID_OUTPUT" if row["kind"] == "parse" else "CRAWLER_INVALID_OUTPUT",
+                    "Dữ liệu upstream không hợp lệ.",
+                    502,
+                )
             else:
                 error = AppError("INTERNAL_ERROR", "Backend không hoàn tất được tác vụ.", 500)
             with self.store.transaction() as c:

@@ -21,8 +21,12 @@ from requirements.normalize import ground, money, normalize, normalize_party
 
 
 def conjunction(conditions: list[Condition], soft: bool) -> Tree:
-    return Tree(kind="all", children=[Tree(kind="predicate", condition_id=c.id)
-                                     for c in conditions if (c.strength == "soft") == soft])
+    return Tree(
+        kind="all",
+        children=[
+            Tree(kind="predicate", condition_id=c.id) for c in conditions if (c.strength == "soft") == soft
+        ],
+    )
 
 
 def prune(tree: Tree, removed: set[str]) -> Tree | None:
@@ -69,8 +73,11 @@ def contradictions(r: Requirement) -> list[str]:
             elif hi == upper:
                 upper_closed &= closed
         bounds[scope] = lower, upper, lower_closed, upper_closed
-    conflicts = [str(k[0]) for k, (lo, hi, lc, hc) in bounds.items()
-                 if lo is not None and hi is not None and (lo > hi or (lo == hi and not (lc and hc)))]
+    conflicts = [
+        str(k[0])
+        for k, (lo, hi, lc, hc) in bounds.items()
+        if lo is not None and hi is not None and (lo > hi or (lo == hi and not (lc and hc)))
+    ]
     dep = bounds.get(("departure_date",), (None, None, True, True))
     ret = bounds.get(("return_date",), (None, None, True, True))
     if dep[0] is not None and ret[1] is not None and (dep[0] > ret[1] or (dep[0] == ret[1] and not ret[3])):
@@ -83,40 +90,94 @@ def finalize(r: Requirement) -> Requirement:
 
     def ask(path, reason, question, options=None, blocking=True):
         digest = hashlib.sha256(f"{r.id}:{r.revision}:{path}:{reason}".encode()).hexdigest()[:20]
-        questions.append(Clarification(id=f"q_{digest}", field_path=path, reason_code=reason,
-                                       question=question, options=options or [], blocking=blocking))
+        questions.append(
+            Clarification(
+                id=f"q_{digest}",
+                field_path=path,
+                reason_code=reason,
+                question=question,
+                options=options or [],
+                blocking=blocking,
+            )
+        )
 
     unsupported = False
     for c in r.conditions:
         hard = c.strength != "soft"
+        if c.strength == "unresolved":
+            ask(
+                f"conditions.{c.id}.strength",
+                "CONDITION_STRENGTH_REQUIRED",
+                "Điều kiện này là bắt buộc hay ưu tiên?",
+                ["hard", "soft"],
+            )
         if isinstance(c.value, UnresolvedValue):
             unsupported |= c.field == "unsupported" and hard
-            if c.value.reason == "DATE_NEEDS_CLARIFICATION" and re.search(r"(?<!\d)\d{1,2}/\d{1,2}(?![\d/])", c.value.raw):
-                ask(f"conditions.{c.id}.value", "DATE_YEAR_REQUIRED", "Ngày bạn nói thuộc năm nào?", blocking=hard)
+            if c.value.reason == "DATE_NEEDS_CLARIFICATION" and re.search(
+                r"(?<!\d)\d{1,2}/\d{1,2}(?![\d/])", c.value.raw
+            ):
+                ask(
+                    f"conditions.{c.id}.value",
+                    "DATE_YEAR_REQUIRED",
+                    "Ngày bạn nói thuộc năm nào?",
+                    blocking=hard,
+                )
             else:
-                ask(f"conditions.{c.id}.value", c.value.reason,
-                    f"Bạn làm rõ điều kiện: {c.value.raw}", blocking=hard)
+                ask(
+                    f"conditions.{c.id}.value",
+                    c.value.reason,
+                    f"Bạn làm rõ điều kiện: {c.value.raw}",
+                    blocking=hard,
+                )
         elif isinstance(c.value, Budget):
             if not c.value.currency:
-                ask(f"conditions.{c.id}.value.currency", "CURRENCY_REQUIRED", "Ngân sách dùng tiền tệ nào?", ["VND", "USD"], hard)
+                ask(
+                    f"conditions.{c.id}.value.currency",
+                    "CURRENCY_REQUIRED",
+                    "Ngân sách dùng tiền tệ nào?",
+                    ["VND", "USD"],
+                    hard,
+                )
             if not c.value.basis:
-                ask(f"conditions.{c.id}.value.basis", "BUDGET_BASIS_REQUIRED", "Ngân sách tính cho ai?",
-                    ["group_total", "per_adult", "per_person"], hard)
+                ask(
+                    f"conditions.{c.id}.value.basis",
+                    "BUDGET_BASIS_REQUIRED",
+                    "Ngân sách tính cho ai?",
+                    ["group_total", "per_adult", "per_person"],
+                    hard,
+                )
     for path in contradictions(r):
-        ask("conditions", "CONTRADICTORY_CONDITIONS", f"Các giới hạn {path} đang mâu thuẫn; bạn muốn giữ giới hạn nào?")
-    positive_scope = any(c.field in {"destinations", "supplier"} and isinstance(c.value, SetValue)
-                         and c.operator not in {"excludes", "not_in"} for c in r.conditions)
+        ask(
+            "conditions",
+            "CONTRADICTORY_CONDITIONS",
+            f"Các giới hạn {path} đang mâu thuẫn; bạn muốn giữ giới hạn nào?",
+        )
+    positive_scope = any(
+        c.field in {"destinations", "supplier"}
+        and isinstance(c.value, SetValue)
+        and c.operator not in {"excludes", "not_in"}
+        for c in r.conditions
+    )
     if r.mode == "discover" and not positive_scope:
         ask("conditions", "SEARCH_SCOPE_REQUIRED", "Bạn muốn tìm tour đến đâu hoặc của nhà cung cấp nào?")
     # Party details block cost calculation only; static acquisition can continue.
-    group_budgets = [c for c in r.conditions if isinstance(c.value, Budget) and c.value.basis in {"group_total", "per_person"}]
+    group_budgets = [
+        c
+        for c in r.conditions
+        if isinstance(c.value, Budget) and c.value.basis in {"group_total", "per_person"}
+    ]
     if group_budgets:
         blocking = any(c.strength != "soft" for c in group_budgets)
         if r.party.adults is None:
             ask("party.adults", "PARTY_REQUIRED", "Nhóm có bao nhiêu người lớn?", blocking=blocking)
         for child in r.party.children:
             if child.age is None:
-                ask(f"party.children.{child.id}.age", "CHILD_AGE_REQUIRED", "Bé bao nhiêu tuổi?", blocking=blocking)
+                ask(
+                    f"party.children.{child.id}.age",
+                    "CHILD_AGE_REQUIRED",
+                    "Bé bao nhiêu tuổi?",
+                    blocking=blocking,
+                )
     blockers = [q.reason_code for q in questions if q.blocking]
     data = r.model_dump()
     data["clarifications"] = questions
@@ -129,8 +190,16 @@ def finalize(r: Requirement) -> Requirement:
     return Requirement.model_validate(data)
 
 
-def from_extraction(*, extraction: Extraction, message: Message, requirement_id: str, mode: str,
-                    timezone: str, targets: list, previous: Requirement | None = None) -> Requirement:
+def from_extraction(
+    *,
+    extraction: Extraction,
+    message: Message,
+    requirement_id: str,
+    mode: str,
+    timezone: str,
+    targets: list,
+    previous: Requirement | None = None,
+) -> Requirement:
     if previous is None:
         if extraction.operations:
             raise AppError("LLM_INVALID_OUTPUT", "Initial extraction không được sửa revision cũ.", 502)
@@ -141,7 +210,9 @@ def from_extraction(*, extraction: Extraction, message: Message, requirement_id:
         messages, revision = [message], 1
     else:
         if extraction.conditions or extraction.hard_tree or extraction.preference_tree:
-            raise AppError("LLM_INVALID_OUTPUT", "Update phải dùng operations; không ghi đè toàn bộ state.", 502)
+            raise AppError(
+                "LLM_INVALID_OUTPUT", "Update phải dùng operations; không ghi đè toàn bộ state.", 502
+            )
         conditions = list(previous.conditions)
         hard_tree, soft_tree = previous.hard_tree, previous.preference_tree
         changed = set()
@@ -156,7 +227,12 @@ def from_extraction(*, extraction: Extraction, message: Message, requirement_id:
                 raise AppError("LLM_INVALID_OUTPUT", "Target sửa không tồn tại.", 502)
             if op.op == "increment_budget":
                 budgets = [c for c in previous.conditions if isinstance(c.value, Budget)]
-                if len(budgets) != 1 or not isinstance(old.value, Budget) or not old.value.currency or not old.value.basis:
+                if (
+                    len(budgets) != 1
+                    or not isinstance(old.value, Budget)
+                    or not old.value.currency
+                    or not old.value.basis
+                ):
                     raise AppError("LLM_INVALID_OUTPUT", "Không xác định duy nhất ngân sách cần tăng.", 502)
                 if op.delta_raw not in op.quote:
                     raise AppError("LLM_INVALID_OUTPUT", "Delta thiếu quote.", 502)
@@ -166,7 +242,9 @@ def from_extraction(*, extraction: Extraction, message: Message, requirement_id:
                     if values[key] is not None:
                         amount = Decimal(values[key]) + delta
                         values[key] = int(amount) if old.value.currency == "VND" else format(amount, "f")
-                replacement = Condition.model_validate({**old.model_dump(), "value": Budget(**values), "sources": [*old.sources, ref]})
+                replacement = Condition.model_validate(
+                    {**old.model_dump(), "value": Budget(**values), "sources": [*old.sources, ref]}
+                )
             elif op.op in {"add", "replace"}:
                 replacement = normalize(op.condition, message, timezone)
                 if op.op == "replace":
@@ -190,6 +268,17 @@ def from_extraction(*, extraction: Extraction, message: Message, requirement_id:
                         hard_tree = Tree(kind="all", children=[hard_tree, leaf])
         party = normalize_party(extraction.party, previous.party, message)
         messages, revision = [*previous.messages, message], previous.revision + 1
-    return finalize(Requirement(id=requirement_id, revision=revision, mode=mode, timezone=timezone,
-                                targets=targets, messages=messages, party=party, conditions=conditions,
-                                hard_tree=hard_tree, preference_tree=soft_tree))
+    return finalize(
+        Requirement(
+            id=requirement_id,
+            revision=revision,
+            mode=mode,
+            timezone=timezone,
+            targets=targets,
+            messages=messages,
+            party=party,
+            conditions=conditions,
+            hard_tree=hard_tree,
+            preference_tree=soft_tree,
+        )
+    )
