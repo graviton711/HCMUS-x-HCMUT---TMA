@@ -65,4 +65,4 @@ AI có thể giúp hiểu yêu cầu ngôn ngữ tự nhiên và trình bày so 
 
 ## Phạm vi tài liệu liên quan
 
-Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Kiến trúc mục tiêu ở `docs/system-architecture.md`, wireframe ở `docs/wireframes.md`; cả hai là bản review, chưa đồng nghĩa với implementation. Crawler khảo sát nguồn hiện tại được mô tả tại `src/crawler/README.md`.
+Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Kiến trúc mục tiêu ở `docs/system-architecture.md`, wireframe ở `docs/wireframes.md`; cả hai là bản review, chưa đồng nghĩa với implementation. Checkout hiện tại chưa có code hoặc tài liệu module crawler. Đề xuất phân chia backend và contract tích hợp ở `docs/backend-plan.md` và `docs/backend-contracts.md`.

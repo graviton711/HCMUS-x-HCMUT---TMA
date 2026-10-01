@@ -1,6 +1,6 @@
 # Kiến trúc hệ thống
 
-**Trạng thái:** Kiến trúc mục tiêu cho team review. Repo hiện mới có crawler khảo sát nguồn; các module còn lại chưa implement.
+**Trạng thái:** Kiến trúc mục tiêu cho team review. Checkout hiện tại chỉ có tài liệu và cấu hình Python, chưa có code crawler/backend. Đề xuất chi tiết backend ở [backend-plan.md](backend-plan.md); các lựa chọn mới trong đó chưa được chốt.
 
 ## Sơ đồ tổng quan
 
@@ -80,6 +80,7 @@ flowchart TD
 ## Giả định và quyết định còn mở
 
 - Phạm vi là web demo; chưa chốt framework UI, API, database hay hosting.
+- User chọn cả hai luồng nhập nhu cầu và so sánh URL. Backend đề xuất FastAPI/Pydantic và job có trạng thái cho extraction/comparison; chi tiết vẫn là thiết kế, chưa có endpoint chạy. Contract ở [api-contract.md](api-contract.md) và [crawler-contract.md](crawler-contract.md).
 - Danh mục nguồn do team kiểm tra và duyệt. Google Sheets có thể là công cụ vận hành danh mục ở giai đoạn đầu, không phải dependency của luồng quyết định cho người dùng.
 - Cách đo độ phù hợp, trọng số tiêu chí, độ tin cậy nguồn và chính sách freshness cần chốt sau khi có bộ dữ liệu mẫu và wireframe được review.
 - Phải kiểm tra quyền truy cập và khả năng trích xuất theo từng nguồn trước khi đưa nguồn vào luồng so sánh.
