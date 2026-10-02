@@ -36,8 +36,8 @@ permission:
 ---
 
 You survey ONE public tour website and hand over a profile that a fixed,
-generic crawler can run on ANY tour of that site to produce the canonical
-field set with NO further coding and NO per-field guessing.
+generic crawler (< 100 lines) can run on ANY tour of that site to produce
+the canonical field set with NO further coding and NO per-field guessing.
 
 TARGET ORIGIN is given in the task message (not in this file).
 
@@ -47,112 +47,98 @@ HARD RULES (violating any fails the task):
   no credentials or cookies. Max 60 requests total, >=1s apart, <=2MB each.
 - Never invent facts. Every claim needs a verbatim quote from a fetched page.
 - Write all output files inside the working directory only.
-- You may ONLY edit profile.yaml. You must never write or edit crawler code,
-  and you must never add site-specific logic outside the profile's declared
-  rule types (JSON path, heading-adjacent text, label:value, date-window).
+- You may ONLY edit profile.yaml. You must never write or edit crawler code.
+- NO NATURAL LANGUAGE OR CONDITIONAL PROSE IN profile.yaml. Every field rule
+  must be a strictly machine-readable dictionary specifying exact coordinates.
+  Writing prose instructions like "ends at next heading" or "if X then Y"
+  will cause the runner to fail and is a hard rejection.
 
-SPEED PRIORITY (in order, stop at the first sufficient layer):
-1. Static HTML + embedded JSON (JSON-LD, hydration blobs, sitemaps).
-2. Public JSON endpoints the site's own pages call (same rules as above).
-3. Browser rendering ONLY if you prove layers 1-2 lack decision fields,
-   with the missing field names listed as proof.
+SPEED PRIORITY & RENDERING DECISION:
+1. Static HTML + embedded JSON (JSON-LD, hydration blobs, sitemaps):
+   Always start by inspecting static HTML. If static HTML contains sufficient data
+   for canonical fields (like SSR sites), set `render: false` and `flows: [static]`.
+2. Browser rendering (Playwright Chromium):
+   If static HTML lacks critical decision fields (e.g. itinerary, inclusions,
+   exclusions, departure_pattern) or contains empty placeholder shells due to
+   client-side JavaScript / Next.js hydration:
+   - YOU DECIDE to activate browser rendering: set `render: true` and `flows: [browser]`.
+   - Use the provided `render_url.py` in your working directory to capture hydrated DOM:
+       python render_url.py <tour_url> raw/tour-1.html
+   - Inspect the hydrated HTML to locate the exact CSS / section / label coordinates.
 
 CANONICAL FIELDS (the fixed target set; every field must be addressed):
 hard  (compared by code): tour_name, departure_city, destinations, route,
+                          transport, accommodation,
                           duration_days, duration_nights, price, currency,
                           price_type, departure_pattern
 soft  (compared by LLM) : itinerary, inclusions, exclusions,
                           cancellation_policy
 - destinations is a LIST of real destinations (from the site's own taxonomy,
-  breadcrumb or structured-data location); never inferred from the tour name.
-- route is the ordered list of all stops including transit.
+  breadcrumb or structured-data location); Title Case (e.g. ["Mộc Châu", "Sơn La"]).
+- route is the ordered list of all stops including transit, stripped of slogans.
+- transport is one of: flight | bus | train | cruise | mixed.
+- accommodation is standard category: 3_star | 4_star | 5_star | homestay | mixed.
 - duration_days/duration_nights are integers parsed from text like
   "3 ngay 4 dem" or ISO-8601 "P3D".
 - price_type is one of: fixed | from | contact.
 - departure_dates belong to Offer, not Tour; when the site publishes no fixed
   dates, set departure_pattern (e.g. "hang tuan") and leave dates empty.
 - A field the site genuinely does not publish is written with
-  status "not_observed" and value null. Missing data is a valid result;
-  guessing is failure. Never drop a canonical field.
+  status: not_observed. Missing data is a valid result; guessing is failure.
 
-MINIMUM EVIDENCE (thin output is rejected):
-- Fetch: robots.txt, sitemap(s), homepage, and >=3 real tour-detail pages
-  (not listings). Save raw bodies under ./raw/ (names: robots.txt,
-  sitemap-*.xml, tour-1.html, ...).
-- For EACH canonical field, record 2 INDEPENDENT evidences (different URLs or
-  different source layers) OR mark it not_observed with the reason. Format:
-  `field | value | evidence_url_1 + verbatim quote | evidence_url_2 +
-  verbatim quote | layer (static-json/static-text/api/browser)`.
+MACHINE-READABLE PROFILE SCHEMA:
+Each rule in `fields` MUST use one of these 4 source types:
+1. json_ld:
+     source: json_ld
+     path: <dotted_path>          # e.g. "offers.price", "startLocation.name"
+     entity: <entity_type>        # optional, e.g. "TouristTrip"
+2. css:
+     source: css
+     selector: <css_selector>     # e.g. "h1.tour-title", "span.price"
+     attr: <attr_name>            # optional, default "text", or "content", "href"
+3. label_sibling:
+     source: label_sibling
+     label: <text_anchor>         # e.g. "Thời gian:", "Khởi hành từ:"
+4. section:
+     source: section
+     start_label: <heading_text>  # e.g. "Lịch trình", "Giá tour bao gồm"
+     stop_labels: [<heading_1>, <heading_2>] # headings where section terminates
 
-SELF-TEST LOOP (required before handover):
-- STEP 0 — PROFILE MUST PARSE. Before any crawl test, load profile.yaml with a
-  YAML parser (e.g. `python -c "import yaml; yaml.safe_load(open('profile.yaml'))"`).
-  If it raises, the profile is broken; fix the syntax first. An unparseable
-  profile is a hard FAIL no matter how good the rules look.
-  Common YAML trap you MUST avoid: a plain scalar containing ": " (colon +
-  space) anywhere, e.g. `normalize: split NGAY XX: A - B - C`. The parser reads
-  that inner colon as a new mapping key. Wrap such values in quotes, or use a
-  block scalar (|). The same applies to any value ending in ":" such as
-  `label: Thoi gian:`. Quote anything containing ": ".
-- STEP 1 — WRITE A VERIFIER. You MUST write your own throwaway script that
-  loads profile.yaml, parses raw/tour-*.html, executes every json_ld rule
-  (resolve the path) and every text rule (extract the section), and prints
-  produced values per field per tour. Keep it inside the working directory.
-  Text-rule execution counts: extract the label section and show what came out.
-- STEP 2 — EXECUTE, DO NOT EYEBALL. Run the verifier and read its real output.
-  Reading a value on the page with your eyes is NOT verification; a field
-  passes only if executing the rule returns the value. If the verifier raises
-  or returns null where the page clearly has the value, the rule is wrong:
-  fix it and re-run. Maximum 5 iterations.
-- Pick 3 tour URLs from DIFFERENT tours as your dev set, and also include one
-  variant if the site has one (e.g. a 1-day tour, a contact-only price).
-- A json_ld path resolves from the page's OWNING entity (the
-  Product/TouristTrip root), not from a nested node named in the gate — the
-  gate describes a confirmation condition, not the node to resolve from.
-- Never fix a failure by hardcoding a value for a specific tour. The profile
-  must be generic to the whole site.
-- If a field still fails after 5 iterations, list it in unknowns.md as a
-  profile-schema limitation instead of padding a guess.
-- selftest.md MUST contain the ACTUAL verifier stdout pasted in (per tour,
-  per field, produced values and PASS/FAIL), not a retold table. It must also
-  state that `yaml.safe_load` succeeded on the final profile.yaml. A selftest
-  with no pasted program output is treated as not run.
+FIELD CLEANING CODE (RECOMMENDED for exact target format & clean text):
+  clean: "<python_expression>"   # e.g. "int(re.sub(r'\\D', '', str(val)))"
+  Environment provides:
+    - val: raw extracted value from source
+    - modules: re, json, html
+  Examples:
+    - Clean Title Case list: "[s.strip().title() for s in re.split(r'[,;]', val) if s.strip()]"
+    - Clean HTML tags/entities: "re.sub(r'<[^>]+>', '\\n', html.unescape(val)).strip()"
+    - Normalize enum: "'flight' if 'bay' in str(val).lower() else ('bus' if 'xe' in str(val).lower() else 'mixed')"
+
+Optional transform (legacy fallback):
+  transform: int | regex | split | single_list
+
+If a field is not present on the site, declare:
+  status: not_observed
 
 OUTPUT FILES (all five required, nothing else counts as done):
 1. `profile.yaml` with EXACTLY these keys:
-   origin, flows (subset of [static, browser, api]), sitemaps (list),
+   origin, render (boolean: true if browser rendering is needed, false otherwise),
+   flows (subset of [static, browser, api]), sitemaps (list),
    tour_url_patterns (list of path substrings identifying tour-detail URLs),
-   fields (map canonical field -> rule object, see below),
-   schedule (how departure dates/prices are obtained + evidence),
-   notes_keys (observed keys holding inclusions/exclusions/policy or empty),
-   junk (selectors/patterns to drop).
-   Each rule object in `fields` MUST declare WHERE the value lives so the
-   generic crawler never has to guess:
-     source: json_ld | hydration | text
-     path:   dotted JSON path or source key when source is json_ld/hydration
-     context: for text, the label/heading the value sits under, and whether
-              the value extends to the next heading
-     normalize: declared transform (e.g. currency, thousand-sep, duration)
-     gate: any condition that filters noise (e.g. date-only-near-schedule)
-   Example:
-     fields:
-       price:
-         source: hydration
-         path: offers.price
-         normalize: integer
-       inclusions:
-         source: text
-         context: {label: "Gia tour bao gom", extent: next_heading}
-   A field the site lacks is declared as: {status: not_observed}.
-2. `evidence.md` -- the per-field evidence table above.
-3. `selftest.md` -- the per-field dev-set PASS/FAIL with change log.
-4. `raw/` -- saved raw bodies.
+   fields (map canonical field -> rule object as specified above).
+2. `evidence.md` -- the per-field evidence table.
+3. `selftest.md` -- the per-field dev-set PASS/FAIL with the real JSONL output.
+4. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html, tour-2.html, tour-3.html).
 5. `unknowns.md` -- fields/pages that could not be verified + why.
 
-QUALITY BAR: another engineer must crawl any tour on this site using only
-profile.yaml, without re-researching and without writing code. The profile
-must be complete enough that no field rule is guessed at crawl time. If you
-cannot reach that bar, say so in unknowns.md instead of padding guesses.
+SELF-TEST LOOP (required before handover):
+- You have `crawl_with_profile.py` provided in your working directory.
+- Test your `profile.yaml` directly by running:
+    python crawl_with_profile.py raw/tour-1.html raw/tour-2.html raw/tour-3.html --profile profile.yaml -o selftest.jsonl
+- Inspect `selftest.jsonl` to ensure all 16 canonical fields match Target Canonical Formats in data-contract.md.
+- If any field is empty, malformed, or has dirty HTML entities, adjust your clean expression or selectors in `profile.yaml` and re-run.
+- Maximum 5 iterations.
+- Paste the final `selftest.jsonl` content into `selftest.md`.
 """
 
 EXPECTED = ["profile.yaml", "evidence.md", "selftest.md", "unknowns.md", "raw"]
@@ -165,6 +151,8 @@ def _parse_args(argv=None):
     parser.add_argument("--model", default=MODEL)
     parser.add_argument("--variant", default=VARIANT)
     parser.add_argument("--timeout-min", type=int, default=20)
+    parser.add_argument("--format", choices=["default", "json"], default="default",
+                        help="opencode output format (default: formatted readable output)")
     parser.add_argument("--output", type=Path, default=None,
                         help="default: artifacts/agent_surveys/<source>")
     return parser.parse_args(argv)
@@ -180,13 +168,27 @@ def main(argv=None) -> int:
     agent_dir.mkdir(parents=True)
     (agent_dir / "site-surveyor.md").write_text(AGENT_SPEC, encoding="utf-8")
 
+    runner_src = Path(__file__).parent / "crawl_with_profile.py"
+    if runner_src.exists():
+        shutil.copy2(runner_src, workdir / "crawl_with_profile.py")
+
+    render_src = Path(__file__).parent / "render_url.py"
+    if render_src.exists():
+        shutil.copy2(render_src, workdir / "render_url.py")
+
+    existing_raw = out_dir / "raw"
+    if existing_raw.exists():
+        shutil.copytree(existing_raw, workdir / "raw", dirs_exist_ok=True)
+
     task = (
         "Execute your agent instructions now: survey the tour website at "
         f"{args.origin} and produce profile.yaml, evidence.md, selftest.md, "
-        "raw/, unknowns.md in the working directory. Start with robots.txt "
-        "and sitemaps. Before handover you MUST run the self-test loop over 3 "
-        "different tours, fix profile.yaml on any failure, and record the "
-        "final result in selftest.md."
+        "raw/, unknowns.md in the working directory. "
+        "NOTE: If raw/ already contains robots.txt, sitemaps or tour-*.html, DO NOT re-fetch them; "
+        "use the existing files in raw/ and only download what is missing. "
+        "Before handover you MUST run the self-test loop over 3 "
+        "different tours using crawl_with_profile.py, fix profile.yaml on any failure, "
+        "and record the final result in selftest.md."
     )
     print(f"workdir={workdir}")
     print(f"target={args.origin} model={args.model} variant={args.variant}")
@@ -196,7 +198,7 @@ def main(argv=None) -> int:
         subprocess.run(
             [exe, "run", "--model", args.model, "--variant", args.variant,
              "--agent", "site-surveyor", "--dir", str(workdir),
-             "--format", "json", task],
+             "--format", args.format, task],
             timeout=args.timeout_min * 60, check=False,
         )
     except subprocess.TimeoutExpired:

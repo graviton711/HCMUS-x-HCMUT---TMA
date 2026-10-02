@@ -28,8 +28,13 @@ include = ["tourcrawl*", "shared*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "scripts"]
 addopts = "-ra"
+
+[tool.pyright]
+extraPaths = ["src", "scripts"]
+venvPath = "."
+venv = ".venv"
 
 [tool.ruff]
 target-version = "py312"

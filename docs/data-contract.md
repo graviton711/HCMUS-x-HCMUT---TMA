@@ -66,12 +66,15 @@ Offer    { fields }
 | `departure_city` | str | ✅ | một giá trị, điểm khởi hành |
 | `destinations` | list[str] | ✅ | điểm đến thật, đã chuẩn hoá, dùng để lọc |
 | `route` | list[str] | | toàn bộ hành trình theo thứ tự, gồm cả transit |
+| `transport` | enum | | `flight` \| `bus` \| `train` \| `cruise` \| `mixed` |
+| `accommodation` | str | | tiêu chuẩn khách sạn/lưu trú, vd: `3_star`, `4_star`, `homestay` |
 | `duration_days` | int | ✅ | chuẩn hoá từ "3 ngày 4 đêm" / `P3D` |
 | `duration_nights` | int | | |
 | `price` | int | ✅ | giá tham chiếu (thấp nhất đã quan sát), đơn vị theo `currency` |
 | `currency` | str | ✅ | ISO 4217, ví dụ `VND` |
 | `price_type` | enum | | `fixed` \| `from` \| `contact` |
 | `departure_pattern` | str | | "hàng tuần", "theo yêu cầu" khi không có ngày cụ thể |
+| `offers` | list[Offer] | | danh sách các lượt khởi hành theo ngày (nếu có) |
 
 ## Tour.fields — soft (LLM so sánh)
 
@@ -106,13 +109,26 @@ Offer    { fields }
 
 `status: partial` vẫn dùng được để so, nhưng phải gắn cảnh báo trong kết quả hiển thị.
 
-## Chuẩn hoá giá trị
+## Chuẩn hoá giá trị (Target Canonical Formats)
+
+Mọi pipeline thu thập (Agent & Runner) phải làm sạch dữ liệu để khớp chính xác với định dạng đích sau:
 
 - `currency`: `đ`, `VNĐ`, `VND` → `VND`.
-- `duration_days` / `duration_nights`: parse từ "3 ngày 4 đêm" hoặc ISO 8601 duration `P3D`.
-- `departure_date`: chỉ nhận ngày có ngữ cảnh lịch khởi hành; không nhận chuỗi ngày nằm ngoài cửa sổ quanh từ khoá khởi hành/lịch.
-- `price`: bỏ dấu phân cách nghìn, giữ phần số.
-- `destinations`: chỉ lấy từ chỗ nguồn đã phân loại sẵn (category, breadcrumb, location của structured data). Không suy từ tên tour.
+- `duration_days` / `duration_nights`: Số nguyên `int`, trích xuất từ "3 ngày 4 đêm" hoặc `P3D`.
+- `price`: Số nguyên `int`, bỏ dấu chấm/phẩy phân cách hàng nghìn.
+- `destinations`: `list[str]` chuẩn Title Case (vd: `["Mộc Châu", "Sơn La"]`), không in hoa toàn bộ, không viết tắt, lọc từ taxonomy/breadcrumb của nguồn.
+- `route`: `list[str]` các điểm dừng theo thứ tự hành trình, loại bỏ hoàn toàn slogan quảng cáo (vd: `["Hà Nội", "Thung Khe", "Mộc Châu"]`).
+- `transport`: Enum chuẩn: `flight` | `bus` | `train` | `cruise` | `mixed`.
+- `accommodation`: Chuẩn hóa: `homestay` | `2_star` | `3_star` | `4_star` | `5_star` | `mixed`.
+- `itinerary`, `inclusions`, `exclusions`, `cancellation_policy`: **Plain text thuần túy**, sạch 100% thẻ HTML (`<p>`, `<br/>`), giải mã toàn bộ escaped entities (`\u003cbr/\u003e`, `&amp;`, `&quot;`, `-\t`), phân tách dòng bằng `\n- ` hoặc `\n`.
+- `offers`: Mảng `list[dict]` các lượt khởi hành cụ thể (`departure_date`, `price`, `availability`), rỗng nếu không có lịch cố định.
+
+## Định dạng lưu trữ Crawler Pipeline
+
+Định dạng lưu trữ chuẩn của tầng thu thập dữ liệu là **JSON Lines (`.jsonl`)**:
+- Mỗi dòng là 1 JSON object hoàn chỉnh của 1 Tour, giữ nguyên native types (`int`, `list[str]`, `list[dict]`).
+- Cho phép stream đọc/ghi nối dòng với độ phức tạp bộ nhớ $O(1)$.
+
 
 ## Giao diện backend–frontend
 
