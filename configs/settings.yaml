@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=./settings.schema.json
+# Global settings for tourtcrawl. Team edits via PR like code.
+fetch:
+  timeout_s: 20
+  max_bytes: 2000000
+  delay_s: 1.0
+  user_agent: "MLAITourSourceAuditor/0.1"
+browser:
+  timeout_ms: 60000
+  max_tabs: 12
+  max_rows_per_tab: 12
+  wait_response_ms: 3000
+  tab_growth_wait_ms: 4000
+logging:
+  level: "INFO"  # may be overridden by LOG_LEVEL env
+batch:
+  max_consecutive_failures: 10
+  delay_s: 1.0
+output:
+  dir: ".local"
+clean:
+  min_visible_chars: 40
+  boilerplate_short_words: 6
+  boilerplate_short_run: 20
+  flight_short_run: 15

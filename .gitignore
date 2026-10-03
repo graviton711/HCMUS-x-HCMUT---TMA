@@ -14,7 +14,7 @@ pip-wheel-metadata/
 .coverage
 htmlcov/
 
-# uv / venv — giữ uv.lock + .python-version, bỏ venv
+# uv / venv — keep uv.lock + .python-version; ignore virtual environments
 .venv/
 venv/
 env/
@@ -27,16 +27,20 @@ env/
 *.pem
 *.p12
 
-# Node / Web Demo (dự phòng frontend)
+# Node / web demo
 node_modules/
 .next/
 out/
-dist/
 .vite/
 *.local
 
-# Data / ML artifacts (giữ code, bỏ dữ liệu nặng)
-data/
+# Local crawl artifacts
+.local/crawl-reports/
+artifacts/
+
+# Data / ML artifacts; keep only the small, versioned source registry
+data/*
+!data/providers.toml
 datasets/
 *.csv
 *.parquet

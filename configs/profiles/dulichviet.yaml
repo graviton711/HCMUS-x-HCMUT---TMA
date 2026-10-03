@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=../profile.schema.json
+# Dulichviet source profile. Static-only: no browser, no API.
+origin: "dulichviet.com.vn"
+flows: ["static"]
+sitemaps:
+  - "https://dulichviet.com.vn/sitemap_tour_index.xml"
+tour_url_patterns: ["/du-lich-"]
+aliases: {}
+schedule_markers:
+  heading: "Lịch khởi hành"
+  month_pattern: ""
+  date_pattern: "\\d{2}/\\d{2}/20\\d{2}"
+section_anchors:
+  highlights: ["sec-highlights"]
+  itinerary: ["sec-itinerary"]
+  schedule: ["sec-schedule"]
+  included: ["sec-included"]
+  notes: ["sec-notes"]
+  related: ["sec-related"]
+section_heading_fallback:
+  - ["h2", "h3"]
+notes_key_pattern: ""
+junk_presentation_keys: []
+keep_patterns: []

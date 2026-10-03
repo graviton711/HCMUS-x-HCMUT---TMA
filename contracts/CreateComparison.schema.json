@@ -1,0 +1,73 @@
+{
+  "$defs": {
+    "OfferSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "target_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Target Id",
+          "type": "string"
+        },
+        "offer_snapshot_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Offer Snapshot Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_id",
+        "offer_snapshot_id"
+      ],
+      "title": "OfferSelection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "requirement_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Requirement Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "offer_selections": {
+      "items": {
+        "$ref": "#/$defs/OfferSelection"
+      },
+      "maxItems": 5,
+      "title": "Offer Selections",
+      "type": "array"
+    },
+    "reuse_comparison_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reuse Comparison Id"
+    }
+  },
+  "required": [
+    "requirement_id",
+    "revision"
+  ],
+  "title": "CreateComparison",
+  "type": "object"
+}

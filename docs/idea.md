@@ -1,6 +1,7 @@
 # Proposal: Hỗ trợ quyết định chọn tour
 
-**Trạng thái:** Bản đề xuất để team review  
+**Trạng thái:** Đã chốt phạm vi sản phẩm theo xác nhận ngày 03/10/2026.
+
 **Định vị:** Decision support cho người Việt chọn tour và nhà cung cấp; không phải công cụ lập kế hoạch chuyến đi.
 
 ## Tóm tắt
@@ -16,12 +17,14 @@ Hệ thống giúp người dùng thu thập, xác minh và so sánh các tour p
 
 ## Luồng người dùng và kết quả
 
-Người dùng có thể:
+Một màn nhập chung nhận nhu cầu và URL tùy chọn:
 
 1. Nhập nhu cầu/ràng buộc: điểm đến, ngày hoặc độ linh hoạt, nơi khởi hành, ngân sách, số người/độ tuổi, sở thích và điều kiện quan trọng.
-2. Đưa vào các tour hoặc URL đang cân nhắc để hệ thống đối chiếu trực tiếp.
+2. Thêm các tour/URL đang cân nhắc, kể cả chỉ một URL; hệ thống phân tích tour cung cấp và tìm thêm tour để đối chiếu chung. Có thể chỉ nhập URL nếu chưa có nhu cầu rõ.
 
-Hệ thống lọc theo ràng buộc cứng, sau đó so sánh các lựa chọn còn lại theo độ phù hợp, tổng giá/dịch vụ, điều kiện tour và tín hiệu rủi ro nhà cung cấp. Kết quả cần có bảng so sánh, giải thích trade-off, dữ liệu chưa biết/chưa xác minh và bằng chứng cho từng nhận định. Không tự chọn thay người dùng.
+Người dùng review nhu cầu/phạm vi → hệ thống tìm/đánh giá/rank/tự chọn tối đa ba gợi ý và dựng bảng so sánh ngay → xem lý do/evidence hoặc tìm phương án khác/sửa yêu cầu. Không yêu cầu sàng lọc danh sách/chọn ba tour. Thiếu tour đủ điều kiện thì hiển thị đúng số có được; người dùng tự quyết định chọn tour cuối cùng.
+
+Khi chỉ có URL, dữ kiện tour gợi ý phạm vi để review, không tự thành sở thích/ràng buộc. Đề xuất giữ tour URL làm tham chiếu và so với tối đa ba gợi ý mới; một URL + ba gợi ý = bốn tour đối chiếu. Budget retrieval khởi điểm 20 tour/lượt và count tham chiếu cần review/đo với BE. G9/G10 và policy còn mở tại [checklist](frontend-backend-checklist.md); v1 chưa xử lý chung/ranking/vòng phương án khác.
 
 ## Phân biệt với recommendation và lập kế hoạch
 
@@ -65,4 +68,4 @@ AI có thể giúp hiểu yêu cầu ngôn ngữ tự nhiên và trình bày so 
 
 ## Phạm vi tài liệu liên quan
 
-Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Kiến trúc mục tiêu ở `docs/system-architecture.md`, wireframe ở `docs/wireframes.md`; cả hai là bản review, chưa đồng nghĩa với implementation. Crawler khảo sát nguồn hiện tại được mô tả tại `src/crawler/README.md`.
+Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Kiến trúc mục tiêu và wireframe đã chốt; công việc frontend ở [frontend-plan.md](frontend-plan.md), backend ở [backend-plan.md](backend-plan.md). Backend v1 và tourcrawl đã có code riêng; việc nối hai phần và frontend được theo dõi ở [frontend-crawler-integration.md](frontend-crawler-integration.md).
