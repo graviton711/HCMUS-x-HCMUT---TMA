@@ -1,6 +1,6 @@
 # Wireframe low-fi
 
-**Trạng thái:** Bản bố cục để review, chưa phải UI final. Mục tiêu là làm rõ quyết định và bằng chứng, không tối ưu visual design.
+**Trạng thái:** Đã chốt bố cục theo xác nhận ngày 03/10/2026, chưa phải UI final. Mục tiêu là làm rõ quyết định và bằng chứng; chi tiết hành vi/mobile/visual tiếp tục ở planning frontend.
 
 ## 1. Nhập nhu cầu hoặc tour cần so sánh
 
@@ -71,7 +71,7 @@
 
 **Hành vi:** Evidence mở theo từng field, không chỉ một danh sách link chung. Phân biệt nội dung nhà cung cấp tự công bố với xác minh độc lập; hiển thị thiếu dữ liệu và giới hạn crawl. Không hiển thị “uy tín thấp/cao” nếu không có tiêu chí và nguồn cụ thể.
 
-## Ghi chú review
+## Ghi chú cho thiết kế chi tiết
 
 - Ví dụ giá, ngày và tên công ty trong wireframe chỉ minh hoạ bố cục, không phải dữ liệu thật.
-- Cần review xem hai tab nhập có đủ rõ không, bảng có quá rộng trên mobile không, và nhóm evidence/rủi ro có dễ kiểm chứng không.
+- Khi thiết kế chi tiết, kiểm tra hai tab nhập đủ rõ, bảng đối chiếu được trên mobile và nhóm evidence/rủi ro dễ kiểm chứng; giữ các trách nhiệm và bố cục chính đã chốt.

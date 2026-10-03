@@ -1,6 +1,6 @@
 # Kiến trúc hệ thống
 
-**Trạng thái:** Kiến trúc mục tiêu cho team review. Repo hiện chưa có module nào được implement.
+**Trạng thái:** Đã chốt kiến trúc mục tiêu theo xác nhận ngày 03/10/2026. Repo hiện chưa có module nào được implement; stack và chi tiết API còn mở được xử lý trong planning frontend/backend.
 
 ## Sơ đồ tổng quan
 

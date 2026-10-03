@@ -13,18 +13,15 @@ flowchart LR
     R --> U
 ```
 
-Đây là kiến trúc mục tiêu; hiện repo mới có crawler khảo sát nguồn, chưa có ứng dụng decision support hoàn chỉnh.
+Idea, kiến trúc và bố cục wireframe đã chốt. Repo hiện có tài liệu và skill thiết kế; các module sản phẩm chưa được implement.
 
 - [Proposal và phân tích bài toán](docs/idea.md)
 - [Kiến trúc hệ thống](docs/system-architecture.md)
 - [Wireframe](docs/wireframes.md)
-- [Crawler khảo sát nguồn](src/crawler/README.md)
+- [Planning frontend / UI/UX](docs/frontend-plan.md)
+- [Chuẩn bị frontend / UI/UX và skill thiết kế](docs/frontend-design-preparation.md)
+- [Hợp đồng dữ liệu và API](docs/data-contract.md)
 
-## Phát triển crawler
+## Công việc frontend tiếp theo
 
-```powershell
-uv sync
-uv run pytest
-uv run ruff check .
-uv run supplier-crawler inspect <url> --output .local/crawl-reports/report.json
-```
+Review [flow](docs/frontend-flows.md) và [checklist FE–BE](docs/frontend-backend-checklist.md), sau đó chốt nền tảng kỹ thuật và thiết kế UI chi tiết theo planning. Quy trình làm việc ở [AGENTS.md](AGENTS.md).

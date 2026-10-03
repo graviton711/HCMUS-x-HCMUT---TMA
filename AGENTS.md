@@ -95,3 +95,7 @@ src/
 ## 5. Communication 
 
 Luôn giữ reply càng ngắn gọn càng tốt, người đọc vào là nắm được vấn đề ngay, không nói những thứ hiển nhiên hoặc không liên quan.
+
+## 6. Frontend / UI/UX Skills
+
+Trước công việc frontend/UI/UX, đọc `docs/frontend-design-preparation.md` để chọn skill trong `.agents/skills/` đúng phạm vi. Skill không thay thế Planning Protocol, proposal, wireframe hoặc data contract. Không áp quy tắc landing/marketing vào bảng so sánh và form của sản phẩm; chỉ chọn phong cách cụ thể khi hướng thiết kế đó đã được thống nhất.
