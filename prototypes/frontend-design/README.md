@@ -37,4 +37,4 @@ Không cần extension VS Code. Kiểm tra desktop 1440px, tablet 768px, mobile 
 
 ## Chia sẻ preview online
 
-User đã đồng ý dùng GitHub Pages để nhóm mở bằng link, không cần pull/chạy local. [Quy trình publish](../../docs/frontend-preview-publishing.md) ghi phạm vi, điều kiện Pages và trạng thái triển khai. Workflow chỉ lấy thư mục này từ `feature/minh-phu`; link public sẽ được ghi sau khi deploy và kiểm tra thành công. Mọi đường dẫn asset trong trang là tương đối để chạy dưới project path.
+Prototype/workflow đã push lên `feature/minh-phu`. [Quy trình publish](../../docs/frontend-preview-publishing.md) ghi phạm vi, điều kiện Pages và run đang chờ chủ repo bật hosting. Workflow chỉ lấy thư mục này; link public sẽ được ghi sau khi deploy và kiểm tra thành công. Mọi đường dẫn asset trong trang là tương đối để chạy dưới project path.

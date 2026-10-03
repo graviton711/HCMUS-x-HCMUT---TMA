@@ -1,6 +1,8 @@
 # Chia sẻ prototype frontend
 
-**Trạng thái:** user đã đồng ý GitHub Pages ngày 03/10/2026. Workflow được chuẩn bị trên `feature/minh-phu`; chưa có link online được xác minh. Đã đăng nhập và kiểm tra GitHub UI: repo **private**, tài khoản `minhphune` không có quyền repository options/Pages. Cần chủ repo `graviton711` hoặc người được phân quyền Pages xác nhận gói hỗ trợ và bật source GitHub Actions. Không thay đổi visibility hoặc gói GitHub.
+**Trạng thái:** user đã đồng ý GitHub Pages ngày 03/10/2026. Đã commit/push prototype và workflow lên `feature/minh-phu` tại `577033a`, xác nhận SHA local/remote khớp. [Run #1](https://github.com/graviton711/HCMUS-x-HCMUT---TMA/actions/runs/37135033019) chạy từ đúng nhánh nhưng dừng ở **Configure GitHub Pages: HTTP 404, Get Pages site failed**; GitHub yêu cầu bật Pages với source GitHub Actions. Chưa có link online được xác minh.
+
+Đã đăng nhập và kiểm tra GitHub UI: repo **private**, tài khoản `minhphune` không có quyền repository options/Pages. Cần chủ repo `graviton711` hoặc người được phân quyền Pages xác nhận gói hỗ trợ và bật source GitHub Actions; sau đó re-run run trên. Không thay đổi visibility hoặc gói GitHub.
 
 ## Phạm vi và cách triển khai
 
@@ -24,6 +26,7 @@ GitHub Free hỗ trợ Pages cho repo public; private cần gói phù hợp. N�
 - Sau thiết lập, push thay đổi trong thư mục prototype/workflow vào `feature/minh-phu` sẽ cập nhật cùng link preview. Push chỉ sửa tài liệu không chạy deploy.
 - Commit nguồn và publish là hai trạng thái riêng; workflow thành công chưa thay nghiệm thu visual P3.2 hoặc nghiệm thu sản phẩm P5/P6.
 - Local prototype đã đạt 56/56 browser checks. Bước publish cần kiểm tra thêm đường dẫn project trên hosting và xác nhận run/commit triển khai; không chạy lại backend/crawler chỉ vì thêm hosting tĩnh.
+- Workflow đã parse YAML và kiểm tra giới hạn branch/artifact/quyền/SHA action; GitHub nhận workflow và chạy job. Deployment còn bị chặn ở cấu hình Pages của repo, không được ghi thành publish thành công.
 - Đã kiểm tra local dưới prefix `/HCMUS-x-HCMUT---TMA/`: bảng review và A/B trả 200, ảnh/font tải đủ, không request sai prefix hoặc lỗi console; viewer B mobile có viewport 390px và mở được evidence. Đây là kiểm tra base path trước publish, chưa xác nhận website online.
 - Hướng visual, count policy, framework, contract G1–G10 và crawler D1–D5 vẫn theo [design review](frontend-design-review.md) / [planning](frontend-plan.md).
 
