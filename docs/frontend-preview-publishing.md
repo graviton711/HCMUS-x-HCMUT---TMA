@@ -23,7 +23,7 @@ GitHub Free hỗ trợ Pages cho repo public; private cần gói phù hợp. N�
 
 ## Cập nhật / kiểm chứng
 
-- Sau thiết lập, push thay đổi trong thư mục prototype/workflow vào `feature/minh-phu` sẽ cập nhật cùng link preview. Push chỉ sửa tài liệu không chạy deploy.
+- Sau thiết lập, push thay đổi trong thư mục prototype/workflow vào `feature/minh-phu` sẽ cập nhật cùng link preview. Tài liệu nằm trong thư mục prototype cũng kích hoạt workflow; chỉ sửa tài liệu ngoài phạm vi này không chạy deploy.
 - Commit nguồn và publish là hai trạng thái riêng; workflow thành công chưa thay nghiệm thu visual P3.2 hoặc nghiệm thu sản phẩm P5/P6.
 - Local prototype đã đạt 56/56 browser checks. Bước publish cần kiểm tra thêm đường dẫn project trên hosting và xác nhận run/commit triển khai; không chạy lại backend/crawler chỉ vì thêm hosting tĩnh.
 - Workflow đã parse YAML và kiểm tra giới hạn branch/artifact/quyền/SHA action; GitHub nhận workflow và chạy job. Deployment còn bị chặn ở cấu hình Pages của repo, không được ghi thành publish thành công.
