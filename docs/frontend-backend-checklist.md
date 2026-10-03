@@ -3,7 +3,7 @@
 **Trạng thái:** Đã đối chiếu code backend `0b7e59f` ngày 03/10/2026. Giữ đủ C1–C11 của planning cũ; phần chưa đáp ứng vẫn cần FE + BE trao đổi. “Đã có” chỉ xác nhận code hiện tại, không đồng nghĩa đã nghiệm thu UI hoặc dữ liệu tour thật.
 **Owner:** FE + BE cùng review; BE xác nhận dữ liệu/khả năng xử lý, FE xác nhận đủ để thực hiện [flow](frontend-flows.md).
 
-Nguồn chuẩn: [HTTP contract v1](api-contract.md), [domain contract](backend-contracts.md), [schemas](../contracts/README.md). Hướng tích hợp theo code: [frontend-api-integration.md](frontend-api-integration.md). Contract cũ `POST /api/compare` đã được thay bằng pipeline `/v1`; không giữ hai schema cạnh tranh.
+Nguồn chuẩn: [HTTP contract v1](api-contract.md), [domain contract](backend-contracts.md), [schemas](../contracts/README.md). Hướng tích hợp theo code: [frontend-api-integration.md](frontend-api-integration.md). [Data contract cũ](data-contract.md) giữ field/yêu cầu tham khảo, API `/api/compare` không phải runtime. [Đối chiếu crawler](frontend-crawler-integration.md) ghi code đã merge và D1–D5 chưa nối; mọi gap dưới đây vẫn giữ.
 
 ## Contract hiện có
 
@@ -11,7 +11,7 @@ Nguồn chuẩn: [HTTP contract v1](api-contract.md), [domain contract](backend-
 - Comparison bất đồng bộ; GET job/result, cancel, idempotency; stable target/offer/evidence references.
 - Điều kiện hard/soft, cây AND/OR, pass/fail/unknown, eligible/ineligible/needs_verification; không dùng điểm AI mặc định.
 - Fact có data_state/verification/completeness/observed_at/evidence_ids; evidence endpoint có raw quote và snapshot binding.
-- Mẫu input, JSON Schema request/domain và tests đã có. Response public chưa được schema hóa đầy đủ; default tour data vẫn synthetic, crawler thật chưa nối.
+- Mẫu input, JSON Schema request/domain và tests đã có. Tourcrawl CLI/profile và scripts đã merge; chưa có adapter/HTTP exchange tương thích vào backend. Public response chưa schema hóa đầy đủ; API tour data mặc định vẫn synthetic.
 
 ## Các quyết định cần chốt
 
@@ -45,6 +45,8 @@ Không bỏ hàng/tính năng trong wireframe chỉ vì backend hiện chưa tr�
 | G8 — Public schema | Model/JSON Schema/OpenAPI cho mọi response branch và error + snapshots; sinh types/validation chung, giữ invariant reference ngoài JSON Schema | C10/C11, P1.4–P1.5, P2.4, P4.6 | BE API + FE |
 
 Ưu tiên trao đổi G1/G2/G8 trước vì ảnh hưởng trực tiếp bảng so sánh và API boundary. G3–G7 tiếp tục giữ trong plan; crawler/nguồn tour thật vẫn là phụ thuộc P5.2, không coi fixture là nghiệm thu dữ liệu thật.
+
+**Sau khi đọc hai nhánh crawler:** có đường lấy title/price/itinerary/notes, nhưng output chưa typed, chưa binding offer/evidence và chưa vào public result. Do đó G1–G3/G5/G8 chưa đóng. Backend (Minh Khôi) + crawler/data (Thái Sơn) cần giải quyết D1–D5; frontend (Minh Phú) review giá trị/nhãn/trạng thái trên response snapshots. D3 phải thống nhất availability vì CSV dùng string và suy từ lịch trong khi domain BE hiện nhận số; D4 không đổi crawler `verified` thành “xác minh độc lập”.
 
 ## Checklist review contract
 

@@ -23,7 +23,7 @@ Conflict package phải hợp nhất, không chọn nguyên một phía: giữ d
 | scripts/run_site_survey.py | Website → raw samples + prompt khảo sát trong artifacts/agent_surveys | Artifacts/profile khảo sát chưa có trong Git, không phải fixture FE đã review |
 | scripts/crawl_with_profile.py | Profile aliases trong artifacts + sitemap → CSV field dạng text và availability_status | Chuỗi giá/ngày, nhiều giá ghép, không typed offer/quote/evidence IDs; không dùng thẳng làm bảng so sánh |
 | scripts/verify_fields_profile.py | Profile dạng fields + HTML đã lưu → báo cáo thử quy tắc JSON-LD | Text rules báo SKIP; khác định dạng aliases mà script CSV đọc; chưa là field engine chung |
-| [gateway backend](../src/data_access/README.md) | CrawlRequest → fixture hoặc HTTP POST /crawl → CrawlResult đã validate | tourcrawl/scripts chưa cung cấp HTTP /crawl hay adapter chuyển output sang contract BE |
+| [gateway backend](../src/data_access/README.md) | CrawlRequest → fixture hoặc HTTP POST đến CRAWLER_URL (contract đề xuất /crawl) → CrawlResult đã validate | tourcrawl/scripts chưa cung cấp HTTP exchange hay adapter chuyển output sang contract BE |
 
 FE tiếp tục gọi **API v1 duy nhất**. CLI/CSV/raw JSON không phải endpoint frontend; không expose raw HTML, artifacts hoặc logic parsing vào FE. Có thể khảo sát dữ liệu để chốt UI, nhưng không gọi đó là response production.
 
@@ -60,4 +60,4 @@ Quan sát cần xử lý ở D4: fetch_robots có thể trả None khi lỗi; ru
 - Kiểm tra merge ancestry, không còn conflict markers, pyproject/uv.lock hợp lệ và không mất CLI/module của một phía.
 - Chạy tests offline backend + tourcrawl và lint theo cấu hình đã hợp nhất; không gọi NIM/crawl thật để xác nhận merge.
 - Giữ 38 task frontend/C1–C11/FLOW-1–6; bổ sung D1–D5, không cắt yêu cầu khi data chưa đáp ứng.
-- Trạng thái kiểm tra thực tế được cập nhật sau khi các merge/dependencies hoàn tất; tests offline không thay kiểm chứng nguồn thật.
+- Đã sync lockfile vào môi trường riêng `.uv/merge-env` (giữ `.venv` cũ); **107 tests passed**, lint `src tests scripts` đạt. API tests dùng SQLite tạm/fixture/NIM stub; chưa chạy NIM/site survey/browser/crawl nguồn thật hoặc frontend E2E.

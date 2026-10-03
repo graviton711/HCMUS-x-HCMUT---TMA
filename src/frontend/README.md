@@ -40,3 +40,4 @@ Bootstrap session → draft/validate → create requirement → text thì poll p
 - Mock và API thật dùng cùng schema/client boundary; thư viện, package root, routes và hosting là đầu ra P2.
 - Giá/cost do BE tính, FE định dạng và giữ evidence; không tạo budget giả để lấy giá, không suy số tổng khi có bound/null hoặc thiếu phụ thu. G1–G8 còn giữ để hoàn thiện interface.
 - Data fixture và source thật dùng cùng API; synthetic phải hiện nhãn. HTTP fixture integration không thay nghiệm thu crawler/data thật P5.2.
+- Tourcrawl/scripts đã merge nhưng output CSV/raw JSON chưa phải CrawlResult/public DTO; không gọi crawler trực tiếp từ FE. Ranh giới adapter/registry/price/evidence/profile ở [D1–D5](../../docs/frontend-crawler-integration.md); G1–G8 vẫn giữ.

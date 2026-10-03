@@ -1,6 +1,6 @@
 # Frontend tích hợp backend v1
 
-**Trạng thái:** Ghi nhận từ code nhánh `backend`, commit `0b7e59f`, ngày 03/10/2026; dùng để review P1/P2, chưa thay cho việc FE + BE chốt contract. Mặc định backend dùng fixture, `origin=synthetic`; chưa có crawler tour thật.
+**Trạng thái:** Ghi nhận từ backend `0b7e59f`, đã merge/tham chiếu trên `feature/minh-phu` ngày 03/10/2026; dùng để review P1/P2, chưa thay việc FE + BE chốt contract. Tourcrawl/scripts cũng đã merge nhưng chưa nối với gateway; API mặc định vẫn fixture, `origin=synthetic`. Chi tiết ở [đối chiếu crawler](frontend-crawler-integration.md).
 **Nguồn chuẩn:** [HTTP contract](api-contract.md), [domain contract](backend-contracts.md), [schema sinh từ models](../contracts/README.md). Tài liệu này ánh xạ API vào frontend; các khoảng thiếu được giữ tại [C1–C11 và G1–G8](frontend-backend-checklist.md).
 **Đối chiếu:** [routes](../src/api/app.py), [DTO](../src/api/dto.py), [models nhu cầu](../src/domain/requirements.py), [Fact/evidence](../src/domain/crawl.py), [decision engine](../src/decision/engine.py), [store](../src/api/store.py), [settings](../src/api/settings.py).
 
@@ -120,4 +120,4 @@ HTTP chính: 401 UNAUTHORIZED; 404 NOT_FOUND; 409 REVISION_CONFLICT/STALE_CLARIF
 
 Một nguồn lỗi nhưng còn snapshot dùng được → partial; thiếu field bình thường → succeeded + unknown cells; mọi source attempt lỗi và không có snapshot → failed SOURCES_UNAVAILABLE. Tất cả target bị access/capability từ chối có thể succeeded + NO_SUPPORTED_TARGETS. ALL_INELIGIBLE/ONLY_UNVERIFIED có thể vẫn có candidates để xem lý do.
 
-Đã chạy experiment offline bằng models + fixture + decision engine cho hai JSON đầu vào: discover cho ba nhóm 1/1/1; URL-only có candidates, groups rỗng và chưa có giá public. Đã đọc tests API/decision nhưng **chưa chạy lại pytest**: `.venv` thiếu dependencies và trỏ tới interpreter không dùng được. Đây không phải xác nhận HTTP E2E/NIM/crawler thật. Schema response còn thiếu typed models/response_model; các file JSON sinh hiện tại chưa đủ để sinh toàn bộ API client (C10).
+Đã chạy experiment offline bằng models + fixture + decision engine cho hai JSON đầu vào: discover cho ba nhóm 1/1/1; URL-only có candidates, groups rỗng và chưa có giá public. Sau merge, tests backend/tourcrawl (bao gồm API integration bằng TestClient) đạt **107 passed** trong `.uv/merge-env`, lint đạt; `.venv` cũ giữ nguyên. Chưa xác nhận frontend E2E, NIM/crawler nguồn thật. Schema response còn thiếu typed models/response_model; JSON schemas hiện chưa đủ sinh toàn bộ API client (C10).

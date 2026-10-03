@@ -36,6 +36,7 @@ out/
 
 # Local crawl artifacts
 .local/crawl-reports/
+artifacts/
 
 # Data / ML artifacts; keep only the small, versioned source registry
 data/*

@@ -59,7 +59,7 @@ Chi tiết và owner được theo dõi trong [checklist frontend–backend](fro
 - Hai luồng `/v1` và clarification/jobs đã có; cần review UX text/form, hard/soft/AND/OR, offer, sửa revision và session hết hạn.
 - Giữ hàng giá, tên tour/nhà cung cấp, nội dung điều kiện và trade-off giá/chính sách dù public response chưa đáp ứng (G1–G3); ghi rõ field chờ BE trên thiết kế.
 - Catalog dropdown (G4), freshness mọi ô (G5), khôi phục revision (G6), grouping edits (G7), schema response/snapshots (G8) chưa đủ; không tự tạo contract để lấp.
-- Dữ liệu tour hiện là fixture: mọi ví dụ/prototype phải gắn nhãn minh họa; nghiệm thu dữ liệu thật chờ tích hợp crawler ở P5.
+- API tour hiện dùng fixture: mọi ví dụ/prototype phải gắn nhãn minh họa. Tourcrawl/scripts đã có nhưng chưa nối; [D1–D5](frontend-crawler-integration.md) là phụ thuộc P5. Dữ liệu CSV/raw text dùng khảo sát, không tự coi là giá/chỗ/evidence đạt contract.
 
 Không tự bổ sung API, điểm AI, tỷ lệ tin cậy hoặc ngưỡng freshness để lấp các điểm còn mở.
 

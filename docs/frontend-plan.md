@@ -1,9 +1,9 @@
 # Planning frontend / UI/UX
 
-**Trạng thái:** Planning v1.1, bổ sung từ backend `0b7e59f` ngày 03/10/2026 để cùng review. Đang PLANNING; các phase xây dựng/tích hợp bên dưới là công việc tương lai.
-**Baseline:** Idea, kiến trúc và wireframe đã chốt theo xác nhận của bạn. Backend đã implement pipeline `/v1` với session, requirement revision và jobs; tour data vẫn synthetic. Chưa chốt stack frontend, visual final và các khoảng thiếu trong public contract.
+**Trạng thái:** Planning v1.2 trên `feature/minh-phu`, đối chiếu backend `0b7e59f`, crawler docs `4b720a9` và crawler agent `6f84417` ngày 03/10/2026. Đang PLANNING; các phase xây dựng/tích hợp bên dưới là công việc tương lai.
+**Baseline:** Idea, kiến trúc và wireframe đã chốt theo xác nhận của bạn. Backend có pipeline `/v1` với session/revision/jobs; tour data API vẫn synthetic. Tourcrawl và scripts đã merge nhưng chưa có adapter/transport vào backend. Stack frontend, visual final và public contract còn cần chốt.
 
-Giữ nguyên 7 phase và 38 task ID của v1. Đã thay giả định API cũ bằng thông tin đọc từ code; **không bỏ tính năng hoặc tick nghiệm thu chỉ vì backend đã implement một phần**. Checklist ghi riêng phần BE đã có và G1–G8 còn cần trao đổi.
+Giữ nguyên 7 phase và 38 task ID của v1. Đã thay giả định API cũ bằng thông tin đọc từ code; **không bỏ tính năng hoặc tick nghiệm thu chỉ vì backend/crawler đã implement một phần**. Checklist giữ G1–G8; đối chiếu crawler bổ sung D1–D5. Mọi chỉnh sửa/merge chỉ trên nhánh Minh Phú theo `AGENTS.md`.
 
 ## Tài liệu và cách làm việc
 
@@ -11,6 +11,7 @@ Giữ nguyên 7 phase và 38 task ID của v1. Đã thay giả định API cũ b
 - [Luồng và trạng thái UI](frontend-flows.md): bản chi tiết hành vi để review.
 - [Checklist frontend–backend](frontend-backend-checklist.md): những quyết định kỹ thuật phải thống nhất.
 - [Hướng tích hợp API v1](frontend-api-integration.md): endpoint, payload, session/revision/job/offer/evidence và giới hạn thực tế.
+- [Đối chiếu crawler](frontend-crawler-integration.md): output CSV/raw JSON khác contract runtime; D1–D5 để BE + crawler chốt adapter, registry, giá/evidence và profiles.
 - [Contract HTTP](api-contract.md), [domain](backend-contracts.md), [schemas](../contracts/README.md), [input mẫu](../examples/README.md): nguồn chuẩn backend; chưa đủ schema cho mọi public response.
 - [Chuẩn bị skill](frontend-design-preparation.md), [module frontend](../src/frontend/README.md).
 
@@ -36,6 +37,8 @@ Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ư
 
 **Điểm chặn ưu tiên P1:** G1 giá public khi không có Budget, G2 tên tour/nhà cung cấp/canonical URL, G8 schema response + snapshots. Các mục nội dung/trade-off (G3), catalog (G4), freshness (G5), revision/restore (G6), sửa AND/OR (G7) giữ nguyên để bàn với BE; không hạ yêu cầu wireframe theo giới hạn fixture.
 
+**Phụ thuộc dữ liệu thật:** D1 adapter CrawlResult/transport; D2 registry/capability/TTL; D3 giá–ngày–availability có nghĩa; D4 provenance/access/verification; D5 thống nhất profile formats và gold fixtures. CLI crawl có code không thay nghiệm thu P5.2; FE tiếp tục dùng public API v1.
+
 ### P0. Nền tảng
 
 - [x] P0.1 — Ghi nhận idea, kiến trúc, wireframe là baseline đã chốt. **Owner:** Bạn + Codex.
@@ -47,7 +50,7 @@ Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ư
 - [ ] P1.1 — Review hai luồng: tìm theo nhu cầu và so sánh URL; chốt thao tác sửa tiêu chí, thử lại, quay lại. **Owner:** Bạn + Codex. **Đầu ra:** `frontend-flows.md` đã thống nhất.
 - [ ] P1.2 — Ánh xạ control form vào conditions/party/value đã có; chốt field bắt buộc/tùy chọn, hard/soft, catalog canonical IDs, budget basis/coverage, tuổi và ngày linh hoạt. **Owner:** FE + BE. **Còn mở:** C1/G4/G7; URL-only không bắt nhập party/ngày/budget.
 - [ ] P1.3 — Review endpoint/lifecycle đã ghi tại `frontend-api-integration.md`: form/edits đồng bộ, text/comparison qua job; chốt FE polling/cancel/retry và base URL. **Owner:** FE + BE. **Đã có:** code `/v1`; không cần thiết kế lại endpoint từ đầu.
-- [ ] P1.4 — Chốt schema request/**public response**, lỗi, offer/evidence reference, freshness, giá và kết quả lọc; BE bổ sung G1–G3/G5/G8. **Owner:** FE + BE. **Đầu ra:** C1–C10 đủ hỗ trợ wireframe, không dùng CrawlResult nội bộ thay public DTO.
+- [ ] P1.4 — Chốt schema request/**public response**, lỗi, offer/evidence reference, freshness, giá và kết quả lọc; BE bổ sung G1–G3/G5/G8 và cùng crawler chốt D1–D4. **Owner:** FE + BE; crawler cung cấp dữ kiện nguồn. **Đầu ra:** C1–C10 đủ hỗ trợ wireframe, không dùng CrawlResult/CSV nội bộ thay public DTO.
 - [ ] P1.5 — BE cung cấp response snapshots đủ các tình huống, nối hai input mẫu đã có; hai phía xác nhận schema và expected UI. **Owner:** BE + FE. **Đầu ra:** bộ mẫu C11, bao gồm URL-only không hard/budget và groups rỗng nhưng có candidates.
 - [ ] P1.6 — Review session ẩn danh v1 (chưa có account login); chốt placeholder đăng nhập, token storage, lưu IDs/khôi phục đúng revision sau refresh và hết hạn. URL đã giới hạn 2–5; chốt số cột/candidate discovery. **Owner:** Bạn + FE + BE. **Còn mở:** G6.
 
@@ -90,8 +93,8 @@ Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ư
 ### P5. Tích hợp backend thật
 
 - [ ] P5.1 — Kết nối API v1 đang có bằng fixture; xác nhận session/Bearer, base URL/CORS, HTTP/envelope/schema và parse/comparison lifecycle. Ghi rõ synthetic, chưa nghiệm thu tour thật.
-- [ ] P5.2 — Sau khi crawler thật nối, chạy cả hai luồng bằng dữ liệu thật; kiểm tra partial, zero matches, field unknown, access từ chối và toàn bộ source attempts thất bại. **Phụ thuộc BE/crawler còn giữ.**
-- [ ] P5.3 — Kiểm tra giá đúng offer, phụ thu chưa biết, freshness, xác minh nguồn và trade-off mở đúng evidence bằng API public; nghiệm thu G1–G3/G5 với nguồn thật.
+- [ ] P5.2 — Sau khi D1–D5 được chốt/nghiệm thu, chạy cả hai luồng API bằng dữ liệu nguồn thật; kiểm tra partial, zero matches, field unknown, access từ chối và toàn bộ source attempts thất bại. **Phụ thuộc BE/crawler còn giữ; merge CLI chưa hoàn thành task.**
+- [ ] P5.3 — Kiểm tra giá đúng offer, phụ thu chưa biết, freshness, xác minh nguồn và trade-off mở đúng evidence bằng API public; nghiệm thu G1–G3/G5 và D3/D4. `verified` trong crawl report không phải independently_verified; lịch khởi hành không chứng minh còn chỗ.
 - [ ] P5.4 — Kiểm tra text patch lỗi giữ revision, response/job cũ, 409/stale answers/selections, cancel/chạy lại, mất mạng/idempotency và khôi phục đúng phiên/revision theo G6.
 - [ ] P5.5 — Ghi bug FE/BE với request ID và payload tái hiện phù hợp; đồng bộ tài liệu sau sửa contract. Mock và API thật phải cùng schema.
 
@@ -123,10 +126,10 @@ Tham chiếu chính thức: [Vite](https://vite.dev/guide/), [Next.js server/cli
 
 ## Việc làm tiếp theo
 
-1. FE + BE review G1/G2/G8 trước: giá cho URL-only, nhận diện tour/nguồn và schema response; ghi quyết định vào contract chuẩn.
+1. FE + BE review G1/G2/G8 trước; BE + crawler đồng thời chốt D1 để dữ liệu có đường vào runtime: giá cho URL-only, nhận diện tour/nguồn, schema response và adapter/transport; ghi quyết định vào contract chuẩn.
 2. Review P1.1–P1.2/P1.6 theo API đã có: field/catalog, clarification, AND/OR, offer, session và refresh. Giữ G3–G7 và từng scenario C11 để trao đổi tiếp với backend.
 3. Codex chuẩn bị reference và phương án visual P3.1–P3.2; bạn có thể bổ sung template sau.
 
-**Kiểm chứng lần cập nhật:** Đã chạy hai input mẫu qua models/fixture/decision engine offline; ghi chi tiết ở hướng tích hợp. Chưa chạy lại HTTP E2E/pytest vì môi trường Python backend hiện thiếu dependencies/interpreter; không đánh dấu P5/P6 hoàn thành từ việc đọc code.
+**Kiểm chứng lần cập nhật:** Hai input mẫu đã qua models/fixture/decision engine; sau merge đã tạo môi trường kiểm tra riêng `.uv/merge-env`, giữ nguyên `.venv`. Toàn bộ tests backend + tourcrawl đạt **107 passed**, lint `src tests scripts` đạt; tests API dùng SQLite tạm/fixture/NIM stub. Chưa nghiệm thu NIM/crawler nguồn thật hoặc frontend E2E, không tick P5/P6 từ kết quả này.
 
 Các điều kiện hoàn thành thể hiện phụ thuộc trong roadmap; không tự cấp quyền triển khai. Quy trình PLANNING vẫn theo `AGENTS.md`.
