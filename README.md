@@ -13,15 +13,52 @@ flowchart LR
     R --> U
 ```
 
-Idea, kiến trúc và bố cục wireframe đã chốt. Repo hiện có tài liệu và skill thiết kế; các module sản phẩm chưa được implement.
+Backend v1 đã có API, hiểu nhu cầu qua NVIDIA NIM, bộ lọc/so sánh, lưu revision và worker. Hai luồng chạy được với dữ liệu mô phỏng; crawler thật do thành viên phụ trách crawler tích hợp theo contract.
 
 - [Proposal và phân tích bài toán](docs/idea.md)
 - [Kiến trúc hệ thống](docs/system-architecture.md)
 - [Wireframe](docs/wireframes.md)
-- [Planning frontend / UI/UX](docs/frontend-plan.md)
-- [Chuẩn bị frontend / UI/UX và skill thiết kế](docs/frontend-design-preparation.md)
-- [Hợp đồng dữ liệu và API](docs/data-contract.md)
+- [Kế hoạch backend để thảo luận](docs/backend-plan.md)
+- [Contract dữ liệu backend — bản nháp](docs/backend-contracts.md)
+- [Module hiểu yêu cầu — bản nháp](src/requirements/README.md)
+- [Contract crawler và mẫu JSON — bản nháp](docs/crawler-contract.md)
+- [Contract API cho frontend — bản nháp](docs/api-contract.md)
+- [Bộ tình huống đánh giá tiếng Việt](docs/requirements-evaluation.md)
 
-## Công việc frontend tiếp theo
+## Chạy backend
 
-Review [flow](docs/frontend-flows.md) và [checklist FE–BE](docs/frontend-backend-checklist.md), sau đó chốt nền tảng kỹ thuật và thiết kế UI chi tiết theo planning. Quy trình làm việc ở [AGENTS.md](AGENTS.md).
+Python >= 3.12 và uv. Chạy từ thư mục repo:
+
+```powershell
+uv sync
+uv run tour-backend serve
+```
+
+Trang chào backend: `http://127.0.0.1:8000/`; tài liệu tương tác: `http://127.0.0.1:8000/docs`. Sau khi sửa code, dừng server bằng Ctrl+C rồi chạy lại để nạp thay đổi.
+NIM đọc `NVIDIA_NIM_API` và `NVIDIA_NIM_MODEL` từ `.env` hiện có. Ngân sách chưa nói phạm vi mặc định là **giá tour**, có provenance `system_default`; currency/basis chưa rõ vẫn được hỏi lại.
+
+- [Hướng dẫn frontend, payload và cấu hình](examples/README.md)
+- [Runtime, lệnh kiểm tra và giới hạn](docs/backend-runtime.md)
+- [JSON Schema đã xuất cho team](contracts/README.md)
+
+## Planning frontend
+
+Frontend đang PLANNING; chưa có production UI. Idea/kiến trúc/wireframe là baseline đã chốt theo xác nhận của người phụ trách frontend. Tài liệu frontend đã đối chiếu backend v1; giữ các phần còn thiếu để FE + BE tiếp tục thống nhất.
+
+- [Roadmap 7 phase và todo frontend](docs/frontend-plan.md)
+- [Flow và trạng thái UI](docs/frontend-flows.md)
+- [Hướng tích hợp API v1 theo code](docs/frontend-api-integration.md)
+- [Checklist contract và khoảng thiếu cần trao đổi với BE](docs/frontend-backend-checklist.md)
+- [Chuẩn bị skill/thiết kế](docs/frontend-design-preparation.md), [module frontend](src/frontend/README.md)
+
+## Kiểm tra backend
+
+Mặc định `DATA_PROVIDER=fixture`: ba tour giả lập tại `tour-demo.invalid`; mọi kết quả có `origin=synthetic`. Không có dữ liệu tour thật trong repo. Local runtime dùng SQLite và một worker; không chạy nhiều process trên cùng database.
+
+```powershell
+uv run pytest -q
+uv run ruff check src tests
+uv run tour-backend export-schemas
+```
+
+Gọi NIM thật (tách khỏi tests offline): `uv run tour-backend probe-nim`; bộ smoke tiếng Việt: `uv run tour-backend evaluate-nim`. Kết quả smoke không thay bộ gold 50 câu + 15 chuỗi hội thoại đầy đủ.

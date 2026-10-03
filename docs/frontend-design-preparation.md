@@ -12,7 +12,7 @@ Roadmap và checklist công việc nằm ở [planning frontend](frontend-plan.m
 - Luồng chính: nhập → làm rõ ràng buộc → so sánh → xem bằng chứng → sửa tiêu chí hoặc mở trang nhà cung cấp.
 - Không tự tạo lịch trình, đặt tour, thanh toán hoặc chọn thay người dùng.
 
-Nguồn yêu cầu: [proposal](idea.md), [kiến trúc](system-architecture.md), [wireframe](wireframes.md), [contract](data-contract.md). `TMA.md` là đề bài cuộc thi; `idea.md` là proposal sản phẩm.
+Nguồn yêu cầu: [proposal](idea.md), [kiến trúc](system-architecture.md), [wireframe](wireframes.md), [HTTP contract v1](api-contract.md), [domain contract](backend-contracts.md). `TMA.md` là đề bài cuộc thi; `idea.md` là proposal sản phẩm. [Hướng tích hợp](frontend-api-integration.md) ghi chi tiết đã đối chiếu code `0b7e59f`; [checklist](frontend-backend-checklist.md) giữ phần BE chưa đủ cho thiết kế.
 
 ## Skill được chọn
 
@@ -44,8 +44,9 @@ Không chọn `gpt-taste` làm mặc định vì ép AIDA/GSAP và chuyển đ�
 ## Những yêu cầu UI phải giữ
 
 - Tách ràng buộc bắt buộc khỏi ưu tiên; người dùng nhìn thấy tiêu chí và cách sắp xếp.
-- So sánh đúng `Offer` theo ngày khởi hành. `Tour.fields.price` chỉ là giá tham chiếu; không coi là tổng giá cuối cùng cho nhóm khách.
-- Phân biệt ba trục: mức đầy đủ (`observed`, `partial`, `not_observed`), xác minh (`provider_claimed`, `independently_verified`) và độ mới (`observed_at`). Có dữ liệu không có nghĩa đã xác minh hoặc còn mới.
+- So sánh đúng offer snapshot theo ngày; nhiều offer chưa chọn vẫn xem được dữ kiện tour. Giá public cho URL-only còn thiếu (G1); không coi giá người lớn là tổng cuối cho nhóm hoặc dựng giá để hoàn thiện mock visual.
+- Phân biệt data_state (`present`, `missing`, `conflicting`, `invalid`, `unsupported`), completeness (`complete`, `partial`, `unknown`), verification (`supplier_published`, `independently_verified`, `unverified`) và freshness. Có timestamp không có nghĩa đã xác minh/còn mới; freshness hiện chưa đủ mọi ô (G5).
+- Không có hard filter thì eligibility=null; có tour dù groups rỗng. Dùng can_collect_data và blockers để thiết kế làm rõ; không gắn “đạt nhu cầu” cho URL-only.
 - Evidence mở theo từng field, gồm giá trị nguồn, URL, thời điểm và giới hạn; không chỉ gom link chung cho cả tour.
 - Bao phủ loading, không có kết quả, dữ liệu một phần, nguồn không hỗ trợ và lỗi có thể thử lại.
 - Mobile vẫn đối chiếu cùng tiêu chí và mở được evidence; không chỉ thu nhỏ bảng desktop.
@@ -55,9 +56,10 @@ Không chọn `gpt-taste` làm mặc định vì ép AIDA/GSAP và chuyển đ�
 
 Chi tiết và owner được theo dõi trong [checklist frontend–backend](frontend-backend-checklist.md), phase P1 của planning.
 
-- Contract hiện chỉ mô tả `POST /api/compare` nhận URL; luồng tìm theo nhu cầu trong proposal chưa có API tương ứng.
-- Schema yêu cầu cá nhân, tổng chi phí nhóm/độ tuổi và quy tắc tính phụ thu chưa chốt.
-- Ngưỡng dữ liệu cũ, cách xác định độ phù hợp và tham chiếu chính xác từng offer trong trade-off chưa chốt.
+- Hai luồng `/v1` và clarification/jobs đã có; cần review UX text/form, hard/soft/AND/OR, offer, sửa revision và session hết hạn.
+- Giữ hàng giá, tên tour/nhà cung cấp, nội dung điều kiện và trade-off giá/chính sách dù public response chưa đáp ứng (G1–G3); ghi rõ field chờ BE trên thiết kế.
+- Catalog dropdown (G4), freshness mọi ô (G5), khôi phục revision (G6), grouping edits (G7), schema response/snapshots (G8) chưa đủ; không tự tạo contract để lấp.
+- Dữ liệu tour hiện là fixture: mọi ví dụ/prototype phải gắn nhãn minh họa; nghiệm thu dữ liệu thật chờ tích hợp crawler ở P5.
 
 Không tự bổ sung API, điểm AI, tỷ lệ tin cậy hoặc ngưỡng freshness để lấp các điểm còn mở.
 

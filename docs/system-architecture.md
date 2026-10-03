@@ -1,6 +1,6 @@
 # Kiến trúc hệ thống
 
-**Trạng thái:** Đã chốt kiến trúc mục tiêu theo xác nhận ngày 03/10/2026. Repo hiện chưa có module nào được implement; stack và chi tiết API còn mở được xử lý trong planning frontend/backend.
+**Trạng thái:** Đã chốt kiến trúc mục tiêu theo xác nhận ngày 03/10/2026. Backend v1 đã có FastAPI/Pydantic, SQLite và worker theo [backend-plan.md](backend-plan.md); fixture/HTTP gateway ở [backend-runtime.md](backend-runtime.md). Frontend vẫn PLANNING; crawler thật chưa nối với backend.
 
 ## Sơ đồ tổng quan
 
@@ -79,7 +79,8 @@ flowchart TD
 
 ## Giả định và quyết định còn mở
 
-- Phạm vi là web demo; contract API dùng JSON, nhưng framework UI/backend, database và hosting chưa chốt.
-- Danh mục nguồn hiện được team quản lý trong Git (`configs/profiles/*.yaml` và kết quả khảo sát ở `docs/provider-registry.md`); không có bản Google Sheets song song. Nếu sau này cần giao diện cho người không quen Git, phải chuyển nguồn chuẩn thay vì duy trì hai bản.
+- Phạm vi là web demo; frontend framework và hosting chưa chốt. Backend local đã dùng FastAPI/Pydantic, SQLite và durable jobs.
+- User chọn cả hai luồng nhập nhu cầu và so sánh URL; contract HTTP/domain/crawler ở [api-contract.md](api-contract.md), [backend-contracts.md](backend-contracts.md), [crawler-contract.md](crawler-contract.md).
+- Danh mục nguồn được team quản lý trong Git (`configs/profiles/*.yaml` và [provider registry](provider-registry.md)); capability runtime BE là contract riêng cần đối chiếu, không dùng Google Sheets song song.
 - Cách đo độ phù hợp, trọng số tiêu chí, độ tin cậy nguồn và chính sách freshness cần chốt sau khi có bộ dữ liệu mẫu và wireframe được review.
 - Phải kiểm tra quyền truy cập và khả năng trích xuất theo từng nguồn trước khi đưa nguồn vào luồng so sánh.

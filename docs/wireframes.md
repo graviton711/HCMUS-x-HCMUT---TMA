@@ -24,7 +24,13 @@
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Hành vi:** Nêu rõ field bắt buộc/tuỳ chọn; nếu input tự nhiên còn mơ hồ, hỏi làm rõ trước khi truy vấn. Có thể nhập nhu cầu hoặc dán URL, nhưng không trộn lẫn chúng thành một ô không giải thích.
+**Hành vi:** Nêu rõ field bắt buộc/tuỳ chọn; điều kiện mơ hồ phải được làm rõ trước khi kết luận đạt. Tìm theo nhu cầu chờ đủ scope truy vấn; URL có thể đối chiếu dữ liệu tĩnh khi phép tính giá còn thiếu input. Hai luồng có input riêng, không trộn lẫn vào một ô không giải thích.
+
+**Cả hai luồng được chọn cho demo:**
+
+- Tab nhu cầu có text input hoặc form; sau khi xử lý hiển thị cách hiểu theo Bắt buộc / Ưu tiên / Cần làm rõ để sửa. Không gửi text và form cùng ghi đè một field không rõ thứ tự.
+- Tab URL có danh sách 2–5 URL riêng và phần nhu cầu tùy chọn. Không bắt user điền ngân sách/ngày/số người khi chỉ muốn đối chiếu thông tin công bố.
+- Tiến trình xử lý/nguồn lỗi có trạng thái rõ; user có thể tiếp tục sửa, nhưng kết quả cũ giữ nhu cầu/thời điểm của lần chạy đó.
 
 ## 2. Bảng so sánh
 
@@ -32,7 +38,7 @@
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ Kết quả so sánh                                                              │
 │ Nhật Bản · TP.HCM · 10–13/11 · 2 người lớn + 1 trẻ · tối đa 35tr/người       │
-│ 3 lựa chọn phù hợp điều kiện cứng              Giá/chỗ cập nhật: 27/09 10:42 │
+│ 2 lựa chọn đạt · 1 cần xác minh thêm            Giá/chỗ cập nhật: 27/09 10:42 │
 ├─────────────────────┬───────────────────┬───────────────────┬────────────────┤
 │ Tiêu chí            │ Tour A            │ Tour B            │ Tour C         │
 ├─────────────────────┼───────────────────┼───────────────────┼────────────────┤
@@ -51,6 +57,8 @@
 ```
 
 **Hành vi:** Điều kiện bắt buộc được tách khỏi ưu tiên; mỗi ô có trạng thái đạt/không đạt/thiếu/cũ. Không sắp xếp theo “điểm AI” mặc định; nếu có sắp xếp, người dùng thấy tiêu chí và trọng số đang dùng. Giá cần ghi rõ tổng giá, đơn vị tính và thời điểm quan sát.
+
+Trong tab URL, tour không đạt hoặc nguồn lỗi vẫn giữ cột tương ứng. Nhiều lượt khởi hành có lựa chọn riêng; chưa chọn thì ô giá/ngày/chỗ không ghép thành một offer. Chỉ có giá người lớn hoặc thiếu phụ thu thì không ghi là tổng giá cả nhóm đã đủ. Khi không có điều kiện bắt buộc, không gắn nhãn “đã đạt nhu cầu”.
 
 ## 3. Bằng chứng và rủi ro
 

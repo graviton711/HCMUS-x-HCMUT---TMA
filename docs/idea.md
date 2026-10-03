@@ -66,4 +66,4 @@ AI có thể giúp hiểu yêu cầu ngôn ngữ tự nhiên và trình bày so 
 
 ## Phạm vi tài liệu liên quan
 
-Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Kiến trúc mục tiêu ở `docs/system-architecture.md`, wireframe ở `docs/wireframes.md` đã chốt; chi tiết công việc frontend ở `docs/frontend-plan.md`. Các tài liệu thiết kế chưa đồng nghĩa với implementation.
+Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Kiến trúc mục tiêu và wireframe đã chốt; công việc frontend ở [frontend-plan.md](frontend-plan.md), backend ở [backend-plan.md](backend-plan.md). Backend v1 đã có code; việc nối crawler và frontend vẫn là công việc tích hợp.
