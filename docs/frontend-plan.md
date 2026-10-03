@@ -1,9 +1,9 @@
 # Planning frontend / UI/UX
 
-**Trạng thái:** Planning v1.2 trên `feature/minh-phu`, đối chiếu backend `0b7e59f`, crawler docs `4b720a9` và crawler agent `6f84417` ngày 03/10/2026. Đang PLANNING; các phase xây dựng/tích hợp bên dưới là công việc tương lai.
-**Baseline:** Idea, kiến trúc và wireframe đã chốt theo xác nhận của bạn. Backend có pipeline `/v1` với session/revision/jobs; tour data API vẫn synthetic. Tourcrawl và scripts đã merge nhưng chưa có adapter/transport vào backend. Stack frontend, visual final và public contract còn cần chốt.
+**Trạng thái:** Planning v1.7 trên feature/minh-phu, sửa ngày 03/10/2026: đã có reference và hai prototype visual P3 để review; đã chuẩn bị [workflow preview GitHub Pages](frontend-preview-publishing.md), chờ chủ repo bật hosting cho repo private. PLANNING, tài liệu và HTML/CSS/JS thử nghiệm ngoài `src/`; backend/crawler baseline giữ nguyên, chưa frontend production hoặc chốt stack.
+**Baseline:** Input nhu cầu + URL → Review → BE tìm/đánh giá/rank/tự chọn tối đa ba gợi ý và so sánh ngay → evidence hoặc tìm phương án khác/sửa yêu cầu. V1 chưa G9/G10; API synthetic/crawler chưa nối. Đề xuất budget 20 ứng viên và URL tham chiếu ngoài ba gợi ý cần review, không phải contract đã chốt.
 
-Giữ nguyên 7 phase và 38 task ID của v1. Đã thay giả định API cũ bằng thông tin đọc từ code; **không bỏ tính năng hoặc tick nghiệm thu chỉ vì backend/crawler đã implement một phần**. Checklist giữ G1–G8; đối chiếu crawler bổ sung D1–D5. Mọi chỉnh sửa/merge chỉ trên nhánh Minh Phú theo `AGENTS.md`.
+Giữ 7 phase/38 task ID; P1.1 tick cho journey đã duyệt, không thay nghiệm thu contract. Giữ G1–G9/D1–D5; thêm G10 cho ranking/Top 3 có giải thích. Mọi chỉnh sửa/merge chỉ trên nhánh Minh Phú theo `AGENTS.md`.
 
 ## Tài liệu và cách làm việc
 
@@ -27,15 +27,15 @@ Mỗi phiên: chọn task → đọc/cập nhật tài liệu liên quan → t�
 |---|---|---|---|
 | P0 | Ghi nhận nền tảng | Tài liệu nền và skill có thể truy cập | Đã có |
 | P1 | Chốt flow và contract với BE | Không còn điểm chưa chốt ảnh hưởng luồng chính; có schema và JSON mẫu dùng được | P0 |
-| P2 | Chốt nền tảng kỹ thuật FE | Stack, cấu trúc, state, chiến lược API/mock/kiểm tra được ghi rõ | P1; so sánh stack có thể làm sớm |
-| P3 | Thiết kế UI/UX chi tiết | Màn chính, mobile, token và trạng thái đã review trên cùng dữ liệu mẫu | P1; tìm reference có thể làm sớm |
-| P4 | Xây frontend với mock đúng contract | Hai luồng đầu vào đi hết đến kết quả và evidence; đủ trạng thái | P1–P3 |
+| P2 | Chốt nền tảng kỹ thuật FE | Stack, cấu trúc, state, chiến lược API/mock/kiểm tra được ghi rõ | Flow P1.1; API boundary cần contract P1 |
+| P3 | Thiết kế UI/UX chi tiết | Ba bề mặt chính và panel evidence, mobile/token/trạng thái; đánh dấu contract chờ BE | Flow P1.1 đã chốt; không chờ field/survey/schema hoàn tất |
+| P4 | Xây frontend với mock đúng contract | Một luồng với nhu cầu, URL hoặc cả hai đi thẳng đến đề xuất/so sánh/evidence | P1–P3 |
 | P5 | Tích hợp backend và nguồn thật | Chạy API fixture trước, sau đó đủ luồng với nguồn thật; lỗi/dữ liệu thiếu đúng nghĩa | P4 + API BE; crawler thật cho P5.2–P5.3 |
 | P6 | Kiểm tra và bàn giao demo | Checklist nghiệm thu đạt, demo chạy được, giới hạn được ghi nhận | P5 |
 
-Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ưu tiên theo phụ thuộc, không làm visual final cho tính năng chưa có contract. P2/P3 có thể nghiên cứu độc lập trong khi FE + BE hoàn thiện P1.
+Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Có thể thiết kế flow/wireframe/visual ngay từ P1.1 đã duyệt, dùng dữ liệu minh họa và ghi rõ field chờ BE; không chặn thiết kế bởi tên biến, catalog hay survey. Contract phải hoàn thiện trước phần mock/tích hợp runtime phụ thuộc nó. P2/P3 tiến hành song song với các task contract còn mở của P1.
 
-**Điểm chặn ưu tiên P1:** G1 giá public khi không có Budget, G2 tên tour/nhà cung cấp/canonical URL, G8 schema response + snapshots. Các mục nội dung/trade-off (G3), catalog (G4), freshness (G5), revision/restore (G6), sửa AND/OR (G7) giữ nguyên để bàn với BE; không hạ yêu cầu wireframe theo giới hạn fixture.
+**Ưu tiên contract, không chặn design:** G9 pipeline hợp nhất, G10 ranking/Top 3/lý do, G1 giá public không Budget, G2 nhận diện, G8 schemas/snapshots. Engine hiện có groups/evaluations, chưa có ranking; thuật toán/trọng số còn chốt với BE. G3–G7 giữ nguyên; không hạ wireframe theo fixture.
 
 **Phụ thuộc dữ liệu thật:** D1 adapter CrawlResult/transport; D2 registry/capability/TTL; D3 giá–ngày–availability có nghĩa; D4 provenance/access/verification; D5 thống nhất profile formats và gold fixtures. CLI crawl có code không thay nghiệm thu P5.2; FE tiếp tục dùng public API v1.
 
@@ -47,12 +47,12 @@ Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ư
 
 ### P1. Flow và hợp đồng FE–BE
 
-- [ ] P1.1 — Review hai luồng: tìm theo nhu cầu và so sánh URL; chốt thao tác sửa tiêu chí, thử lại, quay lại. **Owner:** Bạn + Codex. **Đầu ra:** `frontend-flows.md` đã thống nhất.
+- [x] P1.1 — Nhập nhu cầu + URL → review → hệ thống tìm/đánh giá/rank/tự chọn tối đa ba gợi ý và so sánh ngay → evidence hoặc tìm phương án khác/sửa yêu cầu. Bỏ chọn tour thủ công. **Owner:** Bạn + Codex. **Đầu ra:** frontend-flows.md; budget 20, cách đếm URL và contract G9/G10 còn review.
 - [ ] P1.2 — Ánh xạ control form vào conditions/party/value đã có; chốt field bắt buộc/tùy chọn, hard/soft, catalog canonical IDs, budget basis/coverage, tuổi và ngày linh hoạt. **Owner:** FE + BE. **Còn mở:** C1/G4/G7; URL-only không bắt nhập party/ngày/budget.
-- [ ] P1.3 — Review endpoint/lifecycle đã ghi tại `frontend-api-integration.md`: form/edits đồng bộ, text/comparison qua job; chốt FE polling/cancel/retry và base URL. **Owner:** FE + BE. **Đã có:** code `/v1`; không cần thiết kế lại endpoint từ đầu.
-- [ ] P1.4 — Chốt schema request/**public response**, lỗi, offer/evidence reference, freshness, giá và kết quả lọc; BE bổ sung G1–G3/G5/G8 và cùng crawler chốt D1–D4. **Owner:** FE + BE; crawler cung cấp dữ kiện nguồn. **Đầu ra:** C1–C10 đủ hỗ trợ wireframe, không dùng CrawlResult/CSV nội bộ thay public DTO.
-- [ ] P1.5 — BE cung cấp response snapshots đủ các tình huống, nối hai input mẫu đã có; hai phía xác nhận schema và expected UI. **Owner:** BE + FE. **Đầu ra:** bộ mẫu C11, bao gồm URL-only không hard/budget và groups rỗng nhưng có candidates.
-- [ ] P1.6 — Review session ẩn danh v1 (chưa có account login); chốt placeholder đăng nhập, token storage, lưu IDs/khôi phục đúng revision sau refresh và hết hạn. URL đã giới hạn 2–5; chốt số cột/candidate discovery. **Owner:** Bạn + FE + BE. **Còn mở:** G6.
+- [ ] P1.3 — Review lifecycle v1/polling/cancel/retry/base URL và orchestration thu thập chung → nhóm đề xuất/so sánh tự động. Chốt vòng phương án khác, exclusion theo tour identity, reuse snapshot còn hợp lệ/không tự crawl vô hạn. **Owner:** FE + BE. **Còn mở:** G9.
+- [ ] P1.4 — Chốt request/public response/lỗi, origin/dedup, giá/offer/evidence/quality; BE trả nhóm tối đa ba gợi ý mới, comparison tự động với URL tham chiếu, lý do/ranking/coverage/budget/policy. Chốt giả định 20 ứng viên và count tham chiếu theo FLOW-3. **Owner:** FE + BE; G1–G3/G5/G8/G9/G10 và D1–D4 giữ nguyên.
+- [ ] P1.5 — BE cung cấp snapshots: kết quả/so sánh tự động cho nhu cầu-only/URL-only/cả hai, trùng nguồn/lỗi từng phần; thiếu ba/hard unknown/tie/multiple offers, vòng phương án khác không lặp tour đã xem và hết phương án. **Owner:** BE + FE. **Đầu ra:** C11; kiểm tra rank/lý do đúng evaluations/policy/binding.
+- [ ] P1.6 — Phiên ẩn danh, token/IDs/đúng revision và result round sau refresh/hết hạn. Tách số URL nhập, budget retrieval nội bộ và ba gợi ý hiển thị; review đề xuất URL tham chiếu ngoài số ba. V1 hiện URL 2–5, mục tiêu một URL cần G9. **Owner:** Bạn + FE + BE. **Còn mở:** G6/FLOW-3.
 
 **Hoàn thành P1 khi:** Có contract chuẩn duy nhất được hai phía review; mọi giá trị quan trọng trên màn hình có field/nguồn hoặc cách hiển thị thiếu đã thống nhất. Không tự thêm API/enum vào frontend để lấp chỗ trống.
 
@@ -60,7 +60,7 @@ Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ư
 
 - [ ] P2.1 — Chọn stack và ghi lý do theo bảng bên dưới; chốt phiên bản/runtime sau khi kiểm tra tương thích. **Owner:** Bạn + Codex.
 - [ ] P2.2 — Chốt package root, route, ranh giới feature và tài liệu cạnh từng module. **Owner:** Codex + FE. **Đầu ra:** cập nhật `src/frontend/README.md`.
-- [ ] P2.3 — Tách draft, committed Requirement revision, parse/comparison job, result snapshot và state hiển thị; chống response cũ ghi đè, giữ draft khi conflict, bảo toàn cây AND/OR và khôi phục đúng phiên. **Owner:** FE. **Phụ thuộc:** G6/G7.
+- [ ] P2.3 — Tách draft chung, committed revision, jobs và snapshots/vòng kết quả do BE chọn; lưu lịch sử phương án đã xem, chống response cũ/conflict, giữ AND/OR và phiên. Không có state chọn 2–3 tour bắt buộc. **Owner:** FE. **Phụ thuộc:** G6/G7/G9.
 - [ ] P2.4 — Chốt sinh type và runtime validation từ request + public response schemas; API boundary ánh xạ id/envelope, readiness, lỗi HTTP/job; policy idempotency/retry/cache/cancel. **Owner:** FE + BE. **Phụ thuộc:** G8; schema request hiện chưa đủ full client.
 - [ ] P2.5 — Chốt mock và API thật dùng cùng schema/client; base URL/proxy/CORS, token/session, config local/demo, hosting refresh route và lệnh kiểm tra. **Owner:** FE + BE. **Đã có:** CORS localhost:3000/5173 và Bearer token; cấu hình hosting vẫn cần chốt.
 
@@ -68,13 +68,13 @@ Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ư
 
 ### P3. Thiết kế UI/UX
 
-- [ ] P3.1 — Codex tìm 3–5 reference phù hợp form, comparison và evidence; ghi link, điểm học được, mobile và điều kiện dùng asset/template. Template bạn gửi sau được đánh giá bằng cùng tiêu chí.
-- [ ] P3.2 — Codex tạo 2 hướng visual trên **cùng một màn so sánh**; bạn chọn theo khả năng đọc/đối chiếu và cảm giác sản phẩm. `minimalist-ui` là một ứng viên, chưa phải phong cách mặc định.
+- [x] P3.1 — Có bốn reference form/comparison/evidence, điểm học được, mobile và điều kiện sử dụng tại [design review](frontend-design-review.md). [Nguồn ảnh/font/icon](../prototypes/frontend-design/assets/SOURCES.md) đầy đủ; template bạn gửi sau được đánh giá bằng cùng tiêu chí.
+- [ ] P3.2 — Có hai hướng visual trên **cùng một màn so sánh**; bạn chọn theo khả năng đọc/đối chiếu và cảm giác sản phẩm. **Chờ review:** A Giấy & mực / B Hành trình xanh tại [prototype](../prototypes/frontend-design/README.md), đã kiểm tra desktop/mobile và tương tác. `minimalist-ui` là ứng viên A; chưa chốt visual hoặc stack, chưa frontend production.
 - [ ] P3.3 — Chốt token (màu thương hiệu/trạng thái, typography có dấu Việt, spacing, radius, icon, focus, theme) và danh sách component dùng lại cùng trạng thái của chúng. **Owner:** Codex đề xuất; bạn review.
-- [ ] P3.4 — Thiết kế chi tiết input text/form hai tab, nhóm hard/soft/làm rõ, jobs, offer picker, bảng và evidence desktop/mobile; bám wireframe. Hàng giá/tên/nhà cung cấp/chính sách còn G1–G3, giữ yêu cầu và đánh dấu field chờ BE.
-- [ ] P3.5 — Thiết kế loading, empty, chỉ còn 1 tour, partial, lỗi, dữ liệu cũ/thiếu/chưa xác minh; thêm không hard filter, nhiều offer chưa chọn, revision conflict, phiên hết hạn và job hủy. Viết microcopy theo enum thực tế.
+- [ ] P3.4 — Thiết kế ba bề mặt Input/Review/Kết quả: tối đa ba gợi ý có lý do và bảng so sánh tự động, URL tham chiếu/evidence/offer picker. Bỏ danh sách/checkbox chọn tour; có Tìm phương án khác/Sửa yêu cầu/Thử lại nguồn lỗi. Review count URL/mobile theo FLOW-3; G1–G3/G9/G10 chờ BE.
+- [ ] P3.5 — Loading/empty/ít hơn ba, hết phương án mới, partial/lỗi/cũ/thiếu/chưa xác minh; URL-only chưa có ưu tiên, không hard filter/multiple offers/conflict/hết phiên/hủy. Không gắn phù hợp cho hard unknown hoặc trả lại nhóm cũ như mới.
 - [ ] P3.6 — Chốt mobile: vẫn đối chiếu cùng hàng tiêu chí, giữ tên tour và mở evidence dễ dàng; kiểm tra bàn phím, focus và nội dung dài trên prototype.
-- [ ] P3.7 — Walkthrough với bạn và một vài người đúng nhóm mục tiêu: nhập nhu cầu, giải thích trade-off, tìm nguồn giá; ghi vấn đề và chỉnh thiết kế.
+- [ ] P3.7 — Walkthrough ba tổ hợp đầu vào: nhận đề xuất/bảng ngay → hiểu lý do/trade-off/nguồn giá → yêu cầu phương án khác hoặc sửa nhu cầu. Kiểm tra user không phải sàng lọc pool hay chọn tour mới xem so sánh.
 
 **Owner P3:** Codex chuẩn bị thiết kế; bạn quyết định hướng. Backend kiểm tra dữ liệu nào thực sự hỗ trợ màn hình.
 **Hoàn thành P3 khi:** Mọi component/trạng thái đã có thiết kế và mẫu dữ liệu; không dùng dữ liệu giả làm bằng chứng thật. Taste chỉ áp dụng phần giới thiệu; redesign dùng checklist kiểm tra, không tự đổi wireframe hoặc stack.
@@ -82,9 +82,9 @@ Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ư
 ### P4. Xây frontend với mock
 
 - [ ] P4.1 — Dựng nền tảng đã chốt, token/component dùng chung và API boundary có validation.
-- [ ] P4.2 — Slice URL: bootstrap session → validate 2–5 URLs → tạo Requirement → tạo/poll comparison → bảng/evidence → sửa targets/chạy lại; giữ cột URL lỗi, không gắn eligible khi filter_applied=false.
-- [ ] P4.3 — Slice nhu cầu: form hoặc text/parse job → làm rõ bằng answers/edits → review committed revision → comparison; tách hard/soft, giữ grouping, dùng can_collect_data và blockers đúng nghĩa.
-- [ ] P4.4 — Chọn offer/ngày bằng snapshot + reuse cho URL; discovery hiển thị candidate theo offer; đổi tiêu chí/sắp xếp minh bạch và format tiền/ngày. Giữ yêu cầu giá/nhóm/chính sách G1–G3; không tự tính hoặc tạo budget giả để lấy giá.
+- [ ] P4.2 — Slice nhập/review chung: session → draft nhu cầu + URL tùy chọn → validate/hiểu nhu cầu/đọc URL khi cần → review criteria và phạm vi tìm → xác nhận. Không ép party/budget; giữ hard/soft/AND/OR, readiness và draft khi lỗi.
+- [ ] P4.3 — Job phân tích/retrieval/đánh giá/rank → BE chọn nhóm/so sánh → render đề xuất/lý do/bảng/evidence ngay; tìm phương án khác giữ criteria và URL, không lặp nhóm đã xem. Không tạo danh sách chọn tour hoặc tự ghép/rank v1 tại FE. **Phụ thuộc:** G9/G10.
+- [ ] P4.4 — Offer/ngày theo context/snapshot được chỉ rõ; đổi giá/ngày/evidence đồng bộ, format tiền/ngày. Sửa yêu cầu/URL hoặc thử lại nguồn chạy lại phần phụ thuộc; không ngầm chọn rẻ nhất/tính giá thay BE. Giữ G1–G3/G9/G10; đổi offer khác bước chọn tour thủ công.
 - [ ] P4.5 — Hoàn thiện mọi trạng thái P3.5, mobile, keyboard, liên kết nguồn và chống submit lặp/response cũ.
 - [ ] P4.6 — Kiểm tra các slice bằng JSON mẫu đã thống nhất; sửa lỗi logic/layout và đối chiếu với tài liệu.
 
@@ -92,8 +92,8 @@ Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ư
 
 ### P5. Tích hợp backend thật
 
-- [ ] P5.1 — Kết nối API v1 đang có bằng fixture; xác nhận session/Bearer, base URL/CORS, HTTP/envelope/schema và parse/comparison lifecycle. Ghi rõ synthetic, chưa nghiệm thu tour thật.
-- [ ] P5.2 — Sau khi D1–D5 được chốt/nghiệm thu, chạy cả hai luồng API bằng dữ liệu nguồn thật; kiểm tra partial, zero matches, field unknown, access từ chối và toàn bộ source attempts thất bại. **Phụ thuộc BE/crawler còn giữ; merge CLI chưa hoàn thành task.**
+- [ ] P5.1 — Kết nối API v1 fixture để kiểm tra session/Bearer/CORS/envelope/schema/jobs; kiểm tra contract hợp nhất/ranking khi BE cung cấp G9/G10. Ghi synthetic; groups hiện có chưa nghiệm thu ranking/Top 3.
+- [ ] P5.2 — Sau G9/G10/D1–D5, chạy nguồn thật ba tổ hợp: tự đề xuất/so sánh và tìm phương án khác; kiểm tra ít hơn ba/hết nhóm mới, trùng tour/offers/nguồn lỗi/unknown/access từ chối. Đo budget 20 theo chất lượng/latency/coverage trước chốt runtime; merge CLI chưa nghiệm thu.
 - [ ] P5.3 — Kiểm tra giá đúng offer, phụ thu chưa biết, freshness, xác minh nguồn và trade-off mở đúng evidence bằng API public; nghiệm thu G1–G3/G5 và D3/D4. `verified` trong crawl report không phải independently_verified; lịch khởi hành không chứng minh còn chỗ.
 - [ ] P5.4 — Kiểm tra text patch lỗi giữ revision, response/job cũ, 409/stale answers/selections, cancel/chạy lại, mất mạng/idempotency và khôi phục đúng phiên/revision theo G6.
 - [ ] P5.5 — Ghi bug FE/BE với request ID và payload tái hiện phù hợp; đồng bộ tài liệu sau sửa contract. Mock và API thật phải cùng schema.
@@ -103,7 +103,7 @@ Không chốt lịch ngày khi chưa biết deadline và năng lực backend. Ư
 ### P6. Nghiệm thu và bàn giao
 
 - [ ] P6.1 — Typecheck, lint, build và kiểm tra schema/fixture đạt; kiểm tra logic giá/ngày/status/reference có rủi ro sai nghĩa.
-- [ ] P6.2 — E2E cho hai luồng thành công và các nhánh partial/error/empty; test response cũ và giữ input khi thử lại.
+- [ ] P6.2 — E2E ba tổ hợp: tự đề xuất/so sánh/evidence → tìm phương án khác/sửa nhu cầu; kiểm tra exclusion/vòng cũ, thiếu ba/hết phương án/hard fail-unknown/offer binding. Giữ partial/error/empty/response cũ/input khi retry.
 - [ ] P6.3 — Kiểm tra trên desktop/mobile mục tiêu, nội dung dài, bàn phím, contrast, reduced-motion và theme đã chọn.
 - [ ] P6.4 — Kiểm tra hiệu năng trang thực tế và thời gian BE riêng; xử lý ảnh/font/layout shift, không che chờ BE bằng tiến độ giả.
 - [ ] P6.5 — Walkthrough: người dùng hiểu vì sao tour khác nhau, nhận ra giá cũ/thiếu và mở được nguồn đúng field.
@@ -126,10 +126,10 @@ Tham chiếu chính thức: [Vite](https://vite.dev/guide/), [Next.js server/cli
 
 ## Việc làm tiếp theo
 
-1. FE + BE review G1/G2/G8 trước; BE + crawler đồng thời chốt D1 để dữ liệu có đường vào runtime: giá cho URL-only, nhận diện tour/nguồn, schema response và adapter/transport; ghi quyết định vào contract chuẩn.
-2. Review P1.1–P1.2/P1.6 theo API đã có: field/catalog, clarification, AND/OR, offer, session và refresh. Giữ G3–G7 và từng scenario C11 để trao đổi tiếp với backend.
-3. Codex chuẩn bị reference và phương án visual P3.1–P3.2; bạn có thể bổ sung template sau.
+1. Review ba bề mặt Input → Review → Kết quả/so sánh tự động; bỏ chọn tour thủ công. Chốt ở FLOW-3 đề xuất URL tham chiếu + ba gợi ý, không ép user chọn từ pool.
+2. Review [hai prototype A/B](frontend-design-review.md), chọn hoặc điều chỉnh hướng ở P3.2; sau đó chốt token/component P3.3 và thiết kế ba màn/trạng thái P3.4–P3.6. Có thể bổ sung template sau. Các field chưa có contract dùng dữ liệu minh họa có nhãn.
+3. FE + BE trao đổi G9/G10/G1/G2/G8: pool/budget 20 thử nghiệm, rank/lý do/coverage, so sánh tự động và vòng phương án khác; BE + crawler D1–D5. Giữ G3–G7/C11, chốt trước tích hợp.
 
-**Kiểm chứng lần cập nhật:** Hai input mẫu đã qua models/fixture/decision engine; sau merge đã tạo môi trường kiểm tra riêng `.uv/merge-env`, giữ nguyên `.venv`. Toàn bộ tests backend + tourcrawl đạt **107 passed**, lint `src tests scripts` đạt; tests API dùng SQLite tạm/fixture/NIM stub. Chưa nghiệm thu NIM/crawler nguồn thật hoặc frontend E2E, không tick P5/P6 từ kết quả này.
+**Kiểm chứng baseline merge:** Hai input mẫu đã qua models/fixture/decision engine; tests backend + tourcrawl đạt **107 passed** và lint đạt trong `.uv/merge-env`, giữ `.venv`. Chỉ kiểm chứng v1, không chứng minh G9/G10. P3 prototype đạt **56/56 kiểm tra trình duyệt** trên fixture local ở 1440/768/390/320px; không nghiệm thu API, nguồn thật hoặc frontend production E2E, không tick P5/P6.
 
 Các điều kiện hoàn thành thể hiện phụ thuộc trong roadmap; không tự cấp quyền triển khai. Quy trình PLANNING vẫn theo `AGENTS.md`.

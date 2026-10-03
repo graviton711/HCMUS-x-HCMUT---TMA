@@ -1,7 +1,7 @@
 # Frontend tích hợp backend v1
 
 **Trạng thái:** Ghi nhận từ backend `0b7e59f`, đã merge/tham chiếu trên `feature/minh-phu` ngày 03/10/2026; dùng để review P1/P2, chưa thay việc FE + BE chốt contract. Tourcrawl/scripts cũng đã merge nhưng chưa nối với gateway; API mặc định vẫn fixture, `origin=synthetic`. Chi tiết ở [đối chiếu crawler](frontend-crawler-integration.md).
-**Nguồn chuẩn:** [HTTP contract](api-contract.md), [domain contract](backend-contracts.md), [schema sinh từ models](../contracts/README.md). Tài liệu này ánh xạ API vào frontend; các khoảng thiếu được giữ tại [C1–C11 và G1–G8](frontend-backend-checklist.md).
+**Nguồn chuẩn:** [HTTP contract](api-contract.md), [domain contract](backend-contracts.md), [schema sinh từ models](../contracts/README.md). Tài liệu ghi API **hiện có**, chưa đủ [flow thống nhất/ranking](frontend-flows.md); khoảng thiếu [C1–C11 và G1–G10](frontend-backend-checklist.md).
 **Đối chiếu:** [routes](../src/api/app.py), [DTO](../src/api/dto.py), [models nhu cầu](../src/domain/requirements.py), [Fact/evidence](../src/domain/crawl.py), [decision engine](../src/decision/engine.py), [store](../src/api/store.py), [settings](../src/api/settings.py).
 
 ## Endpoint và response thực tế
@@ -24,7 +24,11 @@
 
 ## Input nhu cầu và validation
 
-`mode=discover|compare_urls`. Discover nhận **text hoặc form**, không nhận URLs; compare URLs nhận 2–5 URLs và text/form tùy chọn. Không gửi cả text và form. Đổi mode tạo requirement mới; giữ draft hai tab riêng.
+V1 `mode=discover|compare_urls`. Discover nhận **text hoặc form**, không nhận URLs; compare URLs nhận 2–5 URLs và text/form tùy chọn nhưng không retrieval thêm. Không gửi cả text và form; đổi mode phải tạo requirement mới. Đây là giới hạn backend, không còn là thiết kế hai tab của frontend.
+
+**Flow mục tiêu / G9:** Một draft nhu cầu + URL → review → BE thu thập chung và tự trả nhóm đề xuất/comparison ngay. Bỏ chọn tour thủ công; có vòng phương án khác/exclusion và sửa yêu cầu/retry. Đề xuất URL làm tham chiếu ngoài tối đa ba gợi ý mới và budget nội bộ 20 tour/lượt cần review/đo, chưa DTO/endpoint thực tế. origin=synthetic hiện là dữ liệu fixture, không nhãn nguồn gốc tour. Không ghép hai response v1 ở FE.
+
+**Ranking / G10:** BE rank, tự chọn tối đa ba gợi ý khác nhau và so sánh luôn; trả lý do/criteria/offer/evidence/quality/coverage/budget/policy. Engine hiện chỉ candidates/groups/evaluations/trade_offs, chưa ranking/nhóm tự động/vòng phương án khác; thứ tự mảng hoặc số eligible không phải rank. DTO/công thức/budget 20 chưa chốt, FE không lấy ba phần tử đầu làm đề xuất hay cho user sàng lọc pool.
 
 - Text: 1–8.000 ký tự; form: tối đa 50 conditions. URL tối đa 2.048 ký tự, HTTP(S), không credentials, port chỉ 80/443, không khoảng trắng/control/backslash; trùng hoàn toàn bị từ chối. Canonical dedup/giới hạn số cột discovery còn cần review C5.
 - Condition: `{id, field, operator, value, strength}`; mặc định form là `hard`. FE gán ID khi tạo condition/child; sau response dùng ID thực tế. Backend tạo provenance, FE không gửi source quote tự dựng.

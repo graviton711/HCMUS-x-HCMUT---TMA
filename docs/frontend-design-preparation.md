@@ -4,12 +4,14 @@
 
 Roadmap và checklist công việc nằm ở [planning frontend](frontend-plan.md). Idea, kiến trúc và bố cục wireframe đã chốt; tài liệu này hướng dẫn dùng skill khi thiết kế chi tiết.
 
+P3.1 đã có bốn reference và asset provenance; hai prototype A Giấy & mực / B Hành trình xanh đang [chờ review](frontend-design-review.md). Font/màu trong bản mẫu là ứng viên, chưa chốt style hoặc stack sản phẩm.
+
 ## Brief sản phẩm
 
 - Người Việt đang cân nhắc tour trọn gói và nhà cung cấp.
-- Hai đầu vào: nhu cầu cá nhân hoặc URL tour đang cân nhắc.
+- Một màn đầu vào: nhu cầu cá nhân + URL tour tùy chọn; phân tích tour cung cấp và tìm thêm để đối chiếu chung, kể cả một URL.
 - Giá trị chính: so sánh cùng tiêu chí, giải thích đánh đổi, kiểm chứng dữ kiện và thấy dữ liệu còn thiếu.
-- Luồng chính: nhập → làm rõ ràng buộc → so sánh → xem bằng chứng → sửa tiêu chí hoặc mở trang nhà cung cấp.
+- Luồng: nhập chung → review → BE tìm/đánh giá/rank/tự chọn tối đa ba gợi ý và so sánh ngay → evidence hoặc tìm phương án khác/sửa yêu cầu. Bỏ bước user sàng lọc/chọn tour.
 - Không tự tạo lịch trình, đặt tour, thanh toán hoặc chọn thay người dùng.
 
 Nguồn yêu cầu: [proposal](idea.md), [kiến trúc](system-architecture.md), [wireframe](wireframes.md), [HTTP contract v1](api-contract.md), [domain contract](backend-contracts.md). `TMA.md` là đề bài cuộc thi; `idea.md` là proposal sản phẩm. [Hướng tích hợp](frontend-api-integration.md) ghi chi tiết đã đối chiếu code `0b7e59f`; [checklist](frontend-backend-checklist.md) giữ phần BE chưa đủ cho thiết kế.
@@ -44,6 +46,8 @@ Không chọn `gpt-taste` làm mặc định vì ép AIDA/GSAP và chuyển đ�
 ## Những yêu cầu UI phải giữ
 
 - Tách ràng buộc bắt buộc khỏi ưu tiên; người dùng nhìn thấy tiêu chí và cách sắp xếp.
+- Kết quả có tối đa ba gợi ý/lý do và bảng tự động từ BE; tìm phương án khác giữ criteria và loại nhóm đã xem. Hard fail/unknown không lấp giả; chưa ưu tiên thì nhãn tương tự. G10 còn chốt, không tự tạo điểm AI.
+- Giữ tour cung cấp và nhãn nguồn gốc; tour tìm thêm dùng cùng criteria. Chỉ URL thì gợi ý phạm vi từ dữ kiện, không suy sở thích/điều kiện cá nhân. Tour URL giữ làm tham chiếu/so chung, không màn danh sách/chọn tour trước bảng.
 - So sánh đúng offer snapshot theo ngày; nhiều offer chưa chọn vẫn xem được dữ kiện tour. Giá public cho URL-only còn thiếu (G1); không coi giá người lớn là tổng cuối cho nhóm hoặc dựng giá để hoàn thiện mock visual.
 - Phân biệt data_state (`present`, `missing`, `conflicting`, `invalid`, `unsupported`), completeness (`complete`, `partial`, `unknown`), verification (`supplier_published`, `independently_verified`, `unverified`) và freshness. Có timestamp không có nghĩa đã xác minh/còn mới; freshness hiện chưa đủ mọi ô (G5).
 - Không có hard filter thì eligibility=null; có tour dù groups rỗng. Dùng can_collect_data và blockers để thiết kế làm rõ; không gắn “đạt nhu cầu” cho URL-only.
@@ -52,11 +56,13 @@ Không chọn `gpt-taste` làm mặc định vì ép AIDA/GSAP và chuyển đ�
 - Mobile vẫn đối chiếu cùng tiêu chí và mở được evidence; không chỉ thu nhỏ bảng desktop.
 - Nội dung tiếng Việt, định dạng VND/ngày rõ ràng, font hiển thị dấu đầy đủ, focus bàn phím và tương phản dễ đọc; motion tôn trọng reduced-motion.
 
+Budget nội bộ khởi điểm 20 ứng viên và URL tham chiếu ngoài ba gợi ý là đề xuất ở FLOW-3; chưa benchmark/chốt, không expose pool hoặc checkbox để user sàng lọc.
+
 ## Các điểm cần làm rõ ở bước thiết kế
 
 Chi tiết và owner được theo dõi trong [checklist frontend–backend](frontend-backend-checklist.md), phase P1 của planning.
 
-- Hai luồng `/v1` và clarification/jobs đã có; cần review UX text/form, hard/soft/AND/OR, offer, sửa revision và session hết hạn.
+- Flow chung đã duyệt, có thể thiết kế ngay mà không chờ field/survey/tên biến. `/v1` hiện vẫn hai mode loại trừ nhau; xử lý URL + retrieval/review phạm vi/dedup/nhóm so sánh tự động/vòng phương án khác còn G9. Tiếp tục review UX text/form, hard/soft/AND/OR, offer, revision và session hết hạn.
 - Giữ hàng giá, tên tour/nhà cung cấp, nội dung điều kiện và trade-off giá/chính sách dù public response chưa đáp ứng (G1–G3); ghi rõ field chờ BE trên thiết kế.
 - Catalog dropdown (G4), freshness mọi ô (G5), khôi phục revision (G6), grouping edits (G7), schema response/snapshots (G8) chưa đủ; không tự tạo contract để lấp.
 - API tour hiện dùng fixture: mọi ví dụ/prototype phải gắn nhãn minh họa. Tourcrawl/scripts đã có nhưng chưa nối; [D1–D5](frontend-crawler-integration.md) là phụ thuộc P5. Dữ liệu CSV/raw text dùng khảo sát, không tự coi là giá/chỗ/evidence đạt contract.

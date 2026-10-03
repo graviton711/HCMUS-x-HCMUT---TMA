@@ -1,6 +1,6 @@
 # Đối chiếu frontend, backend và crawler
 
-**Trạng thái:** PLANNING; cập nhật trên `feature/minh-phu` ngày 03/10/2026. Giữ yêu cầu frontend G1–G8 tại [checklist](frontend-backend-checklist.md); merge code có sẵn không đồng nghĩa pipeline nguồn thật đã tích hợp.
+**Trạng thái:** PLANNING trên `feature/minh-phu`, ngày 03/10/2026. Giữ G1–G8/D1–D5; bổ sung G9 theo flow URL + retrieval chung ở [checklist](frontend-backend-checklist.md). Merge code có sẵn không đồng nghĩa pipeline nguồn thật hoặc flow hợp nhất đã tích hợp.
 
 ## Nguồn tham khảo và phạm vi merge
 
@@ -45,7 +45,7 @@ Trong pipeline, context dùng kiểm tra departure có cả JSON của chính de
 
 | ID | Công việc / điều kiện hoàn thành | Owner | Phụ thuộc frontend |
 |---|---|---|---|
-| D1 | Chốt adapter + transport CrawlRequest/CrawlResult: IDs, source status, mode discover/compare_urls, deadline, offer/evidence binding; có response fixture validate và HTTP /crawl hoặc phương án gateway đã thống nhất | Backend + crawler | P5.2; G1/G2/G8 |
+| D1 | Chốt adapter + transport CrawlRequest/CrawlResult: IDs, source status, deadline, offer/evidence binding; BE điều phối thu thập URL và retrieval chung G9 từ các capability hiện có. Có fixture validate và HTTP /crawl hoặc gateway đã thống nhất; không yêu cầu FE tự nối mode discover/compare_urls | Backend + crawler | P5.2; G1/G2/G8/G9 |
 | D2 | Chốt registry Git/profile → SourceCapability: approved domains, access_status/checked_at, searchable/returned fields và freshness_seconds; kiểm tra nguồn thật trước khi bật | Crawler + backend | C1/C8, P5.2–P5.3 |
 | D3 | Chốt raw pricing/date/availability → typed data; phân biệt lịch định kỳ và ngày cụ thể, công bố giá và giá đủ nhóm, unavailable/unknown và số chỗ | Crawler + backend pricing | G1/G5, P4.4/P5.3 |
 | D4 | Giữ locator/raw_quote/snapshot/time và kiểm chứng riêng từng field; `verified` nội bộ không chuyển thành independently_verified. Nghiệm thu stop/reason khi nguồn không được phép/không kiểm tra được | Crawler + backend | C7/C9, P3.5/P5.3 |
@@ -53,7 +53,7 @@ Trong pipeline, context dùng kiểm tra departure có cả JSON của chính de
 
 Quan sát cần xử lý ở D4: fetch_robots có thể trả None khi lỗi; run_tour hiện chỉ chặn khi có parser và disallow, chưa dừng khi không kiểm tra được robots. Source access gating của BE vẫn cần chốt trước khi nguồn thật đi vào kết quả người dùng. Đây là vấn đề code hiện hữu cần owner sửa/nghiệm thu, không tự thay production crawler trong giai đoạn planning.
 
-Ưu tiên trao đổi D1 cùng G1/G2/G8. Các đường lấy title/price/itinerary đã có giúp chuẩn bị adapter, nhưng **không đóng gap chỉ vì có code trích xuất**; chỉ đóng khi API public trả đúng schema/evidence và scenario được nghiệm thu.
+Ưu tiên D1 cùng G9/G1/G2/G8. Crawler cung cấp dữ kiện URL và capability tìm kiếm; BE giữ criteria chung/dedup/source provenance. Các đường lấy title/price/itinerary giúp chuẩn bị adapter nhưng không đóng gap chỉ vì có code trích xuất; API public phải đúng schema/evidence và scenario được nghiệm thu.
 
 ## Kiểm tra sau merge
 
