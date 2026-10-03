@@ -1,6 +1,10 @@
 # Kiến trúc hệ thống
 
-**Trạng thái:** Đã chốt kiến trúc mục tiêu theo xác nhận ngày 03/10/2026. Backend v1 đã có FastAPI/Pydantic, SQLite và worker theo [backend-plan.md](backend-plan.md); fixture/HTTP gateway ở [backend-runtime.md](backend-runtime.md). Frontend vẫn PLANNING; crawler thật chưa nối với backend.
+**Trạng thái:** Đã chốt kiến trúc mục tiêu theo xác nhận ngày 03/10/2026. Backend v1 có FastAPI/Pydantic, SQLite và worker theo [backend-plan.md](backend-plan.md); fixture/HTTP gateway ở [backend-runtime.md](backend-runtime.md). Tourcrawl có CLI/profile và scripts riêng; chưa có adapter vào runtime backend. Frontend vẫn PLANNING. Phần chưa nối ghi tại [đối chiếu crawler](frontend-crawler-integration.md).
+
+## Thứ tự lát cắt frontend
+
+Ưu tiên slice so sánh URL trước rồi slice nhu cầu theo P4.2/P4.3; **cả hai luồng vẫn thuộc demo đã chốt**. API URL nhận 2–5 targets; mẫu 2–3 tour chỉ là kịch bản thử UI, không hạ phạm vi về chỉ URL. Fixture frontend dùng public contract v1, không dùng output crawler thô hoặc API `/api/compare` cũ.
 
 ## Sơ đồ tổng quan
 

@@ -1,6 +1,8 @@
 # Hợp đồng dữ liệu và API
 
-**Trạng thái:** Contract MVP. Định nghĩa bộ field chuẩn cho mọi tour từ mọi nhà cung cấp.
+**Trạng thái:** Thiết kế field/API trước backend v1, giữ làm danh mục yêu cầu tham khảo; **không phải contract runtime hiện tại**. API `/api/compare`, wrapper observed/partial/not_observed và so sánh field mềm bằng LLM bên dưới chưa được implement theo thiết kế này.
+
+Nguồn runtime chuẩn: [HTTP v1](api-contract.md), [backend domain](backend-contracts.md), [crawler exchange](crawler-contract.md), [schemas sinh từ models](../contracts/README.md). Giữ toàn bộ field/yêu cầu bên dưới để FE + BE + crawler review; không loại bỏ vì backend hiện chưa trả. Sai khác/việc còn thiếu nằm ở [checklist FE–BE](frontend-backend-checklist.md) và [đối chiếu crawler](frontend-crawler-integration.md). Khi bổ sung phải cập nhật contract v1, không tạo API chuẩn thứ hai.
 
 ## Nguyên tắc
 

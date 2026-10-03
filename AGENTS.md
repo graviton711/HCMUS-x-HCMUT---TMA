@@ -99,3 +99,7 @@ Luôn giữ reply càng ngắn gọn càng tốt, người đọc vào là nắm
 ## 6. Frontend / UI/UX Skills
 
 Trước công việc frontend/UI/UX, đọc `docs/frontend-design-preparation.md` để chọn skill trong `.agents/skills/` đúng phạm vi. Skill không thay thế Planning Protocol, proposal, wireframe hoặc data contract. Không áp quy tắc landing/marketing vào bảng so sánh và form của sản phẩm; chỉ chọn phong cách cụ thể khi hướng thiết kế đó đã được thống nhất.
+
+## 7. Branch Scope — Minh Phú
+
+Theo yêu cầu của Minh Phú, chỉ làm việc, sửa file, xử lý conflict và tạo commit trên `feature/minh-phu`. Kiểm tra branch trước mọi mutation. Các nhánh khác chỉ dùng để fetch/tham khảo; khi cần, merge về `feature/minh-phu` rồi phân tích và sửa tại đó. Không commit hoặc push vào `backend`, `main` hay các nhánh crawler. Không tự chuyển sang nhánh khác để chỉnh sửa.

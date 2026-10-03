@@ -13,7 +13,7 @@ flowchart LR
     R --> U
 ```
 
-Backend v1 đã có API, hiểu nhu cầu qua NVIDIA NIM, bộ lọc/so sánh, lưu revision và worker. Hai luồng chạy được với dữ liệu mô phỏng; crawler thật do thành viên phụ trách crawler tích hợp theo contract.
+Idea, kiến trúc và wireframe đã chốt. Backend v1 có API, hiểu nhu cầu qua NVIDIA NIM, bộ lọc/so sánh, revision và worker. Package `tourcrawl` và các script khảo sát nguồn đã được đưa về nhánh này; chưa có adapter nối output crawler vào backend. Hai luồng API mặc định vẫn dùng dữ liệu mô phỏng; frontend đang PLANNING.
 
 - [Proposal và phân tích bài toán](docs/idea.md)
 - [Kiến trúc hệ thống](docs/system-architecture.md)
@@ -24,6 +24,7 @@ Backend v1 đã có API, hiểu nhu cầu qua NVIDIA NIM, bộ lọc/so sánh, l
 - [Contract crawler và mẫu JSON — bản nháp](docs/crawler-contract.md)
 - [Contract API cho frontend — bản nháp](docs/api-contract.md)
 - [Bộ tình huống đánh giá tiếng Việt](docs/requirements-evaluation.md)
+- [Phân công/quy ước Git](docs/team-workflow.md), [registry nguồn](docs/provider-registry.md)
 
 ## Chạy backend
 
@@ -49,6 +50,7 @@ Frontend đang PLANNING; chưa có production UI. Idea/kiến trúc/wireframe l�
 - [Flow và trạng thái UI](docs/frontend-flows.md)
 - [Hướng tích hợp API v1 theo code](docs/frontend-api-integration.md)
 - [Checklist contract và khoảng thiếu cần trao đổi với BE](docs/frontend-backend-checklist.md)
+- [Đối chiếu crawler/backend và công việc tích hợp dữ liệu](docs/frontend-crawler-integration.md)
 - [Chuẩn bị skill/thiết kế](docs/frontend-design-preparation.md), [module frontend](src/frontend/README.md)
 
 ## Kiểm tra backend
@@ -62,3 +64,9 @@ uv run tour-backend export-schemas
 ```
 
 Gọi NIM thật (tách khỏi tests offline): `uv run tour-backend probe-nim`; bộ smoke tiếng Việt: `uv run tour-backend evaluate-nim`. Kết quả smoke không thay bộ gold 50 câu + 15 chuỗi hội thoại đầy đủ.
+
+## Crawler và dữ liệu
+
+[tourcrawl pipeline](src/tourcrawl/pipeline/README.md) chạy CLI độc lập, output CSV/JSON detail; profiles tại `configs/profiles/`. Browser flow cần `uv sync --extra browser` và Chromium của Playwright. Các script khảo sát/profile nằm tại `scripts/`, đọc/ghi artifacts được ignore; không có bộ dữ liệu tour thật đã nghiệm thu trong Git.
+
+API runtime dùng [HTTP/domain contract v1](docs/api-contract.md) và [CrawlRequest/CrawlResult](docs/crawler-contract.md). [Data contract cũ](docs/data-contract.md) giữ danh sách field/yêu cầu chưa đáp ứng, không phải API đang chạy. Adapter, registry/TTL, giá/offer/evidence và profile format còn D1–D5 trong [đối chiếu tích hợp](docs/frontend-crawler-integration.md).

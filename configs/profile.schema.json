@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mlai.local/schemas/profile.schema.json",
+  "title": "Tour source profile",
+  "description": "Declarative per-source config. Engine never branches on source names.",
+  "type": "object",
+  "required": ["origin", "flows"],
+  "properties": {
+    "origin": {"type": "string", "description": "Apex domain, e.g. travel.com.vn"},
+    "flows": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Subset of: static, browser, combo_api_browser"
+    },
+    "sitemaps": {"type": "array", "items": {"type": "string", "format": "uri"}},
+    "tour_url_patterns": {"type": "array", "items": {"type": "string"}},
+    "combo": {
+      "type": "object",
+      "properties": {
+        "path_fragment": {"type": "string"},
+        "slug_pattern": {"type": "string"},
+        "tour_code_param": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "aliases": {
+      "type": "object",
+      "additionalProperties": {"type": "array", "items": {"type": "string"}}
+    },
+    "schedule_markers": {
+      "type": "object",
+      "properties": {
+        "heading": {"type": "string"},
+        "month_pattern": {"type": "string"},
+        "date_pattern": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "section_anchors": {
+      "type": "object",
+      "additionalProperties": {"type": "array", "items": {"type": "string"}}
+    },
+    "section_heading_keywords": {
+      "type": "object",
+      "additionalProperties": {"type": "array", "items": {"type": "string"}}
+    },
+    "section_heading_fallback": {"type": "array"},
+    "notes_key_pattern": {"type": "string"},
+    "junk_presentation_keys": {"type": "array", "items": {"type": "string"}},
+    "keep_patterns": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}
