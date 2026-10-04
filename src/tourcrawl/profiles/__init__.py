@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import ModuleType
 
 DEFAULT_SETTINGS = Path("configs/settings.yaml")
 DEFAULT_PROFILES = Path("configs/profiles")
@@ -27,7 +28,7 @@ def _resolve(path: Path) -> Path:
     return candidates[0]
 
 
-def _yaml() -> object:
+def _yaml() -> ModuleType:
     try:
         import yaml
     except ImportError as exc:

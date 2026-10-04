@@ -5,8 +5,12 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from shared import get_logger
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 log = get_logger("browser")
 
@@ -33,7 +37,7 @@ class BrowserSession:
         self.timeout_ms = timeout_ms
         self._stack = None
         self._browser = None
-        self.page = None
+        self.page: Page | None = None
 
     def __enter__(self) -> BrowserSession:
         try:
@@ -58,9 +62,11 @@ class BrowserSession:
                 self._stack.__exit__(*args)
 
     def capture(self, url: str, profile: dict, settings: dict) -> CapturedTraffic:
+        page = self.page
+        if page is None:
+            raise RuntimeError("BrowserSession not started; use 'with BrowserSession(...)'.")
         traffic = CapturedTraffic()
         browser_cfg = settings.get("browser", {})
-        page = self.page
 
         def on_response(response):
             try:

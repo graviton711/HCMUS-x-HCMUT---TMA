@@ -31,7 +31,14 @@ testpaths = ["tests"]
 pythonpath = ["src", "scripts"]
 addopts = "-ra"
 
-[tool.pyright]
+# basedpyright mac dinh o che do "recommended" (bat ca rule pedantic nhu
+# reportAny/reportUnusedCallResult) -> can baseline "standard" cho ca team.
+# Luu y: basedpyright khong cho phep co ca hai section [tool.pyright] va
+# [tool.basedpyright] trong pyproject - chi giu [tool.basedpyright].
+[tool.basedpyright]
+typeCheckingMode = "standard"
+reportAny = "none"
+reportUnusedCallResult = "none"
 extraPaths = ["src", "scripts"]
 venvPath = "."
 venv = ".venv"

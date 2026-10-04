@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import sys
 from pathlib import Path
@@ -45,7 +46,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
+    if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = _parse_args(argv)
     _load_dotenv()
