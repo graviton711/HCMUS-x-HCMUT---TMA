@@ -1,4 +1,4 @@
-"""Crawl tour fields using declarative profile coordinates (< 100 lines)."""
+"""Crawl tour fields using declarative profile coordinates (mechanical, no per-site heuristics)."""
 from __future__ import annotations
 
 import argparse
@@ -63,6 +63,38 @@ def fetch_html(target: str, render: bool) -> str:
             return page.content()
     return urlopen(Request(target, headers={"User-Agent": "TourCrawler/1.0"}), timeout=20).read().decode("utf-8", errors="replace")
 
+def _walk_path(data: object, path: str) -> object:
+    curr: object = data
+    for part in path.split("."):
+        if not isinstance(curr, dict) or (curr := curr.get(part)) is None:
+            return None
+    return curr
+
+
+def extract_api_field(rule: dict, row: dict[str, object]) -> object:
+    """GET a public same-origin JSON endpoint declared in the profile.
+
+    `{placeholders}` in `url` are filled from fields extracted earlier
+    (e.g. {tour_code}); failures mean not_observed, never guesses.
+    """
+    try:
+        url = str(rule.get("url", "")).format(
+            **{k: v for k, v in row.items() if isinstance(v, (str, int))})
+    except (KeyError, IndexError, ValueError):
+        return None
+    try:
+        req = Request(url, headers={"User-Agent": "TourCrawler/1.0"})
+        data = json.loads(urlopen(req, timeout=20).read().decode("utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return None
+    val = _walk_path(data, str(rule.get("path", ""))) if rule.get("path") else data
+    if val is None:
+        return None
+    if code := rule.get("clean"):
+        return eval(code, {"val": val, "re": re, "json": json, "html": html})
+    return val
+
+
 def crawl_tour(target: str, profile: dict) -> dict:
     render = bool(profile.get("render") or "browser" in profile.get("flows", []))
     soup = BeautifulSoup(fetch_html(target, render), "html.parser")
@@ -73,9 +105,16 @@ def crawl_tour(target: str, profile: dict) -> dict:
         except (ValueError, TypeError):
             continue
     row: dict[str, object] = {"url": target}
+    deferred: dict[str, dict] = {}
     for field, rule in profile.get("fields", {}).items():
+        if rule and rule.get("source") == "api":
+            deferred[str(field)] = rule
+            continue
         v = extract_field(soup, json_ld, rule)
         row[str(field)] = v if v is not None else ""
+    for field, rule in deferred.items():
+        v = extract_api_field(rule, row)
+        row[field] = v if v is not None else ""
     return row
 
 def main(argv=None) -> int:

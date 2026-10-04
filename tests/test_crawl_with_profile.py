@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 from bs4 import BeautifulSoup
@@ -155,6 +156,48 @@ def test_extract_field_clean_expression():
         "clean": "val.split()[0].upper()",
     }
     assert extract_field(soup, [], rule) == "TOUR"
+
+
+def test_extract_api_field_from_file_uri(tmp_path: Path):
+    payload = {"data": {"departures": [
+        {"date": "2026-11-18", "p": "8,590,000"},
+        {"date": "2026-11-21", "p": "8,990,000"},
+    ]}}
+    api_file = tmp_path / "api.json"
+    api_file.write_text(json.dumps(payload), encoding="utf-8")
+    rule = {
+        "source": "api",
+        "url": api_file.as_uri(),
+        "path": "data.departures",
+        "clean": "[{'departure_date': d['date'], 'price': int(d['p'].replace(',', ''))} for d in val]",
+    }
+    val = _mod.extract_api_field(rule, {"url": "https://example.test/tour-1", "tour_code": "ABC123"})
+    assert val == [
+        {"departure_date": "2026-11-18", "price": 8590000},
+        {"departure_date": "2026-11-21", "price": 8990000},
+    ]
+
+
+def test_extract_api_field_missing_placeholder_returns_none():
+    rule = {"source": "api", "url": "https://example.test/api?code={tour_code}", "path": "a"}
+    assert _mod.extract_api_field(rule, {"url": "https://example.test/tour-1"}) is None
+
+
+def test_crawl_tour_api_deferred_until_other_fields(tmp_path: Path):
+    html_file = tmp_path / "tour.html"
+    html_file.write_text(HTML_SAMPLE, encoding="utf-8")
+    api_file = tmp_path / "api.json"
+    api_file.write_text(json.dumps(
+        {"offers": [{"departure_date": "2026-11-18", "price": 8590000}]}), encoding="utf-8")
+    profile = {
+        "fields": {
+            "offers": {"source": "api", "url": api_file.as_uri(), "path": "offers"},
+            "tour_code": {"source": "css", "selector": "h1.tour-title", "clean": "'ABC123'"},
+        }
+    }
+    row = crawl_tour(str(html_file), profile)
+    assert row["tour_code"] == "ABC123"
+    assert row["offers"] == [{"departure_date": "2026-11-18", "price": 8590000}]
 
 
 def test_main_jsonl_output(tmp_path: Path):

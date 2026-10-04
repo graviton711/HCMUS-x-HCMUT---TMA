@@ -72,6 +72,14 @@ SPEED PRIORITY & RENDERING DECISION:
        python render_url.py <tour_url> raw/tour-1.html
    - Inspect the hydrated HTML to locate the exact CSS / section / label coordinates.
 
+3. Internal API endpoints (per-departure detail like price_by_age, flights):
+   If a decision field only appears after clicking a departure, discover the
+   JSON endpoint with:
+       python render_url.py <tour_url> raw/tour-1.html --capture-net raw/api
+   then read raw/api/network.json and the saved response files, pick the right
+   endpoint, and declare a `source: api` rule in profile.yaml. The endpoint
+   must be a public same-origin GET and counts against your request budget.
+
 CANONICAL FIELDS (the fixed target set; every field must be addressed):
 hard  (compared by code): tour_name, departure_city, destinations, route,
                           transport, accommodation,
@@ -96,6 +104,13 @@ soft  (compared by LLM) : itinerary, inclusions, exclusions,
   hotel_location (verbatim text). OMIT an optional key entirely when the
   source does not publish it - never guess or null-fill. Prices on the
   schedule take precedence over the headline price.
+- offers MUST be maximally enriched: before handover, actively check whether
+  richer per-departure data (price_by_age, flights, conditions, tour_code,
+  single_supplement, pickup_point) exists in static HTML, hydration blobs, or
+  via `render_url.py --capture-net raw/api` endpoint discovery - even if the
+  cached pages already pass self-test. An offers entry carrying only the 3
+  required keys while richer public data exists on the site is an incomplete
+  handover, not a pass.
 - When the site publishes no fixed dates, set offers: [] and
   departure_pattern (e.g. "hang tuan"). Guessing dates is failure.
 - surcharges is the verbatim extra-cost text: single supplement, holiday/Tet
@@ -107,7 +122,7 @@ soft  (compared by LLM) : itinerary, inclusions, exclusions,
   status: not_observed. Missing data is a valid result; guessing is failure.
 
 MACHINE-READABLE PROFILE SCHEMA:
-Each rule in `fields` MUST use one of these 4 source types:
+Each rule in `fields` MUST use one of these 5 source types:
 1. json_ld:
      source: json_ld
      path: <dotted_path>          # e.g. "offers.price", "startLocation.name"
@@ -123,6 +138,11 @@ Each rule in `fields` MUST use one of these 4 source types:
      source: section
      start_label: <heading_text>  # e.g. "Lịch trình", "Giá tour bao gồm"
      stop_labels: [<heading_1>, <heading_2>] # headings where section terminates
+5. api:
+     source: api
+     url: "https://site.example/api/tour?code={tour_code}"  # {placeholders}
+                                  # filled from earlier fields ({url}, {tour_code}, ...)
+     path: "data.departures"      # dotted path into the JSON response
 
 FIELD CLEANING CODE (RECOMMENDED for exact target format & clean text):
   clean: "<python_expression>"   # e.g. "int(re.sub(r'\\D', '', str(val)))"

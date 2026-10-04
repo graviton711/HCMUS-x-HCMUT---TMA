@@ -4,7 +4,7 @@ Tài liệu đặc tả hợp đồng kỹ thuật giữa Agent khảo sát (`ru
 
 ## 1. Nguyên tắc cốt lõi
 
-* **Agent làm việc khó, Runner làm việc dễ:** Agent (LLM) phân tích DOM, tìm tọa độ chính xác và xuất ra `profile.yaml` thuần dữ liệu máy đọc được. Runner (`crawl_with_profile.py`) là script cơ học tối giản (< 100 dòng), tuyệt đối không suy đoán hay chứa logic heuristic riêng của từng website.
+* **Agent làm việc khó, Runner làm việc dễ:** Agent (LLM) phân tích DOM, tìm tọa độ chính xác và xuất ra `profile.yaml` thuần dữ liệu máy đọc được. Runner (`crawl_with_profile.py`) là script cơ học thuần túy — tuyệt đối không suy đoán hay chứa logic heuristic riêng của từng website (nguyên tắc bất biến là "không heuristic per-site", không phải số dòng; flow `api` cho phép nó vượt mốc 100 dòng ban đầu).
 * **Cấm văn xuôi trong profile:** Profile chỉ chứa selector, path, regex và primitive enum; không chứa câu điều kiện hoặc hướng dẫn bằng tiếng Anh/Việt tự nhiên.
 
 ## 2. Chuẩn Profile DSL (Machine-Readable Contract)
@@ -38,6 +38,13 @@ Mỗi trường trong `fields.<field_name>` phải tuân thủ đúng một tron
      - "Giá tour bao gồm"
      - "Chính sách hoàn hủy"
    ```
+5. **`api` (endpoint JSON nội bộ):**
+   ```yaml
+   source: api
+   url: "https://site/api/tour?code={tour_code}"   # placeholder nạp từ field đã trích trước đó ({tour_code}, {url}...)
+   path: data.departures            # dot-notation vào JSON response
+   ```
+   Runner GET endpoint công khai same-origin SAU khi trích xong các field khác, đi bộ theo `path` rồi chạy `clean`. Cách dò endpoint: `render_url.py --capture-net <dir>` ghi lại mọi JSON XHR vào `<dir>/network.json`; agent đọc file đó rồi khai báo rule `api`. Vẫn chịu mọi quy tắc GET công khai same-origin.
 
 ### 2.2. Cơ chế làm sạch dữ liệu (`clean` & `transform`)
 
@@ -80,7 +87,7 @@ Trường không tồn tại trên web được đánh dấu: `status: not_obser
 | Script | Trách nhiệm | Input | Output |
 |---|---|---|---|
 | `run_site_survey.py` | Điều phối Agent khảo sát domain, tự kiểm thử với `crawl_with_profile.py` trên tập `raw/` | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
-| `render_url.py` | Helper độc lập render URL động qua Playwright Chromium và xuất HTML ra file | URL + File đích | File HTML hoàn chỉnh sau render |
+| `render_url.py` | Helper độc lập render URL động qua Playwright Chromium, xuất HTML ra file; `--capture-net <dir>` ghi thêm mọi JSON response (XHR) vào `<dir>/` + index `network.json` để dò endpoint API | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
 | `crawl_with_profile.py` | Thu thập dữ liệu tour cơ học theo tọa độ profile (nghiêm ngặt < 100 dòng) | URL tour hoặc file HTML + `profile.yaml` | File JSON Lines (`.jsonl`) chuẩn hoá |
 
 
