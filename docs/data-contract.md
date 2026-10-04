@@ -84,16 +84,25 @@ Offer    { fields }
 | `inclusions` | text | ✅ | nguyên văn |
 | `exclusions` | text | ✅ | nguyên văn |
 | `cancellation_policy` | text | | cho phép fallback chính sách site-wide, phải ghi rõ nguồn |
+| `surcharges` | text | | phụ thu nguyên văn: phòng đơn, Tết/lễ, tour nước ngoài, tip, visa |
+| `child_policy` | text | | giá/điều kiện trẻ em nguyên văn: tuổi, % giá người lớn, giường phụ, trẻ nhỏ |
 
 ## Offer.fields
 
 | Field | Kiểu | Bắt buộc | Ghi chú |
 |---|---|---|---|
 | `departure_date` | date | ✅ | ISO 8601 |
-| `price` | int | ✅ | giá của đúng ngày khởi hành này |
+| `price` | int | ✅ | giá người lớn/combo của đúng ngày khởi hành này |
 | `price_type` | enum | | `fixed` \| `from` \| `contact` |
 | `availability` | enum | | `available` \| `sold_out` \| `unknown` |
-| `supplements` | text | | phụ thu phòng đơn, trẻ em... |
+| `supplements` | text | | phụ thu nguyên văn của lượt này |
+| `tour_code` | str | | mã đặt được của lượt khởi hành |
+| `price_by_age` | dict | | `{adult, child, small_child, infant}` int/null; định nghĩa dải tuổi nằm trong `child_policy` của Tour |
+| `single_supplement` | int | | phụ thu phòng đơn của lượt này |
+| `flights` | list[dict] | | `{flight_no, airline, dep_datetime, arr_datetime}` — không có với tour đường bộ |
+| `conditions` | text | | điều kiện hoàn/hủy/đổi riêng của lượt (nếu khác chính sách chung) |
+| `pickup_point` | text | | điểm/giờ tập trung của lượt |
+| `hotel_location` | text | | khách sạn gắn với lượt (tour combo) |
 
 - Mỗi ngày khởi hành có giá riêng: giá thật để so nằm ở `Offer`, không ở `Tour`.
 - Không gọi `valid_from` là `departure_date` nếu nguồn không nói rõ đó là ngày khởi hành.
@@ -104,7 +113,7 @@ Offer    { fields }
 | Mức | Field | Thiếu thì |
 |---|---|---|
 | Bắt buộc | `tour_name`, `url`, `departure_city`, `destinations`, `duration_days`, `price`, `currency`, `itinerary`, `inclusions`, `exclusions` | FAIL nguồn |
-| Cho phép thiếu | `canonical_url`, `route`, `duration_nights`, `price_type`, `departure_pattern`, `cancellation_policy`, `availability`, `departure_date` | cảnh báo, không FAIL |
+| Cho phép thiếu | `canonical_url`, `route`, `duration_nights`, `price_type`, `departure_pattern`, `cancellation_policy`, `availability`, `departure_date`, `offers`, `surcharges`, `child_policy` | cảnh báo, không FAIL |
 | Không bắt buộc | toàn bộ `Provider.fields` | bỏ qua |
 
 `status: partial` vẫn dùng được để so, nhưng phải gắn cảnh báo trong kết quả hiển thị.
@@ -120,8 +129,8 @@ Mọi pipeline thu thập (Agent & Runner) phải làm sạch dữ liệu để 
 - `route`: `list[str]` các điểm dừng theo thứ tự hành trình, loại bỏ hoàn toàn slogan quảng cáo (vd: `["Hà Nội", "Thung Khe", "Mộc Châu"]`).
 - `transport`: Enum chuẩn: `flight` | `bus` | `train` | `cruise` | `mixed`.
 - `accommodation`: Chuẩn hóa: `homestay` | `2_star` | `3_star` | `4_star` | `5_star` | `mixed`.
-- `itinerary`, `inclusions`, `exclusions`, `cancellation_policy`: **Plain text thuần túy**, sạch 100% thẻ HTML (`<p>`, `<br/>`), giải mã toàn bộ escaped entities (`\u003cbr/\u003e`, `&amp;`, `&quot;`, `-\t`), phân tách dòng bằng `\n- ` hoặc `\n`.
-- `offers`: Mảng `list[dict]` các lượt khởi hành cụ thể (`departure_date`, `price`, `availability`), rỗng nếu không có lịch cố định.
+- `itinerary`, `inclusions`, `exclusions`, `cancellation_policy`, `surcharges`, `child_policy`: **Plain text thuần túy**, sạch 100% thẻ HTML (`<p>`, `<br/>`), giải mã toàn bộ escaped entities (`\u003cbr/\u003e`, `&amp;`, `&quot;`, `-\t`), phân tách dòng bằng `\n- ` hoặc `\n`.
+- `offers`: Mảng `list[dict]` các lượt khởi hành cụ thể (`departure_date`, `price`, `availability`, cùng các field phụ optional: `tour_code`, `price_by_age`, `single_supplement`, `flights`, `conditions`, `pickup_point`, `hotel_location`), rỗng nếu không có lịch cố định. datetime theo ISO 8601; field phụ nguồn không công bố thì bỏ hẳn khỏi dict (không ghi null thay bằng đoán).
 
 ## Định dạng lưu trữ Crawler Pipeline
 

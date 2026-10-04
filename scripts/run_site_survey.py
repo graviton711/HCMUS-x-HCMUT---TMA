@@ -17,12 +17,18 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import io
+import os
+import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
+from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
 
 MODEL = "opencode/muse-spark-1.3-contributor-free"
 VARIANT = "xhigh"
@@ -70,9 +76,9 @@ CANONICAL FIELDS (the fixed target set; every field must be addressed):
 hard  (compared by code): tour_name, departure_city, destinations, route,
                           transport, accommodation,
                           duration_days, duration_nights, price, currency,
-                          price_type, departure_pattern
+                          price_type, departure_pattern, offers
 soft  (compared by LLM) : itinerary, inclusions, exclusions,
-                          cancellation_policy
+                          cancellation_policy, surcharges, child_policy
 - destinations is a LIST of real destinations (from the site's own taxonomy,
   breadcrumb or structured-data location); Title Case (e.g. ["Mộc Châu", "Sơn La"]).
 - route is the ordered list of all stops including transit, stripped of slogans.
@@ -81,8 +87,22 @@ soft  (compared by LLM) : itinerary, inclusions, exclusions,
 - duration_days/duration_nights are integers parsed from text like
   "3 ngay 4 dem" or ISO-8601 "P3D".
 - price_type is one of: fixed | from | contact.
-- departure_dates belong to Offer, not Tour; when the site publishes no fixed
-  dates, set departure_pattern (e.g. "hang tuan") and leave dates empty.
+- offers is the fixed-date layer: list of dicts, one per published departure.
+  Required keys: {"departure_date": "YYYY-MM-DD", "price": <int>, "availability":
+  "available"|"sold_out"|"unknown"}. Optionally, when the source exposes them
+  in the same data, add: tour_code (str), price_by_age ({adult, child,
+  small_child, infant}, ints), single_supplement (int), flights ({flight_no,
+  airline, dep_datetime, arr_datetime}), conditions/pickup_point/
+  hotel_location (verbatim text). OMIT an optional key entirely when the
+  source does not publish it - never guess or null-fill. Prices on the
+  schedule take precedence over the headline price.
+- When the site publishes no fixed dates, set offers: [] and
+  departure_pattern (e.g. "hang tuan"). Guessing dates is failure.
+- surcharges is the verbatim extra-cost text: single supplement, holiday/Tet
+  peak surcharges, foreign-tour surcharges, tip, visa fee. Quote verbatim from
+  the notes/conditions block; empty when the site publishes none.
+- child_policy is the verbatim child pricing text: age bands, percentage of
+  adult price, extra-bed rules, infant rules. Quote verbatim; empty when absent.
 - A field the site genuinely does not publish is written with
   status: not_observed. Missing data is a valid result; guessing is failure.
 
@@ -133,9 +153,16 @@ OUTPUT FILES (all five required, nothing else counts as done):
 
 SELF-TEST LOOP (required before handover):
 - You have `crawl_with_profile.py` provided in your working directory.
+- bs4 and yaml are already installed in the `python` on PATH; never pip install.
+- On Windows always invoke `python` (NOT `python3` — that alias points to the
+  system Python without dependencies).
+- profile.yaml MUST be pure UTF-8 with Vietnamese text verbatim (no \\uXXXX
+  escapes). After writing or editing it, always verify:
+    python -c "import yaml; d=yaml.safe_load(open('profile.yaml',encoding='utf-8')); print(d['fields']['tour_name'])"
+  If the printed value contains backslash-u escapes, rewrite the file.
 - Test your `profile.yaml` directly by running:
     python crawl_with_profile.py raw/tour-1.html raw/tour-2.html raw/tour-3.html --profile profile.yaml -o selftest.jsonl
-- Inspect `selftest.jsonl` to ensure all 16 canonical fields match Target Canonical Formats in data-contract.md.
+- Inspect `selftest.jsonl` to ensure all 18 canonical fields match Target Canonical Formats in data-contract.md.
 - If any field is empty, malformed, or has dirty HTML entities, adjust your clean expression or selectors in `profile.yaml` and re-run.
 - Maximum 5 iterations.
 - Paste the final `selftest.jsonl` content into `selftest.md`.
@@ -143,8 +170,66 @@ SELF-TEST LOOP (required before handover):
 
 EXPECTED = ["profile.yaml", "evidence.md", "selftest.md", "unknowns.md", "raw"]
 
+USER_AGENT = "MLAITourSourceAuditor/0.1"
+PREFETCH_TIMEOUT_S = 15
+MAX_BODY_BYTES = 2_000_000
 
-def _parse_args(argv=None):
+
+def _robots_sitemaps(text: str) -> list[str]:
+    return [line.split(":", 1)[1].strip() for line in text.splitlines()
+            if line.lower().startswith("sitemap:")]
+
+
+def _save_url(url: str, raw_dir: Path) -> str | None:
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", urlsplit(url).path.strip("/")) or "robots.txt"
+    dest = raw_dir / name
+    if dest.exists():
+        return None
+    try:
+        req = Request(url, headers={"User-Agent": USER_AGENT})
+        with urlopen(req, timeout=PREFETCH_TIMEOUT_S) as resp:
+            body = resp.read(MAX_BODY_BYTES)
+        dest.write_bytes(body)
+        return name
+    except Exception:
+        return None
+
+
+def _agent_env() -> dict[str, str] | None:
+    """PATH with the project .venv first, so the agent's `python` is the venv
+    (bs4/yaml/playwright ready) and it never pip-installs into system Python."""
+    root = Path(__file__).resolve().parents[1]
+    for bin_dir, exe in ((".venv/Scripts", "python.exe"), (".venv/bin", "python")):
+        if (root / bin_dir / exe).exists():
+            env = dict(os.environ)
+            env["PATH"] = str(root / bin_dir) + os.pathsep + env.get("PATH", "")
+            env.setdefault("VIRTUAL_ENV", str(root / ".venv"))
+            return env
+    return None
+
+
+def prefetch(origin: str, raw_dir: Path) -> list[str]:
+    """Best-effort: save robots.txt and its declared sitemaps into raw/.
+
+    Mechanical work the agent would otherwise burn HTTP requests and LLM
+    turns on; any failure is ignored (the agent still handles the source).
+    """
+    base = origin.rstrip("/")
+    robots = _save_url(f"{base}/robots.txt", raw_dir)
+    if robots:
+        sitemaps = _robots_sitemaps(
+            (raw_dir / robots).read_text(encoding="utf-8", errors="replace"))
+    else:
+        sitemaps = []
+    sitemaps.append(f"{base}/sitemap.xml")
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        names = pool.map(lambda url: _save_url(url, raw_dir), dict.fromkeys(sitemaps))
+        saved = [robots] if robots else []
+        saved.extend(name for name in names if name)
+    return saved
+
+
+def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a site-survey agent.")
     parser.add_argument("--source", required=True, help="short name, e.g. pys")
     parser.add_argument("--origin", required=True, help="https://example.test/")
@@ -158,14 +243,17 @@ def _parse_args(argv=None):
     return parser.parse_args(argv)
 
 
-def main(argv=None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
+def main(argv: Sequence[str] | None = None) -> int:
+    if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = _parse_args(argv)
     out_dir = args.output or Path("artifacts/agent_surveys") / args.source
-    workdir = Path(tempfile.mkdtemp(prefix="site-survey-"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    workdir = out_dir / "_work"
     agent_dir = workdir / ".opencode" / "agents"
-    agent_dir.mkdir(parents=True)
+    agent_dir.mkdir(parents=True, exist_ok=True)
+    raw_dir = workdir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
     (agent_dir / "site-surveyor.md").write_text(AGENT_SPEC, encoding="utf-8")
 
     runner_src = Path(__file__).parent / "crawl_with_profile.py"
@@ -176,37 +264,45 @@ def main(argv=None) -> int:
     if render_src.exists():
         shutil.copy2(render_src, workdir / "render_url.py")
 
-    existing_raw = out_dir / "raw"
-    if existing_raw.exists():
-        shutil.copytree(existing_raw, workdir / "raw", dirs_exist_ok=True)
+    # raw/ các lần chạy trước nằm ở out_dir/raw (chuẩn cũ) — đưa vào workdir
+    # để agent dùng lại thay vì tải lại từ đầu.
+    legacy_raw = out_dir / "raw"
+    if legacy_raw.exists():
+        shutil.copytree(legacy_raw, raw_dir, dirs_exist_ok=True)
+
+    started = time.perf_counter()
+    prefetched = prefetch(args.origin, raw_dir)
+    print(f"prefetch={prefetched or 'nothing'} elapsed={time.perf_counter() - started:.1f}s",
+          flush=True)
 
     task = (
         "Execute your agent instructions now: survey the tour website at "
         f"{args.origin} and produce profile.yaml, evidence.md, selftest.md, "
         "raw/, unknowns.md in the working directory. "
-        "NOTE: If raw/ already contains robots.txt, sitemaps or tour-*.html, DO NOT re-fetch them; "
+        "NOTE: raw/ has been prefetched with robots.txt and sitemap XMLs. "
+        "If raw/ already contains robots.txt, sitemaps or tour-*.html, DO NOT re-fetch them; "
         "use the existing files in raw/ and only download what is missing. "
         "Before handover you MUST run the self-test loop over 3 "
         "different tours using crawl_with_profile.py, fix profile.yaml on any failure, "
         "and record the final result in selftest.md."
     )
-    print(f"workdir={workdir}")
-    print(f"target={args.origin} model={args.model} variant={args.variant}")
-    started = time.perf_counter()
+    print(f"workdir={workdir}", flush=True)
+    print(f"target={args.origin} model={args.model} variant={args.variant}", flush=True)
     exe = shutil.which("opencode") or shutil.which("opencode.cmd") or "opencode"
+    returncode: int | None = None
     try:
-        subprocess.run(
+        completed = subprocess.run(
             [exe, "run", "--model", args.model, "--variant", args.variant,
              "--agent", "site-surveyor", "--dir", str(workdir),
              "--format", args.format, task],
-            timeout=args.timeout_min * 60, check=False,
+            timeout=args.timeout_min * 60, check=False, env=_agent_env(),
         )
+        returncode = completed.returncode
     except subprocess.TimeoutExpired:
         print(f"agent timed out after {args.timeout_min} min; collecting partial output",
               file=sys.stderr)
-    elapsed = time.perf_counter() - started
+    agent_elapsed = time.perf_counter() - started
 
-    out_dir.mkdir(parents=True, exist_ok=True)
     missing = []
     for name in EXPECTED:
         src = workdir / name
@@ -218,7 +314,8 @@ def main(argv=None) -> int:
             shutil.copytree(src, dst, dirs_exist_ok=True)
         else:
             shutil.copy2(src, dst)
-    print(f"elapsed={elapsed:.0f}s saved={out_dir}")
+    print(f"agent_elapsed={agent_elapsed:.0f}s total={time.perf_counter() - started:.0f}s "
+          f"opencode_exit={returncode} saved={out_dir}", flush=True)
     if missing:
         print(f"MISSING (incomplete run): {missing}", file=sys.stderr)
         return 1

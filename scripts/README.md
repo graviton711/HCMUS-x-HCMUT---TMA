@@ -30,7 +30,7 @@ Mỗi trường trong `fields.<field_name>` phải tuân thủ đúng một tron
    source: label_sibling
    label: "Thời gian:"          # nhãn neo trong văn bản
    ```
-4. **`section` (dành cho soft-fields: lịch trình, bao gồm, loại trừ):**
+4. **`section` (dành cho soft-fields: lịch trình, bao gồm, loại trừ, chính sách hoàn hủy, phụ thu, giá trẻ em):**
    ```yaml
    source: section
    start_label: "Lịch trình"    # heading bắt đầu
@@ -71,6 +71,8 @@ Agent khảo sát tự chủ quyết định cấu hình render dựa trên bả
 
 Trường không tồn tại trên web được đánh dấu: `status: not_observed`.
 
+**Field `offers` (tầng ngày khởi hành cố định):** `list[dict]` — mỗi phần tử `{departure_date: "YYYY-MM-DD", price: int|null, availability: available|sold_out|unknown}`, dựng bằng biểu thức `clean` từ bảng lịch/tab của nguồn. Giá trên lịch khởi hành (nếu có) ưu tiên hơn giá bìa. Site không công bố ngày cố định → `offers: []` + khai báo `departure_pattern`. Site ẩn lịch sau tab động (kiểu Vietravel) → `offers: []` + `status: not_observed` trong `unknowns.md`, không suy đoán.
+
 ---
 
 ## 3. Trách nhiệm các Script
@@ -82,3 +84,11 @@ Trường không tồn tại trên web được đánh dấu: `status: not_obser
 | `crawl_with_profile.py` | Thu thập dữ liệu tour cơ học theo tọa độ profile (nghiêm ngặt < 100 dòng) | URL tour hoặc file HTML + `profile.yaml` | File JSON Lines (`.jsonl`) chuẩn hoá |
 
 
+
+## 4. Vận hành & tốc độ (`run_site_survey.py`)
+
+* **Workdir dài hạn:** `artifacts/agent_surveys/<source>/_work` thay cho thư mục tạm — tồn tại qua các lần chạy nên `raw/` tích lũy tự nhiên (agent được dặn không tải lại file có sẵn); timeout/crash không mất phần đã tải. `raw/` vẫn được sao chép ra `artifacts/agent_surveys/<source>/raw` ở cuối mỗi lần chạy để làm bằng chứng.
+* **Prefetch cơ học:** trước khi khởi động agent, wrapper tải song song `robots.txt`, các sitemap khai báo trong robots và `/sitemap.xml` vào `raw/`. Đây là việc không cần LLM; agent đỡ các request đầu và ít tốn lượt LLM turn. Prefetch chỉ là best-effort — lỗi sẽ bị bỏ qua, agent tự xử lý nguồn.
+* **Timing log:** mỗi lần chạy in elapsed của từng giai đoạn (prefetch, agent, tổng) kèm mã trả về của opencode để biết nghẽn ở đâu.
+* **Môi trường dependency:** wrapper đưa `.venv/Scripts` (hoặc `.venv/bin`) lên đầu `PATH` của tiến trình opencode — agent gõ `python` là venv của dự án, có sẵn `bs4`/`pyyaml`/`playwright`, không `pip install` vào Python hệ thống. Agent chỉ được gọi `python`, không gọi `python3` (trên Windows alias này trỏ về Python hệ thống, thiếu dependency). Không tìm thấy `.venv` thì giữ nguyên PATH (agent tự lo như cũ).
+* **Quy tắc UTF-8:** `profile.yaml` phải chứa tiếng Việt verbatim (UTF-8 thuần, cấm `\uXXXX`). Sau khi ghi, agent bắt buộc kiểm tra bằng `yaml.safe_load` và in một field tiếng Việt; nếu ra escape thì ghi lại file.
