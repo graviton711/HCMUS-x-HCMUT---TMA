@@ -1,0 +1,32 @@
+{
+  "scope": "Planning prototype; file:// with local fonts/images/scripts. No backend or external API.",
+  "widths": [
+    1440,
+    1280,
+    768,
+    390,
+    320
+  ],
+  "suites": [
+    {
+      "file": "layout-checks.json",
+      "checks": 25,
+      "passed": 25,
+      "errors": []
+    },
+    {
+      "file": "interaction-checks.json",
+      "checks": 30,
+      "passed": 30,
+      "errors": []
+    },
+    {
+      "file": "visual-checks.json",
+      "checks": 2,
+      "passed": 2,
+      "errors": []
+    }
+  ],
+  "checks": 57,
+  "passed": 57
+}

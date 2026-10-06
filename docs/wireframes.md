@@ -1,109 +1,106 @@
 # Wireframe low-fi
 
-**Trạng thái:** PLANNING, ngày 03/10/2026. Theo sửa đổi của user, bỏ danh sách/checkbox chọn tour; hệ thống tự đề xuất và so sánh ngay. Mẫu chỉ minh họa bố cục, chưa UI final/public response. Budget 20 và URL tham chiếu ngoài ba gợi ý cần review theo FLOW-3.
+**Trạng thái:** PLANNING, sửa ngày 06/10/2026 theo [review nhóm](frontend-review-2026-10-06.md). Giấy & Mực đã chốt style; token và ba màn mới còn P3.3–P3.7. Mẫu chỉ minh họa bố cục/hành vi, chưa public response hoặc frontend production.
 
-**Flow:** Input nhu cầu + URL → Review → Processing → Kết quả/so sánh tự động. Evidence là panel; không thêm màn sàng lọc ứng viên.
+**Bổ sung mới:** [Review điều khiển/navigation](frontend-review-controls.md): navbar Giới thiệu/Tìm tour/Liên hệ/Hỗ trợ, form và kết quả đều thuộc Tìm tour. Heading kết quả có Tìm kiếm + trạng thái bằng chữ; bỏ số revision trên UI. Cột yêu cầu có slider sở thích; Sửa tự cuộn tới xác nhận, confirm chỉ cập nhật, nút/chat mới tìm. Chữ nội dung 14–16px, mobile giữ bảng cuộn riêng. Bố cục thấp dưới đây giữ vai trò nền, không mô tả token chi tiết mới.
 
-## 1. Nhập nhu cầu và URL tùy chọn
+**Flow:** Giới thiệu → form nhu cầu và xác nhận tại chỗ → Kết quả/so sánh có trạng thái xử lý. Evidence là panel. Bỏ stepper và màn Review riêng; không thêm màn chọn tour từ pool.
 
-```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Chọn tour có căn cứ                                                         │
-├──────────────────────────────────────────────────────────────────────────────┤
-│ Bạn đang muốn một chuyến đi như thế nào?                                   │
-│                                                                              │
-│ Nhu cầu [ Muốn đi Nhật từ TP.HCM tháng 11, khoảng 5 ngày..._______________ ] │
-│         [_______________________________________________________________ ] │
-│ [Điền theo hướng dẫn]                                                      │
-│                                                                              │
-│ Đã có tour đang cân nhắc? Thêm URL (tùy chọn)                               │
-│ [ https://.../tour-tham-chieu_______________________________________ ] [Thêm URL]    │
-│ [ tour-tham-chieu × ] [ tour-x × ]                                                   │
-│                                                                              │
-│ Hệ thống sẽ đọc các tour bạn gửi và tìm thêm lựa chọn để đối chiếu.          │
-│                                              [ Xem cách hiểu nhu cầu → ]   │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
-**Hành vi:** Nhu cầu và URL có vùng nhập/nhãn rõ trong một draft chung. Cho nhập nhu cầu-only, URL-only hoặc cả hai; không bắt điền ngân sách/ngày/số người để xem dữ kiện công bố. Text/form là hai cách nhập nhu cầu, không gửi cả hai ghi đè nhau. “Điền theo hướng dẫn” và field survey là chi tiết thiết kế, có thể đổi sau.
-
-## 2. Review nhu cầu và phạm vi tìm
+## 1. Giới thiệu
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Kiểm tra cách hiểu trước khi tìm                                           │
-│ Bắt buộc      Điểm đến Nhật Bản · xuất phát TP.HCM                          │
-│ Ưu tiên       Khoảng 5 ngày                                                 │
-│ Cần làm rõ    Tháng 11 năm nào? [Chọn năm]                                  │
-│                                                                              │
-│ Phạm vi tìm   Nhật Bản, khởi hành từ TP.HCM                   [Sửa phạm vi] │
-│ Tour bạn gửi  Tour tham chiếu · Tour X                                              │
-│                                                                              │
-│ [Quay lại sửa đầu vào]                          [Xác nhận và tìm tour →]   │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│ Đi cùng                                      Hướng dẫn · Demo         │
+├───────────────────────────────────────────────────────────────────────┤
+│ Chọn chuyến đi có căn cứ                    [Ảnh du lịch]             │
+│ So sánh tour, hiểu đánh đổi, kiểm tra nguồn.                           │
+│ [Tìm tour →]           [Xem hướng dẫn/demo]                           │
+│                                                                       │
+│ [Vị trí · minh họa]      [Thời tiết · minh họa]                        │
+│ Tour minh họa:       [Ảnh · Tour A] [Ảnh · Tour B] [Ảnh · Tour C]      │
+│ Cách dùng: điền nhu cầu → xác nhận → đối chiếu và hỏi thêm.            │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
-**Hành vi:** Nội dung criteria trong ví dụ chỉ minh họa nhóm, không mặc định strength cho câu nhập. Khi chỉ có URL, đọc tour để gợi ý phạm vi; nhãn chỉ rõ phần này lấy từ tour tham chiếu và cho sửa. Giá/supplier/đặc điểm tour không tự thành ngân sách/sở thích/điều kiện bắt buộc. URL khác tuyến hoặc thiếu dữ liệu thì hỏi phạm vi tìm; chỉ làm rõ phần cần để truy vấn. URL đọc lỗi vẫn giữ input và cho bổ sung nhu cầu để tìm thêm.
+Widget và tour có nhãn minh họa. Prototype dùng walkthrough tương tác; video thật chưa có. Mô phỏng loading/từ chối quyền/lỗi và fallback, không gọi API ngoài hoặc geolocation thật. Provider/quyền/API là enhancement cần chốt, không chặn Tìm tour. Đi cùng vẫn là tên tạm.
 
-
-## 3. Kết quả có sẵn đề xuất và bảng so sánh
+## 2. Form nhu cầu + xác nhận
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Ba tour gợi ý theo nhu cầu                     [Tìm phương án khác]          │
-│ Nhật Bản · TP.HCM · nhu cầu đã xác nhận         [Sửa nhu cầu / URL]           │
-│                                                                              │
-│ 1. Tour A · lý do phù hợp/giới hạn       2. Tour B       3. Tour C            │
-│ [Vì sao hệ thống đề xuất?]   [Xem bằng chứng theo từng dữ kiện]              │
-│ Tour bạn cung cấp được giữ làm tham chiếu để đối chiếu bên dưới.            │
-├──────────────────────┬──────────────────┬──────────────┬────────────┬─────────┤
-│ Tiêu chí             │ Tour tham chiếu  │ Gợi ý A      │ Gợi ý B    │ Gợi ý C │
-├──────────────────────┼──────────────────┼──────────────┼────────────┼─────────┤
-│ Nhà cung cấp         │ Công ty R        │ Công ty A    │ Công ty B  │ Công ty C│
-│ Lịch/thời lượng      │ 10/11 · 5N4Đ     │ 10/11 · 5N4Đ │11/11·6N5Đ │12/11·5N4Đ│
-│ Giá công bố/người lớn│ 35,9tr           │ 32,8tr       │ 29,9tr     │ 31,2tr  │
-│ Bao gồm              │ Xem nguồn        │ Bay/khách sạn│ Bay/4 đêm  │Chưa đủ  │
-│ Điều kiện            │ Xem nguồn        │ Phòng đơn    │ 2 điểm mua │Chưa đủ  │
-│ Nguồn/quality        │ Theo từng field  │ [3 nguồn]    │ [2 nguồn]  │[1 nguồn]│
-├──────────────────────┴──────────────────┴──────────────┴────────────┴─────────┤
-│ Trade-off: B có giá công bố thấp hơn A nhưng có điểm mua sắm; C thiếu dữ    │
-│ kiện chính sách. Các nhận định mở được nguồn, giữ giới hạn dữ liệu.          │
-│ URL chưa đọc được: Tour X [Thử lại nguồn]                                    │
-│ [Tìm phương án khác]   [Sửa nhu cầu / URL]   [Mở nhà cung cấp theo tour]      │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│ Chuyến đi bạn đang tìm                                                │
+├─────────────────────────────────────┬─────────────────────────────────┤
+│ Bắt buộc trong tìm cá nhân hóa       │ Nhu cầu trước khi xác nhận     │
+│ Điểm đến *      [Nhật Bản]          │ Nhật Bản · từ TP.HCM           │
+│ Khởi hành *     [TP.HCM]            │ Tháng 11/2026 · 2 người lớn    │
+│ Ngày dự kiến *  [11/2026]           │ 35 triệu / người lớn          │
+│ Người lớn *     [2]                │ Coverage: giá tour             │
+│ Ngân sách *     [35 triệu/người lớn]│ Ưu tiên 5 ngày · trẻ em 0       │
+│                                     │ [Cần làm rõ / lỗi theo field]   │
+│ Tùy chọn và mặc định rõ             │                                 │
+│ 5 ngày (ưu tiên) · trẻ em 0         │ Chat ghi chú                    │
+│ Khách sạn / mua sắm [Chưa chọn]     │ [Thêm lưu ý khác…] [Gửi]       │
+│ URL tham chiếu [________________]  │                                 │
+├─────────────────────────────────────┴─────────────────────────────────┤
+│ [Về giới thiệu]                         [Xác nhận và tìm tour →]      │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
-**Hành vi:** BE tự chọn tối đa ba gợi ý và dựng comparison/trade-off; UI hiển thị ngay, không cần checkbox hoặc nút “So sánh các tour đã chọn”. Nhãn/phạm vi/tiêu chí/policy dùng để rank và lý do/giới hạn phải rõ. Không đủ ba tour đủ điều kiện thì hiển thị ít hơn; hard unknown/fail không lấp giả.
+Field/default là mẫu để review C1/G4, chưa thay API contract; ngân sách mẫu là ưu tiên với basis per_adult/coverage giá tour, không tự coi là tổng nhóm. Trẻ em >0 cần tuổi để đánh giá giá; unknown giữ blocker. Chat ghi chú sửa cùng draft, không tự suy hard/soft. Validation giữ input và focus tới field lỗi; xác nhận/review nằm ngay form.
 
-**Có URL — đề xuất để review:** Ba là số gợi ý mới, tour URL nằm ngoài số này và vẫn được phân tích/so chung. Không có URL thì bảng chỉ có tối đa ba gợi ý. Một URL + ba gợi ý = bốn tour; nhiều URL giữ reference/lý do của tất cả, bố cục/mobile phải review. Canonical duplicate không lặp thành gợi ý mới; không biến tour URL thành “đạt nhu cầu” nếu không đủ căn cứ.
+URL-only vẫn trong kế hoạch: review phạm vi có nguồn, không ép bộ field cá nhân hóa hoặc suy ngân sách/sở thích từ tour. V1 hiện tách mode và URL 2–5 (G9). Fixture prototype Nhật Bản không giả có retrieval cho đầu vào khác.
 
-**Tìm phương án khác:** Giữ nhu cầu/URL, BE trả nhóm mới loại đề xuất đã xem; giữ kết quả trước trong khi chờ. Hết nhóm mới thì nói rõ và cho sửa nhu cầu. Khác “Thử lại nguồn” hoặc “Cập nhật dữ liệu”, có thể vẫn trả tour cũ sau khi làm mới.
-
-**Offer / evidence:** Chỉ rõ offer/context của giá/ngày; đổi đồng bộ snapshot/evidence, không ngầm chọn rẻ nhất. Giá người lớn công bố khác tổng nhóm đủ phụ thu. Thiếu dữ kiện/nguồn lỗi phải có lý do; không hard filter thì không gắn đạt nhu cầu. Chỉ hiển thị phase xử lý thật.
-
-## 4. Panel bằng chứng và rủi ro
+## 3. Kết quả, so sánh và chat
 
 ```text
-┌────────────────────────────── Bằng chứng: Giá Tour A ────────────────────────┐
-│ Giá trị chuẩn hóa      32.800.000 VND / người                                │
-│ Trạng thái             Nhà cung cấp công bố · kiểm tra lại lúc 10:42          │
-│ Nguồn                  tour-page.example/tour-a  [Mở nguồn ↗]                │
-│ Trích dẫn              “Giá người lớn: 32.800.000đ; khởi hành 10/11/2026”    │
-│                                                                              │
-│ Kiểm tra chéo          Chưa có nguồn độc lập xác nhận tình trạng chỗ.         │
-│ Rủi ro liên quan       Giá có thể thay đổi; xác nhận với nhà cung cấp trước   │
-│                       khi thanh toán.                                        │
-│                                                                              │
-│ [Đóng]                 Các field khác: lịch khởi hành · bao gồm · chính sách  │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────┬────────────────────────────────────────┐
+│ Yêu cầu của bạn · revision 2 │ Tour theo nhu cầu · Dữ liệu minh họa    │
+│ ~340–380px / 30% desktop     │ [Gợi ý A]    [Gợi ý B]    [Gợi ý C]    │
+├───────────────────────────────┤                                        │
+│ Điểm đến      [Nhật Bản]     │ [Bảng kiểm chứng] [Phân tích AI]       │
+│ Khởi hành     [TP.HCM]       ├──────────────┬─────────┬─────────┬───────┤
+│ Ngày          [11/2026]      │ Tiêu chí     │ A       │ B       │ C     │
+│ Người lớn     [2]           │ Giá/người lớn│ 32,8tr  │ 29,9tr  │31,2tr │
+│ Trẻ em        [0]           │ Ngày/offer   │ 10/11   │ 11/11   │12/11  │
+│ Ngân sách     [35tr/adult]   │ Bao gồm      │ [Nguồn] │ [Nguồn] │Thiếu  │
+│ Thời lượng    [5 ngày ưu tiên]│ Điều kiện    │ [Nguồn] │ [Nguồn] │Thiếu  │
+│ Coverage giá tour · ưu tiên  │ ...          │ ...     │ ...     │...    │
+├───────────────────────────────┤                                        │
+│ Chat về chuyến đi            │ Tab Phân tích AI:                      │
+│ “Giảm ngân sách còn 30tr”    │ Kết luận/đánh đổi · evidence theo ý     │
+│ Đề xuất: 35tr → 30tr         │ A−B = 2,9tr/người lớn · basis/offer    │
+│ [Xác nhận thay đổi] [Hủy]    │ Giới hạn phụ thu/trẻ em/dữ kiện thiếu │
+│ [Hỏi hoặc đổi yêu cầu…] [Gửi]│                                        │
+└───────────────────────────────┴────────────────────────────────────────┘
 ```
 
-**Hành vi:** Evidence mở theo từng field, không chỉ một danh sách link chung. Phân biệt nội dung nhà cung cấp tự công bố với xác minh độc lập; hiển thị thiếu dữ liệu và giới hạn crawl. Không hiển thị “uy tín thấp/cao” nếu không có tiêu chí và nguồn cụ thể.
+- Criteria hiển thị đủ hàng/default và blocker; sửa trực tiếp từng field và chat ngay dưới. Diff trước → sau chưa đổi bảng cho tới xác nhận; Hủy/làm rõ/conflict giữ revision. Atomic commit/expected revision và preview không commit còn G11; PATCH text v1 không dùng làm preview.
+- Bỏ Sửa yêu cầu/Lưu bản nháp/Tìm lại/Tìm phương án khác; yêu cầu nhóm khác qua chat giữ criteria và loại tour đã xem. Retry lỗi tác vụ/nguồn là hành động riêng. Không tự nới hard constraints hoặc lấp giả đủ ba.
+- Kết quả gắn revision đã dùng; còn xem được khi lượt mới chờ/lỗi/hủy. Response muộn không ghi đè lượt mới, pending proposal mất hiệu lực khi context đổi.
+- Bảng kiểm chứng giữ cùng hàng/evidence theo field. Tab Phân tích AI là giải thích có căn cứ/phép tính/đánh đổi/unknown, không suy nghĩ nội bộ/điểm AI. So giá cùng basis/coverage/currency/offer; giá người lớn chưa phải tổng cuối đủ phụ thu. G3/G10/G12 cần dữ liệu runtime.
+- Đổi offer cập nhật ngày/giá/evidence/phép tính đồng bộ; không ngầm chọn rẻ nhất. Hard unknown không gọi là đạt nhu cầu.
 
+**Có URL — đề xuất cần review FLOW-3:** tối đa ba gợi ý mới cộng tour URL tham chiếu ngoài số này; một URL + ba gợi ý = bốn cột. Canonical duplicate không lặp, tham chiếu lỗi vẫn có lý do. Nhiều URL/mobile cần review; budget 20 chỉ ở backend.
 
-## Ghi chú thiết kế
+**Processing ngay màn 3:** skeleton + nhật ký hiểu nhu cầu/đọc nguồn/tìm/đánh giá/so sánh có nhãn mock; mô phỏng success/chậm/partial/empty/error/cancel. Runtime chỉ phase/activity thật, chưa có stream từng bước v1 (G13), không phần trăm giả. Giữ kết quả cũ và thao tác Hủy/Retry thích hợp.
 
-- Ba bề mặt: Input, Review, Kết quả/so sánh; Evidence là panel.
-- Pool đề xuất tối đa 20 ứng viên chỉ ở backend, chưa benchmark/chốt policy; không render thành danh sách hoặc phân trang để user chọn.
-- Tên/giá/ngày/lý do trong mẫu đều minh họa, không dữ liệu thật; không tự dựng DTO hay điểm AI.
-- Giữ G1–G10/D1–D5; review mobile, URL count và budget tại FLOW-3/P3. Design tiếp tục song song contract.
+## 4. Panel bằng chứng
+
+```text
+┌──────────────────────── Bằng chứng: Giá Tour A ────────────────────────┐
+│ 32.800.000 VND / người lớn · offer ngày 10/11/2026 · minh họa          │
+│ Nhà cung cấp công bố · thời điểm quan sát                             │
+│ URL nguồn [Mở nguồn ↗] · raw quote / snapshot / giới hạn               │
+│ Chưa có nguồn độc lập xác nhận tình trạng chỗ.                        │
+│ [Đóng]                                                                │
+└───────────────────────────────────────────────────────────────────────┘
+```
+
+Evidence mở đúng field/nhận định/offer, đóng trả focus. Phân biệt tự công bố với xác minh độc lập; timestamp không thay freshness hoặc verification. Không gán uy tín/rủi ro nếu không có tiêu chí và nguồn.
+
+## Visual và kiểm tra
+
+- Giấy ấm, Newsreader + Be Vietnam Pro; xanh sâu/đất nung/nền nhạt và ảnh tạo điểm nhấn, không chỉ tăng chữ đậm. Màu trạng thái có nhãn riêng với thương hiệu.
+- Motion transform/opacity 220–360ms, ảnh hover nhẹ, tour xuất hiện nối tiếp, skeleton/log; tôn trọng reduced-motion.
+- Kiểm tra 1440/1280/768/390/320px, form/validation, chat diff–confirm–cancel, sửa trực tiếp, tab/evidence/offer, mọi loading/error/partial/empty/cancel và Back. Mobile xếp dọc, bảng cuộn riêng.
+- Tour/giá/ngày/lý do/log/chat/widget đều có nhãn minh họa. Giữ G1–G13/D1–D5, không tự dựng API DTO hoặc gọi crawler từ FE.

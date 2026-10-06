@@ -43,6 +43,7 @@ const fields = [
 ];
 const state={round:0,scenario:"standard",reference:false,exhausted:false,offerIndex:0};
 const $=id=>document.getElementById(id);
+const journeyExperience=document.body.dataset.experience==="journey";
 const baseContext=document.querySelector(".context-panel").innerHTML;
 const defaultNeeds="Tôi muốn đi Nhật Bản từ TP.HCM vào tháng 11/2026, khoảng 5 ngày. Ưu tiên giá công bố khoảng 35 triệu/người lớn trở xuống và ít điểm mua sắm.";
 let draftNeeds=defaultNeeds,dialogOpener=null,toastTimer;
@@ -118,10 +119,10 @@ function render(){
   document.querySelector(".intro-copy").textContent=state.scenario==="url-only"?"Tìm thêm theo phạm vi tour bạn gửi. Chưa suy ra nhu cầu hoặc sở thích cá nhân.":"Gợi ý theo nhu cầu đã xác nhận. Đối chiếu điểm hợp, điều cần cân nhắc và nguồn phía sau mỗi dữ kiện.";
   $("suggestions-title").textContent=state.scenario==="url-only" ? selected.length+" gợi ý tương tự tour bạn gửi" : selected.length+" tour gợi ý cho bạn";
   $("round-label").textContent="Nhóm 0"+(state.round+1)+" · "+(state.scenario==="url-only"?"Theo phạm vi tour tham chiếu":"Cùng nhu cầu và phạm vi tìm");
-  document.querySelector(".context-panel").innerHTML=state.scenario==="url-only"?
+  if(!journeyExperience) document.querySelector(".context-panel").innerHTML=state.scenario==="url-only"?
     '<h2 class="context-title">'+icon("sliders")+'Phạm vi tìm</h2><div class="requirement-group"><div class="group-label">Từ tour bạn gửi</div><dl><div><dt>Điểm đến tham chiếu</dt><dd>Nhật Bản</dd></div></dl></div><p class="context-note">Chưa có nhu cầu cá nhân. Giá, lịch và đặc điểm tour gửi chưa được coi là ngân sách hoặc sở thích của bạn.</p>':baseContext;
   $("tour-grid").innerHTML=selected.length?selected.map(card).join(""):
-    '<div class="empty-state">'+icon("route")+'<h2>Chưa có gợi ý để đối chiếu.</h2><p>Trong tình huống minh họa này, chưa tìm được tour đáp ứng phạm vi đã xác nhận.'+(state.reference?' Tour bạn gửi vẫn được giữ bên dưới.':"")+'</p><button type="button" class="btn" data-edit-needs>Sửa yêu cầu '+icon("edit")+'</button></div>';
+    '<div class="empty-state">'+icon("route")+'<h2>Chưa có gợi ý để đối chiếu.</h2><p>Trong tình huống minh họa này, chưa tìm được tour đáp ứng phạm vi đã xác nhận.'+(state.reference?' Tour bạn gửi vẫn được giữ bên dưới.':"")+'</p>'+(journeyExperience?'<p>Trao đổi ở khung chat để điều chỉnh phạm vi tìm.</p>':'<button type="button" class="btn" data-edit-needs>Sửa yêu cầu '+icon("edit")+'</button>')+'</div>';
   $("tour-grid").classList.toggle("no-tours",!selected.length);
   $("reference-strip").hidden=!state.reference;
   $("reference-strip").innerHTML=!state.reference?"" : state.scenario==="source-error"?
@@ -145,6 +146,7 @@ function render(){
   $("include-reference").checked=state.reference;$("scenario").value=state.scenario;
   $("coverage-copy").innerHTML=(selected.length?"Đề xuất trong phạm vi nguồn được hỗ trợ.<br>Không khẳng định tốt nhất toàn thị trường.":"Chưa đủ nhiều tour để so sánh đánh đổi.");
   hydrateIcons();
+  document.dispatchEvent(new CustomEvent("prototype:render"));
 }
 function editNeeds(){
   const personalNeedsMissing=state.scenario==="url-only";
@@ -157,6 +159,7 @@ function editNeeds(){
     '<button type="button" class="btn btn-primary" id="save-draft">Lưu bản nháp '+icon("check")+'</button>',"NHU CẦU & PHẠM VI");
 }
 function showBasis(){
+  if(journeyExperience&&window.journeyBasis){window.journeyBasis();return;}
   showDialog(state.scenario==="url-only"?"Cơ sở gợi ý tương tự":"Căn cứ đề xuất",
     '<div class="evidence-value"><small>Cơ sở đang xem</small><strong>'+(state.scenario==="url-only"?"Phạm vi từ URL tham chiếu":"Nhu cầu đã xác nhận")+'</strong></div>'+
     '<h3>'+(state.scenario==="url-only"?"Chưa suy ra sở thích riêng":"Ràng buộc bắt buộc")+'</h3><p class="dialog-note">'+(state.scenario==="url-only"?"Tour bạn gửi gợi ý phạm vi Nhật Bản. Chưa dùng giá hoặc lịch của tour làm điều kiện cá nhân.":"Nhật Bản, xuất phát từ TP.HCM. Thông tin chưa biết không được mặc định là đạt.")+'</p>'+
@@ -186,18 +189,18 @@ document.addEventListener("click",event=>{
     draftNeeds=value;$("draft-notice").hidden=value===defaultNeeds;$("detail-dialog").close();toast("Đã giữ bản nháp. Kết quả hiện tại chưa thay đổi.");
   }
 });
-$("find-alternatives").addEventListener("click",()=>{
+$("find-alternatives")?.addEventListener("click",()=>{
   if(state.round===1||state.scenario==="empty"){state.exhausted=true;render();return;}
   state.round=1;state.offerIndex=0;state.exhausted=false;render();
   toast("Đang xem nhóm 02 minh họa, gồm các tour khác nhóm 01.");
 });
-$("edit-needs").addEventListener("click",editNeeds);
-$("review-draft").addEventListener("click",editNeeds);
+$("edit-needs")?.addEventListener("click",editNeeds);
+$("review-draft")?.addEventListener("click",editNeeds);
 $("ranking-reasons").addEventListener("click",showBasis);
 $("about-results").addEventListener("click",showReadingHelp);
-$("include-reference").addEventListener("change",event=>{state.reference=event.target.checked;if(!state.reference&&["url-only","source-error"].includes(state.scenario)) state.scenario="standard";render();});
-$("scenario").addEventListener("change",event=>{state.scenario=event.target.value;state.exhausted=false;if(["url-only","source-error"].includes(state.scenario)) state.reference=true;render();});
-$("reset-demo").addEventListener("click",()=>{Object.assign(state,{round:0,scenario:"standard",reference:false,exhausted:false,offerIndex:0});draftNeeds=defaultNeeds;$("draft-notice").hidden=true;render();toast("Đã đặt lại bản mẫu.");});
+$("include-reference").addEventListener("change",event=>{if(journeyExperience)return;state.reference=event.target.checked;if(!state.reference&&["url-only","source-error"].includes(state.scenario)) state.scenario="standard";render();});
+$("scenario").addEventListener("change",event=>{if(journeyExperience)return;state.scenario=event.target.value;state.exhausted=false;if(["url-only","source-error"].includes(state.scenario)) state.reference=true;render();});
+$("reset-demo")?.addEventListener("click",()=>{Object.assign(state,{round:0,scenario:"standard",reference:false,exhausted:false,offerIndex:0});draftNeeds=defaultNeeds;if($("draft-notice")) $("draft-notice").hidden=true;render();toast("Đã đặt lại bản mẫu.");});
 document.addEventListener("change",event=>{
   if(event.target.id==="offer-picker"){
     state.offerIndex=Number(event.target.value)===1?1:0;render();evidence("a","dates");$("offer-picker").focus();

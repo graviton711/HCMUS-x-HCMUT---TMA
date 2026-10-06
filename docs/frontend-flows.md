@@ -1,21 +1,42 @@
 # Luồng và trạng thái frontend
 
-**Trạng thái:** PLANNING, sửa ngày 03/10/2026 theo yêu cầu Minh Phú: hệ thống tự tìm/rank/so sánh ngay; bỏ bước user sàng lọc danh sách/chọn 2–3 tour. V1 còn tách mode/chưa ranking; G9/G10 giữ contract cần bổ sung. Budget 20 và cách đếm tour URL bên dưới là đề xuất để review, chưa được benchmark hoặc implement.
+**Trạng thái:** PLANNING, sửa ngày 06/10/2026 theo [review nhóm](frontend-review-2026-10-06.md): chốt Giấy & Mực; Giới thiệu → form + xác nhận → Kết quả. Review không còn là màn riêng; bỏ stepper. V1 còn tách mode/chưa ranking/chat preview/phân tích/activity; G9–G13 cần chốt. Budget 20 và cách đếm tour URL vẫn là đề xuất, chưa benchmark hoặc implement.
 **Liên quan:** [planning](frontend-plan.md), [wireframe](wireframes.md), [checklist FE–BE](frontend-backend-checklist.md), [API hiện tại](frontend-api-integration.md).
 
 ## Flow mặc định
 
-**Nhập nhu cầu + URL tùy chọn → review nhu cầu/phạm vi → hệ thống tìm, phân tích, đánh giá và rank → tự chọn tối đa 3 tour gợi ý và so sánh ngay → xem evidence/mở nhà cung cấp hoặc yêu cầu phương án khác.**
+**Giới thiệu → Tìm tour → form nhu cầu + URL tùy chọn, review và xác nhận tại chỗ → màn Kết quả hiển thị log xử lý → tối đa 3 gợi ý/bảng kiểm chứng/Phân tích AI → evidence hoặc trao đổi qua chat.**
 
 | Bề mặt | Người dùng làm gì | Dữ liệu / trách nhiệm |
 |---|---|---|
-| 1. Input chung | Nhập nhu cầu bằng text hoặc form, thêm URL tùy chọn | Một draft chung; URL và nhu cầu có nhãn riêng, validate từng field |
-| 2. Review | Sửa Bắt buộc/Ưu tiên/Cần làm rõ và phạm vi tìm, xác nhận nhu cầu | Committed criteria/revision/readiness, giữ AND/OR và nguồn gốc phạm vi |
-| 3. Kết quả + so sánh | Xem đề xuất/lý do và bảng đã được dựng; tour URL được phân tích/so chung | BE chọn nhóm và trả comparison/trade-off cùng criteria/snapshots; nhãn “Bạn cung cấp” / “Hệ thống đề xuất” |
-| Processing | Theo dõi hiểu nhu cầu/đọc URL/tìm/đánh giá/so sánh, hủy hoặc thử lại | Phase thật từ BE; không phần trăm giả |
+| 1. Giới thiệu | Xem dự án, tour minh họa, hướng dẫn/demo; nhấn Tìm tour | Widget vị trí/thời tiết minh họa có loading/từ chối quyền/fallback; provider/API/video thật chưa chốt, không chặn tìm |
+| 2. Form + xác nhận | Điền field bắt buộc/tùy chọn, chat ghi chú; review criteria/phạm vi và xác nhận ngay form | Một draft chung, validation từng field, default có nhãn; committed revision/readiness giữ hard/soft/AND/OR |
+| 3. Kết quả + so sánh | Sửa criteria trực tiếp hoặc chat tại cột yêu cầu rộng; xem bảng kiểm chứng và tab Phân tích AI | BE chọn nhóm tối đa ba gợi ý, giữ URL tham chiếu; phân tích/phép tính dùng cùng revision/offer/evidence |
+| Processing trong màn 3 | Theo dõi nhật ký bước xử lý/skeleton, hủy hoặc thử lại lỗi | Prototype dùng log mock có nhãn; runtime chỉ phase/activity thật từ BE, không phần trăm giả (G13) |
 | Evidence panel | Kiểm tra một field/nhận định và mở nguồn | Reference đúng tour/offer/field, dữ kiện nguồn/thời điểm/giới hạn |
 
-Ba bề mặt chính: Input, Review, Kết quả/so sánh. Không có màn danh sách/checkbox để user chọn tour trước bảng. Phiên ẩn danh; route/back/refresh còn P2. Field/catalog/tên biến có thể đổi sau; thiết kế dùng mẫu có nhãn minh họa.
+Ba màn chính: Giới thiệu, form + xác nhận, Kết quả/so sánh; Evidence là panel. Cột yêu cầu màn 3 khoảng 340–380px/~30% desktop, mobile xếp dọc; bảng cuộn riêng. Bỏ Sửa yêu cầu/Lưu bản nháp/Tìm lại và thanh “1 nhu cầu / 2 xác nhận / 3 so sánh”. Phiên ẩn danh; route/back/refresh còn P2. Field/catalog/tên biến có thể đổi sau, không đồng nghĩa contract đã chốt.
+
+## Form và criteria mặc định
+
+- Bộ field mẫu cá nhân hóa: bắt buộc điểm đến/nơi khởi hành/ngày dự kiến/người lớn/ngân sách mỗi người lớn; mặc định hiển thị thời lượng ưu tiên 5 ngày, trẻ em 0, ngân sách là ưu tiên với coverage giá tour. Khách sạn/mua sắm/URL/ghi chú là tùy chọn. Mapping/validation/strength cần C1/G4, chưa sửa contract.
+- Cột yêu cầu giữ đủ hàng tiêu chí/default/giá trị chưa biết và nhãn bắt buộc/ưu tiên; không giấu blocker hoặc tự bổ sung dữ kiện. Trẻ em >0 cần tuổi để đánh giá giá, unknown giữ blocker.
+- Form/chat sửa cùng draft; chỉ gửi một biểu diễn theo contract, không text/form ghi đè nhau. Chat nhỏ ở form ghi thêm lưu ý, không tự biến ghi chú mơ hồ thành hard constraint.
+- URL-only giữ trong kế hoạch: review phạm vi có nguồn, không ép bộ field cá nhân hóa hoặc suy ngân sách/sở thích từ tour. Prototype fixture Nhật Bản có nhãn và giới hạn, nhập khác không giả có retrieval thật.
+
+## Chat và sửa trực tiếp tại kết quả
+
+1. Phân biệt câu hỏi về snapshot đang xem, đổi criteria và yêu cầu nhóm khác. Prototype nhận một số câu mẫu có nhãn; LLM/context/runtime còn G11.
+2. Sửa trực tiếp hoặc chat tạo đề xuất **trước → sau**; bảng criteria giữ nguyên đến khi user xác nhận. Có Hủy; câu mơ hồ yêu cầu làm rõ. Không dùng PATCH text v1 để preview vì parse thành công sẽ commit.
+3. Sửa field/slider/chat tạo diff và tự cuộn/focus đến khung xác nhận. Xác nhận commit atomic theo expected revision; nút Tìm kiếm hoặc lệnh chat mới chạy theo criteria đã xác nhận. Câu vừa sửa vừa yêu cầu tìm đợi confirm rồi chạy. Proposal hết hiệu lực khi context thay đổi; conflict giữ draft, không tự ghi đè. Revision giữ nội bộ, UI dùng thông báo kết quả theo yêu cầu trước.
+4. Kết quả cũ gắn revision đã đánh giá, còn xem khi lượt mới chờ/lỗi/hủy. Response muộn không thay lượt mới; không tự nới ràng buộc để đủ ba tour.
+5. Yêu cầu nhóm khác qua chat giữ criteria/URL, loại các tour đã xem và báo hết nhóm. Retry lỗi tác vụ/nguồn vẫn là hành động riêng.
+
+## Tab Phân tích AI
+
+- Bảng kiểm chứng giữ dữ kiện cùng hàng/evidence; tab bổ sung kết luận có căn cứ, đánh đổi, điều kiện áp dụng và điều chưa biết. Không trình bày suy nghĩ nội bộ hoặc thêm điểm/trọng số chưa chốt.
+- Phép tính so giá phải giữ cùng basis/coverage/currency/offer; hiện operands và evidence. Ước tính cho số người lớn ghi giới hạn phụ thu/trẻ em, không gọi là tổng cuối.
+- Đổi offer cập nhật giá/ngày/evidence/phép tính cùng snapshot. Criteria sửa không biến snapshot revision cũ thành đã phân tích lại. Backend G3/G10/G12 phải đủ trước runtime.
 
 ## Số ứng viên tìm kiếm khác số tour hiển thị
 
@@ -38,10 +59,10 @@ Pool rộng hơn giúp có cơ sở chọn ba, chi phí là thêm truy xuất/đ
 - Chỉ URL/chưa có ưu tiên cá nhân: dữ kiện tour giúp gợi ý phạm vi để user review; không suy giá thành ngân sách hoặc đặc điểm tour thành sở thích. Đề xuất tương tự phải nói rõ cơ sở, không gọi là tối ưu cá nhân.
 - Tour URL được giữ/so chung, không tự được kết luận phù hợp. Canonical dedup giữ cả nguồn gốc và offer; tour đã có từ URL không lặp thành gợi ý mới để lấp đủ ba.
 
-## Muốn tìm lại
+## Đổi yêu cầu hoặc nhóm gợi ý
 
-- **Tìm phương án khác:** Giữ criteria/revision và URL; BE trả nhóm tiếp theo có căn cứ, loại các đề xuất đã xem theo canonical tour identity. Reuse pool/snapshot còn hợp lệ hoặc retrieval thêm trong budget; không có nhóm mới thì nói rõ, không trả lại nhóm cũ như thể mới.
-- **Sửa nhu cầu / URL:** Giữ draft, review thay đổi rồi tìm/đánh giá/rank/so sánh lại. Không tự nới hard constraints để đủ ba; đề xuất của nhu cầu cũ không mặc định bị loại trong nhu cầu mới.
+- **Nhóm khác qua chat:** Giữ criteria/revision và URL; BE trả nhóm tiếp theo có căn cứ, loại các đề xuất đã xem theo canonical tour identity. Reuse pool/snapshot còn hợp lệ hoặc retrieval thêm trong budget; không có nhóm mới thì nói rõ, không trả lại nhóm cũ như thể mới.
+- **Sửa criteria trực tiếp / qua chat:** Giữ draft, review diff và xác nhận trước khi chạy lại. Không tự nới hard constraints để đủ ba; đề xuất của nhu cầu cũ không mặc định bị loại trong nhu cầu mới.
 - **Thử lại nguồn lỗi / cập nhật dữ liệu:** Khác tìm phương án khác; vẫn có thể ra tour cũ sau khi làm mới. Chỉ reuse snapshot hợp lệ; đổi URL/offer làm mới phần phụ thuộc.
 
 Contract vòng kết quả/exclusion/budget/coverage/retry còn G9/G10; chưa đặt endpoint/enum/key mới. Mỗi lần chạy giữ snapshot riêng; kết quả trước còn xem được khi đang chờ.
@@ -55,7 +76,7 @@ Contract vòng kết quả/exclusion/budget/coverage/retry còn G9/G10; chưa đ
 | Chỉ URL, kể cả một URL | Đọc tour → gợi ý phạm vi có nguồn → review → tìm thêm và so chung |
 | Không nhu cầu, không URL | Giữ màn nhập, hướng dẫn bổ sung ít nhất một loại đầu vào |
 
-URL khác tuyến/dữ liệu không đủ thì hỏi phạm vi, không tự lấy giao mọi tuyến. Nhu cầu nêu rõ được ưu tiên; không ép ngày/party/budget nếu không cần. Chỉ làm rõ phần cần truy vấn; blocker đánh giá không làm mất dữ kiện tĩnh. Không hard filter thì không gắn “đạt nhu cầu”.
+URL khác tuyến/dữ liệu không đủ thì hỏi phạm vi, không tự lấy giao mọi tuyến. Nhu cầu nêu rõ được ưu tiên; URL-only không ép ngày/party/budget. Bộ field bắt buộc của form cá nhân hóa còn C1, không biến thành quy tắc validate mới của API. Blocker đánh giá không làm mất dữ kiện tĩnh; không hard filter thì không gắn “đạt nhu cầu”.
 
 ## Quy tắc thao tác / backend hiện tại
 
@@ -65,7 +86,7 @@ URL khác tuyến/dữ liệu không đủ thì hỏi phạm vi, không tự l�
 - URL lỗi không làm mất gợi ý tìm thêm; retrieval lỗi không làm mất URL đã đọc. Giữ tham chiếu lỗi/lý do và cách thử lại.
 - Giá/ngày/evidence đổi cùng offer snapshot; thiếu giá/phụ thu không tự tính thay BE. Evidence đóng về phần tử mở; URL mở nguồn phải được kiểm tra.
 - V1 discover không nhận URL; compare_urls nhận 2–5 nhưng không retrieval thêm. Engine có evaluations/groups/trade-off, chưa ranking/Top 3. G9/G10 mở rộng thu thập chung, nhóm tự động/vòng phương án khác/budget; không nối hai response tại FE.
-- V1 xác nhận dùng committed revision/readiness để tạo comparison, chưa endpoint confirm riêng. Giữ lifecycle v1 làm nền, không tự đặt DTO mới; G1–G8/D1–D5 vẫn còn.
+- V1 xác nhận dùng committed revision/readiness để tạo comparison, chưa endpoint confirm riêng hoặc chat preview không commit. G11–G13 ghi phần còn thiếu, không tự đặt DTO mới; G1–G10/D1–D5 vẫn còn.
 
 ## Ma trận trạng thái
 
@@ -76,7 +97,9 @@ Các tên UI dưới đây là mô tả trạng thái local, **không phải enu
 | Input thiếu/sai | Lỗi theo field/URL, focus tới lỗi; giữ các giá trị hợp lệ |
 | Criteria mơ hồ | Hiển thị câu hỏi và lý do; dùng can_collect_data cho thu thập, can_evaluate_hard_constraints/blockers cho kết luận; không gom thành một boolean “ready” |
 | Parse revision 0 | Poll parse job, chưa render như Requirement đầy đủ hoặc chạy comparison; lỗi giữ input để sửa |
-| Đang xử lý | Skeleton/phase thật; source progress chưa streaming, không hiển thị phần trăm giả |
+| Đang xử lý / chậm | Skeleton + nhật ký bước mock có nhãn trong prototype; runtime phase/activity thật, source progress v1 chưa streaming (G13), không phần trăm giả |
+| Chat/sửa trực tiếp | Diff → xác nhận/hủy; mơ hồ làm rõ, stale proposal/conflict giữ criteria, chat hỏi dùng đúng snapshot (G11) |
+| Widget giới thiệu | Mock loading/ready/từ chối quyền/error; fallback vẫn cho Tìm tour, không đọc vị trí thật trong prototype |
 | Thành công | BE tự chọn tối đa 3 đề xuất và so sánh ngay, giữ tour URL tham chiếu/lý do/evidence |
 | Không có phương án mới | Giữ kết quả trước và báo rõ đã hết lựa chọn đủ điều kiện trong phạm vi/budget; cho sửa nhu cầu |
 | Chưa đủ 3 đề xuất | Đề xuất đúng số tour đủ điều kiện; phần không đạt/cần xác minh vẫn xem được và có lý do, không tạo lựa chọn giả |
@@ -101,12 +124,12 @@ Fact data_state, completeness, verification là các trục riêng; freshness ch
 ## Điểm review ở P1
 
 - [ ] FLOW-1 — Control text/form, catalog/range/± ngày/budget/party/hard/soft/AND/OR; giữ G4/G7.
-- [x] FLOW-2 — Theo sửa đổi của user: nhập chung → review → BE tự tìm/rank/so sánh ngay; bỏ chọn 2–3 tour, có tìm phương án khác/sửa nhu cầu. Contract G9/G10 còn mở.
+- [x] FLOW-2 — Theo review 06/10: Giới thiệu → form + xác nhận → BE tự tìm/rank/so sánh; sửa criteria/chat/diff, bảng + Phân tích AI, bỏ stepper/chọn tour thủ công. Contract G9–G13 còn mở.
 - [ ] FLOW-3 — Review budget 20, cách đếm URL tham chiếu + ba gợi ý, ranking/vòng phương án khác/offer/binding G9/G10 và metadata/trade-off G2/G3.
-- [ ] FLOW-4 — Revision/parse/answers/edits, cancel/retry/idempotency, response cũ/conflict, polling và exclusion vòng cũ.
+- [ ] FLOW-4 — Revision/parse/answers/edits, chat preview/commit atomic/cancel/stale proposal, response cũ/conflict, polling/activity và exclusion vòng cũ (G11/G13).
 - [ ] FLOW-5 — Route/back/refresh/token/IDs/hết hạn, đúng revision và result round; giữ G6.
 - [ ] FLOW-6 — Mobile kết quả/so sánh tự động, tham chiếu URL và evidence; không thiết kế màn chọn tour.
 
 ## Walkthrough
 
-Nhập nhu cầu/URL → đề xuất và bảng đối chiếu ngay, có lý do/evidence. Không cần sàng lọc danh sách hay chọn ba tour. Không đồng ý thì tìm phương án khác hoặc sửa yêu cầu. Giữ tour tham chiếu để so chung; thiếu/cũ/nguồn lỗi/coverage có giới hạn và hành động rõ.
+Giới thiệu → Tìm tour → form bắt buộc/tùy chọn + chat ghi chú → review và xác nhận tại chỗ → nhật ký xử lý → bảng kiểm chứng/Phân tích AI/evidence. Sửa trực tiếp/chat tạo diff trước xác nhận; nhóm khác qua chat. Giữ tour tham chiếu và snapshot revision cũ khi chờ/lỗi/hủy; dữ kiện thiếu/cũ/nguồn lỗi/coverage có giới hạn rõ.

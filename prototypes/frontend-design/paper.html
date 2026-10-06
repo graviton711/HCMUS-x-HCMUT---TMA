@@ -1,107 +1,71 @@
 <!doctype html>
-<html lang="vi">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Bản mẫu review thiết kế hệ thống hỗ trợ lựa chọn tour cá nhân hóa. Mọi tour, giá và nguồn là minh họa.">
-<meta name="theme-color" content="#303d32">
-<title>A — Giấy & mực · Đi cùng · Prototype P3</title>
-<link rel="icon" type="image/svg+xml" href="assets/mark.svg">
-<link rel="stylesheet" href="styles.css">
-<script src="prototype.js" defer></script>
-</head>
-<body class="paper" data-design="paper">
+<html lang="vi"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Giấy & Mực: prototype ba màn giới thiệu, điền nhu cầu và so sánh tour có chat. Dữ liệu minh họa.">
+<meta name="theme-color" content="#303d32"><title>Giấy & Mực · Đi cùng</title>
+<link rel="icon" type="image/svg+xml" href="assets/mark.svg"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="journey.css"><link rel="stylesheet" href="landing.css"><link rel="stylesheet" href="controls.css">
+<script src="landing.js" defer></script><script src="prototype.js" defer></script><script src="journey.js" defer></script>
+</head><body class="paper" data-design="paper" data-experience="journey">
 <a class="skip-link" href="#main">Đến nội dung chính</a>
-<div class="preview-bar">
-  <div class="container preview-inner">
-    <span class="preview-label"><strong>PROTOTYPE P3</strong><span>Dữ liệu minh họa</span></span>
-    <nav class="preview-links" aria-label="Chọn hướng thiết kế">
-      <a href="index.html">Bảng review</a>
-      <a href="paper.html" aria-current="page">A · Giấy & mực</a>
-      <a href="coastal.html">B · Hành trình xanh</a>
-    </nav>
-  </div>
-</div>
-<header class="site-header">
-  <div class="container header-inner">
-    <a class="brand" href="index.html" aria-label="Đi cùng — về bảng review thiết kế">
-      <span class="brand-mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M8 23 15 7l9 18-9-5-7 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m15 7 0 13" stroke="currentColor" stroke-width="1.8"/></svg></span>
-      <span><span class="brand-name">đi cùng</span><span class="brand-caption">Chọn tour có căn cứ</span></span>
-    </a>
-    <ol class="journey" aria-label="Tiến trình lựa chọn tour">
-      <li><span class="step-number">01</span>Nhu cầu</li>
-      <li><span class="step-number">02</span>Xác nhận</li>
-      <li aria-current="step"><span class="step-number">03</span>So sánh</li>
-    </ol>
-  </div>
-</header>
-<main id="main" class="container main">
-  <div class="page-intro">
-    <div>
-      <span class="eyebrow">NHẬT BẢN · THÁNG 11.2026</span>
-      <h1>Chuyến đi hợp với bạn,<br>nhìn rõ từng lựa chọn.</h1>
-      <p class="intro-copy">Gợi ý theo nhu cầu đã xác nhận. Đối chiếu điểm hợp, điều cần cân nhắc<br class="desktop-break"> và nguồn phía sau mỗi dữ kiện.</p>
-    </div>
-    <div class="actions">
-      <button class="btn btn-text" id="edit-needs" type="button"><span data-icon="edit"></span>Sửa yêu cầu</button>
-      <button class="btn btn-primary" id="find-alternatives" type="button"><span data-icon="refresh"></span>Tìm phương án khác</button>
-    </div>
-  </div>
-  <div id="draft-notice" class="notice" hidden><strong>Bạn có bản nháp nhu cầu mới</strong>Kết quả bên dưới vẫn thuộc nhu cầu đã xác nhận trước đó. Bản mẫu chưa phân tích hoặc tìm lại theo bản nháp.<button class="text-action" id="review-draft" type="button">Xem bản nháp <span data-icon="arrow"></span></button></div>
-  <div class="results-layout">
-    <aside class="context-panel" aria-label="Nhu cầu dùng để so sánh">
-      <h2 class="context-title"><span data-icon="sliders"></span>Yêu cầu của bạn</h2>
-      <div class="requirement-group">
-        <div class="group-label">Bắt buộc</div>
-        <dl><div><dt>Điểm đến</dt><dd>Nhật Bản</dd></div><div><dt>Khởi hành từ</dt><dd>TP. Hồ Chí Minh</dd></div></dl>
-      </div>
-      <div class="requirement-group preference">
-        <div class="group-label">Ưu tiên</div>
-        <dl><div><dt>Thời gian</dt><dd>Khoảng 5 ngày · tháng 11</dd></div><div><dt>Giá công bố / người lớn</dt><dd>Khoảng 35 triệu trở xuống</dd></div><div><dt>Trải nghiệm</dt><dd>Ít điểm mua sắm</dd></div></dl>
-      </div>
-      <p class="context-note"><span data-icon="info"></span>Giá tour công bố chưa phải tổng chi phí cuối cùng cho nhóm.</p>
-      <div class="context-art">
-        <svg viewBox="0 0 180 100" fill="none" aria-hidden="true"><path d="M3 74h174M28 74 77 16l50 58M61 35l15 5 12-7M104 74l21-26 25 26" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/><circle cx="135" cy="21" r="10" fill="#c8d2bf"/><path d="M9 91c19-10 30-4 43-6s25-10 40-7 27 10 38 7 20-6 39-1" stroke="currentColor" stroke-dasharray="3 4"/><path d="M149 70V39m-9 31V43m-7 1h24m-21-6h18m-16 3v29m13-29v29" stroke="currentColor" stroke-width="1.3"/></svg>
-        <p>Một chuyến đi.<br>Nhiều cách để chọn.</p>
-        <small>Đối chiếu trước, quyết định sau.</small>
-      </div>
-    </aside>
-    <div class="result-content">
-      <section aria-labelledby="suggestions-title">
-        <div class="section-heading">
-          <div><h2 id="suggestions-title">3 tour gợi ý cho bạn</h2><p id="round-label">Nhóm 01 · Cùng nhu cầu và phạm vi tìm</p></div>
-          <button class="text-action" id="ranking-reasons" type="button">Căn cứ đề xuất <span data-icon="info"></span></button>
-        </div>
-        <div id="result-notice" class="notice" role="status" hidden></div>
-        <div class="tour-grid" id="tour-grid"></div>
-        <div id="reference-strip" class="reference-strip" hidden></div>
-      </section>
-      <section class="comparison-section" aria-labelledby="comparison-title">
-        <div class="comparison-heading">
-          <div><h2 id="comparison-title">Đặt cạnh nhau để thấy rõ.</h2><p>Cùng tiêu chí. Mỗi dữ kiện đều có thể mở nguồn.</p></div>
-          <div class="comparison-nav"><span id="column-count">3 tour</span><button class="icon-button" id="scroll-left" type="button" aria-label="Cuộn bảng về bên trái"><span data-icon="left"></span></button><button class="icon-button" id="scroll-right" type="button" aria-label="Cuộn bảng sang bên phải"><span data-icon="arrow"></span></button></div>
-        </div>
-        <p class="mobile-scroll-hint"><span data-icon="horizontal"></span>Vuốt bảng sang ngang · tiêu chí và tên tour được giữ lại</p>
-        <div class="compare-wrap" id="compare-wrap" role="region" aria-label="Bảng so sánh tour, có thể cuộn ngang" tabindex="0"><table class="compare-table" id="compare-table"><caption class="sr-only">So sánh các tour theo cùng nhu cầu, giá công bố và các điều kiện.</caption></table></div>
-        <p class="table-note"><span data-icon="info"></span>Tour, giá và nguồn trong bản mẫu đều minh họa. “Nhà cung cấp công bố” chưa đồng nghĩa đã xác minh độc lập; ngày khởi hành chưa chứng minh còn chỗ.</p>
-        <div class="tradeoffs" id="tradeoffs"></div>
-      </section>
-      <div class="result-footer"><span id="coverage-copy">Đề xuất trong phạm vi nguồn được hỗ trợ.<br>Không khẳng định tốt nhất toàn thị trường.</span><button class="text-action" type="button" id="about-results">Hiểu cách đọc kết quả <span data-icon="arrow"></span></button></div>
-    </div>
-  </div>
-  <details class="prototype-tools">
-    <summary>Thử tình huống trong bản mẫu</summary>
-    <div class="tool-content">
-      <label><input type="checkbox" id="include-reference"> Có 1 URL tham chiếu</label>
-      <label>Tình huống <select id="scenario"><option value="standard">Có 3 gợi ý</option><option value="limited">Chỉ có 2 gợi ý</option><option value="url-only">Chỉ cung cấp URL</option><option value="source-error">URL tham chiếu đọc lỗi</option><option value="empty">Không tìm được gợi ý</option></select></label>
-      <button class="text-action" id="reset-demo" type="button">Đặt lại bản mẫu <span data-icon="refresh"></span></button>
-      <p class="tool-explainer">Các control này chỉ dành cho review. Một URL + ba gợi ý = bốn tour đang là giả định FLOW-3 cần duyệt; nhóm và lý do là fixture, chưa kết nối backend.</p>
-    </div>
-  </details>
-</main>
-<footer class="page-footer"><div class="container footer-inner"><span>Đi cùng · Tên tạm cho bản mẫu thiết kế</span><span>PLANNING · HTML / CSS / JS <a href="index.html#references">Nguồn thiết kế & ảnh ↗</a></span></div></footer>
-<dialog id="detail-dialog" aria-labelledby="dialog-title"><div class="dialog-shell"><header class="dialog-head"><div><span class="eyebrow" id="dialog-eyebrow">DỮ KIỆN & NGUỒN</span><h2 id="dialog-title"></h2></div><button class="icon-button" type="button" id="close-dialog" aria-label="Đóng panel"><span data-icon="close"></span></button></header><div class="dialog-body" id="dialog-body"></div><footer class="dialog-foot">Dữ liệu minh họa cho review UI · Không phải thông tin tour thật</footer></div></dialog>
-<div class="toast" id="toast" role="status" hidden></div>
-<noscript><p class="container notice">Bật JavaScript để xem dữ liệu và tương tác của prototype.</p></noscript>
-</body>
-</html>
+<div class="preview-bar"><div class="container preview-inner"><span class="preview-label"><strong>GIẤY & MỰC</strong><span>Dữ liệu & phản hồi mô phỏng</span></span><a href="index.html">Không gian review ↗</a></div></div>
+<header class="site-header"><div class="container header-inner">
+<a class="brand" href="#home" data-nav="home"><span class="brand-mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M8 23 15 7l9 18-9-5-7 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M15 7v13" stroke="currentColor" stroke-width="1.8"/></svg></span><span><span class="brand-name">đi cùng</span><span class="brand-caption">Một chuyến đi. Nhiều góc nhìn.</span></span></a>
+<nav class="app-nav" aria-label="Điều hướng chính"><a href="#home" data-nav="home" aria-current="page"><span data-icon="leaf"></span>Giới thiệu</a><a href="#form" data-nav="tours"><span data-icon="search"></span>Tìm tour</a><a href="#contact" data-nav="contact" aria-label="Liên hệ chúng tôi"><span data-icon="mail"></span><span class="nav-full">Liên hệ chúng tôi</span><span class="nav-short" aria-hidden="true">Liên hệ</span></a><a href="#support" data-nav="support" aria-label="Hỗ trợ người dùng"><span data-icon="info"></span><span class="nav-full">Hỗ trợ người dùng</span><span class="nav-short" aria-hidden="true">Hỗ trợ</span></a></nav>
+</div></header><main id="main">
+<section id="screen-home" class="screen landing-screen"><div id="landing-root" class="container"></div></section>
+<section id="screen-form" class="screen container form-screen" hidden aria-labelledby="form-heading">
+<button class="text-action back-link" data-nav="home" type="button"><span data-icon="left"></span> Về giới thiệu</button>
+<div class="form-layout"><div class="form-editor"><span class="eyebrow">CHUYẾN ĐI BẮT ĐẦU TỪ BẠN</span><h1 id="form-heading" tabindex="-1">Bạn muốn đi đâu,<br><em>và đi như thế nào?</em></h1><p class="form-lead">Điền thông tin cần thiết. Thêm những điều bạn quan tâm để việc so sánh có ý nghĩa hơn.</p><p class="fixture-boundary">Bản mẫu dùng tour Nhật Bản, khởi hành TP.HCM tháng 11/2026. Dữ liệu tour và chat đều minh họa.</p>
+<form id="needs-form" novalidate><div id="form-error" class="notice" role="alert" hidden></div>
+<fieldset><legend>Thông tin chuyến đi <span>Cần điền</span></legend><div class="field-grid">
+<label class="journey-field">Điểm đến <span aria-hidden="true">*</span><select id="need-destination" name="destination" required><option value="">Chọn điểm đến</option><option>Nhật Bản</option></select></label>
+<label class="journey-field">Khởi hành từ <span aria-hidden="true">*</span><select id="need-origin" name="origin" required><option value="">Chọn nơi khởi hành</option><option>TP.HCM</option></select></label>
+<label class="journey-field">Ngày dự kiến <span aria-hidden="true">*</span><input id="need-date" name="date" type="date" required min="2026-10-07"><small>Tour mẫu: 10–17/11/2026.</small></label>
+<label class="journey-field">Số người lớn <span aria-hidden="true">*</span><input id="need-adults" name="adults" type="number" min="1" max="100" required placeholder="Ví dụ: 2"></label>
+<label class="journey-field field-wide">Ngân sách / người lớn <span aria-hidden="true">*</span><div class="input-unit"><input id="need-budget" name="budget" type="number" min="1" max="1000000000" step="1000" required placeholder="Ví dụ: 35000000"><span>VND</span></div><small>Ưu tiên giá tour, chưa bao gồm mọi phụ thu. Đây chưa phải tổng chi phí chuyến đi.</small></label>
+</div></fieldset>
+<fieldset><legend>Thêm một chút về bạn <span>Tùy chọn</span></legend><div class="field-grid">
+<label class="journey-field">Thời lượng ưu tiên<select id="need-duration" name="duration"><option value="5">Khoảng 5 ngày</option><option value="6">Khoảng 6 ngày</option><option value="">Chưa chỉ định</option></select></label>
+<label class="journey-field">Số trẻ em<input id="need-children" name="children" type="number" value="0" min="0" max="20"></label>
+<label class="journey-field field-wide" id="child-age-field" hidden>Tuổi từng trẻ<input id="need-ages" name="ages" placeholder="Ví dụ: 6, 10"><small>Mỗi tuổi 0–17, cách nhau bằng dấu phẩy. Không tự suy ra giá trẻ em.</small></label>
+<label class="journey-field">Khách sạn<select id="need-hotel" name="hotel"><option value="">Chưa chỉ định</option><option value="3">Từ 3 sao</option><option value="4">Từ 4 sao</option><option value="5">Từ 5 sao</option></select></label>
+<label class="journey-field">Điểm mua sắm<select id="need-shopping" name="shopping"><option value="">Chưa chỉ định</option><option value="few">Ưu tiên ít điểm</option><option value="none">Bắt buộc không có</option></select></label>
+<label class="journey-field field-wide">URL tour đang cân nhắc<input id="need-url" name="url" type="url" maxlength="2048" placeholder="https://.../tour"><small>Giữ tour bạn gửi làm tham chiếu để đối chiếu cùng các gợi ý.</small></label>
+</div></fieldset>
+<fieldset class="preferences-fieldset"><legend>Điều gì quan trọng với bạn? <span>Mức sở thích mẫu</span></legend><p class="preference-hint">Kéo thanh để thể hiện ưu tiên. Mức mẫu có thể đổi; đây là sở thích, không phải điều kiện bắt buộc.</p><div id="form-preferences" class="preference-grid"></div></fieldset>
+<div class="form-confirm"><p>Thông tin này sẽ hiện ở cột yêu cầu. Bạn có thể sửa trực tiếp hoặc trao đổi qua chat ở màn kết quả.</p><button class="btn btn-primary" type="submit">Xác nhận & tìm tour <span data-icon="arrow"></span></button></div>
+</form></div>
+<aside class="form-companion"><img src="assets/kyoto.jpg" width="1000" height="667" alt="Cổng torii đỏ ở Kyoto, minh họa điểm đến"><div class="companion-copy"><span class="eyebrow">KHÔNG CHỈ LÀ GIÁ</span><h2>Một chuyến đi hợp ý<br>nằm trong từng chi tiết.</h2><p>Lịch trình, điểm mua sắm hay một chính sách hủy rõ ràng — mỗi điều đều đáng được đặt cạnh nhau.</p></div>
+<section class="mini-chat" aria-labelledby="notes-heading"><h3 id="notes-heading">Còn điều gì bạn muốn nhắn?</h3><p>Ghi chú tùy chọn · Chat mô phỏng</p><div id="notes-log" class="chat-log" role="log" aria-live="polite"><div class="chat-message assistant">Bạn có thể thêm lưu ý về bữa ăn, nhịp đi hay thành viên trong đoàn.</div></div><form id="notes-form" class="chat-composer"><label class="sr-only" for="notes-message">Ghi chú thêm</label><textarea id="notes-message" rows="2" maxlength="500" placeholder="Có người lớn tuổi, muốn đi thong thả…"></textarea><button class="icon-button" type="submit" aria-label="Gửi ghi chú"><span data-icon="arrow"></span></button></form></section>
+</aside></div></section>
+<section id="screen-results" class="screen container main results-screen" hidden aria-labelledby="results-heading">
+<button class="text-action back-link" data-nav="form" type="button"><span data-icon="left"></span> Về thông tin chuyến đi</button>
+<div class="page-intro"><div><span class="eyebrow">CÙNG NHU CẦU · NHIỀU GÓC NHÌN</span><h1 id="results-heading" tabindex="-1">Chuyến đi hợp với bạn,<br>nhìn rõ từng lựa chọn.</h1><p class="intro-copy">Đối chiếu dữ kiện, hiểu đánh đổi và trao đổi để tìm lựa chọn hợp ý hơn.</p></div><div class="search-actions"><button class="btn btn-primary" id="search-tours" type="button"><span data-icon="search"></span><span id="search-button-label">Tìm kiếm</span></button><span class="search-status" id="result-revision" role="status">Chưa có kết quả</span></div></div>
+<div class="results-layout">
+<aside class="context-panel" aria-labelledby="criteria-heading"><div class="context-head"><h2 class="context-title" id="criteria-heading"><span data-icon="sliders"></span>Yêu cầu của bạn</h2><span id="criteria-revision">Đã xác nhận</span></div><p class="context-help">Chọn giá trị để sửa. Xác nhận rồi bấm Tìm kiếm.</p><div id="criteria-fields"></div><div id="criteria-warning" class="criteria-warning" role="status" hidden></div>
+<section class="result-chat" aria-labelledby="chat-heading"><div class="chat-heading"><h3 id="chat-heading">Trao đổi về chuyến đi</h3><span class="chat-status"><span></span>Mô phỏng</span></div><div id="results-chat-log" class="chat-log" role="log" aria-live="polite"><div class="chat-message assistant">Tôi có thể giải thích tour, sửa yêu cầu hoặc tìm nhóm khác. Mọi thay đổi đều chờ bạn xác nhận.</div></div><div id="pending-change" class="pending-change" hidden></div><div class="chat-suggestions"><button type="button" data-chat="Đổi ngân sách thành 32 triệu">Ngân sách 32 triệu</button><button type="button" data-chat="So sánh giá các tour">So sánh giá</button><button type="button" data-chat="Tìm nhóm khác">Nhóm khác</button></div><form id="results-chat-form" class="chat-composer"><label class="sr-only" for="results-chat-message">Tin nhắn về yêu cầu hoặc kết quả</label><textarea id="results-chat-message" maxlength="600" rows="2" placeholder="Bạn muốn thay đổi hay hỏi thêm điều gì?"></textarea><button class="icon-button" type="submit" aria-label="Gửi tin nhắn"><span data-icon="arrow"></span></button></form><p class="chat-footnote">Nhận một số câu mẫu · Chưa kết nối AI</p></section>
+</aside>
+<div class="result-content">
+<section id="processing-panel" class="processing-panel" hidden aria-labelledby="processing-title"><div class="processing-head"><span class="processing-icon" data-icon="route"></span><div><span class="eyebrow">TIẾN ĐỘ MÔ PHỎNG</span><h2 id="processing-title" tabindex="-1">Đang chuẩn bị những lựa chọn cho bạn.</h2></div><button class="text-action" id="cancel-run" type="button">Dừng chờ</button></div><ol id="activity-log" class="activity-log" aria-live="polite" aria-relevant="additions text"></ol><p id="long-wait" class="context-note" hidden>Phản hồi chậm hơn dự kiến. Thông tin của bạn vẫn được giữ.</p><div class="skeleton-grid" aria-hidden="true"><div class="skeleton-card"><span></span><i></i><i></i></div><div class="skeleton-card"><span></span><i></i><i></i></div><div class="skeleton-card"><span></span><i></i><i></i></div></div></section>
+<div id="run-error" class="notice" role="alert" hidden></div>
+<div id="results-snapshot" hidden>
+<section aria-labelledby="suggestions-title"><div class="section-heading"><div><h2 id="suggestions-title">3 tour gợi ý cho bạn</h2><p id="round-label">Nhóm 01 · Dữ liệu minh họa</p></div><button class="text-action" id="ranking-reasons" type="button">Căn cứ đề xuất <span data-icon="info"></span></button></div><div id="result-notice" class="notice" role="status" hidden></div><p class="fixture-summary" id="fixture-summary">Bộ tour minh họa cố định, chưa truy xuất hoặc xếp hạng theo yêu cầu.</p><div class="tour-grid" id="tour-grid"></div><div id="reference-strip" class="reference-strip" hidden></div></section>
+<div class="analysis-tabs" role="tablist" aria-label="Cách xem kết quả"><button id="facts-tab" type="button" role="tab" aria-selected="true" aria-controls="facts-panel" tabindex="0">Dữ kiện so sánh <span data-icon="balance"></span></button><button id="analysis-tab" type="button" role="tab" aria-selected="false" aria-controls="analysis-panel" tabindex="-1">Phân tích AI <span data-icon="info"></span></button></div>
+<div id="facts-panel" role="tabpanel" aria-labelledby="facts-tab"><section class="comparison-section" aria-labelledby="comparison-title"><div class="comparison-heading"><div><h2 id="comparison-title">Đặt cạnh nhau để thấy rõ.</h2><p>Cùng tiêu chí. Mở nguồn ở mỗi dữ kiện.</p></div><div class="comparison-nav"><span id="column-count">3 tour</span><button class="icon-button" id="scroll-left" type="button" aria-label="Cuộn bảng về bên trái"><span data-icon="left"></span></button><button class="icon-button" id="scroll-right" type="button" aria-label="Cuộn bảng sang bên phải"><span data-icon="arrow"></span></button></div></div><p class="mobile-scroll-hint"><span data-icon="horizontal"></span>Vuốt ngang để đối chiếu · giữ tiêu chí và tên tour</p><div class="compare-wrap" id="compare-wrap" role="region" aria-label="Bảng so sánh tour, có thể cuộn ngang" tabindex="0"><table class="compare-table" id="compare-table"></table></div><p class="table-note"><span data-icon="info"></span>Giá công bố/người lớn, chưa đủ phụ thu. Dữ liệu và nguồn minh họa; chưa xác minh độc lập.</p><div class="tradeoffs" id="tradeoffs"></div></section></div>
+<section id="analysis-panel" role="tabpanel" aria-labelledby="analysis-tab" hidden></section>
+<div class="result-footer"><span id="coverage-copy">Phạm vi nguồn còn giới hạn.</span><button class="text-action" id="about-results" type="button">Cách đọc kết quả <span data-icon="arrow"></span></button></div>
+</div></div></div>
+<details class="prototype-tools"><summary>Thử tình huống trong bản mẫu</summary><div class="tool-content"><label><input type="checkbox" id="include-reference">1 URL tham chiếu mẫu</label><label>Kết quả <select id="scenario"><option value="standard">3 gợi ý</option><option value="limited">2 gợi ý</option><option value="url-only">Chỉ URL</option><option value="source-error">Một nguồn lỗi</option><option value="empty">Không có gợi ý</option></select></label><label>Phản hồi <select id="response-mode"><option value="normal">Bình thường (~4 giây)</option><option value="slow">Chậm (~9 giây)</option><option value="error">Mất kết nối</option></select></label><button class="btn" id="simulate-run" type="button">Chạy tình huống</button><p class="tool-explainer">Review UI bằng fixture. Không API, LLM, định vị hoặc thời tiết thật. Chọn tình huống rồi chạy để xem loading.</p></div></details>
+</section>
+<section id="screen-contact" class="screen container service-screen" hidden aria-labelledby="contact-heading">
+<div class="service-heading"><span class="eyebrow">LIÊN HỆ CHÚNG TÔI</span><h1 id="contact-heading" tabindex="-1">Một góp ý của bạn,<br><em>một trải nghiệm tốt hơn.</em></h1><p>Góp ý về cách tìm tour, bảng so sánh hoặc những thông tin bạn muốn nhìn rõ hơn.</p></div>
+<div class="service-layout"><form id="contact-form" class="feedback-form"><label class="journey-field" for="contact-message">Bạn muốn nhắn điều gì?<textarea id="contact-message" rows="5" maxlength="1000" required placeholder="Điều bạn thấy hữu ích, hoặc muốn nhóm cải thiện…"></textarea></label><button class="btn btn-primary" type="submit">Lưu góp ý trong phiên <span data-icon="mail"></span></button><p class="form-hint">Góp ý được giữ trong bản mẫu này, chưa gửi ra ngoài.</p><p id="contact-response" role="status" hidden></p></form><aside class="service-note"><span data-icon="leaf"></span><h2>Đang xây dựng cùng bạn.</h2><p>Đi cùng tập trung vào tour có nguồn, so sánh rõ ràng và những đánh đổi có thể kiểm chứng.</p><p>Nhóm sẽ bổ sung kênh liên hệ chính thức khi sản phẩm sẵn sàng.</p><button class="text-action" type="button" data-nav="support">Xem hướng dẫn sử dụng <span data-icon="arrow"></span></button></aside></div>
+</section>
+<section id="screen-support" class="screen container service-screen" hidden aria-labelledby="support-heading">
+<div class="service-heading"><span class="eyebrow">HỖ TRỢ NGƯỜI DÙNG</span><h1 id="support-heading" tabindex="-1">Đọc rõ hơn.<br><em>Chọn tự tin hơn.</em></h1><p>Từ việc sửa nhu cầu đến kiểm tra nguồn: những thao tác bạn cần khi cân nhắc một chuyến đi.</p></div>
+<div class="support-layout"><div class="support-articles"><article><span>01</span><div><h2>Sửa nhu cầu rồi xác nhận</h2><p>Chọn giá trị hoặc kéo thanh sở thích. Bản mẫu đưa bạn tới khung xác nhận để xem thay đổi trước và sau. Chọn Giữ nguyên nếu chưa muốn áp dụng.</p></div></article><article><span>02</span><div><h2>Tìm kiếm khi bạn sẵn sàng</h2><p>Sau khi xác nhận, bấm Tìm kiếm hoặc nhắn “tìm kiếm đi”. Kết quả cũ còn xem được trong lúc xử lý và được ghi rõ nếu chưa theo nhu cầu mới.</p></div></article><article><span>03</span><div><h2>Đối chiếu dữ kiện và phân tích</h2><p>Tab Dữ kiện so sánh đặt các tour cạnh nhau. Tab Phân tích AI giải thích chênh lệch giá, đánh đổi và điều còn thiếu; các ví dụ hiện đều mô phỏng.</p></div></article><article><span>04</span><div><h2>Kiểm tra nguồn trước khi quyết định</h2><p>Mở từng ô giá, lịch hoặc chính sách để xem dữ kiện và giới hạn. Giá công bố chưa phải tổng cuối; lịch khởi hành chưa chứng minh còn chỗ.</p></div></article></div><aside class="service-note"><span data-icon="route"></span><h2>Tiếp tục chuyến đi của bạn.</h2><p>Lượt tìm tour và phần trao đổi đều nằm trong mục Tìm tour.</p><button class="btn btn-primary" type="button" data-nav="tours">Về Tìm tour <span data-icon="arrow"></span></button><button class="text-action" type="button" data-nav="contact">Góp ý với nhóm <span data-icon="mail"></span></button></aside></div>
+</section></main>
+<footer class="page-footer"><div class="container footer-inner"><span>Đi cùng · Prototype Giấy & Mực</span><span>Tour, giá và phản hồi minh họa · <a href="index.html#references">Nguồn ảnh & font ↗</a></span></div></footer>
+<dialog id="detail-dialog" aria-labelledby="dialog-title"><div class="dialog-shell"><header class="dialog-head"><div><span class="eyebrow" id="dialog-eyebrow">DỮ KIỆN & NGUỒN</span><h2 id="dialog-title"></h2></div><button class="icon-button" type="button" id="close-dialog" aria-label="Đóng panel"><span data-icon="close"></span></button></header><div class="dialog-body" id="dialog-body"></div><footer class="dialog-foot">Dữ liệu minh họa cho review UI · Chưa phải tour thật</footer></div></dialog>
+<div class="toast" id="toast" role="status" hidden></div><noscript><p class="container notice">Bật JavaScript để xem ba màn và tương tác prototype.</p></noscript>
+</body></html>

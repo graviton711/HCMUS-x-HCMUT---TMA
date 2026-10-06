@@ -1,7 +1,7 @@
 # Frontend tích hợp backend v1
 
 **Trạng thái:** Ghi nhận từ backend `0b7e59f`, đã merge/tham chiếu trên `feature/minh-phu` ngày 03/10/2026; dùng để review P1/P2, chưa thay việc FE + BE chốt contract. Tourcrawl/scripts cũng đã merge nhưng chưa nối với gateway; API mặc định vẫn fixture, `origin=synthetic`. Chi tiết ở [đối chiếu crawler](frontend-crawler-integration.md).
-**Nguồn chuẩn:** [HTTP contract](api-contract.md), [domain contract](backend-contracts.md), [schema sinh từ models](../contracts/README.md). Tài liệu ghi API **hiện có**, chưa đủ [flow thống nhất/ranking](frontend-flows.md); khoảng thiếu [C1–C11 và G1–G10](frontend-backend-checklist.md).
+**Nguồn chuẩn:** [HTTP contract](api-contract.md), [domain contract](backend-contracts.md), [schema sinh từ models](../contracts/README.md). Tài liệu ghi API **hiện có**, chưa đủ [flow ba màn/chat/phân tích/activity](frontend-flows.md); khoảng thiếu [C1–C11 và G1–G13](frontend-backend-checklist.md). Nhu cầu UI cập nhật ngày 06/10/2026 không tự thay endpoint/payload v1.
 **Đối chiếu:** [routes](../src/api/app.py), [DTO](../src/api/dto.py), [models nhu cầu](../src/domain/requirements.py), [Fact/evidence](../src/domain/crawl.py), [decision engine](../src/decision/engine.py), [store](../src/api/store.py), [settings](../src/api/settings.py).
 
 ## Endpoint và response thực tế
@@ -26,9 +26,19 @@
 
 V1 `mode=discover|compare_urls`. Discover nhận **text hoặc form**, không nhận URLs; compare URLs nhận 2–5 URLs và text/form tùy chọn nhưng không retrieval thêm. Không gửi cả text và form; đổi mode phải tạo requirement mới. Đây là giới hạn backend, không còn là thiết kế hai tab của frontend.
 
-**Flow mục tiêu / G9:** Một draft nhu cầu + URL → review → BE thu thập chung và tự trả nhóm đề xuất/comparison ngay. Bỏ chọn tour thủ công; có vòng phương án khác/exclusion và sửa yêu cầu/retry. Đề xuất URL làm tham chiếu ngoài tối đa ba gợi ý mới và budget nội bộ 20 tour/lượt cần review/đo, chưa DTO/endpoint thực tế. origin=synthetic hiện là dữ liệu fixture, không nhãn nguồn gốc tour. Không ghép hai response v1 ở FE.
+**Flow mục tiêu / G9:** Giới thiệu → form nhu cầu + URL/review/xác nhận tại chỗ → BE thu thập chung, trả nhóm đề xuất/comparison ngay ở màn 3. Criteria sửa trực tiếp/chat, nhóm khác qua chat; Retry lỗi riêng. Bỏ stepper/chọn tour thủ công/nút Sửa yêu cầu/Lưu bản nháp/Tìm lại. URL tham chiếu ngoài tối đa ba gợi ý mới và budget nội bộ 20 tour/lượt cần review/đo, chưa DTO/endpoint. origin=synthetic là fixture, không nhãn nguồn gốc tour; không ghép hai response v1 ở FE.
 
 **Ranking / G10:** BE rank, tự chọn tối đa ba gợi ý khác nhau và so sánh luôn; trả lý do/criteria/offer/evidence/quality/coverage/budget/policy. Engine hiện chỉ candidates/groups/evaluations/trade_offs, chưa ranking/nhóm tự động/vòng phương án khác; thứ tự mảng hoặc số eligible không phải rank. DTO/công thức/budget 20 chưa chốt, FE không lấy ba phần tử đầu làm đề xuất hay cho user sàng lọc pool.
+
+**Form cá nhân hóa / C1/G4:** Bộ field mẫu bắt buộc điểm đến/khởi hành/ngày/người lớn/ngân sách per_adult và default 5 ngày ưu tiên/trẻ em 0/budget ưu tiên với coverage giá tour theo [review 06/10](frontend-review-2026-10-06.md) chưa thay validation/mapping contract. URL-only không ép bộ field này; trẻ em chưa rõ tuổi giữ blocker giá. Widget vị trí/thời tiết và demo chỉ minh họa, provider/API thật chưa chốt.
+
+**Chat / G11:** Chưa API chat context hoặc preview proposal không commit. Sửa trực tiếp/chat cần diff → xác nhận atomic theo expected revision, hủy/làm rõ/stale proposal/409 và giữ snapshot kết quả cũ. Không gọi PATCH text để preview: parse thành công v1 sẽ commit. Chat nhóm khác vẫn cần G9/exclusion; không dùng chuỗi hội thoại tự dựng làm DTO runtime.
+
+**Phân tích / G12:** Tab bổ sung giải thích có căn cứ/đánh đổi/unknown và phép tính cùng currency/basis/coverage/offer/evidence. V1 chưa dữ liệu/schema phân tích đầy đủ; trade_offs không đáp ứng giá/chính sách. Không trình bày suy nghĩ nội bộ/sinh điểm AI hoặc suy từ thứ tự candidates. Giá/analysis/snapshot phải đồng bộ khi offer/revision đổi.
+
+**Activity / G13:** Nhật ký bước thật cần thứ tự/thời điểm/phase/source status/terminal; v1 chưa stream các bước rank/analysis. Prototype dùng skeleton/log success/chậm/partial/empty/error/cancel có nhãn mock. Runtime chỉ phản ánh phase/activity nhận được, không suy tiến độ từ thời gian chờ hoặc tự chạy log thành công.
+
+**Điều khiển tìm / G14:** Theo [review mới](frontend-review-controls.md), confirmation cập nhật criteria; nút Tìm kiếm hoặc chat yêu cầu tìm mới tạo comparison. Revision giữ nội bộ, UI dùng trạng thái có nghĩa. Slider sở thích mẫu 0–5 chưa mapping vào preference tree/ranking policy/DTO; không tự gửi `pref_*` của prototype qua v1.
 
 - Text: 1–8.000 ký tự; form: tối đa 50 conditions. URL tối đa 2.048 ký tự, HTTP(S), không credentials, port chỉ 80/443, không khoảng trắng/control/backslash; trùng hoàn toàn bị từ chối. Canonical dedup/giới hạn số cột discovery còn cần review C5.
 - Condition: `{id, field, operator, value, strength}`; mặc định form là `hard`. FE gán ID khi tạo condition/child; sau response dùng ID thực tế. Backend tạo provenance, FE không gửi source quote tự dựng.
@@ -66,6 +76,7 @@ Ví dụ dưới đây giả định response đã trả condition ID `budget`; 
 - Whitelist edits: add/remove condition; replace value/strength/operator hoặc subfield value được hỗ trợ; replace party/tuổi theo child ID. URL targets có add `{url, position}`, remove theo target ID, reorder bằng đủ ID hiện tại. Không phải JSON Patch tùy ý; chưa có edit grouping tree trực tiếp (G7).
 - Answers gửi `answers:[{clarification_id,value}]`. Thiếu năm nhận integer `1900..2100`; currency/basis/strength nhận string phù hợp; unresolved value khác nhận typed Value. Câu hỏi scope/mâu thuẫn có `field_path="conditions"` cần sửa conditions bằng edits.
 - Text patch giữ revision đã commit đến khi parse thành công. Parse lỗi/hủy không được xóa bản hiểu trước. `REVISION_CONFLICT`/`STALE_CLARIFICATION`: GET bản mới, giữ draft, cho review thay đổi; không tự retry ghi đè.
+- G11 chưa có protocol preview/confirm riêng. Tách draft/pending proposal khỏi committed revision; snapshot đang xem ghi revision đã dùng, không trở thành kết quả của criteria mới khi chờ/lỗi/hủy.
 - `readiness.can_collect_data` quyết định có thể chạy comparison; `can_evaluate_hard_constraints` là quyền kết luận đạt. Discover cần scope điểm đến/nhà cung cấp có thể truy vấn; URL có thể thu thập dữ liệu tĩnh dù còn blocker giá. Không chặn toàn bộ chỉ vì `status=needs_clarification`.
 
 Chọn offer trong **compare URLs** lấy snapshot ID từ `targets[].offer_options`; gửi comparison mới dùng dữ liệu lần trước:
@@ -86,7 +97,7 @@ Comparison cũ phải succeeded/partial, cùng requirement và tập target ID�
 ## Job, phiên và retry
 
 - Job: `queued → running → succeeded|partial|failed|cancelled`; cả bốn là terminal. Parse thành công → GET requirement; comparison succeeded/partial → GET comparison. Failed đọc `job.error`; result null không phải business empty.
-- Phase hiện có queued/extracting/collecting/completed/failed/cancelled. Progress từng nguồn chỉ có khi kết thúc; không diễn giải metrics thành % hoặc streaming đã có.
+- Phase hiện có queued/extracting/collecting/completed/failed/cancelled. Progress từng nguồn chỉ khi kết thúc; G13 bổ sung nhật ký từng bước, chưa DTO/stream thực tế. Không diễn giải metrics thành % hoặc streaming đã có; log không chứa token/secret.
 - FE policy **đề xuất cần chốt ở P2**: poll GET mỗi 1 giây khi visible, tăng dần tối đa 5 giây khi chờ lâu; dừng terminal, giảm/dừng khi hidden và GET lại khi quay lại. Refetch GET không tự POST/crawl mới.
 - Mutation requirement/comparison/cancel nhận `Idempotency-Key`: retry cùng hành động giữ key và body; hành động mới tạo key mới. Key cùng phiên dùng khác nội dung/route trả 409; lưu server 24 giờ. Chưa có dedup retry tạo session bằng header này.
 - Mất response POST: retry với key cũ để lấy resource đã tạo. Khi biết job ID, truy vấn trạng thái trước khi chạy lại. Request timeout ở FE không đồng nghĩa job failed; đóng tab không hủy BE. Cancel terminal ngăn commit kết quả muộn; upstream đang chạy có thể tiếp tục đến deadline.
@@ -124,4 +135,4 @@ HTTP chính: 401 UNAUTHORIZED; 404 NOT_FOUND; 409 REVISION_CONFLICT/STALE_CLARIF
 
 Một nguồn lỗi nhưng còn snapshot dùng được → partial; thiếu field bình thường → succeeded + unknown cells; mọi source attempt lỗi và không có snapshot → failed SOURCES_UNAVAILABLE. Tất cả target bị access/capability từ chối có thể succeeded + NO_SUPPORTED_TARGETS. ALL_INELIGIBLE/ONLY_UNVERIFIED có thể vẫn có candidates để xem lý do.
 
-Đã chạy experiment offline bằng models + fixture + decision engine cho hai JSON đầu vào: discover cho ba nhóm 1/1/1; URL-only có candidates, groups rỗng và chưa có giá public. Sau merge, tests backend/tourcrawl (bao gồm API integration bằng TestClient) đạt **107 passed** trong `.uv/merge-env`, lint đạt; `.venv` cũ giữ nguyên. Chưa xác nhận frontend E2E, NIM/crawler nguồn thật. Schema response còn thiếu typed models/response_model; JSON schemas hiện chưa đủ sinh toàn bộ API client (C10).
+**Kiểm chứng lịch sử ngày 03/10/2026:** Experiment offline models + fixture + decision engine cho hai JSON: discover cho ba nhóm 1/1/1; URL-only có candidates, groups rỗng và chưa giá public. Tests backend/tourcrawl (bao gồm API TestClient) đạt **107 passed** trong `.uv/merge-env`, lint đạt; `.venv` cũ giữ nguyên. Chưa chứng minh G9–G13/frontend E2E/NIM/crawler nguồn thật. Schema response thiếu typed models/response_model, chưa đủ sinh toàn bộ client (C10).
