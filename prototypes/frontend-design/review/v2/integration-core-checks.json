@@ -1,0 +1,229 @@
+{
+  "checks": [
+    {
+      "name": "home_mount",
+      "pass": true,
+      "detail": "Chọn kỹ,đi thảnh thơi."
+    },
+    {
+      "name": "widget_loading",
+      "pass": true,
+      "detail": "Đang tải thời tiết mẫu…"
+    },
+    {
+      "name": "widget_response",
+      "pass": true,
+      "detail": "TP.HCM · Vị trí minh họa"
+    },
+    {
+      "name": "walkthrough_second_scene",
+      "pass": true,
+      "detail": "2 / 3 · Hệ thống đối chiếu tour, giá và dữ kiện còn thiếu."
+    },
+    {
+      "name": "home_responsive_1440",
+      "pass": true,
+      "detail": {
+        "width": 1440,
+        "scroll": 1440
+      }
+    },
+    {
+      "name": "home_responsive_1280",
+      "pass": true,
+      "detail": {
+        "width": 1280,
+        "scroll": 1280
+      }
+    },
+    {
+      "name": "home_responsive_768",
+      "pass": true,
+      "detail": {
+        "width": 768,
+        "scroll": 768
+      }
+    },
+    {
+      "name": "home_responsive_390",
+      "pass": true,
+      "detail": {
+        "width": 390,
+        "scroll": 390
+      }
+    },
+    {
+      "name": "home_responsive_320",
+      "pass": true,
+      "detail": {
+        "width": 320,
+        "scroll": 320
+      }
+    },
+    {
+      "name": "sample_fills_form",
+      "pass": true,
+      "detail": "2026-11-10"
+    },
+    {
+      "name": "form_responsive_1440",
+      "pass": true,
+      "detail": {
+        "width": 1440,
+        "scroll": 1440
+      }
+    },
+    {
+      "name": "form_responsive_1280",
+      "pass": true,
+      "detail": {
+        "width": 1280,
+        "scroll": 1280
+      }
+    },
+    {
+      "name": "form_responsive_768",
+      "pass": true,
+      "detail": {
+        "width": 768,
+        "scroll": 768
+      }
+    },
+    {
+      "name": "form_responsive_390",
+      "pass": true,
+      "detail": {
+        "width": 390,
+        "scroll": 390
+      }
+    },
+    {
+      "name": "form_responsive_320",
+      "pass": true,
+      "detail": {
+        "width": 320,
+        "scroll": 320
+      }
+    },
+    {
+      "name": "loading_logs",
+      "pass": true,
+      "detail": "Tiếp nhận yêu cầu và kiểm tra các trường+0.0sĐọc nguồn tour và tìm lựa chọn trong phạm vi+0.9s"
+    },
+    {
+      "name": "results_success",
+      "pass": true,
+      "detail": "Kết quả theo yêu cầu v1"
+    },
+    {
+      "name": "facts_responsive_1440",
+      "pass": true,
+      "detail": {
+        "width": 1440,
+        "scroll": 1440,
+        "criteria": 376.3125,
+        "table": 937.6875
+      }
+    },
+    {
+      "name": "facts_responsive_1280",
+      "pass": true,
+      "detail": {
+        "width": 1280,
+        "scroll": 1280,
+        "criteria": 340,
+        "table": 814
+      }
+    },
+    {
+      "name": "facts_responsive_768",
+      "pass": true,
+      "detail": {
+        "width": 768,
+        "scroll": 768,
+        "criteria": 720,
+        "table": 720
+      }
+    },
+    {
+      "name": "facts_responsive_390",
+      "pass": true,
+      "detail": {
+        "width": 390,
+        "scroll": 390,
+        "criteria": 358,
+        "table": 358
+      }
+    },
+    {
+      "name": "facts_responsive_320",
+      "pass": true,
+      "detail": {
+        "width": 320,
+        "scroll": 320,
+        "criteria": 288,
+        "table": 288
+      }
+    },
+    {
+      "name": "tab_keyboard_arrow",
+      "pass": true,
+      "detail": "analysis-tab"
+    },
+    {
+      "name": "tab_keyboard_home",
+      "pass": true,
+      "detail": "facts-tab"
+    },
+    {
+      "name": "offer_date_updated",
+      "pass": true,
+      "detail": "34.800.000 ₫Phòng 2 người · lịch 17/11/2026"
+    },
+    {
+      "name": "offer_calculation_updated",
+      "pass": true,
+      "detail": [
+        "4.900.000 ₫Tok",
+        "4.900.000 ₫ / ",
+        "4.900.000 ₫Cùn"
+      ]
+    },
+    {
+      "name": "evidence_focus_return",
+      "pass": true,
+      "detail": "<button type=\"button\" class=\"cell-source\" data-source=\"a.dates\" aria-label=\"Xem nguồn Lịch &amp; thời lượng của Tokyo · Fuji · Hakone\"><span class=\"cell-value\">17/11/2026 · 5 ngày "
+    },
+    {
+      "name": "chat_preview_preserves_criteria",
+      "pass": true,
+      "detail": "Xác nhận thay đổi yêu cầuNgân sáchHiện tại35.000.000 ₫ / người lớnĐề xuất32.000.000 ₫ / người lớnChỉ cập nhật và chạy lại sau khi bạn xác nhận.Xác nhận thay đổiGiữ nguyên"
+    },
+    {
+      "name": "chat_cancel_preserves_revision",
+      "pass": true,
+      "detail": "v1"
+    },
+    {
+      "name": "chat_confirm_stale_visible",
+      "pass": true,
+      "detail": "Yêu cầu v2. Kết quả bên phải vẫn dùng v1; chưa đánh giá lại theo thay đổi."
+    },
+    {
+      "name": "chat_rerun_finishes_v2",
+      "pass": true,
+      "detail": "32.000.000 ₫ / người lớn"
+    },
+    {
+      "name": "inline_rerun_finishes_v3",
+      "pass": true,
+      "detail": "Khoảng 6 ngày"
+    },
+    {
+      "name": "console_clean",
+      "pass": true,
+      "detail": []
+    }
+  ],
+  "errors": []
+}

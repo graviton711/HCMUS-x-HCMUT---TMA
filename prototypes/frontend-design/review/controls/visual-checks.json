@@ -1,0 +1,18 @@
+{
+  "checks": [
+    {
+      "name": "four_preference_colors",
+      "pass": true,
+      "detail": [
+        "rgb(102, 134, 90)",
+        "rgb(173, 132, 100)",
+        "rgb(120, 156, 146)",
+        "rgb(178, 158, 108)"
+      ]
+    },
+    {
+      "name": "reduced_motion_heading",
+      "pass": true
+    }
+  ]
+}

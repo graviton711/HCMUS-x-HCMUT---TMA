@@ -1,0 +1,205 @@
+{
+  "checks": [
+    {
+      "w": 1440,
+      "s": "home",
+      "pass": true,
+      "scroll": 1440,
+      "nav": "home",
+      "chatFont": "14px"
+    },
+    {
+      "w": 1440,
+      "s": "form",
+      "pass": true,
+      "scroll": 1440,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 1440,
+      "s": "results",
+      "pass": true,
+      "scroll": 1440,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 1440,
+      "s": "contact",
+      "pass": true,
+      "scroll": 1440,
+      "nav": "contact",
+      "chatFont": "14px"
+    },
+    {
+      "w": 1440,
+      "s": "support",
+      "pass": true,
+      "scroll": 1440,
+      "nav": "support",
+      "chatFont": "14px"
+    },
+    {
+      "w": 1280,
+      "s": "home",
+      "pass": true,
+      "scroll": 1280,
+      "nav": "home",
+      "chatFont": "14px"
+    },
+    {
+      "w": 1280,
+      "s": "form",
+      "pass": true,
+      "scroll": 1280,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 1280,
+      "s": "results",
+      "pass": true,
+      "scroll": 1280,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 1280,
+      "s": "contact",
+      "pass": true,
+      "scroll": 1280,
+      "nav": "contact",
+      "chatFont": "14px"
+    },
+    {
+      "w": 1280,
+      "s": "support",
+      "pass": true,
+      "scroll": 1280,
+      "nav": "support",
+      "chatFont": "14px"
+    },
+    {
+      "w": 768,
+      "s": "home",
+      "pass": true,
+      "scroll": 768,
+      "nav": "home",
+      "chatFont": "14px"
+    },
+    {
+      "w": 768,
+      "s": "form",
+      "pass": true,
+      "scroll": 768,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 768,
+      "s": "results",
+      "pass": true,
+      "scroll": 768,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 768,
+      "s": "contact",
+      "pass": true,
+      "scroll": 768,
+      "nav": "contact",
+      "chatFont": "14px"
+    },
+    {
+      "w": 768,
+      "s": "support",
+      "pass": true,
+      "scroll": 768,
+      "nav": "support",
+      "chatFont": "14px"
+    },
+    {
+      "w": 390,
+      "s": "home",
+      "pass": true,
+      "scroll": 390,
+      "nav": "home",
+      "chatFont": "14px"
+    },
+    {
+      "w": 390,
+      "s": "form",
+      "pass": true,
+      "scroll": 390,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 390,
+      "s": "results",
+      "pass": true,
+      "scroll": 390,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 390,
+      "s": "contact",
+      "pass": true,
+      "scroll": 390,
+      "nav": "contact",
+      "chatFont": "14px"
+    },
+    {
+      "w": 390,
+      "s": "support",
+      "pass": true,
+      "scroll": 390,
+      "nav": "support",
+      "chatFont": "14px"
+    },
+    {
+      "w": 320,
+      "s": "home",
+      "pass": true,
+      "scroll": 320,
+      "nav": "home",
+      "chatFont": "14px"
+    },
+    {
+      "w": 320,
+      "s": "form",
+      "pass": true,
+      "scroll": 320,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 320,
+      "s": "results",
+      "pass": true,
+      "scroll": 320,
+      "nav": "tours",
+      "chatFont": "14px"
+    },
+    {
+      "w": 320,
+      "s": "contact",
+      "pass": true,
+      "scroll": 320,
+      "nav": "contact",
+      "chatFont": "14px"
+    },
+    {
+      "w": 320,
+      "s": "support",
+      "pass": true,
+      "scroll": 320,
+      "nav": "support",
+      "chatFont": "14px"
+    }
+  ],
+  "errors": []
+}
