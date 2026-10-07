@@ -21,10 +21,10 @@ from urllib.parse import urlsplit
 
 from shared import get_logger
 
-from .. import extract, quality
-from ..extract import load_profile, load_settings
-from ..fetch import BrowserSession, RateLimiter, SafeFetcher, fetch_robots
-from ..quality import BLOCKED, FETCH_FAIL, OK, PARSE_FAIL, departure_evidence
+from . import extract, quality
+from .extract import load_profile, load_settings
+from .fetch import BrowserSession, RateLimiter, SafeFetcher, fetch_robots
+from .quality import BLOCKED, FETCH_FAIL, OK, PARSE_FAIL, departure_evidence
 
 log = get_logger("pipeline")
 

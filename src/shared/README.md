@@ -4,7 +4,7 @@
 
 Chứa helper hạ tầng mọi tầng đều cần (hiện tại: logging), không chứa logic
 nghiệp vụ nào của crawl hay domain tour. Backend/frontend import trực tiếp
-từ đây; cấm import ngược vào `tourcrawl` hay module nghiệp vụ khác.
+từ đây; cấm import ngược vào `ingest` hay module nghiệp vụ khác.
 
 ## Quy tắc thêm mới
 
