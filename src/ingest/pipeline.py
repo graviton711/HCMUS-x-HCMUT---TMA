@@ -17,7 +17,7 @@ import sys
 import threading
 import time
 import xml.etree.ElementTree as ET
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -479,6 +479,36 @@ def _save_state(path: Path, state: dict) -> None:
     path.write_text(json.dumps(state, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
 
+def _write_quality(settings: dict, profile: dict, detail_paths: Sequence[str]) -> dict:
+    """Per-run quality snapshot plus warn-only drift against the previous run."""
+    source = str(profile.get("name", "default"))
+    path = _source_dir(settings, source) / "quality.json"
+    cfg = settings.get("quality", {})
+    fill_fields = list(cfg.get("fill_fields", ["tour_name", "departure_city",
+                        "destinations", "duration_days", "price", "currency",
+                        "itinerary", "inclusions", "exclusions"]))
+    details = []
+    for name in detail_paths:
+        try:
+            details.append(json.loads(Path(name).read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+    current = quality.summarize_details(details, fill_fields)
+    try:
+        previous = json.loads(path.read_text(encoding="utf-8")).get("summary", {})
+    except (OSError, ValueError):
+        previous = {}
+    if not isinstance(previous, dict):
+        previous = {}
+    warnings = quality.compare_quality(current, previous, cfg) if previous else []
+    for warning in warnings:
+        log.warning("quality drift %s", warning)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    snapshot = {"observed_at": now_vn_iso(), "summary": current, "warnings": warnings}
+    path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    return snapshot
+
+
 def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
               out_dir: Path | None = None) -> int:
     """Append one CSV row per tour; resume by URL. Returns process exit code."""
@@ -497,6 +527,7 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
     new_file = not output.exists()
     fails = 0
     robots_cache: dict = {}
+    detail_paths: list[str] = []
     workers = max(1, int(batch_cfg.get("workers", 4)))
     needs_browser = "browser" in profile.get("flows", []) or "combo_api_browser" in profile.get("flows", [])
     if workers == 1 or needs_browser:
@@ -515,6 +546,8 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                     row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
                 if "_state_entry" in row:
                     state[url] = row.pop("_state_entry")
+                if row.get("detail_file"):
+                    detail_paths.append(row["detail_file"])
                 writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
                 handle.flush()
                 if index % 10 == 0:
@@ -530,6 +563,7 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                 if index < len(todo):
                     time.sleep(gap)
         _save_state(state_path, state)
+        _write_quality(settings, profile, detail_paths)
         log.info("batch done: wrote %s", output)
         return 0
 
@@ -566,6 +600,8 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                     raise
                 if "_state_entry" in row:
                     state[url] = row.pop("_state_entry")
+                if row.get("detail_file"):
+                    detail_paths.append(row["detail_file"])
                 writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
                 handle.flush()
                 if index % 10 == 0:
@@ -582,6 +618,7 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
         finally:
             pool.shutdown(cancel_futures=True)
     _save_state(state_path, state)
+    _write_quality(settings, profile, detail_paths)
     log.info("batch done: wrote %s", output)
     return 0
 

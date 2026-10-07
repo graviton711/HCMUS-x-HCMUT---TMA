@@ -31,3 +31,9 @@ output:
   dir: ".local"
 clean:
   min_visible_chars: 40
+quality:
+  min_tours_ratio: 0.8
+  max_price_shift: 0.3
+  min_fill_rate: 0.85
+  fill_fields: [tour_name, departure_city, destinations, duration_days,
+    price, currency, itinerary, inclusions, exclusions]

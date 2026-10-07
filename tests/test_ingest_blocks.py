@@ -713,3 +713,43 @@ def test_publish_snapshot_upserts_tours_and_offers(monkeypatch, tmp_path):
     assert any('INSERT INTO tours' in q for q in seen)
     assert any('INSERT INTO offers' in q for q in seen)
     assert any('INSERT INTO providers' in q for q in seen)
+
+
+def test_quality_fallback_compare_and_batch_snapshot(tmp_path, monkeypatch):
+    import json as _json
+
+    import ingest.pipeline as pipeline_mod
+    from ingest.pipeline import run_batch
+    from ingest.quality import compare_quality, fallback_fields, summarize_details
+
+    record = {'tour_name': 'T', 'price': 100, 'destinations': [], 'route': ''}
+    assert fallback_fields(record) == ['destinations', 'route']
+    summary = summarize_details([{'record': record}, {'record': {}}], ['tour_name', 'price'])
+    assert summary['tours'] == 2 and summary['price_mean'] == 100
+    assert summary['fill'] == {'tour_name': 0.5, 'price': 0.5}
+    assert summary['fallback_total'] == 2
+    cfg = {'min_tours_ratio': 0.8, 'max_price_shift': 0.3, 'min_fill_rate': 0.85}
+    first = compare_quality(summary, {}, cfg)
+    assert len(first) == 2 and all('fill' in w for w in first)
+    prev = {'tours': 10, 'price_mean': 100.0, 'fill': {'tour_name': 1.0, 'price': 1.0}}
+    warnings = compare_quality(summary, prev, cfg)
+    assert any('tours 2 below' in w for w in warnings)
+    assert any('fill tour_name 0.50 below' in w for w in warnings)
+    assert compare_quality({'tours': 9, 'price_mean': 115.0, 'fill': {'tour_name': 1.0, 'price': 1.0}}, prev, cfg) == []
+
+    detail = tmp_path / 'd.json'
+    detail.write_text(_json.dumps({'record': {'tour_name': 'T', 'price': 100}}), encoding='utf-8')
+
+    def fake_run_tour(url, profile, settings, out_dir, robots_cache=None, conditional=None):
+        return {'url': url, 'status': 'ok', 'title': 'T', 'departures': 0,
+                'verified': 0, 'notes_keys': '', 'error': '', 'detail_file': str(detail)}
+
+    monkeypatch.setattr(pipeline_mod, 'run_tour', fake_run_tour)
+    settings = {'output': {'dir': str(tmp_path / 'home')},
+                'batch': {'workers': 1, 'delay_s': 0, 'max_consecutive_failures': 10}}
+    assert run_batch(['https://example.test/1'], {'name': 's'}, settings,
+                     tmp_path / 'out.csv', tmp_path / 'json') == 0
+    snapshot = _json.loads((tmp_path / 'home' / 's' / 'quality.json').read_text(encoding='utf-8'))
+    assert snapshot['summary']['tours'] == 1 and snapshot['warnings'] == []
+    assert snapshot['observed_at'].endswith('+07:00')
+

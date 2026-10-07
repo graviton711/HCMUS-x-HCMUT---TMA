@@ -132,6 +132,10 @@ Vận hành `search_pages`: fetch song song theo `batch.workers` (mỗi worker m
 
 Mọi output crawl đều namespac theo source (`.local/<source>/`) nên nhiều nguồn không ghi đè nhau; `_state.json` dùng chung vì key là URL đầy đủ. Thư mục `data/` chỉ chứa registry versioned do người quản lý (vd `data/providers.toml`), không chứa output crawl.
 
+## Chất lượng run-over-run
+
+Mỗi batch ghi `.local/<source>/quality.json`: số tour, giá trung bình, tỷ lệ fill từng field bắt buộc (`quality.fill_fields`), và số field rơi vào fallback (rỗng). Lần chạy sau so với lần trước theo ngưỡng `quality.*` (`min_tours_ratio`, `max_price_shift`, `min_fill_rate`); lệch băng chỉ cảnh báo (log + file), không fail batch — tỷ lệ fallback tăng dần chính là tín hiệu site đổi layout, rẻ hơn re-survey mù.
+
 
 
 ## 4. Vận hành & tốc độ (`survey.py`)

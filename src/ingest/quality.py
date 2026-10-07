@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 
 OK, BLOCKED, FETCH_FAIL, PARSE_FAIL = "ok", "blocked", "fetch_fail", "parse_fail"
 
@@ -46,6 +47,66 @@ def compile_keep(patterns: list) -> re.Pattern:
 
 def filter_dep(dep: dict, presentation: set, keep: re.Pattern, min_visible: int = 40) -> dict:
     return {k: v for k, v in dep.items() if not is_junk_field(k, v, presentation, keep, min_visible)}
+
+
+def fallback_fields(record: dict) -> list[str]:
+    """Record fields that fell back to empty (no usable value extracted).
+
+    A rising fallback share per field across runs is the cheapest layout-drift
+    signal: the site changed faster than any re-survey schedule.
+    """
+    return sorted(key for key, value in record.items()
+                  if value in (None, "", [], {}))
+
+
+def summarize_details(details: list[dict], fill_fields: Sequence[str]) -> dict:
+    """Run stats from detail JSONs: tour count, mean price, fill rates."""
+    prices: list[float] = []
+    fills: dict[str, int] = {}
+    fallback_total = 0
+    for detail in details:
+        record = detail.get("record") if isinstance(detail, dict) else None
+        if not isinstance(record, dict):
+            continue
+        price = record.get("price")
+        if isinstance(price, bool):
+            pass
+        elif isinstance(price, (int, float)) and price > 0:
+            prices.append(float(price))
+        for field in fill_fields:
+            value = record.get(field)
+            fills[field] = fills.get(field, 0) + (0 if value in (None, "", [], {}) else 1)
+        fallback_total += len(fallback_fields(record))
+    tours = len(details)
+    return {
+        "tours": tours,
+        "price_mean": (sum(prices) / len(prices)) if prices else None,
+        "fill": {f: (fills.get(f, 0) / tours if tours else 0.0) for f in fill_fields},
+        "fallback_total": fallback_total,
+    }
+
+
+def compare_quality(current: dict, previous: dict, cfg: dict) -> list[str]:
+    """Warn-only drift signals of the current run against the previous good one."""
+    warnings: list[str] = []
+    min_ratio = float(cfg.get("min_tours_ratio", 0.8))
+    max_shift = float(cfg.get("max_price_shift", 0.3))
+    min_fill = float(cfg.get("min_fill_rate", 0.85))
+    prev_tours = int(previous.get("tours", 0) or 0)
+    cur_tours = int(current.get("tours", 0) or 0)
+    if prev_tours > 0 and cur_tours / prev_tours < min_ratio:
+        warnings.append(f"tours {cur_tours} below {min_ratio:.2f} of previous {prev_tours}")
+    prev_mean = previous.get("price_mean")
+    cur_mean = current.get("price_mean")
+    if prev_mean and cur_mean and prev_mean > 0:
+        shift = abs(cur_mean - prev_mean) / prev_mean
+        if shift > max_shift:
+            warnings.append(f"mean price shifted {shift:.2f} "
+                            f"({prev_mean:.0f} -> {cur_mean:.0f})")
+    for field, rate in (current.get("fill") or {}).items():
+        if rate < min_fill:
+            warnings.append(f"fill {field} {rate:.2f} below {min_fill:.2f}")
+    return warnings
 
 
 def dedupe_departures(departures: list) -> tuple[list, dict]:
