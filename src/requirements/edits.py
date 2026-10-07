@@ -3,7 +3,7 @@ from domain.requirements import Budget, Condition, Party, Requirement, SourceRef
 from requirements.service import conjunction, finalize, prune
 
 
-def form_requirement(form, *, requirement_id, mode, timezone, targets):
+def form_requirement(form, *, requirement_id, mode, timezone, targets, requirement_model=Requirement):
     conditions = []
     for c in form.conditions:
         source = SourceReference(
@@ -38,7 +38,7 @@ def form_requirement(form, *, requirement_id, mode, timezone, targets):
         }
     )
     return finalize(
-        Requirement(
+        requirement_model(
             id=requirement_id,
             revision=1,
             mode=mode,
@@ -174,7 +174,7 @@ def apply_edits(previous: Requirement, edits: list) -> Requirement:
         else:
             raise AppError("INVALID_EDIT", "Field không được sửa qua endpoint này.")
     data.update(conditions=list(conditions.values()), hard_tree=hard, preference_tree=soft)
-    return finalize(Requirement.model_validate(data))
+    return finalize(type(previous).model_validate(data))
 
 
 def answer_edits(previous: Requirement, answers):

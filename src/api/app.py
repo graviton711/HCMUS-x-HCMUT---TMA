@@ -3,13 +3,16 @@ import json
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager, suppress
+from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, Request
+from fastapi import Body, Depends, FastAPI, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import ValidationError
 from sqlalchemy import select
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.dto import CreateComparison, CreateRequirement, Form, PatchRequirement
 from api.runtime_lock import RuntimeLock
@@ -41,11 +44,17 @@ class Limits:
             )
 
 
-def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> FastAPI:
+def create_app(settings: Settings | None = None, *, nim=None, gateway=None, access_checker=None) -> FastAPI:
     settings = settings or Settings()
     store = Store(settings)
     gateway = gateway or DataGateway(settings)
     worker = Worker(store, nim or NimGateway(settings), gateway)
+    from api.v2.admin import Admin, bootstrap
+    from api.v2.service import Service
+
+    bootstrap(store, gateway)
+    worker.v2 = Service(store, worker.nim, gateway)
+    worker.v2.admin = Admin(store, worker.v2, access_checker)
     lock, limits = RuntimeLock(settings.database_url), Limits()
 
     @asynccontextmanager
@@ -66,7 +75,32 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
             store.engine.dispose()
             lock.release()
 
-    app = FastAPI(title="Tour Decision Backend", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title="Tour Decision Backend",
+        version="0.2.0",
+        lifespan=lifespan,
+        description="""Backend v2 đã có tại nhóm **v2**: session → requirement/proposal → confirm → comparison/job/events.
+Xem `examples/backend-v2.md` để nối frontend. Dùng `/v2/catalog` lấy fields, controls và limits.
+Nhập text cần NIM; URL-only có proposal cần confirm; structured form tạo revision 1.
+Frontend prototype hiện vẫn dùng dữ liệu mẫu. API v1 tiếp tục hoạt động:
+
+Thử API v1 theo thứ tự:
+
+1. Execute **POST /v1/sessions**, sao chép giá trị `token` trong response.
+2. Bấm **Authorize**, dán riêng token (không thêm `Bearer`). Giữ cùng session cho các bước sau.
+3. **POST /v1/requirements**: chọn example **So sánh URL mô phỏng** để thử với dữ liệu fixture,
+   không cần NIM/crawler. Response 201 trả `id` và `revision: 1`.
+   Với example nhập nhu cầu, response 202 trả `requirement_id` và `job_id`;
+   đợi job succeeded rồi GET requirement để lấy revision đã parse.
+4. **POST /v1/comparisons**: thay `requirement_id` và `revision` bằng giá trị thật ở bước 3.
+   Lần đầu chỉ cần hai field này. Response 202 trả `comparison_id` và `job_id`.
+5. GET job đến khi kết thúc, rồi GET comparison để xem kết quả.
+
+Session/requirement/comparison được lưu khi request hợp lệ. Refresh SQLite viewer để thấy dòng mới.
+401: kiểm tra token; 404: kiểm tra ID và session; 422: kiểm tra request body.
+Các URL `.invalid` là dữ liệu mô phỏng, chỉ dùng với `DATA_PROVIDER=fixture`.
+""",
+    )
     app.state.store, app.state.worker, app.state.gateway = store, worker, gateway
     app.add_middleware(
         CORSMiddleware,
@@ -76,10 +110,33 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
         allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
     )
 
+    def error_body(request, payload):
+        return {
+            **(
+                {"schema_version": "2.0-draft", "request_id": request.state.request_id}
+                if request.url.path.startswith("/v2/")
+                else {}
+            ),
+            "error": payload,
+        }
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request, exc):
+        if not request.url.path.startswith("/v2/"):
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers)
+        error = AppError(
+            "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR",
+            "Không tìm thấy endpoint." if exc.status_code == 404 else "HTTP request không hợp lệ.",
+            exc.status_code,
+        )
+        return JSONResponse(
+            error_body(request, error.payload()), status_code=exc.status_code, headers=exc.headers
+        )
+
     @app.exception_handler(AppError)
     async def app_error(request, exc):
         return JSONResponse(
-            {"error": exc.payload()},
+            error_body(request, exc.payload()),
             status_code=exc.status,
             headers={"Retry-After": "60"} if exc.status == 429 else None,
         )
@@ -92,15 +149,16 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
         payload["details"] = {
             "fields": [{"path": ".".join(map(str, e["loc"])), "type": e["type"]} for e in exc.errors()[:20]]
         }
-        return JSONResponse({"error": payload}, status_code=422)
+        return JSONResponse(error_body(request, payload), status_code=422)
 
     @app.middleware("http")
     async def request_limit(request: Request, call_next):
+        request.state.request_id = uid("request")
         if request.method in {"POST", "PATCH"}:
             length = request.headers.get("content-length")
             if length and (not length.isdigit() or int(length) > 65536):
                 return JSONResponse(
-                    {"error": AppError("INPUT_TOO_LARGE", "Request vượt 64 KB.", 413).payload()},
+                    error_body(request, AppError("INPUT_TOO_LARGE", "Request vượt 64 KB.", 413).payload()),
                     status_code=413,
                 )
             size, parts = 0, []
@@ -108,17 +166,25 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
                 size += len(part)
                 if size > 65536:
                     return JSONResponse(
-                        {"error": AppError("INPUT_TOO_LARGE", "Request vượt 64 KB.", 413).payload()},
+                        error_body(
+                            request, AppError("INPUT_TOO_LARGE", "Request vượt 64 KB.", 413).payload()
+                        ),
                         status_code=413,
                     )
                 parts.append(part)
             request._body = b"".join(parts)
         return await call_next(request)
 
-    async def owner(request: Request, authorization: str | None = Header(default=None)):
-        if not authorization or not authorization.startswith("Bearer "):
+    session_bearer = HTTPBearer(
+        auto_error=False,
+        scheme_name="SessionBearer",
+        description="Tạo POST /v1/sessions, dán riêng giá trị token vào đây (không thêm Bearer).",
+    )
+
+    async def owner(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(session_bearer)]):
+        if credentials is None:
             raise AppError("UNAUTHORIZED", "Cần bearer session token.", 401)
-        result = store.authenticate(authorization[7:])
+        result = store.authenticate(credentials.credentials)
         limits.check(f"owner:{result}", 120)
         return result
 
@@ -156,8 +222,9 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
       <a href="health">Kiểm tra trạng thái</a>
     </nav>
     <p>Trong tài liệu API, tạo phiên bằng <code>POST /v1/sessions</code>,
-       rồi dùng token nhận được ở ô <code>authorization</code>
-       theo dạng <code>Bearer &lt;token&gt;</code> khi gọi các API còn lại.</p>
+       rồi bấm <strong>Authorize</strong> và dán riêng token nhận được
+       (không thêm <code>Bearer</code>). Sau đó tạo requirement trước khi so sánh;
+       dùng ID và revision thật từ response.</p>
   </main>
 </body>
 </html>""")
@@ -172,6 +239,8 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
                 "data_origin": "synthetic" if settings.data_provider == "fixture" else "source",
                 "worker_enabled": settings.worker_enabled,
                 "schema_version": "1.0",
+                "api_versions": ["v1", "v2"],
+                "database_schema_version": 2,
             },
             status_code=200 if healthy else 503,
         )
@@ -190,7 +259,32 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
 
     @app.post("/v1/requirements")
     async def create_requirement(
-        body: CreateRequirement,
+        body: Annotated[
+            CreateRequirement,
+            Body(
+                openapi_examples={
+                    "compare_urls": {
+                        "summary": "So sánh URL mô phỏng",
+                        "description": "Dùng DATA_PROVIDER=fixture; trả 201 với id/revision, không gọi NIM.",
+                        "value": {
+                            "mode": "compare_urls",
+                            "urls": [
+                                "https://tour-demo.invalid/tour-a",
+                                "https://tour-demo.invalid/tour-b",
+                            ],
+                        },
+                    },
+                    "discover_text": {
+                        "summary": "Nhập nhu cầu bằng tiếng Việt",
+                        "description": "Cần cấu hình NIM. Đợi parse job succeeded rồi GET requirement.",
+                        "value": {
+                            "mode": "discover",
+                            "text": "Đi Nhật từ Sài Gòn, 5 ngày. Giá tour tối đa 30 triệu đồng mỗi người lớn.",
+                        },
+                    },
+                }
+            ),
+        ],
         owner_id: str = Depends(owner),
         idempotency_key: str | None = Header(default=None),
     ):
@@ -277,7 +371,18 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
 
     @app.post("/v1/comparisons")
     async def create_comparison(
-        body: CreateComparison,
+        body: Annotated[
+            CreateComparison,
+            Body(
+                openapi_examples={
+                    "first_comparison": {
+                        "summary": "So sánh lần đầu — thay ID bằng response thật",
+                        "description": "Tạo requirement trước trong cùng session; dùng id/revision đã parse.",
+                        "value": {"requirement_id": "req_replace_with_created_id", "revision": 1},
+                    }
+                }
+            ),
+        ],
         owner_id: str = Depends(owner),
         idempotency_key: str | None = Header(default=None),
     ):
@@ -362,4 +467,7 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None) -> F
                         return evidence
         raise AppError("NOT_FOUND", "Không tìm thấy evidence.", 404)
 
+    from api.v2.routes import router
+
+    app.include_router(router(worker.v2, worker.v2.admin, owner, limits))
     return app

@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "expected_version": {
+      "minimum": 1,
+      "title": "Expected Version",
+      "type": "integer"
+    },
+    "reference_urls": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5,
+      "title": "Reference Urls",
+      "type": "array"
+    }
+  },
+  "required": [
+    "expected_version"
+  ],
+  "title": "SourceRefresh",
+  "type": "object"
+}

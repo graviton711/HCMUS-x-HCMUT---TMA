@@ -1,0 +1,101 @@
+{
+  "$defs": {
+    "OfferSelectionV2": {
+      "additionalProperties": false,
+      "properties": {
+        "tour_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Tour Id",
+          "type": "string"
+        },
+        "offer_snapshot_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Offer Snapshot Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tour_id",
+        "offer_snapshot_id"
+      ],
+      "title": "OfferSelectionV2",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "requirement_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Requirement Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "round_intent": {
+      "default": "initial",
+      "enum": [
+        "initial",
+        "next_group",
+        "offer_change"
+      ],
+      "title": "Round Intent",
+      "type": "string"
+    },
+    "previous_comparison_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Previous Comparison Id"
+    },
+    "excluded_tour_ids": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9_.:-]+$",
+        "type": "string"
+      },
+      "maxItems": 500,
+      "title": "Excluded Tour Ids",
+      "type": "array"
+    },
+    "offer_selections": {
+      "items": {
+        "$ref": "#/$defs/OfferSelectionV2"
+      },
+      "maxItems": 100,
+      "title": "Offer Selections",
+      "type": "array"
+    },
+    "candidate_limit": {
+      "default": 20,
+      "maximum": 100,
+      "minimum": 3,
+      "title": "Candidate Limit",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "requirement_id",
+    "revision"
+  ],
+  "title": "CreateComparisonV2",
+  "type": "object"
+}

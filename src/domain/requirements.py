@@ -248,12 +248,12 @@ class Message(Model):
         return self
 
 
-class Requirement(Model):
+class RequirementState(Model):
     schema_version: Literal["1.0"] = "1.0"
     policy_version: Literal["requirements-v1"] = "requirements-v1"
     id: Identifier
     revision: int = Field(ge=1)
-    mode: Literal["discover", "compare_urls"]
+    mode: Literal["discover", "compare_urls", "hybrid"]
     timezone: str = "Asia/Ho_Chi_Minh"
     messages: list[Message] = Field(default_factory=list, max_length=100)
     targets: list[Target] = Field(default_factory=list, max_length=5)
@@ -272,8 +272,8 @@ class Requirement(Model):
             raise ValueError("Unknown timezone") from exc
         if self.mode == "discover" and self.targets:
             raise ValueError("Discover cannot have URL targets")
-        if self.mode == "compare_urls" and not 2 <= len(self.targets) <= 5:
-            raise ValueError("Compare needs 2..5 URL targets")
+        if self.mode in {"compare_urls", "hybrid"} and not 1 <= len(self.targets) <= 5:
+            raise ValueError("Reference collection needs 1..5 URL targets")
         if len({t.url for t in self.targets}) != len(self.targets) or len(
             {t.target_id for t in self.targets}
         ) != len(self.targets):
@@ -305,6 +305,16 @@ class Requirement(Model):
                 text = messages.get(source.message_id, "")
                 if text[source.start : source.end] != source.quote:
                     raise ValueError("Ungrounded source quote")
+        return self
+
+
+class Requirement(RequirementState):
+    mode: Literal["discover", "compare_urls"]
+
+    @model_validator(mode="after")
+    def v1_input_policy(self):
+        if self.mode == "compare_urls" and len(self.targets) < 2:
+            raise ValueError("Compare needs 2..5 URL targets")
         return self
 
 

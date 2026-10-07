@@ -28,12 +28,13 @@ def instant(value: str) -> datetime:
 
 
 class AppError(Exception):
-    def __init__(self, code: str, message: str, status: int = 422, *, retryable: bool = False):
+    def __init__(self, code: str, message: str, status: int = 422, *, retryable: bool = False, details=None):
         super().__init__(message)
         self.code = code
         self.message = message
         self.status = status
         self.retryable = retryable
+        self.details = details or {}
 
     def payload(self) -> dict:
         return {
@@ -42,5 +43,5 @@ class AppError(Exception):
             "retryable": self.retryable,
             "field_path": None,
             "trace_id": uid("trace"),
-            "details": {},
+            "details": self.details,
         }

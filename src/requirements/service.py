@@ -10,7 +10,6 @@ from domain.requirements import (
     DateValue,
     Message,
     Party,
-    Readiness,
     Requirement,
     SetValue,
     Tree,
@@ -181,13 +180,13 @@ def finalize(r: Requirement) -> Requirement:
     blockers = [q.reason_code for q in questions if q.blocking]
     data = r.model_dump()
     data["clarifications"] = questions
-    data["readiness"] = Readiness(
+    data["readiness"] = type(r.readiness)(
         status="unsupported" if unsupported else "needs_clarification" if questions else "ready",
-        can_collect_data=r.mode == "compare_urls" or positive_scope,
+        can_collect_data=r.mode in {"compare_urls", "hybrid"} or positive_scope,
         can_evaluate_hard_constraints=not blockers,
         reasons=list(dict.fromkeys(blockers)),
     )
-    return Requirement.model_validate(data)
+    return type(r).model_validate(data)
 
 
 def from_extraction(
@@ -199,6 +198,7 @@ def from_extraction(
     timezone: str,
     targets: list,
     previous: Requirement | None = None,
+    requirement_model=Requirement,
 ) -> Requirement:
     if previous is None:
         if extraction.operations:
@@ -269,7 +269,7 @@ def from_extraction(
         party = normalize_party(extraction.party, previous.party, message)
         messages, revision = [*previous.messages, message], previous.revision + 1
     return finalize(
-        Requirement(
+        requirement_model(
             id=requirement_id,
             revision=revision,
             mode=mode,

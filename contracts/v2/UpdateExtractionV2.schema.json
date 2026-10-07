@@ -1,0 +1,394 @@
+{
+  "$defs": {
+    "Operation": {
+      "additionalProperties": false,
+      "properties": {
+        "op": {
+          "enum": [
+            "add",
+            "replace",
+            "remove",
+            "increment_budget"
+          ],
+          "title": "Op",
+          "type": "string"
+        },
+        "target_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Id"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawCondition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "quote": {
+          "title": "Quote",
+          "type": "string"
+        },
+        "delta_raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delta Raw"
+        }
+      },
+      "required": [
+        "op",
+        "quote"
+      ],
+      "title": "Operation",
+      "type": "object"
+    },
+    "RawChild": {
+      "additionalProperties": false,
+      "properties": {
+        "age_raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Age Raw"
+        },
+        "quote": {
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "quote"
+      ],
+      "title": "RawChild",
+      "type": "object"
+    },
+    "RawCondition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "field": {
+          "enum": [
+            "destinations",
+            "departure_origin",
+            "departure_date",
+            "return_date",
+            "duration_days",
+            "duration_nights",
+            "estimated_cost",
+            "transport",
+            "flight_stops",
+            "hotel_stars_min",
+            "shopping_stops",
+            "included_services",
+            "supplier",
+            "unsupported"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "operator": {
+          "enum": [
+            "contains",
+            "contains_any",
+            "contains_all",
+            "excludes",
+            "in",
+            "not_in",
+            "eq",
+            "lt",
+            "lte",
+            "gt",
+            "gte",
+            "between",
+            "near",
+            "prefer_low",
+            "prefer_high",
+            "unresolved"
+          ],
+          "title": "Operator",
+          "type": "string"
+        },
+        "strength": {
+          "enum": [
+            "hard",
+            "soft",
+            "unresolved"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "raw_values": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Raw Values",
+          "type": "array"
+        },
+        "quote": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "field",
+        "operator",
+        "strength",
+        "quote"
+      ],
+      "title": "RawCondition",
+      "type": "object"
+    },
+    "RawNotes": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "maxLength": 8000,
+          "title": "Text",
+          "type": "string"
+        },
+        "quote": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "quote"
+      ],
+      "title": "RawNotes",
+      "type": "object"
+    },
+    "RawParty": {
+      "additionalProperties": false,
+      "properties": {
+        "adults_raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adults Raw"
+        },
+        "adults_quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adults Quote"
+        },
+        "children": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/RawChild"
+              },
+              "maxItems": 20,
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Children"
+        },
+        "rooming_quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rooming Quote"
+        }
+      },
+      "title": "RawParty",
+      "type": "object"
+    },
+    "RawPreference": {
+      "additionalProperties": false,
+      "properties": {
+        "dimension": {
+          "enum": [
+            "cost",
+            "comfort",
+            "pace",
+            "culture"
+          ],
+          "title": "Dimension",
+          "type": "string"
+        },
+        "level": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Level",
+          "type": "integer"
+        },
+        "quote": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "dimension",
+        "level",
+        "quote"
+      ],
+      "title": "RawPreference",
+      "type": "object"
+    },
+    "RawURLs": {
+      "additionalProperties": false,
+      "properties": {
+        "urls": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Urls",
+          "type": "array"
+        },
+        "quote": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "urls",
+        "quote"
+      ],
+      "title": "RawURLs",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "preference_updates": {
+      "items": {
+        "$ref": "#/$defs/RawPreference"
+      },
+      "maxItems": 4,
+      "title": "Preference Updates",
+      "type": "array"
+    },
+    "reference_urls_update": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawURLs"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "notes_update": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawNotes"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "conditions": {
+      "items": {
+        "$ref": "#/$defs/RawCondition"
+      },
+      "maxItems": 0,
+      "title": "Conditions",
+      "type": "array"
+    },
+    "hard_tree": {
+      "default": null,
+      "title": "Hard Tree",
+      "type": "null"
+    },
+    "preference_tree": {
+      "default": null,
+      "title": "Preference Tree",
+      "type": "null"
+    },
+    "party": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawParty"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "operations": {
+      "items": {
+        "$ref": "#/$defs/Operation"
+      },
+      "maxItems": 30,
+      "title": "Operations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "preference_updates",
+    "reference_urls_update",
+    "notes_update"
+  ],
+  "title": "UpdateExtractionV2",
+  "type": "object"
+}

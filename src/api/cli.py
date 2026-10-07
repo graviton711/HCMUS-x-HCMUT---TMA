@@ -28,9 +28,32 @@ def main():
         uvicorn.run("api.app:create_app", factory=True, host=args.host, port=args.port, workers=1)
     elif args.command == "export-schemas":
         from api.dto import CreateComparison, CreateRequirement, PatchRequirement
+        from api.v2.admin import (
+            ContactCreate,
+            ContactPatch,
+            ExpectedVersion,
+            SourceApproval,
+            SourceCreate,
+            SourcePatch,
+            SourceRefresh,
+        )
+        from api.v2.models import (
+            ComparisonV2,
+            ConfirmProposal,
+            ConversationMessage,
+            CreateComparisonV2,
+            CreateProposal,
+            CreateRequirementV2,
+            DiscardChanges,
+            JobEvent,
+            Proposal,
+            ProposalVersion,
+            RequirementV2,
+        )
         from domain.crawl import CrawlRequest, CrawlResult, SourceCapability
         from domain.requirements import Requirement
         from requirements.extraction import Extraction
+        from requirements.v2 import InitialExtractionV2, UpdateExtractionV2
 
         args.output.mkdir(parents=True, exist_ok=True)
         for model in (
@@ -44,6 +67,33 @@ def main():
             Extraction,
         ):
             (args.output / f"{model.__name__}.schema.json").write_text(
+                json.dumps(model.model_json_schema(), ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        v2_output = args.output / "v2"
+        v2_output.mkdir(parents=True, exist_ok=True)
+        for model in (
+            CreateRequirementV2,
+            RequirementV2,
+            CreateProposal,
+            Proposal,
+            ConfirmProposal,
+            ProposalVersion,
+            DiscardChanges,
+            CreateComparisonV2,
+            ComparisonV2,
+            ConversationMessage,
+            JobEvent,
+            ContactCreate,
+            ContactPatch,
+            SourceCreate,
+            SourcePatch,
+            ExpectedVersion,
+            SourceApproval,
+            SourceRefresh,
+            InitialExtractionV2,
+            UpdateExtractionV2,
+        ):
+            (v2_output / f"{model.__name__}.schema.json").write_text(
                 json.dumps(model.model_json_schema(), ensure_ascii=False, indent=2), encoding="utf-8"
             )
         print(f"Exported schemas to {args.output.resolve()}")

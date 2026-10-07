@@ -1,5 +1,7 @@
 # Data access
 
+V2 adapter (`v2.py`) gộp reference/discovery qua gateway hiện hữu, giữ task errors và deadline, dùng runtime registry của Store. Transport upstream v1 được công bố rõ; crawler extraction/profile vẫn do owner crawler phụ trách. Xem [backend-v2-runtime](../../docs/backend-v2-runtime.md).
+
 **Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
 
 ## Trách nhiệm / input-output

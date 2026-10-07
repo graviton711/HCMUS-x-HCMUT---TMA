@@ -1,5 +1,7 @@
 # Backend verification
 
+V2 kiểm tra proposal/version/atomicity/late results, durable events, matrix/rank/price/evidence bindings, URL-only/hybrid/exclusions, migration và role/audit/contact. Tests dùng temporary SQLite và mock upstream, không NIM/crawl live. Acceptance cụ thể ở docs/backend-v2-runtime.md.
+
 Tests use synthetic inputs and temporary SQLite databases. No real credentials or network calls are needed.
 
 - Requirements: grounded normalization, tour-price default, ambiguity, AND/OR, contradictions and patch preservation.

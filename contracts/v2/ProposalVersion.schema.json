@@ -1,0 +1,15 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "expected_proposal_version": {
+      "minimum": 1,
+      "title": "Expected Proposal Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "expected_proposal_version"
+  ],
+  "title": "ProposalVersion",
+  "type": "object"
+}

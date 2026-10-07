@@ -1,6 +1,8 @@
 # Backend v1: chạy và tích hợp
 
-**Trạng thái 02/10/2026:** Có implementation, 82 tests offline đạt và hai luồng chạy qua ASGI API với worker thật. NIM live smoke đạt 8/8 ca đã chọn, gồm 2 lượt sửa hội thoại. Crawler thật chưa có dữ liệu để kiểm chứng.
+Backend v2 được bổ sung ngày 07/10/2026, giữ các routes v1 bên dưới. SQLite hiện schema 2 và tự migrate từ 1. Luồng proposal/admin/events và giới hạn nghiệm thu mới tại [backend-v2-runtime](backend-v2-runtime.md); request examples tại [backend-v2](../examples/backend-v2.md).
+
+**Trạng thái 02/10/2026:** Có implementation, 85 tests offline đạt và hai luồng chạy qua ASGI API với worker thật. NIM live smoke đạt 8/8 ca đã chọn, gồm 2 lượt sửa hội thoại. Crawler thật chưa có dữ liệu để kiểm chứng.
 
 ## Chạy local
 
@@ -26,6 +28,8 @@ Mở `http://127.0.0.1:8000/` để thấy trang chào và liên kết vào Swag
 5. POST comparison với requirement id/revision; poll job rồi GET comparison/evidence.
 
 Xem [payload chạy được](../examples/README.md), [HTTP contract](api-contract.md) và [schemas](../contracts/README.md). Session demo có hạn 24 giờ; chưa có tài khoản/password. Lỗi NIM không commit revision mới. Idempotency keys có phạm vi session và body/path; hết hạn sau 24 giờ.
+
+Trong Swagger: tạo session → **Authorize** bằng riêng token → tạo requirement → so sánh bằng ID/revision thật. Chọn example **So sánh URL mô phỏng** để thử persistence không cần NIM/crawler. Session, requirement và comparison/job được lưu ngay khi từng request hợp lệ; refresh SQLite viewer để thấy dữ liệu. Request 401/404 không tạo comparison/job. Hướng dẫn xử lý ở [examples](../examples/README.md#checking-database-writes).
 
 Budget coverage thiếu → `tour_price` + provenance `system_default`, theo quyết định user. Giá trị explicit `trip_total` vẫn được giữ. Currency/basis không được suy đoán. Thiếu tuổi chỉ chặn phép đánh giá chi phí cần tuổi, không chặn đối chiếu tour tĩnh.
 
@@ -60,7 +64,7 @@ uv run ruff format --check src tests
 uv run tour-backend export-schemas
 ```
 
-82 tests kiểm tra normalization/defaults/patches, AND/OR, giá nhóm/bounds/completeness, ownership, revisions/idempotency, cancellation/restart/deadline và hai luồng API. Có một deprecation warning của Starlette TestClient/httpx; suite vẫn đạt trên dependencies đã khóa.
+85 tests kiểm tra normalization/defaults/patches, AND/OR, giá nhóm/bounds/completeness, ownership, revisions/idempotency, cancellation/restart/deadline và hai luồng API. Bao gồm OpenAPI bearer auth, request bị từ chối không ghi resource/job, và Swagger URL example ghi SQLite qua kết nối đọc độc lập. Có một deprecation warning của Starlette TestClient/httpx; suite vẫn đạt trên dependencies đã khóa.
 
 Live riêng: `uv run tour-backend probe-nim`, hoặc `uv run tour-backend evaluate-nim --output data/evaluation.local.json`. Đây là các lượt gọi provider thật với câu giả lập; không chạy trong pytest mặc định. Smoke cuối đạt 8/8 ca + kiểm tra 2 patch; 10 responses hợp lệ có latency 1,453–13,422 giây và một ca cần repair. Đây không phải latency end-to-end benchmark. **Chưa chạy full gold 50 câu/15 chuỗi hoặc held-out set**, nên không suy ra accuracy ngoài bộ này.
 

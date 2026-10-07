@@ -1,0 +1,998 @@
+{
+  "$defs": {
+    "Budget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "budget",
+          "default": "budget",
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Amount"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "basis": {
+          "anyOf": [
+            {
+              "enum": [
+                "per_adult",
+                "per_person",
+                "group_total"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Basis"
+        },
+        "coverage": {
+          "default": "tour_price",
+          "enum": [
+            "tour_price",
+            "trip_total"
+          ],
+          "title": "Coverage",
+          "type": "string"
+        },
+        "coverage_origin": {
+          "default": "system_default",
+          "enum": [
+            "explicit",
+            "system_default"
+          ],
+          "title": "Coverage Origin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "title": "Budget",
+      "type": "object"
+    },
+    "Change": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "condition_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition Id"
+        },
+        "before": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        },
+        "after": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        },
+        "origin": {
+          "enum": [
+            "user_edit",
+            "chat_inference"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "origin",
+        "reason"
+      ],
+      "title": "Change",
+      "type": "object"
+    },
+    "Child": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "age": {
+          "anyOf": [
+            {
+              "maximum": 17,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Age"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Child",
+      "type": "object"
+    },
+    "Clarification": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "field_path": {
+          "title": "Field Path",
+          "type": "string"
+        },
+        "reason_code": {
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "blocking": {
+          "default": true,
+          "title": "Blocking",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "field_path",
+        "reason_code",
+        "question"
+      ],
+      "title": "Clarification",
+      "type": "object"
+    },
+    "Condition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "operator": {
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "discriminator": {
+            "mapping": {
+              "budget": "#/$defs/Budget",
+              "date": "#/$defs/DateValue",
+              "number": "#/$defs/NumberValue",
+              "set": "#/$defs/SetValue",
+              "unresolved": "#/$defs/UnresolvedValue"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NumberValue"
+            },
+            {
+              "$ref": "#/$defs/SetValue"
+            },
+            {
+              "$ref": "#/$defs/DateValue"
+            },
+            {
+              "$ref": "#/$defs/Budget"
+            },
+            {
+              "$ref": "#/$defs/UnresolvedValue"
+            }
+          ],
+          "title": "Value"
+        },
+        "strength": {
+          "enum": [
+            "hard",
+            "soft",
+            "unresolved"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SourceReference"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "field",
+        "operator",
+        "value",
+        "strength",
+        "sources"
+      ],
+      "title": "Condition",
+      "type": "object"
+    },
+    "DateValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "date",
+          "default": "date",
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "DateValue",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Message": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "received_at": {
+          "title": "Received At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "received_at"
+      ],
+      "title": "Message",
+      "type": "object"
+    },
+    "NumberValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "number",
+          "default": "number",
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "maximum": 1000000000000000,
+          "minimum": 0,
+          "title": "Amount",
+          "type": "integer"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "title": "NumberValue",
+      "type": "object"
+    },
+    "Party": {
+      "additionalProperties": false,
+      "properties": {
+        "adults": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adults"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Child"
+          },
+          "maxItems": 20,
+          "title": "Children",
+          "type": "array"
+        },
+        "rooming": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rooming"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SourceReference"
+          },
+          "maxItems": 50,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "title": "Party",
+      "type": "object"
+    },
+    "PreferenceLevel": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Level",
+          "type": "integer"
+        },
+        "origin": {
+          "default": "user",
+          "enum": [
+            "user",
+            "system_default"
+          ],
+          "title": "Origin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "title": "PreferenceLevel",
+      "type": "object"
+    },
+    "Preferences": {
+      "additionalProperties": false,
+      "properties": {
+        "cost": {
+          "$ref": "#/$defs/PreferenceLevel"
+        },
+        "comfort": {
+          "$ref": "#/$defs/PreferenceLevel"
+        },
+        "pace": {
+          "$ref": "#/$defs/PreferenceLevel"
+        },
+        "culture": {
+          "$ref": "#/$defs/PreferenceLevel"
+        }
+      },
+      "title": "Preferences",
+      "type": "object"
+    },
+    "ReadinessV2": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "ready",
+          "enum": [
+            "ready",
+            "needs_clarification",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "can_collect_data": {
+          "default": false,
+          "title": "Can Collect Data",
+          "type": "boolean"
+        },
+        "can_evaluate_hard_constraints": {
+          "default": false,
+          "title": "Can Evaluate Hard Constraints",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "blockers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        }
+      },
+      "title": "ReadinessV2",
+      "type": "object"
+    },
+    "RequirementV2": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0-draft",
+          "default": "2.0-draft",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "policy_version": {
+          "const": "requirements-v1",
+          "default": "requirements-v1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "discover",
+            "compare_urls",
+            "hybrid"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "Asia/Ho_Chi_Minh",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/Message"
+          },
+          "maxItems": 100,
+          "title": "Messages",
+          "type": "array"
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/Target"
+          },
+          "maxItems": 5,
+          "title": "Targets",
+          "type": "array"
+        },
+        "party": {
+          "$ref": "#/$defs/Party"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "maxItems": 50,
+          "title": "Conditions",
+          "type": "array"
+        },
+        "hard_tree": {
+          "$ref": "#/$defs/Tree"
+        },
+        "preference_tree": {
+          "$ref": "#/$defs/Tree"
+        },
+        "clarifications": {
+          "items": {
+            "$ref": "#/$defs/Clarification"
+          },
+          "title": "Clarifications",
+          "type": "array"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ReadinessV2"
+        },
+        "input_kind": {
+          "enum": [
+            "structured",
+            "text",
+            "urls"
+          ],
+          "title": "Input Kind",
+          "type": "string"
+        },
+        "preference_levels": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Preferences"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reference_urls": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Reference Urls",
+          "type": "array"
+        },
+        "notes": {
+          "default": "",
+          "maxLength": 8000,
+          "title": "Notes",
+          "type": "string"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Provenance",
+          "type": "object"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "mode",
+        "input_kind"
+      ],
+      "title": "RequirementV2",
+      "type": "object"
+    },
+    "SetValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "set",
+          "default": "set",
+          "title": "Kind",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "SetValue",
+      "type": "object"
+    },
+    "SourceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "text",
+            "form",
+            "system_default"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "message_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message Id"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "field_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field Path"
+        },
+        "submitted_value": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SourceReference",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "target_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Target Id",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 2048,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_id",
+        "url"
+      ],
+      "title": "Target",
+      "type": "object"
+    },
+    "Tree": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "all",
+            "any",
+            "predicate"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "condition_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition Id"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Tree"
+          },
+          "maxItems": 50,
+          "title": "Children",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Tree",
+      "type": "object"
+    },
+    "UnresolvedValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "unresolved",
+          "default": "unresolved",
+          "title": "Kind",
+          "type": "string"
+        },
+        "raw": {
+          "maxLength": 8000,
+          "title": "Raw",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw",
+        "reason"
+      ],
+      "title": "UnresolvedValue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "version": {
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "requirement_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Requirement Id",
+      "type": "string"
+    },
+    "base_revision": {
+      "minimum": 0,
+      "title": "Base Revision",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "pending",
+        "needs_clarification",
+        "confirmed",
+        "cancelled",
+        "superseded",
+        "expired"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "expires_at": {
+      "title": "Expires At",
+      "type": "string"
+    },
+    "preview": {
+      "$ref": "#/$defs/RequirementV2"
+    },
+    "changes": {
+      "items": {
+        "$ref": "#/$defs/Change"
+      },
+      "title": "Changes",
+      "type": "array"
+    },
+    "clarifications": {
+      "items": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Clarifications",
+      "type": "array"
+    },
+    "requested_action": {
+      "anyOf": [
+        {
+          "enum": [
+            "search",
+            "next_group"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Requested Action"
+    },
+    "parse_job_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parse Job Id"
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "requirement_id",
+    "base_revision",
+    "status",
+    "expires_at",
+    "preview",
+    "changes"
+  ],
+  "title": "Proposal",
+  "type": "object"
+}

@@ -13,7 +13,7 @@ flowchart LR
     R --> U
 ```
 
-Idea, kiến trúc và wireframe đã chốt. Backend v1 có API, hiểu nhu cầu qua NVIDIA NIM, bộ lọc/so sánh, revision và worker. Package `tourcrawl` và các script khảo sát nguồn đã được đưa về nhánh này; chưa có adapter nối output crawler vào backend. Hai luồng API mặc định vẫn dùng dữ liệu mô phỏng; frontend đang PLANNING.
+Idea, kiến trúc và wireframe đã chốt. Backend có `/v1` và `/v2`: hiểu nhu cầu qua NVIDIA NIM, proposal đa field chờ xác nhận, form/URL/hybrid, so sánh/ranking/evidence, durable jobs/events và admin/contact. Xem [runtime v2](docs/backend-v2-runtime.md) và [hướng dẫn nối frontend](examples/backend-v2.md). Package `tourcrawl` chạy độc lập; chưa có adapter nối output crawler vào backend. API mặc định dùng dữ liệu mô phỏng; frontend prototype đang review, chưa gọi API thật.
 
 - [Proposal và phân tích bài toán](docs/idea.md)
 - [Kiến trúc hệ thống](docs/system-architecture.md)

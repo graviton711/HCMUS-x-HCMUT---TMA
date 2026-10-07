@@ -114,6 +114,7 @@ def fixture_result(request: CrawlRequest) -> CrawlResult:
                 supplier_id="supplier_demo",
                 canonical_url=url,
                 observed_at=timestamp,
+                title={"tour-a": "[Mô phỏng] Nhật Bản 5 ngày", "tour-b": "[Mô phỏng] Hàn Quốc 5 ngày", "tour-c": "[Mô phỏng] Nhật Bản 6 ngày"}[slug],
                 fields=fields,
             )
         )

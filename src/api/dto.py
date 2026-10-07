@@ -79,10 +79,17 @@ class OfferSelection(Model):
 
 
 class CreateComparison(Model):
-    requirement_id: Identifier
-    revision: int = Field(ge=1)
-    offer_selections: list[OfferSelection] = Field(default_factory=list, max_length=5)
-    reuse_comparison_id: Identifier | None = None
+    requirement_id: Identifier = Field(description="ID của requirement đã tạo trong cùng session.")
+    revision: int = Field(ge=1, description="Revision đã parse từ GET requirement; không dùng revision 0.")
+    offer_selections: list[OfferSelection] = Field(
+        default_factory=list,
+        max_length=5,
+        description="Tùy chọn: chọn offer từ comparison đã hoàn tất. Bỏ qua khi so sánh lần đầu.",
+    )
+    reuse_comparison_id: Identifier | None = Field(
+        default=None,
+        description="Tùy chọn: ID comparison trước để dùng lại snapshot. Bỏ qua khi so sánh lần đầu.",
+    )
 
     @model_validator(mode="after")
     def selections(self):

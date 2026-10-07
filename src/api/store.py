@@ -15,6 +15,7 @@ from sqlalchemy import (
     create_engine,
     delete,
     insert,
+    inspect,
     select,
     update,
 )
@@ -95,12 +96,22 @@ class Store:
             connect_args={"check_same_thread": False, "timeout": 15},
             **({"poolclass": StaticPool} if filename == ":memory:" else {}),
         )
+        from api.v2 import state  # noqa: F401 -- register additive tables before create_all.
+
+        if inspect(self.engine).has_table("schema_info"):
+            with self.engine.connect() as c:
+                versions = c.execute(select(schema_info.c.version)).scalars().all()
+            if len(versions) > 1 or (versions and versions[0] not in {1, 2}):
+                self.engine.dispose()
+                raise RuntimeError("Unsupported database schema; migration required")
         metadata.create_all(self.engine)
         with self.transaction() as c:
             version = c.execute(select(schema_info.c.version)).scalar()
             if version is None:
-                c.execute(insert(schema_info).values(version=1))
-            elif version != 1:
+                c.execute(insert(schema_info).values(version=2))
+            elif version == 1:
+                c.execute(update(schema_info).values(version=2))
+            elif version != 2:
                 raise RuntimeError("Unsupported database schema; migration required")
 
     @contextmanager
@@ -259,6 +270,10 @@ class Store:
                 deadline_at=(timestamp + timedelta(seconds=self.settings.job_timeout_seconds)).isoformat(),
             )
         )
+        if kind.startswith("v2_"):
+            from api.v2.state import emit
+
+            emit(c, job_id, "queued", "started", "Tác vụ đã vào hàng chờ.")
         return job_id
 
     def job(self, owner, job_id):
@@ -282,7 +297,13 @@ class Store:
                 .where(jobs.c.id == job_id)
                 .values(status="cancelled", phase="cancelled", completed_at=now().isoformat())
             )
-            if row["kind"] == "comparison" or json.loads(row["payload"]).get("expected_revision") == 0:
+            if row["kind"].startswith("v2_"):
+                from api.v2.state import emit
+
+                emit(c, job_id, row["phase"], "cancelled", "Tác vụ đã hủy.")
+            if row["kind"] in {"comparison", "v2_comparison"} or (
+                row["kind"] == "parse" and json.loads(row["payload"]).get("expected_revision") == 0
+            ):
                 c.execute(
                     update(resources).where(resources.c.id == row["resource_id"]).values(status="cancelled")
                 )
@@ -311,8 +332,13 @@ class Store:
                 status="failed", phase="failed", error=dump(error.payload()), completed_at=now().isoformat()
             )
         ).rowcount
+        if count and row["kind"].startswith("v2_"):
+            from api.v2.state import emit
+
+            emit(c, row["id"], row["phase"], "failed", error.message, error_code=error.code)
         if count and (
-            row["kind"] == "comparison" or json.loads(row["payload"]).get("expected_revision") == 0
+            row["kind"] in {"comparison", "v2_comparison"}
+            or (row["kind"] == "parse" and json.loads(row["payload"]).get("expected_revision") == 0)
         ):
             c.execute(update(resources).where(resources.c.id == row["resource_id"]).values(status="failed"))
 
@@ -393,7 +419,9 @@ class Store:
             for job in pending:
                 payload = json.loads(job["payload"])
                 protected.update(
-                    payload[k] for k in ("requirement_id", "reuse_comparison_id") if payload.get(k)
+                    payload[k]
+                    for k in ("requirement_id", "reuse_comparison_id", "previous_comparison_id")
+                    if payload.get(k)
                 )
             ids = list(
                 c.execute(
@@ -403,9 +431,42 @@ class Store:
                 ).scalars()
             )
             if ids:
+                from api.v2.state import purge
+
+                job_ids = list(c.execute(select(jobs.c.id).where(jobs.c.resource_id.in_(ids))).scalars())
+                purge(c, ids, job_ids)
                 c.execute(delete(revisions).where(revisions.c.resource_id.in_(ids)))
                 c.execute(delete(jobs).where(jobs.c.resource_id.in_(ids)))
                 c.execute(delete(resources).where(resources.c.id.in_(ids)))
             c.execute(delete(idempotency).where(idempotency.c.expires_at < now().isoformat()))
-            c.execute(delete(sessions).where(sessions.c.expires_at < now().isoformat()))
+            c.execute(
+                delete(sessions).where(
+                    sessions.c.expires_at < now().isoformat(), sessions.c.created_at < cutoff
+                )
+            )
+            from api.v2 import state
+
+            c.execute(delete(state.activities).where(state.activities.c.created_at < cutoff))
+            old_admin_jobs = list(
+                c.execute(
+                    select(jobs.c.id).where(
+                        jobs.c.kind.in_(["v2_source_check", "v2_source_refresh"]),
+                        jobs.c.status.in_(TERMINAL),
+                        jobs.c.created_at < cutoff,
+                    )
+                ).scalars()
+            )
+            if old_admin_jobs:
+                c.execute(delete(state.snapshots).where(state.snapshots.c.comparison_id.in_(old_admin_jobs)))
+                c.execute(delete(state.job_events).where(state.job_events.c.job_id.in_(old_admin_jobs)))
+                c.execute(delete(jobs).where(jobs.c.id.in_(old_admin_jobs)))
+            contact_cutoff = (
+                now() - timedelta(days=self.settings.contact_resolved_retention_days)
+            ).isoformat()
+            for row in c.execute(
+                select(state.contacts).where(state.contacts.c.status == "resolved")
+            ).mappings():
+                resolved_at = json.loads(row["payload"]).get("resolved_at")
+                if resolved_at and resolved_at < contact_cutoff:
+                    c.execute(delete(state.contacts).where(state.contacts.c.id == row["id"]))
         return {"resources_deleted": len(ids)}

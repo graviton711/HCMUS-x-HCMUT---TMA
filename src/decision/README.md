@@ -1,5 +1,7 @@
 # Decision
 
+V2 (`v2.py`) bổ sung matrix DTO, giá không phụ thuộc Budget, rank policy có contributions/coverage, next-group exclusions và metrics có operands/evidence. V1 giữ nhóm eligibility hiện có. Pace/culture chưa có metric được công bố unsupported. Xem [backend-v2-runtime](../../docs/backend-v2-runtime.md).
+
 **Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
 
 ## Trách nhiệm / input-output

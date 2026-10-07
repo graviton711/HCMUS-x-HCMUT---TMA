@@ -1,6 +1,6 @@
 # Pipeline backend, crawler và kho dữ liệu — mẫu v2
 
-**Trạng thái:** mẫu đã được user duyệt, PLANNING, 07/10/2026. Đặc tả mục tiêu theo [giao thức v2](frontend-protocol-v2.md), không mô tả code backend/crawler hiện có như đã đáp ứng. Feedback backend được cập nhật sau theo mẫu đã duyệt. Owner: BE điều phối/giá/decision/public DTO/admin; crawler thu thập/normalization có provenance; FE state/render/review.
+**Trạng thái:** đặc tả đã được user duyệt; backend implementation ngày 07/10/2026. [Runtime/giới hạn](backend-v2-runtime.md) ghi phần đã chạy/test và phần còn cần crawler/deployment; nội dung dưới giữ mục tiêu pipeline theo [giao thức v2](frontend-protocol-v2.md). Owner: BE điều phối/giá/decision/public DTO/admin; crawler thu thập/normalization có provenance; FE state/render/review.
 
 ## 1. Quyết định kiến trúc
 
@@ -62,7 +62,7 @@ Git `configs/profiles` là versioned extraction artifacts; import vào registry 
 
 Freshness do BE áp field-specific policy; price/availability khác policy/itinerary. API trả freshness state + checked/expires/policy version cho **từng cell**, observed_at không tự thành fresh. Chính sách có version; TTL giá trị thật chốt sau khảo sát/đo nguồn, không chế thời hạn để tô xanh mock.
 
-Default mục tiêu local: session24h/retention7ngày như v1; hosting config công bố expires_at. Contact giữ đến resolved+30ngày (đề xuất cấu hình, không tự triển khai); admin metrics chỉ aggregate/minimal session activity. Expired evidence refs trả410/retention warning, không đổi thành chứng cứ nguồn mới. Log/metrics không chứa token/email/raw message; contact reply_to chỉ endpoint có quyền.
+Local runtime: session24h/retention7ngày như v1; hosting config công bố expires_at. Contact giữ đến resolved+30ngày qua cấu hình; admin metrics chỉ aggregate/minimal session activity. Mục tiêu evidence tombstone410 chưa implement: hiện resource đã purge trả404 theo ownership. Không đổi thành chứng cứ nguồn mới. Log/metrics không chứa token/email/raw message; contact reply_to chỉ endpoint có quyền.
 
 ## 5. Admin, quan sát và contacts
 

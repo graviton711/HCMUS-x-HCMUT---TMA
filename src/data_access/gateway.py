@@ -76,6 +76,10 @@ class DataGateway:
                 raise AppError("CRAWLER_INVALID_OUTPUT", "Nguồn hoặc thời gian evidence không hợp lệ.", 502)
         for snapshot in [*result.tours, *result.offers]:
             facts = list(snapshot.fields.values())
+            if hasattr(snapshot, "policies"):
+                facts += list(snapshot.policies.values())
+                if instant(snapshot.observed_at) > max_time:
+                    raise AppError("CRAWLER_INVALID_OUTPUT", "Snapshot ở tương lai.", 502)
             if hasattr(snapshot, "price_quotes"):
                 facts += snapshot.price_quotes + snapshot.extra_charges
                 if snapshot.pricing_complete:

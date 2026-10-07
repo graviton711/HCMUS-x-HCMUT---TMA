@@ -1,0 +1,2311 @@
+{
+  "$defs": {
+    "Applicability": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "enum": [
+            "adults",
+            "children_count",
+            "rooming",
+            "unresolved"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "field",
+        "value"
+      ],
+      "title": "Applicability",
+      "type": "object"
+    },
+    "Budget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "budget",
+          "default": "budget",
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Amount"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "basis": {
+          "anyOf": [
+            {
+              "enum": [
+                "per_adult",
+                "per_person",
+                "group_total"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Basis"
+        },
+        "coverage": {
+          "default": "tour_price",
+          "enum": [
+            "tour_price",
+            "trip_total"
+          ],
+          "title": "Coverage",
+          "type": "string"
+        },
+        "coverage_origin": {
+          "default": "system_default",
+          "enum": [
+            "explicit",
+            "system_default"
+          ],
+          "title": "Coverage Origin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "title": "Budget",
+      "type": "object"
+    },
+    "Cell": {
+      "additionalProperties": false,
+      "properties": {
+        "row_id": {
+          "title": "Row Id",
+          "type": "string"
+        },
+        "column_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Column Id",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "raw_value": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "title": "Raw Value",
+          "type": "array"
+        },
+        "data_state": {
+          "enum": [
+            "present",
+            "missing",
+            "conflicting",
+            "invalid",
+            "unsupported"
+          ],
+          "title": "Data State",
+          "type": "string"
+        },
+        "verification": {
+          "enum": [
+            "supplier_published",
+            "independently_verified",
+            "unverified"
+          ],
+          "title": "Verification",
+          "type": "string"
+        },
+        "completeness": {
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "title": "Completeness",
+          "type": "string"
+        },
+        "observed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Observed At"
+        },
+        "freshness": {
+          "$ref": "#/$defs/Freshness"
+        },
+        "evidence_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason Code"
+        },
+        "evaluation_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Evaluation Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "row_id",
+        "column_id",
+        "value",
+        "raw_value",
+        "data_state",
+        "verification",
+        "completeness",
+        "observed_at",
+        "freshness",
+        "evidence_ids",
+        "reason_code",
+        "evaluation_ids"
+      ],
+      "title": "Cell",
+      "type": "object"
+    },
+    "Child": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "age": {
+          "anyOf": [
+            {
+              "maximum": 17,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Age"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Child",
+      "type": "object"
+    },
+    "Clarification": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "field_path": {
+          "title": "Field Path",
+          "type": "string"
+        },
+        "reason_code": {
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "question": {
+          "title": "Question",
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "blocking": {
+          "default": true,
+          "title": "Blocking",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "field_path",
+        "reason_code",
+        "question"
+      ],
+      "title": "Clarification",
+      "type": "object"
+    },
+    "Column": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "candidate_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Candidate Id"
+        },
+        "tour_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tour Id"
+        },
+        "tour_snapshot_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Tour Snapshot Id"
+        },
+        "offer_snapshot_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offer Snapshot Id"
+        },
+        "selected_offer_snapshot_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Selected Offer Snapshot Id"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Title"
+        },
+        "title_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title Reason"
+        },
+        "supplier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicSupplier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "canonical_url": {
+          "title": "Canonical Url",
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "reference",
+            "discovery",
+            "both"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "target_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Target Ids",
+          "type": "array"
+        },
+        "source_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Source Ids",
+          "type": "array"
+        },
+        "offer_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offer Reason"
+        },
+        "offer_options": {
+          "items": {
+            "$ref": "#/$defs/OfferSnapshot"
+          },
+          "title": "Offer Options",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "candidate_id",
+        "tour_id",
+        "tour_snapshot_id",
+        "offer_snapshot_id",
+        "selected_offer_snapshot_id",
+        "title",
+        "supplier",
+        "canonical_url",
+        "origin",
+        "target_ids",
+        "source_ids",
+        "offer_reason",
+        "offer_options"
+      ],
+      "title": "Column",
+      "type": "object"
+    },
+    "Condition": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "operator": {
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "discriminator": {
+            "mapping": {
+              "budget": "#/$defs/Budget",
+              "date": "#/$defs/DateValue",
+              "number": "#/$defs/NumberValue",
+              "set": "#/$defs/SetValue",
+              "unresolved": "#/$defs/UnresolvedValue"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NumberValue"
+            },
+            {
+              "$ref": "#/$defs/SetValue"
+            },
+            {
+              "$ref": "#/$defs/DateValue"
+            },
+            {
+              "$ref": "#/$defs/Budget"
+            },
+            {
+              "$ref": "#/$defs/UnresolvedValue"
+            }
+          ],
+          "title": "Value"
+        },
+        "strength": {
+          "enum": [
+            "hard",
+            "soft",
+            "unresolved"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SourceReference"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "field",
+        "operator",
+        "value",
+        "strength",
+        "sources"
+      ],
+      "title": "Condition",
+      "type": "object"
+    },
+    "DateValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "date",
+          "default": "date",
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "DateValue",
+      "type": "object"
+    },
+    "Evaluation": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "condition_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Condition Id",
+          "type": "string"
+        },
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "strength": {
+          "enum": [
+            "hard",
+            "soft",
+            "unresolved"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "expected": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "actual": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "unknown",
+            "not_evaluated"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason_code": {
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "data_quality": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Data Quality",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "condition_id",
+        "candidate_id",
+        "field",
+        "strength",
+        "expected",
+        "actual",
+        "status",
+        "reason_code",
+        "evidence_ids",
+        "data_quality"
+      ],
+      "title": "Evaluation",
+      "type": "object"
+    },
+    "ExtraCharge": {
+      "additionalProperties": false,
+      "properties": {
+        "charge_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Charge Id",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Amount"
+        },
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "basis": {
+          "enum": [
+            "per_adult",
+            "per_child",
+            "per_person",
+            "per_group",
+            "per_room"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Required"
+        },
+        "applicability": {
+          "items": {
+            "$ref": "#/$defs/Applicability"
+          },
+          "maxItems": 20,
+          "title": "Applicability",
+          "type": "array"
+        }
+      },
+      "required": [
+        "charge_id",
+        "amount",
+        "currency",
+        "basis",
+        "required"
+      ],
+      "title": "ExtraCharge",
+      "type": "object"
+    },
+    "Fact_ExtraCharge_": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtraCharge"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "raw_value": {
+          "anyOf": [
+            {
+              "maxLength": 10000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Value"
+        },
+        "data_state": {
+          "default": "missing",
+          "enum": [
+            "present",
+            "missing",
+            "conflicting",
+            "invalid",
+            "unsupported"
+          ],
+          "title": "Data State",
+          "type": "string"
+        },
+        "verification": {
+          "default": "unverified",
+          "enum": [
+            "supplier_published",
+            "independently_verified",
+            "unverified"
+          ],
+          "title": "Verification",
+          "type": "string"
+        },
+        "completeness": {
+          "default": "unknown",
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "title": "Completeness",
+          "type": "string"
+        },
+        "observed_at": {
+          "title": "Observed At",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "normalization_rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalization Rule"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "observed_at"
+      ],
+      "title": "Fact[ExtraCharge]",
+      "type": "object"
+    },
+    "Fact_JsonValue_": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonValue"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "raw_value": {
+          "anyOf": [
+            {
+              "maxLength": 10000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Value"
+        },
+        "data_state": {
+          "default": "missing",
+          "enum": [
+            "present",
+            "missing",
+            "conflicting",
+            "invalid",
+            "unsupported"
+          ],
+          "title": "Data State",
+          "type": "string"
+        },
+        "verification": {
+          "default": "unverified",
+          "enum": [
+            "supplier_published",
+            "independently_verified",
+            "unverified"
+          ],
+          "title": "Verification",
+          "type": "string"
+        },
+        "completeness": {
+          "default": "unknown",
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "title": "Completeness",
+          "type": "string"
+        },
+        "observed_at": {
+          "title": "Observed At",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "normalization_rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalization Rule"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "observed_at"
+      ],
+      "title": "Fact[JsonValue]",
+      "type": "object"
+    },
+    "Fact_PriceQuote_": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PriceQuote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "raw_value": {
+          "anyOf": [
+            {
+              "maxLength": 10000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Value"
+        },
+        "data_state": {
+          "default": "missing",
+          "enum": [
+            "present",
+            "missing",
+            "conflicting",
+            "invalid",
+            "unsupported"
+          ],
+          "title": "Data State",
+          "type": "string"
+        },
+        "verification": {
+          "default": "unverified",
+          "enum": [
+            "supplier_published",
+            "independently_verified",
+            "unverified"
+          ],
+          "title": "Verification",
+          "type": "string"
+        },
+        "completeness": {
+          "default": "unknown",
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "title": "Completeness",
+          "type": "string"
+        },
+        "observed_at": {
+          "title": "Observed At",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "normalization_rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalization Rule"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "observed_at"
+      ],
+      "title": "Fact[PriceQuote]",
+      "type": "object"
+    },
+    "Fact_bool_": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "raw_value": {
+          "anyOf": [
+            {
+              "maxLength": 10000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Value"
+        },
+        "data_state": {
+          "default": "missing",
+          "enum": [
+            "present",
+            "missing",
+            "conflicting",
+            "invalid",
+            "unsupported"
+          ],
+          "title": "Data State",
+          "type": "string"
+        },
+        "verification": {
+          "default": "unverified",
+          "enum": [
+            "supplier_published",
+            "independently_verified",
+            "unverified"
+          ],
+          "title": "Verification",
+          "type": "string"
+        },
+        "completeness": {
+          "default": "unknown",
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "title": "Completeness",
+          "type": "string"
+        },
+        "observed_at": {
+          "title": "Observed At",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "normalization_rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalization Rule"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "observed_at"
+      ],
+      "title": "Fact[bool]",
+      "type": "object"
+    },
+    "Freshness": {
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "fresh",
+            "stale",
+            "unknown"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "checked_at": {
+          "title": "Checked At",
+          "type": "string"
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Expires At"
+        },
+        "policy_version": {
+          "title": "Policy Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "checked_at",
+        "expires_at",
+        "policy_version"
+      ],
+      "title": "Freshness",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Message": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "received_at": {
+          "title": "Received At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "received_at"
+      ],
+      "title": "Message",
+      "type": "object"
+    },
+    "NumberValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "number",
+          "default": "number",
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "maximum": 1000000000000000,
+          "minimum": 0,
+          "title": "Amount",
+          "type": "integer"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "title": "NumberValue",
+      "type": "object"
+    },
+    "OfferSnapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "snapshot_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Snapshot Id",
+          "type": "string"
+        },
+        "offer_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Offer Id",
+          "type": "string"
+        },
+        "tour_snapshot_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Tour Snapshot Id",
+          "type": "string"
+        },
+        "fields": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Fact_JsonValue_"
+          },
+          "maxProperties": 10,
+          "title": "Fields",
+          "type": "object"
+        },
+        "price_quotes": {
+          "items": {
+            "$ref": "#/$defs/Fact_PriceQuote_"
+          },
+          "maxItems": 50,
+          "title": "Price Quotes",
+          "type": "array"
+        },
+        "extra_charges": {
+          "items": {
+            "$ref": "#/$defs/Fact_ExtraCharge_"
+          },
+          "maxItems": 50,
+          "title": "Extra Charges",
+          "type": "array"
+        },
+        "pricing_complete": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Fact_bool_"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "snapshot_id",
+        "offer_id",
+        "tour_snapshot_id"
+      ],
+      "title": "OfferSnapshot",
+      "type": "object"
+    },
+    "Party": {
+      "additionalProperties": false,
+      "properties": {
+        "adults": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adults"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Child"
+          },
+          "maxItems": 20,
+          "title": "Children",
+          "type": "array"
+        },
+        "rooming": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rooming"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SourceReference"
+          },
+          "maxItems": 50,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "title": "Party",
+      "type": "object"
+    },
+    "PreferenceLevel": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Level",
+          "type": "integer"
+        },
+        "origin": {
+          "default": "user",
+          "enum": [
+            "user",
+            "system_default"
+          ],
+          "title": "Origin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "title": "PreferenceLevel",
+      "type": "object"
+    },
+    "Preferences": {
+      "additionalProperties": false,
+      "properties": {
+        "cost": {
+          "$ref": "#/$defs/PreferenceLevel"
+        },
+        "comfort": {
+          "$ref": "#/$defs/PreferenceLevel"
+        },
+        "pace": {
+          "$ref": "#/$defs/PreferenceLevel"
+        },
+        "culture": {
+          "$ref": "#/$defs/PreferenceLevel"
+        }
+      },
+      "title": "Preferences",
+      "type": "object"
+    },
+    "PriceQuote": {
+      "additionalProperties": false,
+      "properties": {
+        "quote_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Quote Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "exact",
+            "from",
+            "range"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Amount"
+        },
+        "upper_amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper Amount"
+        },
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "basis": {
+          "enum": [
+            "per_adult",
+            "per_child",
+            "per_infant",
+            "per_room",
+            "per_group"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "coverage": {
+          "enum": [
+            "tour_price",
+            "trip_total",
+            "unspecified"
+          ],
+          "title": "Coverage",
+          "type": "string"
+        },
+        "age_min": {
+          "anyOf": [
+            {
+              "maximum": 120,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Age Min"
+        },
+        "age_max_exclusive": {
+          "anyOf": [
+            {
+              "maximum": 121,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Age Max Exclusive"
+        },
+        "applicability": {
+          "items": {
+            "$ref": "#/$defs/Applicability"
+          },
+          "maxItems": 20,
+          "title": "Applicability",
+          "type": "array"
+        }
+      },
+      "required": [
+        "quote_id",
+        "kind",
+        "amount",
+        "currency",
+        "basis",
+        "coverage"
+      ],
+      "title": "PriceQuote",
+      "type": "object"
+    },
+    "PublicSupplier": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display_name"
+      ],
+      "title": "PublicSupplier",
+      "type": "object"
+    },
+    "ReadinessV2": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "ready",
+          "enum": [
+            "ready",
+            "needs_clarification",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "can_collect_data": {
+          "default": false,
+          "title": "Can Collect Data",
+          "type": "boolean"
+        },
+        "can_evaluate_hard_constraints": {
+          "default": false,
+          "title": "Can Evaluate Hard Constraints",
+          "type": "boolean"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "blockers": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Blockers",
+          "type": "array"
+        }
+      },
+      "title": "ReadinessV2",
+      "type": "object"
+    },
+    "RequirementV2": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0-draft",
+          "default": "2.0-draft",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "policy_version": {
+          "const": "requirements-v1",
+          "default": "requirements-v1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 0,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "mode": {
+          "enum": [
+            "discover",
+            "compare_urls",
+            "hybrid"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "Asia/Ho_Chi_Minh",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "messages": {
+          "items": {
+            "$ref": "#/$defs/Message"
+          },
+          "maxItems": 100,
+          "title": "Messages",
+          "type": "array"
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/Target"
+          },
+          "maxItems": 5,
+          "title": "Targets",
+          "type": "array"
+        },
+        "party": {
+          "$ref": "#/$defs/Party"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "maxItems": 50,
+          "title": "Conditions",
+          "type": "array"
+        },
+        "hard_tree": {
+          "$ref": "#/$defs/Tree"
+        },
+        "preference_tree": {
+          "$ref": "#/$defs/Tree"
+        },
+        "clarifications": {
+          "items": {
+            "$ref": "#/$defs/Clarification"
+          },
+          "title": "Clarifications",
+          "type": "array"
+        },
+        "readiness": {
+          "$ref": "#/$defs/ReadinessV2"
+        },
+        "input_kind": {
+          "enum": [
+            "structured",
+            "text",
+            "urls"
+          ],
+          "title": "Input Kind",
+          "type": "string"
+        },
+        "preference_levels": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Preferences"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reference_urls": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "title": "Reference Urls",
+          "type": "array"
+        },
+        "notes": {
+          "default": "",
+          "maxLength": 8000,
+          "title": "Notes",
+          "type": "string"
+        },
+        "provenance": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Provenance",
+          "type": "object"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "mode",
+        "input_kind"
+      ],
+      "title": "RequirementV2",
+      "type": "object"
+    },
+    "Row": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "scope": {
+          "enum": [
+            "tour",
+            "offer",
+            "cost",
+            "evaluation"
+          ],
+          "title": "Scope",
+          "type": "string"
+        },
+        "value_type": {
+          "enum": [
+            "date",
+            "number",
+            "set",
+            "text",
+            "boolean",
+            "price_list"
+          ],
+          "title": "Value Type",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unit"
+        },
+        "order": {
+          "minimum": 0,
+          "title": "Order",
+          "type": "integer"
+        },
+        "condition_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Condition Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "field",
+        "label",
+        "scope",
+        "value_type",
+        "unit",
+        "order",
+        "condition_ids"
+      ],
+      "title": "Row",
+      "type": "object"
+    },
+    "SetValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "set",
+          "default": "set",
+          "title": "Kind",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "SetValue",
+      "type": "object"
+    },
+    "SourceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "text",
+            "form",
+            "system_default"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "message_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message Id"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "field_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field Path"
+        },
+        "submitted_value": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SourceReference",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "target_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Target Id",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 2048,
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target_id",
+        "url"
+      ],
+      "title": "Target",
+      "type": "object"
+    },
+    "Tree": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "all",
+            "any",
+            "predicate"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "condition_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition Id"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Tree"
+          },
+          "maxItems": 50,
+          "title": "Children",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Tree",
+      "type": "object"
+    },
+    "UnresolvedValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "unresolved",
+          "default": "unresolved",
+          "title": "Kind",
+          "type": "string"
+        },
+        "raw": {
+          "maxLength": 8000,
+          "title": "Raw",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw",
+        "reason"
+      ],
+      "title": "UnresolvedValue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "requirement_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Requirement Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "requirement_snapshot": {
+      "$ref": "#/$defs/RequirementV2"
+    },
+    "origin": {
+      "enum": [
+        "source",
+        "synthetic"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "evaluated_at": {
+      "title": "Evaluated At",
+      "type": "string"
+    },
+    "policy_versions": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Policy Versions",
+      "type": "object"
+    },
+    "columns": {
+      "items": {
+        "$ref": "#/$defs/Column"
+      },
+      "title": "Columns",
+      "type": "array"
+    },
+    "rows": {
+      "items": {
+        "$ref": "#/$defs/Row"
+      },
+      "title": "Rows",
+      "type": "array"
+    },
+    "cells": {
+      "items": {
+        "$ref": "#/$defs/Cell"
+      },
+      "title": "Cells",
+      "type": "array"
+    },
+    "evaluations": {
+      "items": {
+        "$ref": "#/$defs/Evaluation"
+      },
+      "title": "Evaluations",
+      "type": "array"
+    },
+    "recommendations": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Recommendations",
+      "type": "object"
+    },
+    "analysis": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Analysis",
+      "type": "object"
+    },
+    "source_coverage": {
+      "items": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "type": "object"
+      },
+      "title": "Source Coverage",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "type": "object"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "empty_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Empty Reason"
+    }
+  },
+  "required": [
+    "id",
+    "requirement_id",
+    "revision",
+    "requirement_snapshot",
+    "origin",
+    "evaluated_at",
+    "policy_versions",
+    "columns",
+    "rows",
+    "cells",
+    "evaluations",
+    "recommendations",
+    "analysis",
+    "source_coverage",
+    "warnings",
+    "empty_reason"
+  ],
+  "title": "ComparisonV2",
+  "type": "object"
+}

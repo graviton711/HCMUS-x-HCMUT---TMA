@@ -1,5 +1,7 @@
 # Domain
 
+V2 triển khai shared requirement invariants và 1–5 URL/hybrid riêng với input policy v1; snapshot bổ sung optional title/policies, giữ tương thích payload cũ. Xem [backend-v2-runtime](../../docs/backend-v2-runtime.md).
+
 **Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
 
 ## Trách nhiệm / input-output

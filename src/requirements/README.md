@@ -1,5 +1,9 @@
 # Requirements — hiểu và chuẩn hóa nhu cầu
 
+V2: `v2.py` mở rộng extraction slots cho preference level, URLs và notes; cùng bounded repair/quote grounding. Outputs chỉ đi vào proposal, không tự commit. Intent classifier chọn refs trong comparison; câu trả lời dùng facts/metrics đã kiểm tra. Xem [backend-v2-runtime](../../docs/backend-v2-runtime.md).
+
+NIM extraction v2 bắt buộc trả cả ba slot keys (URLs/notes nullable); guard phát hiện model bỏ sót control mức 0–5 được nêu tường minh rồi bounded repair một lần. Guard chỉ kiểm tra completeness, không thay NIM bằng regex lấy conditions. Level mơ hồ không được tự suy. Live smoke Nhật + cost=4 thành công; bộ gold toàn diện còn cần chạy riêng.
+
 **Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
 
 ## Trách nhiệm và input/output

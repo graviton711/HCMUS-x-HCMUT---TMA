@@ -682,6 +682,136 @@
       "title": "Fact[bool]",
       "type": "object"
     },
+    "Fact_str_": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "raw_value": {
+          "anyOf": [
+            {
+              "maxLength": 10000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Value"
+        },
+        "data_state": {
+          "default": "missing",
+          "enum": [
+            "present",
+            "missing",
+            "conflicting",
+            "invalid",
+            "unsupported"
+          ],
+          "title": "Data State",
+          "type": "string"
+        },
+        "verification": {
+          "default": "unverified",
+          "enum": [
+            "supplier_published",
+            "independently_verified",
+            "unverified"
+          ],
+          "title": "Verification",
+          "type": "string"
+        },
+        "completeness": {
+          "default": "unknown",
+          "enum": [
+            "complete",
+            "partial",
+            "unknown"
+          ],
+          "title": "Completeness",
+          "type": "string"
+        },
+        "observed_at": {
+          "title": "Observed At",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unit"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "normalization_rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalization Rule"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "observed_at"
+      ],
+      "title": "Fact[str]",
+      "type": "object"
+    },
     "Issue": {
       "additionalProperties": false,
       "properties": {
@@ -1079,6 +1209,28 @@
         "observed_at": {
           "title": "Observed At",
           "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "policies": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Fact_str_"
+          },
+          "maxProperties": 20,
+          "title": "Policies",
+          "type": "object"
         },
         "fields": {
           "additionalProperties": {

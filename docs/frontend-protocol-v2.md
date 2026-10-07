@@ -1,6 +1,6 @@
 # Frontend ↔ backend: giao thức v2 mẫu
 
-**Trạng thái:** mẫu đã được user duyệt, PLANNING, 07/10/2026. [Prototype](../prototypes/frontend-design/README.md) dùng mẫu để review UI. Chưa endpoint thật; không gửi payload này vào `/v1`. JSON trao đổi tại [examples/protocol-v2](../examples/protocol-v2/README.md); pipeline tại [backend-pipeline-v2](backend-pipeline-v2.md).
+**Trạng thái:** đặc tả đã được user duyệt, backend implementation ngày 07/10/2026. [Runtime và khác biệt còn lại](backend-v2-runtime.md), [request thật](../examples/backend-v2.md), [schemas v2](../contracts/v2/). [Prototype](../prototypes/frontend-design/README.md) và [JSON design fixtures](../examples/protocol-v2/README.md) vẫn dùng mẫu review UI; không coi sample response là response server hoặc gửi vào `/v1`. Pipeline mục tiêu tại [backend-pipeline-v2](backend-pipeline-v2.md).
 
 ## 1. Quy ước chung
 

@@ -1,6 +1,6 @@
 # Trao đổi JSON — v2 mẫu cho prototype
 
-**PLANNING, 07/10/2026.** Theo [protocol](../../docs/frontend-protocol-v2.md) và [pipeline/crawler/admin](../../docs/backend-pipeline-v2.md). Mọi tour, giá, nguồn, timestamp và ID là synthetic. Không gửi các request này vào `/v1`; schemas sinh từ code trong `contracts/` không bị thay đổi.
+**Design fixtures, 07/10/2026.** Theo [protocol](../../docs/frontend-protocol-v2.md) và [pipeline/crawler/admin](../../docs/backend-pipeline-v2.md). Backend v2 đã có runtime/schema riêng: [giới hạn thực tế](../../docs/backend-v2-runtime.md), [request walkthrough](../backend-v2.md). Mọi tour, giá, nguồn, timestamp và ID ở đây là synthetic, không phải kết quả server. Không gửi các request này vào `/v1` hoặc dùng ID mẫu làm ID resource thật.
 
 | File | Nội dung / dùng để nghiệm thu |
 |---|---|
@@ -15,6 +15,6 @@
 
 Mỗi file chứa `scenario`, `origin="synthetic"` và `exchanges[]`: `{method,path,request?,response:{status,body}}`. Body response dùng envelope schema_version2.0-draft/request_id/data; lỗi dùng error. Examples chia sẻ req_demo/revision2/offer_a/evidence refs. Ví dụ chỉ vài rows/candidates để đọc nhanh; runtime phải trả đủ metadata/row×column theo protocol, không dựng thiếu fields ở FE.
 
-Các invariant phải kiểm tra ngoài parse JSON: before từ revision1, confirm một lần ra revision2, cancel giữ revision2; cùng revision/offer/evidence; giá integer VND; missing=null; seq tăng; analysis tính đúng operands/basis/coverage; approved-only source activation; contact note không được gửi ra ngoài. Chưa có backend v2/server schema validation thật; BE cần export DTO schemas riêng và chạy bộ scenario này trước tích hợp.
+Các invariant phải kiểm tra ngoài parse JSON: before từ revision1, confirm một lần ra revision2, cancel giữ revision2; cùng revision/offer/evidence; giá integer VND; missing=null; seq tăng; analysis tính đúng operands/basis/coverage; approved-only source activation; contact note không được gửi ra ngoài. Runtime có tests v2 riêng trong `tests/test_v2.py`/`tests/test_v2_edges.py`; fixtures này tiếp tục dùng để review thiết kế và không thay contract tests server.
 
-**Đã kiểm tra:** `validate.py` đạt **258 checks / 8 JSON files**; kiểm tra binding/calculations/state và typed Value/Condition/Tree/Party/PriceQuote theo models v1. Chạy từ repo root: `.uv/merge-env/Scripts/python.exe -B examples/protocol-v2/validate.py` hoặc Python có dependency backend. Không gọi NIM/crawl/API; chưa schema/server v2. Stage normalization partial trong activity sample do missing fields, job vẫn succeeded; cancellation là resource khác và không publish.
+**Đã kiểm tra:** `validate.py` đạt **258 checks / 8 JSON files**; kiểm tra binding/calculations/state và typed Value/Condition/Tree/Party/PriceQuote theo models v1. Chạy từ repo root: `uv run python -B examples/protocol-v2/validate.py`. Không gọi NIM/crawl/API. Stage normalization partial trong activity sample do missing fields, job vẫn succeeded; cancellation là resource khác và không publish.

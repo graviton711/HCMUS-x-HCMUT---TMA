@@ -47,11 +47,12 @@ Compare URLs cho typed target edits: `add` URL hợp lệ với vị trí, `remo
 
 ```json
 {
-  "requirement_id": "req_demo",
-  "revision": 2,
-  "offer_selections": []
+  "requirement_id": "req_replace_with_created_id",
+  "revision": 1
 }
 ```
+
+`requirement_id` ở trên là placeholder: thay bằng `id` từ requirement đã tạo trong cùng session và dùng đúng `revision` đã parse. Lần so sánh đầu không cần `offer_selections` hoặc `reuse_comparison_id`.
 
 Response 202: `{comparison_id, job_id, requirement_id, revision, status: "queued"}`. Chọn offer sau lần fetch dùng thêm `reuse_comparison_id` và `offer_selections: [{target_id, offer_snapshot_id}]`; backend kiểm tra ownership, target/source binding và freshness. Nếu cần refresh, báo selection không còn áp dụng thay vì lặng lẽ đổi sang offer khác.
 
@@ -83,6 +84,7 @@ Error shape: `{error: {code, message, field_path, retryable, trace_id, details}}
 | Nhóm | HTTP / code chính |
 |---|---|
 | DTO/type/URL syntax/version sai | 422: `INVALID_INPUT` (chi tiết field/type, không echo input) |
+| Thiếu token, token sai hoặc hết hạn | 401: `UNAUTHORIZED`; chưa tạo resource/job |
 | Revision/state/offer selection cũ | 409: `REVISION_CONFLICT`, `REQUIREMENT_NOT_PARSED`, `OFFER_SELECTION_INVALID` |
 | Resource không tìm thấy/không thuộc session | 404; không tiết lộ ownership của user khác |
 | Rate limit ở API | 429, Retry-After khi có |
@@ -97,6 +99,7 @@ Mutation nhận `Idempotency-Key`; cùng session/key/body trả resource cũ, ke
 
 - `POST /v1/sessions` trả session_id/token/token_type/expires_at; session mới chưa yêu cầu Authorization.
 - Mọi `/v1/*` khác dùng `Authorization: Bearer <token>`; `/` (trang chào HTML), `/health` và `/docs` công khai trên local app.
+- Trong Swagger, bấm **Authorize** và dán riêng giá trị `token` (không thêm `Bearer`); OpenAPI security scheme `SessionBearer` tự gắn header. Giữ cùng token khi tạo/đọc requirement và comparison. Examples ở POST requirement gồm URL mô phỏng không cần NIM và nhập nhu cầu bằng text.
 - Form condition gửi id/field/operator/value/strength, backend tạo provenance. Ví dụ hoàn chỉnh ở `examples/discover-form.json`; không gửi source quotes tự chế từ frontend.
 - GET comparison trả `{id, status, result}`. `result` null nếu chưa hoàn tất; đọc lỗi ở job. GET job dùng `id` và `resource_id`, không trả payload nội bộ.
 - Clarification thiếu năm nhận answer value là integer year; field currency/basis/strength nhận string enum; unresolved value khác nhận typed Value qua answer hoặc edits. Search scope/mâu thuẫn cần sửa conditions trực tiếp.

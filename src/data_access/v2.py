@@ -1,0 +1,128 @@
+"""One orchestration boundary, with explicit legacy crawler transport."""
+
+import asyncio
+
+from data_access.gateway import DataGateway
+from domain.common import AppError, instant, now, uid
+from domain.crawl import CrawlResult, SourceCapability, SourceResult
+from domain.requirements import Readiness, RequirementState
+
+
+def core_requirement(r, mode, targets):
+    data = {k: v for k, v in r.model_dump().items() if k in RequirementState.model_fields}
+    data.update(schema_version="1.0", revision=max(1, r.revision), mode=mode, targets=targets)
+    data["readiness"] = {k: v for k, v in data["readiness"].items() if k in Readiness.model_fields}
+    return RequirementState.model_validate(data)
+
+
+def merge_results(results):
+    combined = {field: {} for field in ("suppliers", "tours", "offers", "evidence")}
+    source_results, issues, origin = [], [], None
+    for result in results:
+        if origin is not None and origin != result.origin:
+            raise AppError("CRAWLER_INVALID_OUTPUT", "Không gộp nguồn thật và mô phỏng.", 502)
+        origin = result.origin
+        source_results.extend(result.source_results)
+        issues.extend(result.issues)
+        for field, mapping in combined.items():
+            key = "supplier_id" if field == "suppliers" else "id" if field == "evidence" else "snapshot_id"
+            for item in getattr(result, field):
+                identifier = getattr(item, key)
+                if identifier in mapping and mapping[identifier] != item:
+                    raise AppError("CRAWLER_INVALID_OUTPUT", "Snapshot ID trùng với nội dung khác.", 502)
+                mapping[identifier] = item
+    return CrawlResult(
+        request_id=uid("crawl"),
+        origin=origin or "source",
+        source_results=source_results,
+        issues=issues,
+        **{k: list(v.values()) for k, v in combined.items()},
+    )
+
+
+class GatewayV2:
+    def __init__(self, gateway, registry):
+        # Do not mutate the v1 gateway or share mutable registry state across awaits.
+        self.gateway = DataGateway(gateway.settings, registry=registry, transport=gateway.transport)
+        self.registry = registry
+
+    async def collect(self, r, deadline_at):
+        tasks = []
+        if r.targets:
+            tasks.append(core_requirement(r, "compare_urls", r.targets))
+        has_scope = any(
+            c.field in {"destinations", "supplier"} and c.operator not in {"excludes", "not_in"}
+            for c in r.conditions
+        )
+        if r.mode in {"discover", "hybrid"} and has_scope:
+            tasks.append(core_requirement(r, "discover", []))
+
+        async def acquire(requirement):
+            try:
+                return await self.gateway.collect(requirement, deadline_at)
+            except AppError as exc:
+                statuses = []
+                if requirement.targets:
+                    for t in requirement.targets:
+                        s = self.gateway.source_for(t.url)
+                        statuses.append(
+                            SourceResult(
+                                source_id=s.source_id if s else "unapproved",
+                                target_id=t.target_id,
+                                status="timeout"
+                                if exc.code in {"SOURCE_TIMEOUT", "JOB_DEADLINE_EXCEEDED"}
+                                else "error",
+                                reason_code=exc.code,
+                            )
+                        )
+                else:
+                    statuses = [
+                        SourceResult(source_id=s.source_id, status="error", reason_code=exc.code)
+                        for s in self.registry
+                        if "discover" in s.modes and s.access_status == "approved"
+                    ]
+                return CrawlResult(
+                    request_id=uid("crawl"),
+                    origin="synthetic" if self.gateway.settings.data_provider == "fixture" else "source",
+                    source_results=statuses,
+                )
+
+        results = await asyncio.gather(*(acquire(t) for t in tasks))
+        if not results:
+            return CrawlResult(
+                request_id=uid("crawl"),
+                origin="synthetic" if self.gateway.settings.data_provider == "fixture" else "source",
+                source_results=[],
+            )
+        return merge_results(results)
+
+
+def registry_from_records(records):
+    registry = [
+        SourceCapability.model_validate(
+            {
+                **record["capability"],
+                "access_status": record["access_status"]
+                if record["state"] == "active"
+                and (not record.get("access_valid_until") or instant(record["access_valid_until"]) > now())
+                else "blocked",
+            }
+        )
+        for record in records
+    ]
+    active_domains = {
+        domain
+        for capability in registry
+        if capability.access_status == "approved"
+        for domain in capability.approved_domains
+    }
+    routed = []
+    for capability in registry:
+        domains = (
+            capability.approved_domains
+            if capability.access_status == "approved"
+            else [domain for domain in capability.approved_domains if domain not in active_domains]
+        )
+        if domains:
+            routed.append(capability.model_copy(update={"approved_domains": domains}))
+    return routed

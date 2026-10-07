@@ -131,6 +131,8 @@ class TourSnapshot(Model):
     supplier_id: Identifier
     canonical_url: str
     observed_at: str
+    title: str | None = Field(default=None, min_length=1, max_length=500)
+    policies: dict[str, Fact[str]] = Field(default_factory=dict, max_length=20)
     fields: dict[str, Fact[JsonValue]] = Field(default_factory=dict, max_length=30)
 
     @model_validator(mode="after")
@@ -221,6 +223,8 @@ class CrawlResult(Model):
                 raise ValueError("Evidence origin mismatch")
         for snapshot in [*tours.values(), *offers.values()]:
             facts = list(snapshot.fields.values())
+            if isinstance(snapshot, TourSnapshot):
+                facts += list(snapshot.policies.values())
             if isinstance(snapshot, OfferSnapshot):
                 facts += [*snapshot.price_quotes, *snapshot.extra_charges]
                 if snapshot.pricing_complete:

@@ -1,9 +1,11 @@
 import asyncio
+import sqlite3
 
 import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
+from api.dto import CreateComparison, CreateRequirement
 from api.store import jobs
 from domain.common import AppError
 from requirements.extraction import Extraction, Operation, RawCondition
@@ -355,6 +357,70 @@ def test_request_limits_and_auth(client):
     assert client.get("/v1/sources", headers={"Authorization": "Bearer invalid"}).status_code == 401
     assert client.get("/health").json()["data_origin"] == "synthetic"
     assert client.get("/openapi.json").status_code == 200
+
+
+def test_swagger_declares_bearer_security_and_valid_examples(client):
+    schema = client.get("/openapi.json").json()
+    scheme = schema["components"]["securitySchemes"]["SessionBearer"]
+    assert scheme["type"] == "http" and scheme["scheme"] == "bearer"
+    for path, operations in schema["paths"].items():
+        for operation in operations.values():
+            if path.startswith("/v1/") and path != "/v1/sessions":
+                assert operation["security"] == [{"SessionBearer": []}]
+                assert not any(p["name"].lower() == "authorization" for p in operation.get("parameters", []))
+            elif not path.startswith("/v2/"):
+                assert not operation.get("security")
+    for path, model in (
+        ("/v1/requirements", CreateRequirement),
+        ("/v1/comparisons", CreateComparison),
+    ):
+        examples = schema["paths"][path]["post"]["requestBody"]["content"]["application/json"]["examples"]
+        for example in examples.values():
+            model.model_validate(example["value"])
+    comparison = schema["paths"]["/v1/comparisons"]["post"]["requestBody"]["content"]["application/json"]
+    assert set(comparison["examples"]["first_comparison"]["value"]) == {"requirement_id", "revision"}
+
+
+def test_rejected_comparisons_do_not_write_rows(client, app):
+    body = {"requirement_id": "req_replace_with_created_id", "revision": 1}
+    for header in ("", "Basic invalid", "Bearer ", "Bearer invalid"):
+        response = client.post("/v1/comparisons", json=body, headers={"Authorization": header})
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "UNAUTHORIZED"
+    assert client.post("/v1/comparisons", json=body).status_code == 404
+    with sqlite3.connect(app.state.store.engine.url.database) as db:
+        assert db.execute("SELECT count(*) FROM sessions").fetchone()[0] == 1
+        for table in ("resources", "requirement_revisions", "jobs", "idempotency"):
+            assert db.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0
+
+
+def test_swagger_url_example_persists_without_crawler_or_nim(client, app):
+    schema = client.get("/openapi.json").json()
+    examples = schema["paths"]["/v1/requirements"]["post"]["requestBody"]["content"]["application/json"][
+        "examples"
+    ]
+    response = client.post("/v1/requirements", json=examples["compare_urls"]["value"])
+    assert response.status_code == 201
+    requirement = response.json()
+    response = client.post(
+        "/v1/comparisons",
+        json={"requirement_id": requirement["id"], "revision": requirement["revision"]},
+    )
+    assert response.status_code == 202
+    created = response.json()
+    with sqlite3.connect(app.state.store.engine.url.database) as db:
+        assert db.execute("SELECT count(*) FROM resources").fetchone()[0] == 2
+        assert db.execute("SELECT count(*) FROM requirement_revisions").fetchone()[0] == 1
+        assert db.execute("SELECT status FROM jobs WHERE id = ?", (created["job_id"],)).fetchone() == (
+            "queued",
+        )
+    complete(app)
+    with sqlite3.connect(app.state.store.engine.url.database) as db:
+        assert db.execute("SELECT status FROM jobs WHERE id = ?", (created["job_id"],)).fetchone() == (
+            "succeeded",
+        )
+    result = client.get(f"/v1/comparisons/{created['comparison_id']}").json()["result"]
+    assert result["origin"] == "synthetic" and len(result["targets"]) == 2
 
 
 def test_clarification_answer_and_stale_answer(client):

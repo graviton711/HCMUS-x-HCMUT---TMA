@@ -23,7 +23,9 @@ class Worker:
         try:
             timeout = max(0.001, (instant(row["deadline_at"]) - now()).total_seconds())
             async with asyncio.timeout(timeout):
-                if row["kind"] == "parse":
+                if row["kind"].startswith("v2_"):
+                    await self.v2.run_job(row, self.id, payload)
+                elif row["kind"] == "parse":
                     previous = (
                         self.store.revision(row["owner"], row["resource_id"], payload["expected_revision"])
                         if payload["expected_revision"]
@@ -93,7 +95,9 @@ class Worker:
                 error = exc
             elif isinstance(exc, ValidationError):
                 error = AppError(
-                    "LLM_INVALID_OUTPUT" if row["kind"] == "parse" else "CRAWLER_INVALID_OUTPUT",
+                    "LLM_INVALID_OUTPUT"
+                    if row["kind"] in {"parse", "v2_parse", "v2_message"}
+                    else "CRAWLER_INVALID_OUTPUT",
                     "Dữ liệu upstream không hợp lệ.",
                     502,
                 )

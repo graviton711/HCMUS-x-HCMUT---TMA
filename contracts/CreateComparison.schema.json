@@ -29,6 +29,7 @@
   "additionalProperties": false,
   "properties": {
     "requirement_id": {
+      "description": "ID của requirement đã tạo trong cùng session.",
       "maxLength": 128,
       "minLength": 1,
       "pattern": "^[a-zA-Z0-9_.:-]+$",
@@ -36,11 +37,13 @@
       "type": "string"
     },
     "revision": {
+      "description": "Revision đã parse từ GET requirement; không dùng revision 0.",
       "minimum": 1,
       "title": "Revision",
       "type": "integer"
     },
     "offer_selections": {
+      "description": "Tùy chọn: chọn offer từ comparison đã hoàn tất. Bỏ qua khi so sánh lần đầu.",
       "items": {
         "$ref": "#/$defs/OfferSelection"
       },
@@ -61,6 +64,7 @@
         }
       ],
       "default": null,
+      "description": "Tùy chọn: ID comparison trước để dùng lại snapshot. Bỏ qua khi so sánh lần đầu.",
       "title": "Reuse Comparison Id"
     }
   },
