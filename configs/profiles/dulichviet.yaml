@@ -24,22 +24,22 @@ fields:
     selector: h1.ct2-page-title
   departure_city:
     source: css
-    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(2) b
+    selector: 'div.ct2-hero-meta-item:-soup-contains("Khởi hành từ") b'
   destinations:
     source: css
-    selector: table[border="0"]
+    selector: 'table:-soup-contains("Hành trình")'
     clean: '[re.sub(r''(?i)^\s*(khám phá|tham quan|du lịch(\s+khách\s+đoàn)?(\s+tour)?)\s+'',
       '''', s).strip() for s in re.split(r''\s*-\s*'', (research(r''Hành trình\s*(.*?)\s*(?:Thời
       gian|Lịch trình)'', str(val), flags=re.S|re.I) or "")) if s.strip()]'
   route:
     source: css
-    selector: table[border="0"]
+    selector: 'table:-soup-contains("Hành trình")'
     clean: '[re.sub(r''(?i)^\s*(khám phá|tham quan|du lịch(\s+khách\s+đoàn)?(\s+tour)?)\s+'',
       '''', s).strip() for s in re.split(r''\s*-\s*'', (research(r''Hành trình\s*(.*?)\s*(?:Thời
       gian|Lịch trình)'', str(val), flags=re.S|re.I) or "")) if s.strip()]'
   transport:
     source: css
-    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(4) b
+    selector: 'div.ct2-hero-meta-item:-soup-contains("Phương tiện") b'
     clean: ('mixed' if (('máy bay' in str(val).lower()) or ('may bay' in str(val).lower()))
       and (('xe' in str(val).lower()) or ('ô tô' in str(val).lower()) or ('o to' in
       str(val).lower())) else ('flight' if (('máy bay' in str(val).lower()) or ('may
@@ -56,13 +56,13 @@ fields:
       ''mixed''))))'
   duration_days:
     source: css
-    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(1) b
+    selector: 'div.ct2-hero-meta-item:-soup-contains("Thời gian") b'
     clean: (int(research(r'(\d+)\s*N', str(val))) if research(r'(\d+)\s*N', str(val))
       else (int(research(r'(\d+)\s*ngày', str(val).lower())) if research(r'(\d+)\s*ngày',
       str(val).lower()) else ''))
   duration_nights:
     source: css
-    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(1) b
+    selector: 'div.ct2-hero-meta-item:-soup-contains("Thời gian") b'
     clean: (int(research(r'(\d+)\s*Đ', str(val))) if research(r'(\d+)\s*Đ', str(val))
       else (int(research(r'(\d+)\s*đêm', str(val).lower())) if research(r'(\d+)\s*đêm',
       str(val).lower()) else ''))
@@ -81,10 +81,10 @@ fields:
       str(val).lower() else 'fixed'))
   departure_pattern:
     source: css
-    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(3) b
+    selector: 'div.ct2-hero-meta-item:-soup-contains("Ngày khởi hành") b'
   offers:
     source: css
-    selector: div#vnt-content > script:nth-of-type(7)
+    selector: 'div#vnt-content script:-soup-contains("CT2_SCHED")'
     clean: 'sorted([{''departure_date'': str(d.get(''startday'', ''''))[:10], ''price'':
       int(d.get(''final'') or d.get(''adult'') or 0), ''availability'': (''available''
       if int(d.get(''available'') or 0) > 0 else ''sold_out''), ''price_by_age'':
