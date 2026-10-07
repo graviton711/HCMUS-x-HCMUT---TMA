@@ -1,0 +1,258 @@
+{
+  "scenario": "Ordered replayable events; normalization missing fields is not acquisition failure; terminal cancellation has no published result",
+  "origin": "synthetic",
+  "exchanges": [
+    {
+      "method": "GET",
+      "path": "/v2/jobs/job_comparison_demo",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "job_comparison_demo",
+            "kind": "comparison",
+            "status": "succeeded",
+            "stage": "publication",
+            "created_at": "2026-10-07T02:30:00Z",
+            "completed_at": "2026-10-07T02:30:00Z",
+            "deadline_at": "2026-10-07T02:33:00Z",
+            "error": null,
+            "resource_ref": {
+              "comparison_id": "comparison_demo",
+              "requirement_id": "req_demo",
+              "revision": 2
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/jobs/job_comparison_demo/events?after_seq=0&limit=50",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "items": [
+              {
+                "seq": 1,
+                "job_id": "job_comparison_demo",
+                "stage": "reference_collection",
+                "status": "skipped",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Không có URL tham chiếu trong revision2"
+              },
+              {
+                "seq": 2,
+                "job_id": "job_comparison_demo",
+                "stage": "retrieval",
+                "status": "started",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Tìm tour trên ba nguồn mẫu"
+              },
+              {
+                "seq": 3,
+                "job_id": "job_comparison_demo",
+                "stage": "retrieval",
+                "status": "completed",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": "source_a",
+                "summary": "Nhận snapshot nguồn A",
+                "counts": {
+                  "tours": 1,
+                  "offers": 1
+                }
+              },
+              {
+                "seq": 4,
+                "job_id": "job_comparison_demo",
+                "stage": "retrieval",
+                "status": "completed",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": "source_b",
+                "summary": "Nhận snapshot nguồn B",
+                "counts": {
+                  "tours": 1,
+                  "offers": 1
+                }
+              },
+              {
+                "seq": 5,
+                "job_id": "job_comparison_demo",
+                "stage": "retrieval",
+                "status": "completed",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": "source_c",
+                "summary": "Nhận snapshot nguồn C",
+                "counts": {
+                  "tours": 1,
+                  "offers": 1
+                }
+              },
+              {
+                "seq": 6,
+                "job_id": "job_comparison_demo",
+                "stage": "normalization",
+                "status": "started",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Bắt đầu normalization"
+              },
+              {
+                "seq": 7,
+                "job_id": "job_comparison_demo",
+                "stage": "normalization",
+                "status": "partial",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Policy C và phụ thu còn thiếu; giữ null"
+              },
+              {
+                "seq": 8,
+                "job_id": "job_comparison_demo",
+                "stage": "evaluation",
+                "status": "started",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Bắt đầu evaluation"
+              },
+              {
+                "seq": 9,
+                "job_id": "job_comparison_demo",
+                "stage": "evaluation",
+                "status": "completed",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Hard constraints có căn cứ; budget cost chưa đủ"
+              },
+              {
+                "seq": 10,
+                "job_id": "job_comparison_demo",
+                "stage": "ranking",
+                "status": "started",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Bắt đầu ranking"
+              },
+              {
+                "seq": 11,
+                "job_id": "job_comparison_demo",
+                "stage": "ranking",
+                "status": "completed",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Chọn tối đa ba tour khác nhau từ bộ mẫu"
+              },
+              {
+                "seq": 12,
+                "job_id": "job_comparison_demo",
+                "stage": "comparison",
+                "status": "started",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Bắt đầu comparison"
+              },
+              {
+                "seq": 13,
+                "job_id": "job_comparison_demo",
+                "stage": "comparison",
+                "status": "completed",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Tạo rows/cells/offer/evidence binding"
+              },
+              {
+                "seq": 14,
+                "job_id": "job_comparison_demo",
+                "stage": "analysis",
+                "status": "started",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Bắt đầu analysis"
+              },
+              {
+                "seq": 15,
+                "job_id": "job_comparison_demo",
+                "stage": "analysis",
+                "status": "completed",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Giải thích từ dữ kiện và phép tính"
+              },
+              {
+                "seq": 16,
+                "job_id": "job_comparison_demo",
+                "stage": "publication",
+                "status": "started",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Bắt đầu publication"
+              },
+              {
+                "seq": 17,
+                "job_id": "job_comparison_demo",
+                "stage": "publication",
+                "status": "completed",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "source_id": null,
+                "summary": "Kiểm tra cancellation rồi publish comparison bất biến"
+              }
+            ],
+            "next_seq": 17,
+            "has_more": false
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v2/jobs/job_cancelled_demo/cancel",
+      "request": {},
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "job_cancelled_demo",
+            "kind": "comparison",
+            "status": "cancelled",
+            "stage": "retrieval",
+            "completed_at": "2026-10-07T02:30:00Z",
+            "resource_ref": {
+              "comparison_id": "comparison_cancelled_demo",
+              "requirement_id": "req_demo",
+              "revision": 2
+            },
+            "result_published": false
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-activity-3"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/comparisons/comparison_cancelled_demo",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "comparison_cancelled_demo",
+            "status": "cancelled",
+            "result": null
+          }
+        }
+      }
+    }
+  ]
+}

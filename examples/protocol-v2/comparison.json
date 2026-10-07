@@ -1,0 +1,1218 @@
+{
+  "scenario": "Common immutable revision2 comparison; published prices always public; missing policy and incomplete costs stay unknown",
+  "origin": "synthetic",
+  "exchanges": [
+    {
+      "method": "POST",
+      "path": "/v2/comparisons",
+      "request": {
+        "requirement_id": "req_demo",
+        "revision": 2,
+        "round_intent": "initial",
+        "previous_comparison_id": null,
+        "excluded_tour_ids": [],
+        "offer_selections": []
+      },
+      "response": {
+        "status": 202,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "comparison_id": "comparison_demo",
+            "job_id": "job_comparison_demo",
+            "requirement_id": "req_demo",
+            "revision": 2,
+            "status": "queued"
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-comparison-1"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/comparisons/comparison_demo",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "comparison_demo",
+            "status": "succeeded",
+            "result": {
+              "id": "comparison_demo",
+              "requirement_id": "req_demo",
+              "revision": 2,
+              "requirement_snapshot": {
+                "id": "req_demo",
+                "revision": 2,
+                "input_kind": "structured",
+                "conditions": [
+                  {
+                    "id": "c_destination",
+                    "field": "destinations",
+                    "operator": "contains",
+                    "value": {
+                      "kind": "set",
+                      "items": [
+                        "country:jp"
+                      ]
+                    },
+                    "strength": "hard",
+                    "sources": [
+                      {
+                        "kind": "form",
+                        "field_path": "form.conditions.c_destination",
+                        "submitted_value": {
+                          "kind": "set",
+                          "items": [
+                            "country:jp"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c_origin",
+                    "field": "departure_origin",
+                    "operator": "in",
+                    "value": {
+                      "kind": "set",
+                      "items": [
+                        "city:vn:hcmc"
+                      ]
+                    },
+                    "strength": "hard",
+                    "sources": [
+                      {
+                        "kind": "form",
+                        "field_path": "form.conditions.c_origin",
+                        "submitted_value": {
+                          "kind": "set",
+                          "items": [
+                            "city:vn:hcmc"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c_date",
+                    "field": "departure_date",
+                    "operator": "between",
+                    "value": {
+                      "kind": "date",
+                      "value": "2026-11-10",
+                      "upper": "2026-11-17"
+                    },
+                    "strength": "hard",
+                    "sources": [
+                      {
+                        "kind": "form",
+                        "field_path": "form.conditions.c_date",
+                        "submitted_value": {
+                          "kind": "date",
+                          "value": "2026-11-10",
+                          "upper": "2026-11-17"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c_budget",
+                    "field": "estimated_cost",
+                    "operator": "lte",
+                    "value": {
+                      "kind": "budget",
+                      "amount": 32000000,
+                      "currency": "VND",
+                      "basis": "per_adult",
+                      "coverage": "tour_price",
+                      "coverage_origin": "explicit"
+                    },
+                    "strength": "soft",
+                    "sources": [
+                      {
+                        "kind": "form",
+                        "field_path": "form.conditions.c_budget",
+                        "submitted_value": {
+                          "kind": "budget",
+                          "amount": 32000000,
+                          "currency": "VND",
+                          "basis": "per_adult",
+                          "coverage": "tour_price",
+                          "coverage_origin": "explicit"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "id": "c_duration",
+                    "field": "duration_days",
+                    "operator": "near",
+                    "value": {
+                      "kind": "number",
+                      "amount": 6
+                    },
+                    "strength": "soft",
+                    "sources": [
+                      {
+                        "kind": "text",
+                        "message_id": "message_change_demo",
+                        "quote": "Thời lượng thành 6 ngày",
+                        "start": 0,
+                        "end": 23
+                      }
+                    ]
+                  }
+                ],
+                "hard_tree": {
+                  "kind": "all",
+                  "children": [
+                    {
+                      "kind": "predicate",
+                      "condition_id": "c_destination"
+                    },
+                    {
+                      "kind": "predicate",
+                      "condition_id": "c_origin"
+                    },
+                    {
+                      "kind": "predicate",
+                      "condition_id": "c_date"
+                    }
+                  ]
+                },
+                "preference_tree": {
+                  "kind": "all",
+                  "children": [
+                    {
+                      "kind": "predicate",
+                      "condition_id": "c_budget"
+                    },
+                    {
+                      "kind": "predicate",
+                      "condition_id": "c_duration"
+                    }
+                  ]
+                },
+                "party": {
+                  "adults": 2,
+                  "children": []
+                },
+                "preference_levels": {
+                  "cost": {
+                    "level": 3,
+                    "origin": "system_default"
+                  },
+                  "comfort": {
+                    "level": 3,
+                    "origin": "system_default"
+                  },
+                  "pace": {
+                    "level": 3,
+                    "origin": "system_default"
+                  },
+                  "culture": {
+                    "level": 3,
+                    "origin": "system_default"
+                  }
+                },
+                "reference_urls": [],
+                "notes": "",
+                "readiness": {
+                  "can_collect_data": true,
+                  "can_evaluate_hard_constraints": true,
+                  "blockers": []
+                },
+                "provenance": {
+                  "source": "user_confirmed_form",
+                  "date_window_origin": "user",
+                  "budget_coverage_origin": "user"
+                },
+                "created_at": "2026-10-07T02:30:00Z"
+              },
+              "origin": "synthetic",
+              "evaluated_at": "2026-10-07T02:30:00Z",
+              "policy_versions": {
+                "ranking": "ranking_demo_v1",
+                "pricing": "pricing_demo_v1",
+                "normalization": "normalization_demo_v1",
+                "freshness": "freshness_demo"
+              },
+              "columns": [
+                {
+                  "id": "column_b",
+                  "candidate_id": "candidate_b",
+                  "tour_id": "tour_b",
+                  "tour_snapshot_id": "tour_b_snap",
+                  "offer_snapshot_id": "offer_b_snap",
+                  "title": "Osaka · Kyoto · Nara",
+                  "supplier": {
+                    "id": "supplier_b",
+                    "display_name": "Lữ hành Mẫu B"
+                  },
+                  "canonical_url": "https://supplier-b.example/tour-b",
+                  "origin": "discovery",
+                  "target_ids": [],
+                  "source_ids": [
+                    "source_b"
+                  ],
+                  "eligibility": true,
+                  "offer_options": [
+                    {
+                      "id": "offer_b",
+                      "snapshot_id": "offer_b_snap",
+                      "departure_date": "2026-11-11",
+                      "rooming": "twin_share",
+                      "price_quotes": [
+                        {
+                          "value": {
+                            "quote_id": "quote_b",
+                            "kind": "exact",
+                            "amount": 29900000,
+                            "upper_amount": null,
+                            "currency": "VND",
+                            "basis": "per_adult",
+                            "coverage": "tour_price",
+                            "age_min": null,
+                            "age_max_exclusive": null,
+                            "applicability": [
+                              {
+                                "field": "rooming",
+                                "value": "twin_share"
+                              }
+                            ]
+                          },
+                          "evidence_ids": [
+                            "ev_price_b"
+                          ],
+                          "data_state": "present",
+                          "verification": "supplier_published",
+                          "completeness": "partial",
+                          "observed_at": "2026-10-07T02:30:00Z",
+                          "freshness": {
+                            "state": "unknown",
+                            "checked_at": "2026-10-07T02:30:00Z",
+                            "expires_at": null,
+                            "policy_version": "freshness_demo"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "selected_offer_snapshot_id": "offer_b_snap",
+                  "pricing_complete": false,
+                  "extra_charges": [],
+                  "pricing_reason_codes": [
+                    "EXTRA_CHARGES_UNKNOWN"
+                  ],
+                  "rank": 1
+                },
+                {
+                  "id": "column_c",
+                  "candidate_id": "candidate_c",
+                  "tour_id": "tour_c",
+                  "tour_snapshot_id": "tour_c_snap",
+                  "offer_snapshot_id": "offer_c_snap",
+                  "title": "Tokyo · Fuji · Yokohama",
+                  "supplier": {
+                    "id": "supplier_c",
+                    "display_name": "Lữ hành Mẫu C"
+                  },
+                  "canonical_url": "https://supplier-c.example/tour-c",
+                  "origin": "discovery",
+                  "target_ids": [],
+                  "source_ids": [
+                    "source_c"
+                  ],
+                  "eligibility": true,
+                  "offer_options": [
+                    {
+                      "id": "offer_c",
+                      "snapshot_id": "offer_c_snap",
+                      "departure_date": "2026-11-12",
+                      "rooming": "twin_share",
+                      "price_quotes": [
+                        {
+                          "value": {
+                            "quote_id": "quote_c",
+                            "kind": "exact",
+                            "amount": 31200000,
+                            "upper_amount": null,
+                            "currency": "VND",
+                            "basis": "per_adult",
+                            "coverage": "tour_price",
+                            "age_min": null,
+                            "age_max_exclusive": null,
+                            "applicability": [
+                              {
+                                "field": "rooming",
+                                "value": "twin_share"
+                              }
+                            ]
+                          },
+                          "evidence_ids": [
+                            "ev_price_c"
+                          ],
+                          "data_state": "present",
+                          "verification": "supplier_published",
+                          "completeness": "partial",
+                          "observed_at": "2026-10-07T02:30:00Z",
+                          "freshness": {
+                            "state": "unknown",
+                            "checked_at": "2026-10-07T02:30:00Z",
+                            "expires_at": null,
+                            "policy_version": "freshness_demo"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "selected_offer_snapshot_id": "offer_c_snap",
+                  "pricing_complete": false,
+                  "extra_charges": [],
+                  "pricing_reason_codes": [
+                    "EXTRA_CHARGES_UNKNOWN"
+                  ],
+                  "rank": 2
+                },
+                {
+                  "id": "column_a",
+                  "candidate_id": "candidate_a",
+                  "tour_id": "tour_a",
+                  "tour_snapshot_id": "tour_a_snap",
+                  "offer_snapshot_id": "offer_a_snap",
+                  "title": "Tokyo · Fuji · Hakone",
+                  "supplier": {
+                    "id": "supplier_a",
+                    "display_name": "Lữ hành Mẫu A"
+                  },
+                  "canonical_url": "https://supplier-a.example/tour-a",
+                  "origin": "discovery",
+                  "target_ids": [],
+                  "source_ids": [
+                    "source_a"
+                  ],
+                  "eligibility": true,
+                  "offer_options": [
+                    {
+                      "id": "offer_a",
+                      "snapshot_id": "offer_a_snap",
+                      "departure_date": "2026-11-10",
+                      "rooming": "twin_share",
+                      "price_quotes": [
+                        {
+                          "value": {
+                            "quote_id": "quote_a",
+                            "kind": "exact",
+                            "amount": 32800000,
+                            "upper_amount": null,
+                            "currency": "VND",
+                            "basis": "per_adult",
+                            "coverage": "tour_price",
+                            "age_min": null,
+                            "age_max_exclusive": null,
+                            "applicability": [
+                              {
+                                "field": "rooming",
+                                "value": "twin_share"
+                              }
+                            ]
+                          },
+                          "evidence_ids": [
+                            "ev_price_a"
+                          ],
+                          "data_state": "present",
+                          "verification": "supplier_published",
+                          "completeness": "partial",
+                          "observed_at": "2026-10-07T02:30:00Z",
+                          "freshness": {
+                            "state": "unknown",
+                            "checked_at": "2026-10-07T02:30:00Z",
+                            "expires_at": null,
+                            "policy_version": "freshness_demo"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "selected_offer_snapshot_id": "offer_a_snap",
+                  "pricing_complete": false,
+                  "extra_charges": [],
+                  "pricing_reason_codes": [
+                    "EXTRA_CHARGES_UNKNOWN"
+                  ],
+                  "rank": 3
+                }
+              ],
+              "rows": [
+                {
+                  "id": "row_price",
+                  "field": "price_quotes",
+                  "label": "Giá công bố",
+                  "value_type": "money",
+                  "unit": "VND",
+                  "scope": "offer",
+                  "order": 1,
+                  "condition_ids": [
+                    "c_budget"
+                  ]
+                },
+                {
+                  "id": "row_date",
+                  "field": "departure_date",
+                  "label": "Khởi hành",
+                  "value_type": "date",
+                  "unit": null,
+                  "scope": "offer",
+                  "order": 2,
+                  "condition_ids": [
+                    "c_date"
+                  ]
+                },
+                {
+                  "id": "row_duration",
+                  "field": "duration_days",
+                  "label": "Thời lượng",
+                  "value_type": "number",
+                  "unit": "day",
+                  "scope": "tour",
+                  "order": 3,
+                  "condition_ids": [
+                    "c_duration"
+                  ]
+                },
+                {
+                  "id": "row_cancel",
+                  "field": "cancellation_policy",
+                  "label": "Chính sách hủy",
+                  "value_type": "text",
+                  "unit": null,
+                  "scope": "tour",
+                  "order": 4,
+                  "condition_ids": []
+                }
+              ],
+              "cells": [
+                {
+                  "row_id": "row_price",
+                  "column_id": "column_a",
+                  "value": {
+                    "amount": 32800000,
+                    "currency": "VND",
+                    "basis": "per_adult",
+                    "coverage": "tour_price"
+                  },
+                  "raw_value": "32800000 VND / người lớn",
+                  "display_hint": "published_price_not_final_total",
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_price_a"
+                  ],
+                  "evaluation_ids": [
+                    "evaluation_a_budget"
+                  ],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_date",
+                  "column_id": "column_a",
+                  "value": "2026-11-10",
+                  "raw_value": "2026-11-10",
+                  "display_hint": "departure_not_availability",
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_date_a"
+                  ],
+                  "evaluation_ids": [
+                    "evaluation_a_date"
+                  ],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_duration",
+                  "column_id": "column_a",
+                  "value": 5,
+                  "raw_value": "5 ngày",
+                  "display_hint": null,
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_route_a"
+                  ],
+                  "evaluation_ids": [
+                    "evaluation_a_duration"
+                  ],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_cancel",
+                  "column_id": "column_a",
+                  "value": "Trước 30 ngày: phí 20% giá tour",
+                  "raw_value": "Trước 30 ngày: phí 20% giá tour",
+                  "display_hint": null,
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_cancel_a"
+                  ],
+                  "evaluation_ids": [],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_price",
+                  "column_id": "column_b",
+                  "value": {
+                    "amount": 29900000,
+                    "currency": "VND",
+                    "basis": "per_adult",
+                    "coverage": "tour_price"
+                  },
+                  "raw_value": "29900000 VND / người lớn",
+                  "display_hint": "published_price_not_final_total",
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_price_b"
+                  ],
+                  "evaluation_ids": [
+                    "evaluation_b_budget"
+                  ],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_date",
+                  "column_id": "column_b",
+                  "value": "2026-11-11",
+                  "raw_value": "2026-11-11",
+                  "display_hint": "departure_not_availability",
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_date_b"
+                  ],
+                  "evaluation_ids": [
+                    "evaluation_b_date"
+                  ],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_duration",
+                  "column_id": "column_b",
+                  "value": 6,
+                  "raw_value": "6 ngày",
+                  "display_hint": null,
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_route_b"
+                  ],
+                  "evaluation_ids": [
+                    "evaluation_b_duration"
+                  ],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_cancel",
+                  "column_id": "column_b",
+                  "value": "Trước 30 ngày: phí 30% giá tour",
+                  "raw_value": "Trước 30 ngày: phí 30% giá tour",
+                  "display_hint": null,
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_cancel_b"
+                  ],
+                  "evaluation_ids": [],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_price",
+                  "column_id": "column_c",
+                  "value": {
+                    "amount": 31200000,
+                    "currency": "VND",
+                    "basis": "per_adult",
+                    "coverage": "tour_price"
+                  },
+                  "raw_value": "31200000 VND / người lớn",
+                  "display_hint": "published_price_not_final_total",
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_price_c"
+                  ],
+                  "evaluation_ids": [
+                    "evaluation_c_budget"
+                  ],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_date",
+                  "column_id": "column_c",
+                  "value": "2026-11-12",
+                  "raw_value": "2026-11-12",
+                  "display_hint": "departure_not_availability",
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_date_c"
+                  ],
+                  "evaluation_ids": [
+                    "evaluation_c_date"
+                  ],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_duration",
+                  "column_id": "column_c",
+                  "value": 5,
+                  "raw_value": "5 ngày",
+                  "display_hint": null,
+                  "reason_code": null,
+                  "evidence_ids": [
+                    "ev_route_c"
+                  ],
+                  "evaluation_ids": [
+                    "evaluation_c_duration"
+                  ],
+                  "data_state": "present",
+                  "verification": "supplier_published",
+                  "completeness": "partial",
+                  "observed_at": "2026-10-07T02:30:00Z",
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                },
+                {
+                  "row_id": "row_cancel",
+                  "column_id": "column_c",
+                  "value": null,
+                  "raw_value": null,
+                  "display_hint": null,
+                  "reason_code": "FIELD_MISSING",
+                  "evidence_ids": [],
+                  "evaluation_ids": [],
+                  "data_state": "missing",
+                  "verification": "unverified",
+                  "completeness": "unknown",
+                  "observed_at": null,
+                  "freshness": {
+                    "state": "unknown",
+                    "checked_at": "2026-10-07T02:30:00Z",
+                    "expires_at": null,
+                    "policy_version": "freshness_demo"
+                  }
+                }
+              ],
+              "evaluations": [
+                {
+                  "id": "evaluation_a_destination",
+                  "condition_id": "c_destination",
+                  "candidate_id": "candidate_a",
+                  "field": "destinations",
+                  "strength": "hard",
+                  "expected": [
+                    "country:jp"
+                  ],
+                  "actual": [
+                    "country:jp"
+                  ],
+                  "status": "pass",
+                  "reason_code": "DESTINATION_MATCH",
+                  "reason": "Trong phạm vi Nhật Bản mẫu",
+                  "evidence_ids": [
+                    "ev_route_a"
+                  ]
+                },
+                {
+                  "id": "evaluation_a_origin",
+                  "condition_id": "c_origin",
+                  "candidate_id": "candidate_a",
+                  "field": "departure_origin",
+                  "strength": "hard",
+                  "expected": "city:vn:hcmc",
+                  "actual": "city:vn:hcmc",
+                  "status": "pass",
+                  "reason_code": "ORIGIN_MATCH",
+                  "reason": "Khởi hành TP.HCM mẫu",
+                  "evidence_ids": [
+                    "ev_route_a"
+                  ]
+                },
+                {
+                  "id": "evaluation_a_date",
+                  "condition_id": "c_date",
+                  "candidate_id": "candidate_a",
+                  "field": "departure_date",
+                  "strength": "hard",
+                  "expected": {
+                    "start": "2026-11-10",
+                    "end": "2026-11-17"
+                  },
+                  "actual": "2026-11-10",
+                  "status": "pass",
+                  "reason_code": "DATE_IN_RANGE",
+                  "reason": "Trong khoảng ngày người dùng chọn",
+                  "evidence_ids": [
+                    "ev_date_a"
+                  ]
+                },
+                {
+                  "id": "evaluation_a_budget",
+                  "condition_id": "c_budget",
+                  "candidate_id": "candidate_a",
+                  "field": "estimated_cost",
+                  "strength": "soft",
+                  "expected": 32000000,
+                  "actual": {
+                    "lower": 32800000,
+                    "upper": null,
+                    "basis": "per_adult",
+                    "coverage": "tour_price",
+                    "currency": "VND",
+                    "complete_for_coverage": false,
+                    "reasons": [
+                      "EXTRA_CHARGES_UNKNOWN"
+                    ]
+                  },
+                  "status": "unknown",
+                  "reason_code": "PRICE_INCOMPLETE",
+                  "reason": "Giá công bố vượt mức ưu tiên; chưa đủ phụ thu để kết luận cost",
+                  "evidence_ids": [
+                    "ev_price_a"
+                  ]
+                },
+                {
+                  "id": "evaluation_a_duration",
+                  "condition_id": "c_duration",
+                  "candidate_id": "candidate_a",
+                  "field": "duration_days",
+                  "strength": "soft",
+                  "expected": 6,
+                  "actual": 5,
+                  "status": "fail",
+                  "reason_code": "DURATION_DIFFERS",
+                  "reason": "Ưu tiên 6 ngày; dữ kiện 5 ngày",
+                  "evidence_ids": [
+                    "ev_route_a"
+                  ]
+                },
+                {
+                  "id": "evaluation_b_destination",
+                  "condition_id": "c_destination",
+                  "candidate_id": "candidate_b",
+                  "field": "destinations",
+                  "strength": "hard",
+                  "expected": [
+                    "country:jp"
+                  ],
+                  "actual": [
+                    "country:jp"
+                  ],
+                  "status": "pass",
+                  "reason_code": "DESTINATION_MATCH",
+                  "reason": "Trong phạm vi Nhật Bản mẫu",
+                  "evidence_ids": [
+                    "ev_route_b"
+                  ]
+                },
+                {
+                  "id": "evaluation_b_origin",
+                  "condition_id": "c_origin",
+                  "candidate_id": "candidate_b",
+                  "field": "departure_origin",
+                  "strength": "hard",
+                  "expected": "city:vn:hcmc",
+                  "actual": "city:vn:hcmc",
+                  "status": "pass",
+                  "reason_code": "ORIGIN_MATCH",
+                  "reason": "Khởi hành TP.HCM mẫu",
+                  "evidence_ids": [
+                    "ev_route_b"
+                  ]
+                },
+                {
+                  "id": "evaluation_b_date",
+                  "condition_id": "c_date",
+                  "candidate_id": "candidate_b",
+                  "field": "departure_date",
+                  "strength": "hard",
+                  "expected": {
+                    "start": "2026-11-10",
+                    "end": "2026-11-17"
+                  },
+                  "actual": "2026-11-11",
+                  "status": "pass",
+                  "reason_code": "DATE_IN_RANGE",
+                  "reason": "Trong khoảng ngày người dùng chọn",
+                  "evidence_ids": [
+                    "ev_date_b"
+                  ]
+                },
+                {
+                  "id": "evaluation_b_budget",
+                  "condition_id": "c_budget",
+                  "candidate_id": "candidate_b",
+                  "field": "estimated_cost",
+                  "strength": "soft",
+                  "expected": 32000000,
+                  "actual": {
+                    "lower": 29900000,
+                    "upper": null,
+                    "basis": "per_adult",
+                    "coverage": "tour_price",
+                    "currency": "VND",
+                    "complete_for_coverage": false,
+                    "reasons": [
+                      "EXTRA_CHARGES_UNKNOWN"
+                    ]
+                  },
+                  "status": "unknown",
+                  "reason_code": "PRICE_INCOMPLETE",
+                  "reason": "Giá công bố trong mức ưu tiên; chưa đủ phụ thu để kết luận cost",
+                  "evidence_ids": [
+                    "ev_price_b"
+                  ]
+                },
+                {
+                  "id": "evaluation_b_duration",
+                  "condition_id": "c_duration",
+                  "candidate_id": "candidate_b",
+                  "field": "duration_days",
+                  "strength": "soft",
+                  "expected": 6,
+                  "actual": 6,
+                  "status": "pass",
+                  "reason_code": "DURATION_MATCH",
+                  "reason": "Ưu tiên 6 ngày; dữ kiện 6 ngày",
+                  "evidence_ids": [
+                    "ev_route_b"
+                  ]
+                },
+                {
+                  "id": "evaluation_c_destination",
+                  "condition_id": "c_destination",
+                  "candidate_id": "candidate_c",
+                  "field": "destinations",
+                  "strength": "hard",
+                  "expected": [
+                    "country:jp"
+                  ],
+                  "actual": [
+                    "country:jp"
+                  ],
+                  "status": "pass",
+                  "reason_code": "DESTINATION_MATCH",
+                  "reason": "Trong phạm vi Nhật Bản mẫu",
+                  "evidence_ids": [
+                    "ev_route_c"
+                  ]
+                },
+                {
+                  "id": "evaluation_c_origin",
+                  "condition_id": "c_origin",
+                  "candidate_id": "candidate_c",
+                  "field": "departure_origin",
+                  "strength": "hard",
+                  "expected": "city:vn:hcmc",
+                  "actual": "city:vn:hcmc",
+                  "status": "pass",
+                  "reason_code": "ORIGIN_MATCH",
+                  "reason": "Khởi hành TP.HCM mẫu",
+                  "evidence_ids": [
+                    "ev_route_c"
+                  ]
+                },
+                {
+                  "id": "evaluation_c_date",
+                  "condition_id": "c_date",
+                  "candidate_id": "candidate_c",
+                  "field": "departure_date",
+                  "strength": "hard",
+                  "expected": {
+                    "start": "2026-11-10",
+                    "end": "2026-11-17"
+                  },
+                  "actual": "2026-11-12",
+                  "status": "pass",
+                  "reason_code": "DATE_IN_RANGE",
+                  "reason": "Trong khoảng ngày người dùng chọn",
+                  "evidence_ids": [
+                    "ev_date_c"
+                  ]
+                },
+                {
+                  "id": "evaluation_c_budget",
+                  "condition_id": "c_budget",
+                  "candidate_id": "candidate_c",
+                  "field": "estimated_cost",
+                  "strength": "soft",
+                  "expected": 32000000,
+                  "actual": {
+                    "lower": 31200000,
+                    "upper": null,
+                    "basis": "per_adult",
+                    "coverage": "tour_price",
+                    "currency": "VND",
+                    "complete_for_coverage": false,
+                    "reasons": [
+                      "EXTRA_CHARGES_UNKNOWN"
+                    ]
+                  },
+                  "status": "unknown",
+                  "reason_code": "PRICE_INCOMPLETE",
+                  "reason": "Giá công bố trong mức ưu tiên; chưa đủ phụ thu để kết luận cost",
+                  "evidence_ids": [
+                    "ev_price_c"
+                  ]
+                },
+                {
+                  "id": "evaluation_c_duration",
+                  "condition_id": "c_duration",
+                  "candidate_id": "candidate_c",
+                  "field": "duration_days",
+                  "strength": "soft",
+                  "expected": 6,
+                  "actual": 5,
+                  "status": "fail",
+                  "reason_code": "DURATION_DIFFERS",
+                  "reason": "Ưu tiên 6 ngày; dữ kiện 5 ngày",
+                  "evidence_ids": [
+                    "ev_route_c"
+                  ]
+                }
+              ],
+              "recommendations": {
+                "ordered_candidate_ids": [
+                  "candidate_b",
+                  "candidate_c",
+                  "candidate_a"
+                ],
+                "ranking_policy_version": "ranking_demo_v1",
+                "reasons": [
+                  {
+                    "candidate_id": "candidate_b",
+                    "summary": "6 ngày và giá công bố thấp nhất trong bộ mẫu",
+                    "evaluation_ids": [
+                      "evaluation_b_duration"
+                    ],
+                    "evidence_ids": [
+                      "ev_price_b",
+                      "ev_route_b"
+                    ],
+                    "limitations": [
+                      "Chưa đủ giá tổng và phụ thu"
+                    ]
+                  }
+                ],
+                "candidate_limit": 20,
+                "examined_candidates": 3,
+                "truncated": false,
+                "excluded_tour_count": 0,
+                "needs_verification_candidate_ids": []
+              },
+              "analysis": {
+                "claims": [
+                  {
+                    "id": "claim_demo",
+                    "text": "B có giá công bố thấp hơn A; không chứng minh tổng chuyến đi rẻ hơn.",
+                    "candidate_ids": [
+                      "candidate_a",
+                      "candidate_b"
+                    ],
+                    "evidence_ids": [
+                      "ev_price_a",
+                      "ev_price_b"
+                    ],
+                    "limitations": [
+                      "Khác lịch khởi hành",
+                      "Phụ thu chưa đủ"
+                    ]
+                  }
+                ],
+                "metrics": [
+                  {
+                    "id": "metric_price_difference",
+                    "operation": "subtract",
+                    "operands": [
+                      {
+                        "candidate_id": "candidate_a",
+                        "field": "price_quotes",
+                        "snapshot_id": "offer_a_snap",
+                        "value": 32800000,
+                        "currency": "VND",
+                        "basis": "per_adult",
+                        "coverage": "tour_price",
+                        "evidence_ids": [
+                          "ev_price_a"
+                        ]
+                      },
+                      {
+                        "candidate_id": "candidate_b",
+                        "field": "price_quotes",
+                        "snapshot_id": "offer_b_snap",
+                        "value": 29900000,
+                        "currency": "VND",
+                        "basis": "per_adult",
+                        "coverage": "tour_price",
+                        "evidence_ids": [
+                          "ev_price_b"
+                        ]
+                      }
+                    ],
+                    "result": 2900000,
+                    "currency": "VND",
+                    "basis": "per_adult",
+                    "coverage": "tour_price",
+                    "comparable": true,
+                    "limitations": [
+                      "So giá công bố của hai lịch, chưa phải tổng cuối"
+                    ],
+                    "evidence_ids": [
+                      "ev_price_a",
+                      "ev_price_b"
+                    ]
+                  }
+                ],
+                "unknowns": [
+                  "Chính sách hủy C",
+                  "Phụ thu đủ nhóm"
+                ]
+              },
+              "source_coverage": {
+                "sources_attempted": 3,
+                "usable_sources": 3,
+                "sources": [
+                  {
+                    "source_id": "source_a",
+                    "status": "ok",
+                    "snapshot_ids": [
+                      "tour_a_snap",
+                      "offer_a_snap"
+                    ],
+                    "truncated": false
+                  },
+                  {
+                    "source_id": "source_b",
+                    "status": "ok",
+                    "snapshot_ids": [
+                      "tour_b_snap",
+                      "offer_b_snap"
+                    ],
+                    "truncated": false
+                  },
+                  {
+                    "source_id": "source_c",
+                    "status": "ok",
+                    "snapshot_ids": [
+                      "tour_c_snap",
+                      "offer_c_snap"
+                    ],
+                    "truncated": false
+                  }
+                ],
+                "truncated": false
+              },
+              "warnings": [
+                "SYNTHETIC_DATA",
+                "EXTRA_CHARGES_UNKNOWN",
+                "FRESHNESS_UNKNOWN"
+              ],
+              "empty_reason": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}

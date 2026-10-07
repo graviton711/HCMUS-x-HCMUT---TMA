@@ -1,0 +1,433 @@
+{
+  "scenario": "Admin counts distinct sessions and accepted user messages/runs; new source requires check+approval; contact processing is internal",
+  "origin": "synthetic",
+  "exchanges": [
+    {
+      "method": "GET",
+      "path": "/v2/admin/overview?from=2026-10-06T17:00:00Z&to=2026-10-07T17:00:00Z&timezone=Asia/Ho_Chi_Minh",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "origin": "synthetic",
+            "metric_definition_version": "metrics_demo_v1",
+            "interval": {
+              "from": "2026-10-06T17:00:00Z",
+              "to": "2026-10-07T17:00:00Z",
+              "timezone": "Asia/Ho_Chi_Minh",
+              "end_exclusive": true
+            },
+            "updated_at": "2026-10-07T02:30:00Z",
+            "distinct_sessions": 2,
+            "user_messages": 13,
+            "comparison_runs": 3,
+            "terminal_breakdown": {
+              "succeeded": 2,
+              "partial": 1,
+              "failed": 0,
+              "cancelled": 0
+            },
+            "active_jobs": 0,
+            "source_health": {
+              "active": 1,
+              "paused": 2,
+              "blocked": 1
+            },
+            "contact_counts": {
+              "new": 1,
+              "in_progress": 0,
+              "resolved": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v2/admin/sources",
+      "request": {
+        "display_name": "Lữ hành Mẫu D",
+        "domain": "supplier-d.example",
+        "profile_ref": "sample-d@1",
+        "capabilities": {
+          "modes": [],
+          "searchable_fields": [],
+          "returned_fields": []
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "source_new_demo",
+            "version": 1,
+            "display_name": "Lữ hành Mẫu D",
+            "domain": "supplier-d.example",
+            "state": "draft",
+            "access_status": "unchecked",
+            "checked_at": null,
+            "capabilities": {
+              "modes": [],
+              "searchable_fields": [],
+              "returned_fields": []
+            },
+            "freshness_policy_ref": null,
+            "profile_version": "sample-d@1",
+            "last_run": null,
+            "health": "unchecked",
+            "data_counts": {
+              "tours": 0,
+              "offers": 0
+            }
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-admin-2"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v2/admin/sources/source_new_demo/checks",
+      "request": {
+        "expected_version": 1
+      },
+      "response": {
+        "status": 202,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "source_id": "source_new_demo",
+            "job_id": "job_source_check_demo",
+            "status": "queued"
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-admin-3"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/jobs/job_source_check_demo",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_check_demo",
+          "data": {
+            "id": "job_source_check_demo",
+            "kind": "source_check",
+            "status": "succeeded",
+            "stage": "source_check",
+            "resource_ref": {
+              "source_id": "source_new_demo",
+              "version": 2
+            },
+            "error": null
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/admin/sources/source_new_demo",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_source_demo",
+          "data": {
+            "id": "source_new_demo",
+            "version": 2,
+            "display_name": "Lữ hành Mẫu D",
+            "domain": "supplier-d.example",
+            "state": "draft",
+            "access_status": "unchecked",
+            "checked_at": null,
+            "capabilities": {
+              "modes": [],
+              "searchable_fields": [],
+              "returned_fields": []
+            },
+            "freshness_policy_ref": null,
+            "profile_version": "sample-d@1",
+            "last_run": null,
+            "health": "unchecked",
+            "data_counts": {
+              "tours": 0,
+              "offers": 0
+            },
+            "last_check": {
+              "job_id": "job_source_check_demo",
+              "status": "passed",
+              "checked_at": "2026-10-07T02:30:00Z"
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v2/admin/sources/source_new_demo/approvals",
+      "request": {
+        "expected_version": 2,
+        "check_job_id": "job_source_check_demo"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "source_new_demo",
+            "version": 3,
+            "display_name": "Lữ hành Mẫu D",
+            "domain": "supplier-d.example",
+            "state": "paused",
+            "access_status": "approved",
+            "checked_at": "2026-10-07T02:30:00Z",
+            "capabilities": {
+              "modes": [
+                "discover",
+                "compare_urls"
+              ],
+              "searchable_fields": [
+                "destinations"
+              ],
+              "returned_fields": [
+                "destinations",
+                "departure_date",
+                "price_quotes"
+              ]
+            },
+            "freshness_policy_ref": null,
+            "profile_version": "sample-d@1",
+            "last_run": null,
+            "health": "ok",
+            "data_counts": {
+              "tours": 0,
+              "offers": 0
+            }
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-admin-6"
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v2/admin/sources/source_new_demo",
+      "request": {
+        "expected_version": 3,
+        "state": "active"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "source_new_demo",
+            "version": 4,
+            "display_name": "Lữ hành Mẫu D",
+            "domain": "supplier-d.example",
+            "state": "active",
+            "access_status": "approved",
+            "checked_at": "2026-10-07T02:30:00Z",
+            "capabilities": {
+              "modes": [
+                "discover",
+                "compare_urls"
+              ],
+              "searchable_fields": [
+                "destinations"
+              ],
+              "returned_fields": [
+                "destinations",
+                "departure_date",
+                "price_quotes"
+              ]
+            },
+            "freshness_policy_ref": null,
+            "profile_version": "sample-d@1",
+            "last_run": null,
+            "health": "ok",
+            "data_counts": {
+              "tours": 0,
+              "offers": 0
+            }
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-admin-7"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/v2/contacts",
+      "request": {
+        "category": "data_issue",
+        "message": "Giá cần nêu rõ chưa đủ phụ thu. (Liên hệ synthetic)",
+        "reply_to": null,
+        "client_submission_id": "submission_demo",
+        "context": {
+          "session_id": "session_demo",
+          "comparison_id": "comparison_demo"
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "ticket_id": "contact_demo",
+            "status": "new",
+            "created_at": "2026-10-07T02:30:00Z"
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-admin-8"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/admin/contacts?status=new",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "items": [
+              {
+                "id": "contact_demo",
+                "version": 1,
+                "category": "data_issue",
+                "message": "Giá cần nêu rõ chưa đủ phụ thu. (Liên hệ synthetic)",
+                "reply_to": null,
+                "status": "new",
+                "created_at": "2026-10-07T02:30:00Z",
+                "session_ref": "session_demo",
+                "assignee": null,
+                "internal_notes": []
+              }
+            ],
+            "next_cursor": null
+          }
+        }
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/v2/admin/contacts/contact_demo",
+      "request": {
+        "expected_version": 1,
+        "status": "in_progress",
+        "internal_note": "Đã ghi nhận vào review UI; chưa gửi email."
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "contact_demo",
+            "version": 2,
+            "category": "data_issue",
+            "message": "Giá cần nêu rõ chưa đủ phụ thu. (Liên hệ synthetic)",
+            "reply_to": null,
+            "status": "in_progress",
+            "created_at": "2026-10-07T02:30:00Z",
+            "session_ref": "session_demo",
+            "assignee": null,
+            "internal_notes": [
+              {
+                "author_id": "admin_demo",
+                "text": "Đã ghi nhận vào review UI; chưa gửi email.",
+                "created_at": "2026-10-07T02:30:00Z"
+              }
+            ]
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-admin-10"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/admin/sessions",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "items": [
+              {
+                "id": "session_demo",
+                "started_at": "2026-10-07T02:30:00Z",
+                "last_active_at": "2026-10-07T02:30:00Z",
+                "user_message_count": 8,
+                "comparison_count": 2,
+                "state": "open",
+                "last_job_ref": "job_comparison_demo"
+              },
+              {
+                "id": "session_demo_2",
+                "started_at": "2026-10-07T02:00:00Z",
+                "last_active_at": "2026-10-07T02:12:00Z",
+                "user_message_count": 5,
+                "comparison_count": 1,
+                "state": "open",
+                "last_job_ref": null
+              }
+            ],
+            "next_cursor": null
+          }
+        }
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/admin/sessions/session_demo/activity",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "items": [
+              {
+                "seq": 1,
+                "kind": "user_message",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "summary": "Accepted user message; no raw text"
+              },
+              {
+                "seq": 2,
+                "kind": "job",
+                "job_id": "job_comparison_demo",
+                "stage": "publication",
+                "status": "succeeded",
+                "occurred_at": "2026-10-07T02:30:00Z",
+                "trace_id": "trace_demo"
+              }
+            ],
+            "next_cursor": null
+          }
+        }
+      }
+    }
+  ]
+}

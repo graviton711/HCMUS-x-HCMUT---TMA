@@ -1,5 +1,7 @@
 # HTTP contract v1 để frontend tích hợp
 
+**Mục tiêu frontend 07/10:** [protocol v2 mẫu](frontend-protocol-v2.md) và [JSON exchanges](../examples/protocol-v2/README.md) bổ sung multi-edit/chat preview/atomic confirm, unified pipeline, table metadata/evidence/admin/contact. Phần bên dưới mô tả **v1 hiện hữu**; v2 chưa implement và không tương thích request trực tiếp vào v1.
+
 **Trạng thái:** Endpoints v1 đã implement và kiểm thử với temporary SQLite/fixture/NIM stub. Request schemas ở [contracts](../contracts/README.md), ví dụ chạy ở [examples](../examples/README.md). Dữ liệu tour mặc định là synthetic.
 
 ## Tạo và sửa nhu cầu
