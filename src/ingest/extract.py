@@ -119,6 +119,13 @@ def page_prose(html: str) -> str:
     return "\n".join(parser.chunks)
 
 
+def script_texts(html: str) -> str:
+    """Raw contents of script tags (structured blobs live here, not in prose)."""
+    return "\n".join(
+        match.group(1) for match in
+        _re.finditer(r"<script[^>]*>(.*?)</script>", html, _re.S | _re.I))
+
+
 def page_text_only(html: str) -> str:
     """All text incl. CSS-hidden nodes (parser ignores visibility)."""
     parser = _TextCollector()
@@ -198,11 +205,13 @@ def extract_field(soup: BeautifulSoup, json_ld: list, rule: dict) -> object:
     return apply_clean(rule, val)
 
 
-def extract_api_field(rule: dict, row: dict, fetch_json: Callable[[str], object]) -> object:
+def extract_api_field(rule: dict, row: dict, fetch_json: Callable[[str], object],
+                      raw_out: dict | None = None) -> object:
     """GET a public same-origin JSON endpoint declared in the profile.
 
     `{placeholders}` fill from fields extracted earlier. Origin check lives
     in the caller's fetch_json; failures mean not_observed, never guesses.
+    When raw_out is given, the raw response text is stored under "response".
     """
     try:
         url = str(rule.get("url", "")).format(**{k: v for k, v in row.items() if isinstance(v, (str, int))})
@@ -212,6 +221,13 @@ def extract_api_field(rule: dict, row: dict, fetch_json: Callable[[str], object]
         data = fetch_json(url)
     except (OSError, ValueError):
         return None
+    if raw_out is not None:
+        import json as _json_mod
+
+        try:
+            raw_out["response"] = _json_mod.dumps(data, ensure_ascii=False)
+        except (TypeError, ValueError):
+            raw_out["response"] = str(data)
     val = data
     if rule.get("path"):
         curr: Any = data
@@ -223,11 +239,17 @@ def extract_api_field(rule: dict, row: dict, fetch_json: Callable[[str], object]
     return apply_clean(rule, val)
 
 
-def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] | None = None) -> dict:
-    """Full canonical row from one page: static fields first, api fields after."""
+def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] | None = None,
+                 include_raw: bool = False) -> dict | tuple[dict, dict]:
+    """Full canonical row from one page: static fields first, api fields after.
+
+    With include_raw=True returns (row, raw) where raw holds pre-clean values;
+    evidence must always be checked against raw, never against cleaned output.
+    """
     soup = BeautifulSoup(html, "html.parser")
     json_ld = parse_json_ld(html)
     row: dict[str, object] = {}
+    raw: dict[str, object] = {}
     deferred: dict[str, dict] = {}
     for field, rule in (profile.get("fields") or {}).items():
         if rule and rule.get("source") == "api":
@@ -235,14 +257,31 @@ def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] |
             continue
         v = extract_field(soup, json_ld, rule or {})
         row[str(field)] = v if v is not None else ""
+        raw[str(field)] = _raw_field(soup, json_ld, rule or {})
     if fetch_json is not None:
         for field, rule in deferred.items():
-            v = extract_api_field(rule, row, fetch_json)
+            holder: dict = {}
+            v = extract_api_field(rule, row, fetch_json, holder)
             row[field] = v if v is not None else ""
+            raw[field] = holder.get("response", "")
     else:
         for field in deferred:
             row[field] = ""
+            raw[field] = ""
+    if include_raw:
+        return row, raw
     return row
+
+
+def _raw_field(soup: BeautifulSoup, json_ld: list, rule: dict) -> object:
+    """The value before `clean` runs; empty string when the source is absent."""
+    if not rule or rule.get("status") == "not_observed":
+        return ""
+    rule = dict(rule)
+    rule.pop("clean", None)
+    rule.pop("transform", None)
+    v = extract_field(soup, json_ld, rule)
+    return v if v is not None else ""
 
 
 def same_origin_getter(page_url: str, fetcher: SafeFetcher) -> Callable[[str], object]:

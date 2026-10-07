@@ -178,9 +178,13 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     merged["page_prose"] = extract.page_prose(html)
 
     if profile.get("fields"):
-        merged["record"] = extract.crawl_fields(
-            html, profile, extract.same_origin_getter(page.url, fetcher))
-        verdict, missing = verify_record(merged["record"], html)
+        record, record_raw = extract.crawl_fields(
+            html, profile, extract.same_origin_getter(page.url, fetcher),
+            include_raw=True)
+        merged["record"] = record
+        merged["record_raw"] = record_raw
+        evidence_context = merged["page_prose"] + "\n" + extract.script_texts(html)
+        verdict, missing = verify_record(record, record_raw, evidence_context)
         merged["record_evidence"] = verdict
         merged["record_missing"] = missing
 

@@ -121,16 +121,26 @@ def test_departure_evidence_grades():
     assert departure_evidence({}, "anything") == "unverified"
 
 
-def test_verify_record_grades_verbatim_evidence():
+def test_verify_record_checks_raw_not_cleaned():
     from ingest.quality import verify_record
 
-    record = {"tour_name": "Tour Ha Giang", "price": 8590000, "url": "https://example.test/t"}
-    html = "<h1>Tour Ha Giang</h1><p>8,590,000 VND</p>"
-    assert verify_record(record, html) == ("verified", [])
-    verdict, missing = verify_record(record, "<h1>Tour Ha Giang</h1><p>1,000 VND</p>")
-    assert verdict == "partial" and missing == ["price"]
-    assert verify_record({"url": "https://example.test/t"}, html) == ("unverified", [])
-    assert verify_record({}, html) == ("unverified", [])
+    record = {"tour_name": "Tour Ha Giang", "transport": "mixed",
+              "price": 8590000, "url": "https://example.test/t"}
+    raw = {"tour_name": "Tour Ha Giang", "transport": "Xe du lich, May bay",
+           "price": "8,590,000 VND"}
+    html = "<h1>Tour Ha Giang</h1><p>Xe du lich, May bay</p><p>8,590,000 VND</p>"
+    assert verify_record(record, raw, html) == ("verified", [])
+    verdict, missing = verify_record(record, raw, "<h1>Tour Ha Giang</h1><p>1,000 VND</p>")
+    assert verdict == "partial" and sorted(missing) == ["price", "transport"]
+    assert verify_record({"url": "https://example.test/t"}, {}, html) == ("unverified", [])
+    assert verify_record({}, {}, html) == ("unverified", [])
+
+
+def test_verify_record_flags_value_synthesized_without_source():
+    from ingest.quality import verify_record
+
+    record = {"currency": "VND"}
+    assert verify_record(record, {"currency": ""}, "<p>anything</p>") == ("unverified", ["currency"])
 
 
 def test_cli_parses_args():

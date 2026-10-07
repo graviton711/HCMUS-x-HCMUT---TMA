@@ -116,13 +116,15 @@ def _leaves(value: object) -> list[str]:
     return []
 
 
-def verify_record(record: dict, html: str) -> tuple[str, list[str]]:
+def verify_record(record: dict, raw: dict, html: str) -> tuple[str, list[str]]:
     """Verbatim evidence check for one static DSL record.
 
-    Every non-empty scalar leaf must appear character-for-character
-    (after normalization) in the page HTML. Returns (verdict, missing
-    fields); verdict is verified/partial/unverified. Structural keys
-    such as the source url are never checked. No fuzzy matching.
+    Evidence is always checked against RAW pre-clean values, never against
+    cleaned output: a normalized enum (`mixed`) or a reformatted structure
+    can never appear verbatim, so checking cleaned values would fail honest
+    records. A field with an empty raw but a non-empty value was synthesized
+    without a source and counts as missing. Structural keys such as the
+    source url are never checked. No fuzzy matching.
     """
     context_norm = normalize(html)
     context_digits = re.sub(r"\D", "", html)
@@ -131,12 +133,14 @@ def verify_record(record: dict, html: str) -> tuple[str, list[str]]:
     for key, value in record.items():
         if key == "url":
             continue
-        leaves = [leaf for leaf in _leaves(value) if normalize(leaf)]
-        if not leaves:
+        raw_leaves = [leaf for leaf in _leaves(raw.get(key)) if normalize(leaf)]
+        if not raw_leaves:
+            if _leaves(value):
+                missing.append(key)
             continue
-        checked += len(leaves)
+        checked += len(raw_leaves)
         ok = True
-        for leaf in leaves:
+        for leaf in raw_leaves:
             if leaf.isdigit():
                 if leaf not in context_digits:
                     ok = False
