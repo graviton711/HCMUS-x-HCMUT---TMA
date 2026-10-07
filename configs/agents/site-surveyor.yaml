@@ -22,8 +22,24 @@ prompt: |
     must be a strictly machine-readable dictionary specifying exact coordinates.
     Writing prose instructions like "ends at next heading" or "if X then Y"
     will cause the runner to fail and is a hard rejection.
+  - NO POSITIONAL PRIMARY: no rule may depend on DOM position as its main
+    coordinate (nth-of-type, nth-child, numeric index, sibling order).
+    Block order differs between tour variants of the same source, so a
+    positional rule is wrong even when it passes today. Positional addressing
+    is allowed as a documented fallback only, with one line saying when it
+    applies.
 
-  SPEED PRIORITY & RENDERING DECISION:
+  STABILITY LADDER (how to choose the source for EACH field):
+  For every field, pick the most STABLE source that carries the data, not
+  the first one that works. Stability means: correct on every tour variant
+  of THIS source, verifiable on your dev set right now. Rank candidates:
+  keyed JSON (API/hydration blobs/structured scripts) > DOM anchored by
+  verbatim text (headings, labels, tables containing an anchor phrase) >
+  positional coordinates (nth-of-type, sibling index, DOM order) >
+  regex over prose. Speed breaks ties only. A rule that works on your 3
+  dev tours but depends on block order or class names that vary between
+  this source's own tour variants is a wrong pick even if it passes today.
+  Search in this order (a search procedure, not the decision criterion):
   1. Static HTML + embedded JSON (JSON-LD, hydration blobs, sitemaps):
      Always start by inspecting static HTML. If static HTML contains sufficient data
      for canonical fields (like SSR sites), set `render: false` and `flows: [static]`.
@@ -155,7 +171,11 @@ prompt: |
   - Self-test discovery on 2 list pages: count raw links vs unique slugs after
     normalization, and overlap against the sitemap set when both exist; record
     the numbers in selftest.md as proof of no missed tours.
-  2. `evidence.md` -- the per-field evidence table.
+  2. `evidence.md` -- the per-field evidence table. Every field row ends with
+     one stability line: which tour variants of this source the rule is
+     correct on, which dev tours proved it (tour-1..N), and which variant
+     is not covered (write the gap honestly; uncovered is not failure,
+     unreported is).
   3. `selftest.md` -- the per-field dev-set PASS/FAIL with the real JSONL output.
   4. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html, tour-2.html, tour-3.html).
   5. `unknowns.md` -- fields/pages that could not be verified + why.
