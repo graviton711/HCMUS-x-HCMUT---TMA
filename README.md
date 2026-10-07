@@ -33,7 +33,7 @@ uv run ruff check .
 ```powershell
 uv run python -m ingest.survey --source <source>
 uv run python -m ingest --discover --profile <source> --limit 5
-uv run python -m ingest --batch .local/<source>/discovered.csv --profile <source>
+uv run python -m ingest --batch --profile <source>
 uv run python -m ingest.audit --profile <source>
 uv run python -m ingest --migrate
 uv run python -m ingest --publish --profile <source>

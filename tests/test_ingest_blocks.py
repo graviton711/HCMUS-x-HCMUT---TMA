@@ -156,6 +156,8 @@ def test_cli_parses_args():
     assert args.url.endswith("/t") and args.profile == "dulichviet" and args.limit == 5
     assert _parse_args(["--publish"]).publish == ""
     assert _parse_args(["--publish", "out"]).publish == "out"
+    assert _parse_args(["--batch"]).batch == ""
+    assert _parse_args(["--batch", "in.csv"]).batch == "in.csv"
 
 
 def test_save_discovered_roundtrip(tmp_path):

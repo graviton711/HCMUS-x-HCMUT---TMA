@@ -613,7 +613,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="tour-crawl", description="Crawl tour data by source profile.")
     parser.add_argument("url", nargs="?", help="single tour URL")
     parser.add_argument("--profile", "-p", default="dulichviet", help="source profile name")
-    parser.add_argument("--batch", type=Path, help="CSV file with a url column")
+    parser.add_argument("--batch", nargs="?", const="", default=None, metavar="CSV",
+                        help="crawl URLs from a CSV file with a url column "
+                             "(default: <output.dir>/<source>/discovered.csv)")
     parser.add_argument("--sitemap", action="store_true", help="enumerate profile sitemaps instead")
     parser.add_argument("--discover", action="store_true",
                         help="enumerate via the profile discovery block (search_pages or sitemap)")
@@ -843,8 +845,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"published={counts}")
         return 0
 
-    if args.batch:
-        with args.batch.open(encoding="utf-8-sig") as handle:
+    if args.batch is not None:
+        batch_path = (Path(args.batch) if args.batch
+                      else _source_dir(settings, source) / "discovered.csv")
+        if not batch_path.exists():
+            print(f"No batch file: {batch_path} not found; run --discover first or pass --batch <csv>.",
+                  file=sys.stderr)
+            return 2
+        with batch_path.open(encoding="utf-8-sig") as handle:
             urls = [row["url"] for row in csv.DictReader(handle) if row.get("url")]
     elif args.sitemap:
         fetcher = make_fetcher(settings)
@@ -891,7 +899,7 @@ def main(argv: list[str] | None = None) -> int:
         urls = urls[: args.limit]
 
     out_dir = args.out_dir or (_source_dir(settings, source) / "tours")
-    if len(urls) == 1 and not args.batch and not args.sitemap:
+    if len(urls) == 1 and args.batch is None and not args.sitemap:
         try:
             row = run_tour(urls[0], profile, settings, out_dir)
         except Exception as exc:
