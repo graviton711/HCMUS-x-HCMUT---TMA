@@ -59,3 +59,17 @@ def test_resolve_origin_reads_mvp_scope_list():
     assert resolve_origin('dulichviet') == 'https://dulichviet.com.vn'
     with pytest.raises(ValueError, match='exactly one row'):
         resolve_origin('khong-ton-tai')
+
+
+def test_promote_copies_profile_into_configs(tmp_path):
+    from ingest.survey import _parse_args, promote_profile
+
+    out_dir = tmp_path / "survey"
+    out_dir.mkdir()
+    (out_dir / "profile.yaml").write_text("origin: example.test\n", encoding="utf-8")
+    dest = promote_profile(out_dir, "example", tmp_path / "profiles")
+    assert dest.read_text(encoding="utf-8") == "origin: example.test\n"
+    with pytest.raises(ValueError, match="no profile.yaml"):
+        promote_profile(tmp_path / "empty", "example", tmp_path / "profiles")
+    assert _parse_args(["--source", "example", "--promote"]).promote is True
+    assert _parse_args(["--source", "example"]).promote is False

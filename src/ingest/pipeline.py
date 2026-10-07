@@ -550,7 +550,7 @@ def _load_dotenv() -> None:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="tour-crawl", description="Crawl tour data by source profile.")
     parser.add_argument("url", nargs="?", help="single tour URL")
-    parser.add_argument("--profile", "-p", default="vietravel", help="source profile name")
+    parser.add_argument("--profile", "-p", default="dulichviet", help="source profile name")
     parser.add_argument("--batch", type=Path, help="CSV file with a url column")
     parser.add_argument("--sitemap", action="store_true", help="enumerate profile sitemaps instead")
     parser.add_argument("--discover", action="store_true",

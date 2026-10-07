@@ -4,7 +4,7 @@
 
 ## Cắt phạm vi
 
-- 3–5 site lữ hành, bắt đầu từ 2 profile đã có (`dulichviet`, `vietravel`), thêm site mới chỉ qua `python -m ingest.survey` + selftest, cấm parser viết tay per-site ngoài profile.
+- 3–5 site lữ hành, bắt đầu từ profile `dulichviet`, thêm site mới chỉ qua `python -m ingest.survey --promote` + selftest, cấm parser viết tay per-site ngoài profile.
 - 1 tuyến demo khóa cứng (ví dụ Đà Nẵng 4 ngày) chạy canned data; live crawl là đường phụ, fail thì fallback canned chứ không fail demo.
 - Không điểm số bí mật (`idea.md` đã cấm): thứ tự hiển thị phải kèm lý do tính bằng code từ field có nguồn. Không chữ "học preference", chỉ lưu lựa chọn đã chốt. Không nhận thời gian thực.
 

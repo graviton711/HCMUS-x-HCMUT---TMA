@@ -80,9 +80,9 @@ def test_profiles_load_and_reject_bad(tmp_path):
 
     settings = load_settings()
     assert settings["batch"]["max_consecutive_failures"] == 10
-    vietravel = load_profile("vietravel")
-    assert vietravel["origin"] == "travel.com.vn"
-    assert "combo" in " ".join(vietravel["flows"])
+    profile = load_profile("dulichviet")
+    assert profile["origin"] == "dulichviet.com.vn"
+    assert "static" in " ".join(profile["flows"])
     bad = tmp_path / "bad.yaml"
     bad.write_text("just: [a, list]\n", encoding="utf-8")
     try:

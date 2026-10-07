@@ -150,7 +150,25 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         help="opencode output format (default: formatted readable output)")
     parser.add_argument("--output", type=Path, default=None,
                         help="default: artifacts/agent_surveys/<source>")
+    parser.add_argument("--promote", action="store_true",
+                        help="on COMPLETE, copy profile.yaml to configs/profiles/<source>.yaml")
     return parser.parse_args(argv)
+
+
+DEFAULT_PROFILES_DIR = Path(__file__).resolve().parents[2] / "configs" / "profiles"
+
+
+def promote_profile(out_dir: Path, source: str,
+                    profiles_dir: Path | None = None) -> Path:
+    """Copy a completed survey profile into the versioned configs tree."""
+    src = Path(out_dir) / "profile.yaml"
+    if not src.exists():
+        raise ValueError(f"no profile.yaml in {out_dir}")
+    dest_dir = Path(profiles_dir) if profiles_dir is not None else DEFAULT_PROFILES_DIR
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{source}.yaml"
+    shutil.copy2(src, dest)
+    return dest
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -219,6 +237,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"MISSING (incomplete run): {missing}", file=sys.stderr)
         return 1
     print("COMPLETE: profile.yaml, evidence.md, unknowns.md, raw/ all present")
+    if args.promote:
+        dest = promote_profile(out_dir, args.source)
+        print(f"promoted={dest}", flush=True)
     return 0
 
 
