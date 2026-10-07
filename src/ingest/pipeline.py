@@ -232,7 +232,43 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--output", "-o", type=Path, default=None, help="CSV output path")
     parser.add_argument("--out-dir", type=Path, default=None, help="JSON detail directory")
     parser.add_argument("--no-browser", action="store_true", help="skip browser flow")
+    parser.add_argument("--migrate", action="store_true", help="apply SQL migrations to the tour database and exit")
     return parser.parse_args(argv)
+
+
+def _migrations_dir() -> Path:
+    return Path(__file__).resolve().parents[2] / "migrations"
+
+
+def tour_db_url() -> str:
+    _load_dotenv()
+    url = os.getenv("SUPABASE_TOUR_DB_URL")
+    if not url:
+        raise RuntimeError("SUPABASE_TOUR_DB_URL is required; set it in .env")
+    return url
+
+
+def migrate_db(url: str | None = None) -> int:
+    """Apply pending SQL migrations once each; returns the count applied."""
+    import psycopg
+
+    applied = 0
+    with psycopg.connect(url or tour_db_url()) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "CREATE TABLE IF NOT EXISTS schema_migrations "
+                "(version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+            )
+            for path in sorted(_migrations_dir().glob("*.sql")):
+                cursor.execute("SELECT 1 FROM schema_migrations WHERE version = %s", (path.name,))
+                if cursor.fetchone():
+                    continue
+                cursor.execute(path.read_text(encoding="utf-8"))
+                cursor.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (path.name,))
+                applied += 1
+                log.info("applied migration %s", path.name)
+        connection.commit()
+    return applied
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -241,6 +277,10 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     _load_dotenv()
     os.environ.setdefault("LOG_LEVEL", "INFO")
+
+    if args.migrate:
+        print(f"migrations applied={migrate_db()}")
+        return 0
 
     try:
         settings = load_settings()

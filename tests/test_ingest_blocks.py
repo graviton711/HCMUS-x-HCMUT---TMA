@@ -169,3 +169,33 @@ def test_compile_keep_is_case_insensitive_regression():
 
 
 
+
+
+def test_migrate_db_applies_each_sql_once(monkeypatch, tmp_path):
+    import sys
+    import types
+
+    import ingest.pipeline as pipeline_mod
+    from ingest.pipeline import migrate_db
+
+    (tmp_path / '001_a.sql').write_text('CREATE TABLE t1 (id INT);', encoding='utf-8')
+    monkeypatch.setattr(pipeline_mod, '_migrations_dir', lambda: tmp_path)
+    seen = []
+
+    class FakeCursor:
+        def __enter__(self): return self
+        def __exit__(self, *a): return None
+        def execute(self, q, p=()): seen.append(q)
+        def fetchone(self): return None
+
+    class FakeConn:
+        def __enter__(self): return self
+        def __exit__(self, *a): return None
+        def cursor(self): return FakeCursor()
+        def commit(self): pass
+
+    fake_psycopg = types.SimpleNamespace(connect=lambda _url: FakeConn())
+    monkeypatch.setitem(sys.modules, 'psycopg', fake_psycopg)
+    assert migrate_db('postgresql://unused') == 1
+    assert any('CREATE TABLE t1' in q for q in seen)
+    assert any('schema_migrations' in q for q in seen)
