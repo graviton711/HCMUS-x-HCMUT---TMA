@@ -291,10 +291,12 @@ def _save_discovered(urls: list[str], path: Path) -> Path:
 
 
 def _read_done(path: Path) -> set[str]:
+    """URLs already settled; fetch failures are NOT done (retried next run)."""
     if not path.exists():
         return set()
     with path.open(encoding="utf-8-sig") as handle:
-        return {row["url"] for row in csv.DictReader(handle) if row.get("url")}
+        return {row["url"] for row in csv.DictReader(handle)
+                if row.get("url") and row.get("status") not in (FETCH_FAIL, BLOCKED)}
 
 
 def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,

@@ -20,7 +20,11 @@ from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
 
+from shared import get_logger
+
 from .fetch import SafeFetcher
+
+log = get_logger("extract")
 
 DEFAULT_SETTINGS = Path("configs/settings.yaml")
 DEFAULT_PROFILES = Path("configs/profiles")
@@ -156,6 +160,37 @@ def iso_to_dmy(iso: object) -> str:
 _EVAL_NAMES = {"val": None, "re": _re, "json": _json, "html": _html}
 
 
+def research(pattern: str, text: object, group: int | str = 1, flags: int = 0) -> str:
+    """Safe regex extract for profile `clean` code: "" when nothing matches.
+
+    Never raises on bad input; a bad pattern itself also yields "".
+    """
+    try:
+        match = _re.search(pattern, str(text), flags)
+    except _re.error:
+        return ""
+    if not match:
+        return ""
+    try:
+        hit = match.group(group)
+    except (IndexError, AttributeError):
+        return ""
+    if hit is None:
+        return ""
+    return hit.strip() if isinstance(hit, str) else str(hit)
+
+
+def refindall(pattern: str, text: object, flags: int = 0) -> list:
+    """Safe regex find-all for profile `clean` code: [] when nothing matches."""
+    try:
+        return _re.findall(pattern, str(text), flags)
+    except _re.error:
+        return []
+
+
+_EVAL_NAMES.update({"research": research, "refindall": refindall})
+
+
 def apply_clean(rule: dict, val: object) -> object:
     """Run the profile's `clean` expression, falling back to `transform`."""
     if val is None:
@@ -265,13 +300,24 @@ def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] |
         if rule and rule.get("source") == "api":
             deferred[str(field)] = rule
             continue
-        v = extract_field(soup, json_ld, rule or {})
+        try:
+            v = extract_field(soup, json_ld, rule or {})
+            r = _raw_field(soup, json_ld, rule or {})
+        except Exception as exc:
+            log.warning("field %s failed (%s: %s); left empty",
+                        field, type(exc).__name__, str(exc)[:120])
+            v, r = "", ""
         row[str(field)] = v if v is not None else ""
-        raw[str(field)] = _raw_field(soup, json_ld, rule or {})
+        raw[str(field)] = r
     if fetch_json is not None:
         for field, rule in deferred.items():
             holder: dict = {}
-            v = extract_api_field(rule, row, fetch_json, holder)
+            try:
+                v = extract_api_field(rule, row, fetch_json, holder)
+            except Exception as exc:
+                log.warning("api field %s failed (%s: %s); left empty",
+                            field, type(exc).__name__, str(exc)[:120])
+                v = ""
             row[field] = v if v is not None else ""
             raw[field] = holder.get("response", "")
     else:

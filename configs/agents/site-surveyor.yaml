@@ -113,10 +113,21 @@ prompt: |
     Environment provides:
       - val: raw extracted value from source
       - modules: re, json, html
+      - research(pattern, text, group=1, flags=0): safe regex extract,
+        returns "" on no match (never raises)
+      - refindall(pattern, text, flags=0): safe findall, returns [] on no match
+    HARD RULE: every clean MUST be total - it must never raise on any input,
+    including empty strings and pages missing the section. NEVER call .group()
+    on an unchecked re.search result; a guard that accepts more inputs than
+    the extractor (e.g. guard matches "huy" but extractor requires a heading)
+    is a bug. Prefer research() over raw re.search().group().
     Examples:
       - Clean Title Case list: "[s.strip().title() for s in re.split(r'[,;]', val) if s.strip()]"
       - Clean HTML tags/entities: "re.sub(r'<[^>]+>', '\n', html.unescape(val)).strip()"
       - Normalize enum: "'flight' if 'bay' in str(val).lower() else ('bus' if 'xe' in str(val).lower() else 'mixed')"
+      - Safe regex extract: "research(r'Price\\s*([\\d,]+)', str(val))"
+    Self-test MUST include at least one tour where an optional section
+    (notes/policy/surcharge block) is absent, proving no clean raises.
 
   Optional transform (legacy fallback):
     transform: int | regex | split | single_list

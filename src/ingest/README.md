@@ -57,11 +57,20 @@ Mỗi trường trong `fields.<field_name>` phải tuân thủ đúng một tron
 Để đảm bảo dữ liệu đầu ra đạt đúng chuẩn Target Canonical của [docs/data-contract.md](file:///d:/GSpace/MLAI/docs/data-contract.md) mà không nhồi heuristic vào Runner, **Agent trực tiếp cung cấp code làm sạch qua thuộc tính `clean`**:
 
 * **`clean` (Khuyến nghị cốt lõi):** Biểu thức Python một dòng hoặc lambda string biến đổi giá trị thô `val`.
-  Môi trường thực thi cung cấp sẵn: biến `val`, các module `re`, `json`, `html`.
+  Môi trường thực thi cung cấp sẵn: biến `val`, các module `re`, `json`, `html`,
+  và các helper an toàn `research(pattern, text, group=1, flags=0)` (trả `""`
+  khi không khớp thay vì ném lỗi), `refindall(pattern, text, flags=0)` (trả `[]`
+  khi không khớp).
   * Trích xuất số: `clean: "int(re.sub(r'\D', '', str(val)))"`
   * Chuẩn hóa danh sách Title Case: `clean: "[s.strip().title() for s in re.split(r'[,;]', val) if s.strip()]"`
   * Dọn sạch HTML/Unicode entity: `clean: "re.sub(r'<[^>]+>', '\n', html.unescape(val)).strip()"`
   * Chuẩn hóa Enum: `clean: "'flight' if 'bay' in str(val).lower() else ('bus' if 'xe' in str(val).lower() else 'mixed')"`
+  * Trích regex an toàn: `clean: "research(r'Giá từ\\s*([\\d.]+)', str(val))"`
+
+  **Luật bất biến:** mọi `clean` phải là hàm toàn phần — không được ném lỗi với
+  bất kỳ input nào.   Cấm gọi `.group()` trên kết quả `re.search` chưa kiểm tra;
+  dùng `research` hoặc guard tường minh. Engine cách ly lỗi theo field: expression nào
+  ném lỗi thì field đó thành rỗng và evidence đánh dấu, tour vẫn sống.
 
 * **`transform` (Legacy fallback):** Hỗ trợ `int`, `regex`, `split`, `single_list`, `trim`.
 

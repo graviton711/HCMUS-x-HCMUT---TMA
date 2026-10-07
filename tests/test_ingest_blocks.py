@@ -149,6 +149,74 @@ def test_timestamps_use_vietnam_time():
     assert now_vn_iso().endswith("+07:00")
 
 
+def test_crawl_fields_isolates_a_raising_clean():
+    from ingest.extract import apply_clean, crawl_fields, refindall, research
+
+    assert research(r"(a)(b)", "xab", 2) == "b"
+    assert research(r"zzz", "xab") == ""
+    assert research(r"(a", "xab") == ""
+    assert refindall(r"\d+", "a1b22") == ["1", "22"]
+    assert refindall(r"zzz", "abc") == []
+    assert apply_clean({"clean": "research(r'Price\\s*([\\d,]+)', str(val))"},
+                       "Price 1,200 VND") == "1,200"
+
+    html = "<html><body><h1>Tour A</h1></body></html>"
+    profile = {"fields": {
+        "good": {"source": "css", "selector": "h1"},
+        "bad": {"source": "css", "selector": "h1", "clean": "1/0"},
+        "ugly": {"source": "css", "selector": "h1",
+                 "clean": "re.search(r'zzz', str(val)).group(1)"},
+    }}
+    row = crawl_fields(html, profile)
+    assert row["good"] == "Tour A"
+    assert row["bad"] == "" and row["ugly"] == ""
+
+
+def test_read_done_retries_failures(tmp_path):
+    import csv as _csv
+
+    from ingest.pipeline import _read_done
+
+    path = tmp_path / "t.csv"
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = _csv.DictWriter(handle, fieldnames=["url", "status"])
+        writer.writeheader()
+        writer.writerow({"url": "https://example.test/ok", "status": "ok"})
+        writer.writerow({"url": "https://example.test/fail", "status": "fetch_fail"})
+        writer.writerow({"url": "https://example.test/blocked", "status": "blocked"})
+        writer.writerow({"url": "https://example.test/plain"})
+    assert _read_done(path) == {"https://example.test/ok", "https://example.test/plain"}
+
+
+def test_batch_resume_retries_failed_urls(tmp_path, monkeypatch):
+    import csv as _csv
+
+    import ingest.pipeline as pipeline_mod
+    from ingest.pipeline import run_batch
+
+    out_csv = tmp_path / "out.csv"
+    with out_csv.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = _csv.DictWriter(handle, fieldnames=["url", "status"])
+        writer.writeheader()
+        writer.writerow({"url": "https://example.test/done", "status": "ok"})
+        writer.writerow({"url": "https://example.test/retry", "status": "fetch_fail"})
+
+    calls: list[str] = []
+
+    def fake_run_tour(url, profile, settings, out_dir, robots_cache=None,
+                      conditional=None):
+        calls.append(url)
+        return {"url": url, "status": "ok", "title": "T", "departures": 0,
+                "verified": 0, "notes_keys": "", "error": ""}
+
+    monkeypatch.setattr(pipeline_mod, "run_tour", fake_run_tour)
+    settings = {"output": {"dir": str(tmp_path)},
+                "batch": {"workers": 1, "delay_s": 0, "max_consecutive_failures": 10}}
+    assert run_batch(["https://example.test/done", "https://example.test/retry"],
+                     {}, settings, out_csv, tmp_path / "json") == 0
+    assert calls == ["https://example.test/retry"]
+
+
 def test_cli_parses_args():
     from ingest.pipeline import _parse_args
 
