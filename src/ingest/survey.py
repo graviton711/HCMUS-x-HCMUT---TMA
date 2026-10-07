@@ -175,8 +175,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if render_src.exists():
         shutil.copy2(render_src, workdir / "render_url.py")
 
-    # raw/ các lần chạy trước nằm ở out_dir/raw (chuẩn cũ) — đưa vào workdir
-    # để agent dùng lại thay vì tải lại từ đầu.
     legacy_raw = out_dir / "raw"
     if legacy_raw.exists():
         shutil.copytree(legacy_raw, raw_dir, dirs_exist_ok=True)
