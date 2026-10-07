@@ -32,7 +32,8 @@ uv run ruff check .
 ## Chạy tối thiểu module ingest
 
 ```powershell
-uv run python -m ingest.survey --source dulichviet --origin https://dulichviet.com.vn/
+uv run python -m ingest.survey --source dulichviet
+# --origin chỉ cần khi thêm nguồn mới chưa có trong configs/sources-mvp.csv
 uv run python -m ingest --discover --profile dulichviet --limit 5
 uv run python -m ingest <tour_url> --profile dulichviet
 uv run python -m ingest.audit --profile dulichviet --urls <file_url_list>
