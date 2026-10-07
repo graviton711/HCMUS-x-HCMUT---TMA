@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import io
 import json
 import os
@@ -96,11 +97,16 @@ def _read_done(path: Path) -> set[str]:
 
 
 def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
-             robots_cache: dict | None = None) -> dict:
+             robots_cache: dict | None = None,
+             conditional: dict | None = None) -> dict:
     """One tour end-to-end. Returns a status-tagged result dict.
 
     Pass a shared `robots_cache` dict from batch runs so robots.txt is
     fetched once per origin; single calls without it behave as before.
+    Pass `conditional` (etag/last_modified/hash from a previous snapshot)
+    to skip parsing when the page is unchanged; the row then carries
+    status `not_modified` plus a `_state_entry` for the caller to persist
+    (CSV writer ignores the private key).
     """
     fetch_cfg = settings.get("fetch", {})
     limiter = RateLimiter(float(fetch_cfg.get("delay_s", 1.0)))
@@ -123,11 +129,37 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     if robots is not None and not robots.can_fetch(fetcher.user_agent, url):
         return {"url": url, "status": BLOCKED, "error": "robots.txt disallows URL"}
 
-    page = fetcher.fetch(url, origin)
-    if page.error or page.status_code != 200:
+    extra_headers: dict = {}
+    if conditional:
+        if conditional.get("etag"):
+            extra_headers["If-None-Match"] = conditional["etag"]
+        if conditional.get("last_modified"):
+            extra_headers["If-Modified-Since"] = conditional["last_modified"]
+    page = fetcher.fetch(url, origin, extra_headers or None)
+    if page.error or page.status_code not in (200, 304):
         return {"url": url, "status": FETCH_FAIL,
                 "error": page.error or f"HTTP {page.status_code}"}
+    if page.status_code == 304:
+        prior = conditional or {}
+        return {"url": url, "observed_at": observed, "profile": profile.get("name", ""),
+                "status": "not_modified", "title": "", "departures": 0,
+                "verified": 0, "notes_keys": "", "error": "",
+                "_state_entry": {"etag": page.headers.get("ETag", prior.get("etag", "")),
+                                 "last_modified": page.headers.get("Last-Modified", prior.get("last_modified", "")),
+                                 "hash": prior.get("hash", ""),
+                                 "observed_at": observed}}
+    body_hash = hashlib.sha256(page.body).hexdigest()
+    if conditional and conditional.get("hash") == body_hash:
+        return {"url": url, "observed_at": observed, "profile": profile.get("name", ""),
+                "status": "not_modified", "title": "", "departures": 0,
+                "verified": 0, "notes_keys": "", "error": "",
+                "_state_entry": {"etag": page.headers.get("ETag", ""),
+                                 "last_modified": page.headers.get("Last-Modified", ""),
+                                 "hash": body_hash, "observed_at": observed}}
     html = page.body.decode("utf-8", errors="replace")
+    fresh_state = {"etag": page.headers.get("ETag", ""),
+                   "last_modified": page.headers.get("Last-Modified", ""),
+                   "hash": body_hash, "observed_at": observed}
 
     clean_cfg = settings.get("clean", {})
     merged: dict = {
@@ -214,7 +246,25 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
             "status": status, "title": merged["title"], "departures": len(departures),
             "verified": verified, "notes_keys": ",".join(sorted(notes.keys())),
             "record_evidence": merged.get("record_evidence", ""), "error": error,
-            "detail_file": str(detail_path)}
+            "detail_file": str(detail_path), "_state_entry": fresh_state}
+
+
+def _state_path(settings: dict) -> Path:
+    """Snapshot state lives beside the output dir so re-snapshots skip unchanged pages."""
+    return Path(settings.get("output", {}).get("dir", ".local")) / "_state.json"
+
+
+def _load_state(path: Path) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_state(path: Path, state: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
 
 
 def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
@@ -226,6 +276,8 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
     if out_dir is None:
         out_dir = Path(settings.get("output", {}).get("dir", ".local")) / "tours"
     done = _read_done(output)
+    state_path = _state_path(settings)
+    state = _load_state(state_path)
     todo = [url for url in urls if url not in done]
     log.info("batch: %d urls (%d skipped)", len(todo), len(urls) - len(todo))
 
@@ -245,20 +297,25 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
             for index, url in enumerate(todo, 1):
                 log.info("tour %d/%d %s", index, len(todo), url)
                 try:
-                    row = run_tour(url, profile, settings, out_dir, robots_cache)
+                    row = run_tour(url, profile, settings, out_dir, robots_cache,
+                                   state.get(url))
                 except Exception as exc:
                     row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
+                if "_state_entry" in row:
+                    state[url] = row.pop("_state_entry")
                 writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
                 handle.flush()
                 if row.get("status") in (FETCH_FAIL, BLOCKED):
                     fails += 1
                     if fails >= max_fails:
                         log.error("failure budget exhausted (%d)", fails)
+                        _save_state(state_path, state)
                         return 1
                 else:
                     fails = 0
                 if index < len(todo):
                     time.sleep(gap)
+        _save_state(state_path, state)
         log.info("batch done: wrote %s", output)
         return 0
 
@@ -272,7 +329,8 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
             lock = origin_locks.setdefault(origin, threading.Lock())
         with lock:
             try:
-                row = run_tour(url, profile, settings, out_dir, robots_cache)
+                row = run_tour(url, profile, settings, out_dir, robots_cache,
+                               state.get(url))
             except Exception as exc:
                 row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
             time.sleep(gap)
@@ -292,6 +350,8 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                 except BaseException:
                     pool.shutdown(cancel_futures=True)
                     raise
+                if "_state_entry" in row:
+                    state[url] = row.pop("_state_entry")
                 writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
                 handle.flush()
                 if row.get("status") in (FETCH_FAIL, BLOCKED):
@@ -299,11 +359,13 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                     if fails >= max_fails:
                         log.error("failure budget exhausted (%d)", fails)
                         pool.shutdown(cancel_futures=True)
+                        _save_state(state_path, state)
                         return 1
                 else:
                     fails = 0
         finally:
             pool.shutdown(cancel_futures=True)
+    _save_state(state_path, state)
     log.info("batch done: wrote %s", output)
     return 0
 

@@ -196,7 +196,8 @@ def test_run_batch_respects_out_dir(tmp_path, monkeypatch):
 
     calls = []
 
-    def fake_run_tour(url, profile, settings, out_dir, robots_cache=None):
+    def fake_run_tour(url, profile, settings, out_dir, robots_cache=None,
+                      conditional=None):
         calls.append(out_dir)
         return {"url": url, "status": "ok", "title": "T", "departures": 0,
                 "verified": 0, "notes_keys": "", "error": ""}
@@ -262,6 +263,84 @@ def test_concurrent_batch_keeps_input_order(tmp_path, monkeypatch):
     with out_csv.open(encoding="utf-8-sig") as handle:
         rows = list(_csv.DictReader(handle))
     assert [r["url"] for r in rows] == urls
+
+
+def test_conditional_fetch_skips_unchanged_pages(tmp_path, monkeypatch):
+    import hashlib as _hashlib
+
+    import ingest.pipeline as pipeline_mod
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import run_tour
+
+    body = b"<html><head><title>T</title></head><body>hi</body></html>"
+    digest = _hashlib.sha256(body).hexdigest()
+    seen_headers: list = []
+
+    class FakeFetcher:
+        def __init__(self, *args, **kwargs):
+            self.user_agent = "test"
+
+        def fetch(self, url, origin_host="", extra_headers=None):
+            if url.endswith("/robots.txt"):
+                return FetchResult(url, 404, "", b"", "HTTP 404")
+            seen_headers.append(extra_headers or {})
+            if (extra_headers or {}).get("If-None-Match") == '"abc"':
+                return FetchResult(url, 304, "", b"", None, {"ETag": '"abc"'})
+            return FetchResult(url, 200, "text/html", body, None, {"ETag": '"abc"'})
+
+    monkeypatch.setattr(pipeline_mod, "SafeFetcher", FakeFetcher)
+    monkeypatch.setattr(pipeline_mod, "fetch_robots", lambda *a: None)
+    out_json = tmp_path / "json"
+
+    row = run_tour("https://example.test/1", {}, {}, out_json,
+                   None, {"etag": '"abc"', "last_modified": "", "hash": "old"})
+    assert row["status"] == "not_modified"
+    assert seen_headers[-1].get("If-None-Match") == '"abc"'
+    assert row["_state_entry"]["hash"] == "old"
+
+    row = run_tour("https://example.test/2", {}, {}, out_json,
+                   None, {"etag": "", "last_modified": "", "hash": digest})
+    assert row["status"] == "not_modified"
+
+    row = run_tour("https://example.test/3", {}, {}, out_json,
+                   None, {"etag": "", "last_modified": "", "hash": "stale"})
+    assert row["status"] == "ok"
+    assert row["_state_entry"]["hash"] == digest
+
+    row = run_tour("https://example.test/4", {}, {}, out_json)
+    assert row["status"] == "ok"
+    assert row["_state_entry"]["hash"] == digest
+
+
+def test_state_file_round_trip_and_corrupt_recovery(tmp_path, monkeypatch):
+    import ingest.pipeline as pipeline_mod
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import _load_state, _save_state, run_batch
+
+    assert _load_state(tmp_path / "missing.json") == {}
+    (tmp_path / "bad.json").write_text("not json{{", encoding="utf-8")
+    assert _load_state(tmp_path / "bad.json") == {}
+    _save_state(tmp_path / "s.json", {"u": {"hash": "h"}})
+    assert _load_state(tmp_path / "s.json") == {"u": {"hash": "h"}}
+
+    class FakeFetcher:
+        def __init__(self, *args, **kwargs):
+            self.user_agent = "test"
+
+        def fetch(self, url, origin_host="", extra_headers=None):
+            if url.endswith("/robots.txt"):
+                return FetchResult(url, 404, "", b"", "HTTP 404")
+            return FetchResult(url, 200, "text/html",
+                               b"<html><head><title>T</title></head><body></body></html>",
+                               None, {})
+
+    monkeypatch.setattr(pipeline_mod, "SafeFetcher", FakeFetcher)
+    monkeypatch.setattr(pipeline_mod, "fetch_robots", lambda *a: None)
+    out_csv = tmp_path / "out.csv"
+    settings = {"output": {"dir": str(tmp_path / "state-home")},
+                "batch": {"workers": 1, "delay_s": 0, "max_consecutive_failures": 10}}
+    assert run_batch(["https://example.test/1"], {}, settings, out_csv, tmp_path / "json") == 0
+    assert (tmp_path / "state-home" / "_state.json").exists()
 
 
 def test_compile_keep_is_case_insensitive_regression():

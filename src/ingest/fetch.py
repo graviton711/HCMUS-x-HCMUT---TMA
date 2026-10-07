@@ -38,6 +38,7 @@ class FetchResult:
     content_type: str
     body: bytes = b""
     error: str | None = None
+    headers: dict = field(default_factory=dict)
 
 
 class UnsafeURLError(ValueError):
@@ -87,17 +88,22 @@ class SafeFetcher:
         self.limiter = limiter or RateLimiter()
         self.requests_made = 0
 
-    def fetch(self, url: str, origin_host: str = "") -> FetchResult:
+    def fetch(self, url: str, origin_host: str = "",
+              extra_headers: dict | None = None) -> FetchResult:
         try:
             safe = validate_public_url(url, origin_host)
         except UnsafeURLError as exc:
             return FetchResult(url, 0, "", b"", str(exc))
         self.limiter.wait()
         self.requests_made += 1
+        headers = {"User-Agent": self.user_agent}
+        headers.update(extra_headers or {})
         try:
             with build_opener().open(
-                Request(safe, headers={"User-Agent": self.user_agent}), timeout=self.timeout
+                Request(safe, headers=headers), timeout=self.timeout
             ) as resp:
+                if resp.status == 304:
+                    return FetchResult(safe, 304, "", b"", None, self._validators(resp))
                 body = resp.read(self.max_bytes + 1)
         except Exception as exc:
             return FetchResult(safe, 0, "", b"", f"{type(exc).__name__}: {exc}"[:200])
@@ -105,7 +111,18 @@ class SafeFetcher:
             return FetchResult(safe, resp.status, "", b"", f"HTTP {resp.status}")
         if len(body) > self.max_bytes:
             return FetchResult(safe, resp.status, "", b"", "Response exceeds byte limit")
-        return FetchResult(safe, resp.status, resp.headers.get("Content-Type", ""), body)
+        return FetchResult(safe, resp.status, resp.headers.get("Content-Type", ""),
+                           body, None, self._validators(resp))
+
+    @staticmethod
+    def _validators(resp) -> dict:
+        """Only the headers conditional requests need; nothing else stored."""
+        out = {}
+        for name in ("ETag", "Last-Modified"):
+            value = resp.headers.get(name)
+            if value:
+                out[name] = value
+        return out
 
 
 def fetch_robots(fetcher: SafeFetcher, site_base: str, origin_host: str):
