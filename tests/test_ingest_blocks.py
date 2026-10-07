@@ -406,7 +406,8 @@ def test_run_batch_respects_out_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline_mod, "run_tour", fake_run_tour)
     out_csv = tmp_path / "out.csv"
     out_json = tmp_path / "json"
-    assert run_batch(["https://example.test/1"], {}, {}, out_csv, out_json) == 0
+    assert run_batch(["https://example.test/1"], {},
+                     {"output": {"dir": str(tmp_path)}}, out_csv, out_json) == 0
     assert calls == [out_json]
     assert out_csv.exists()
 
@@ -433,7 +434,7 @@ def test_batch_fetches_robots_once_per_origin(tmp_path, monkeypatch):
     out_csv = tmp_path / "out.csv"
     out_json = tmp_path / "json"
     urls = ["https://a.test/1", "https://a.test/2", "https://b.test/1"]
-    assert run_batch(urls, {}, {}, out_csv, out_json) == 0
+    assert run_batch(urls, {}, {"output": {"dir": str(tmp_path)}}, out_csv, out_json) == 0
     assert sorted(robots_calls) == ["https://a.test/robots.txt", "https://b.test/robots.txt"]
 
 
@@ -458,7 +459,8 @@ def test_concurrent_batch_keeps_input_order(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline_mod, "fetch_robots", lambda *a: None)
     out_csv = tmp_path / "out.csv"
     out_json = tmp_path / "json"
-    settings = {"batch": {"workers": 2, "delay_s": 0, "max_consecutive_failures": 10}}
+    settings = {"output": {"dir": str(tmp_path)},
+                "batch": {"workers": 2, "delay_s": 0, "max_consecutive_failures": 10}}
     urls = ["https://slow.test/1", "https://fast.test/2"]
     assert run_batch(urls, {"flows": ["static"]}, settings, out_csv, out_json) == 0
     with out_csv.open(encoding="utf-8-sig") as handle:
@@ -535,13 +537,14 @@ def test_state_file_round_trip_and_corrupt_recovery(tmp_path, monkeypatch):
                                b"<html><head><title>T</title></head><body></body></html>",
                                None, {})
 
-    monkeypatch.setattr(pipeline_mod, "SafeFetcher", FakeFetcher)
+    monkeypatch.setattr(pipeline_mod, "make_fetcher", lambda settings: FakeFetcher())
     monkeypatch.setattr(pipeline_mod, "fetch_robots", lambda *a: None)
     out_csv = tmp_path / "out.csv"
     settings = {"output": {"dir": str(tmp_path / "state-home")},
                 "batch": {"workers": 1, "delay_s": 0, "max_consecutive_failures": 10}}
     assert run_batch(["https://example.test/1"], {}, settings, out_csv, tmp_path / "json") == 0
-    assert (tmp_path / "state-home" / "_state.json").exists()
+    saved = _load_state(tmp_path / "state-home" / "_state.json")
+    assert "https://example.test/1" in saved and saved["https://example.test/1"]["hash"]
 
 
 def test_compile_keep_is_case_insensitive_regression():
