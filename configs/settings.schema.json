@@ -34,7 +34,33 @@
       "type": "object",
       "properties": {
         "max_consecutive_failures": {"type": "integer"},
-        "delay_s": {"type": "number"}
+        "delay_s": {"type": "number"},
+        "workers": {"type": "integer"}
+      },
+      "additionalProperties": true
+    },
+    "sitemap": {
+      "type": "object",
+      "properties": {
+        "attempts": {"type": "integer"}
+      },
+      "additionalProperties": true
+    },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "min_evidence": {"type": "number"}
+      },
+      "additionalProperties": true
+    },
+    "survey": {
+      "type": "object",
+      "properties": {
+        "model": {"type": "string"},
+        "variant": {"type": "string"},
+        "timeout_min": {"type": "integer"},
+        "prefetch_timeout_s": {"type": "number"},
+        "max_body_bytes": {"type": "integer"}
       },
       "additionalProperties": true
     },

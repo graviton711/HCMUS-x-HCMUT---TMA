@@ -74,3 +74,16 @@ def test_promote_copies_profile_into_configs(tmp_path):
         promote_profile(tmp_path / "empty", "example", tmp_path / "profiles")
     assert _parse_args(["--source", "example", "--promote"]).promote is True
     assert _parse_args(["--source", "example"]).promote is False
+    defaults = _parse_args(["--source", "example"])
+    assert defaults.model is None and defaults.variant is None and defaults.timeout_min is None
+
+
+def test_settings_has_tunable_sections():
+    from ingest.extract import load_settings
+
+    settings = load_settings()
+    assert settings["sitemap"]["attempts"] == 2
+    assert settings["batch"]["workers"] == 4
+    assert settings["audit"]["min_evidence"] == 0.9
+    assert settings["survey"]["timeout_min"] == 20
+    assert settings["survey"]["prefetch_timeout_s"] == 15

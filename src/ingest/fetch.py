@@ -125,6 +125,21 @@ class SafeFetcher:
         return out
 
 
+def make_fetcher(settings: dict) -> SafeFetcher:
+    """Single construction site for settings-driven fetchers.
+
+    Tunables live in configs/settings.yaml (`fetch`); literals below are
+    fallbacks only, never the source of truth.
+    """
+    cfg = settings.get("fetch", {})
+    return SafeFetcher(
+        timeout=float(cfg.get("timeout_s", 20)),
+        max_bytes=int(cfg.get("max_bytes", MAX_BODY_BYTES)),
+        user_agent=str(cfg.get("user_agent", "MLAITourSourceAuditor/0.1")),
+        limiter=RateLimiter(float(cfg.get("delay_s", 1.0))),
+    )
+
+
 def fetch_robots(fetcher: SafeFetcher, site_base: str, origin_host: str):
     """Robots parser or None when unavailable (fail closed upstream)."""
     result = fetcher.fetch(f"{site_base}/robots.txt", origin_host)

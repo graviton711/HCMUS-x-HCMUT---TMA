@@ -115,8 +115,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--urls", type=Path, default=None,
                         help="file with one tour URL per line "
                              "(default: url column of <output.dir>/tours.csv)")
-    parser.add_argument("--min-evidence", type=float, default=0.9,
-                        help="minimum verified fraction (default 0.9)")
+    parser.add_argument("--min-evidence", type=float, default=None,
+                        help="minimum verified fraction (default: audit.min_evidence in settings)")
     parser.add_argument("--out-dir", type=Path, default=None, help="detail JSON directory")
     args = parser.parse_args(argv)
     try:
@@ -144,7 +144,9 @@ def main(argv: list[str] | None = None) -> int:
                   file=sys.stderr)
             return 2
         urls = _urls_from_csv(default_csv)
-    result = audit_urls(urls, profile, settings, args.out_dir, args.min_evidence)
+    result = audit_urls(urls, profile, settings, args.out_dir,
+                        args.min_evidence if args.min_evidence is not None
+                        else float(settings.get("audit", {}).get("min_evidence", 0.9)))
     print(f"tours={result.tours} failed_tours={len(result.failed_tours)} "
           f"evidence_rate={result.evidence_rate:.2f}")
     for name in sorted(result.fields):

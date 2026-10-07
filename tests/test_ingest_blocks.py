@@ -261,6 +261,36 @@ def test_sitemap_gives_up_after_two_failures(caplog):
     assert calls == ["https://example.test/s.xml"] * 2
 
 
+def test_sitemap_attempts_come_from_settings():
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import sitemap_urls
+
+    calls: list[str] = []
+
+    class FakeFetcher(SafeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
+            calls.append(url)
+            return FetchResult(url, 0, "", b"", "TimeoutError")
+
+    assert sitemap_urls(FakeFetcher(), ["https://example.test/s.xml"], ["/du-lich-"],
+                        attempts=1) == []
+    assert calls == ["https://example.test/s.xml"]
+    assert sitemap_urls(FakeFetcher(), ["https://example.test/s.xml"], ["/du-lich-"],
+                        attempts=3) == []
+    assert calls == ["https://example.test/s.xml"] * 4
+
+
+def test_make_fetcher_reads_settings():
+    from ingest.fetch import make_fetcher
+
+    fetcher = make_fetcher({"fetch": {"timeout_s": 5, "max_bytes": 1000,
+                                      "delay_s": 0.1, "user_agent": "TestAgent/1.0"}})
+    assert (fetcher.timeout, fetcher.max_bytes, fetcher.user_agent,
+            fetcher.limiter.delay) == (5.0, 1000, "TestAgent/1.0", 0.1)
+    fallback = make_fetcher({})
+    assert (fallback.timeout, fallback.max_bytes) == (20.0, 2000000)
+
+
 def test_search_pages_dedupes_startday_links_and_caps_pages():
     from ingest.fetch import FetchResult
     from ingest.pipeline import discover_urls, search_page_urls
@@ -346,7 +376,7 @@ def test_batch_fetches_robots_once_per_origin(tmp_path, monkeypatch):
             return FetchResult(url, 200, "text/html",
                                b"<html><head><title>T</title></head><body></body></html>", None)
 
-    monkeypatch.setattr(pipeline_mod, "SafeFetcher", FakeFetcher)
+    monkeypatch.setattr(pipeline_mod, "make_fetcher", lambda settings: FakeFetcher())
     out_csv = tmp_path / "out.csv"
     out_json = tmp_path / "json"
     urls = ["https://a.test/1", "https://a.test/2", "https://b.test/1"]
@@ -406,7 +436,7 @@ def test_conditional_fetch_skips_unchanged_pages(tmp_path, monkeypatch):
                 return FetchResult(url, 304, "", b"", None, {"ETag": '"abc"'})
             return FetchResult(url, 200, "text/html", body, None, {"ETag": '"abc"'})
 
-    monkeypatch.setattr(pipeline_mod, "SafeFetcher", FakeFetcher)
+    monkeypatch.setattr(pipeline_mod, "make_fetcher", lambda settings: FakeFetcher())
     monkeypatch.setattr(pipeline_mod, "fetch_robots", lambda *a: None)
     out_json = tmp_path / "json"
 

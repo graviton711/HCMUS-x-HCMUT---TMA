@@ -26,7 +26,7 @@ from shared import get_logger
 
 from . import extract, quality
 from .extract import load_profile, load_settings
-from .fetch import BrowserSession, RateLimiter, SafeFetcher, fetch_robots
+from .fetch import BrowserSession, SafeFetcher, fetch_robots, make_fetcher
 from .quality import BLOCKED, FETCH_FAIL, OK, PARSE_FAIL, departure_evidence, verify_record
 
 log = get_logger("pipeline")
@@ -35,10 +35,10 @@ CSV_COLUMNS = ["url", "observed_at", "profile", "status", "title",
                "departures", "verified", "notes_keys", "record_evidence", "error"]
 
 
-def _fetch_sitemap(fetcher: SafeFetcher, sitemap: str) -> bytes | None:
-    """One retry; None when both attempts fail (logged once)."""
+def _fetch_sitemap(fetcher: SafeFetcher, sitemap: str, attempts: int = 2) -> bytes | None:
+    """Retry `attempts` times; None when all fail (logged once)."""
     last_error: object = "unknown"
-    for _ in range(2):
+    for _ in range(max(1, attempts)):
         result = fetcher.fetch(sitemap)
         if result.status_code == 200 and not result.error:
             return result.body
@@ -77,7 +77,8 @@ def _urlset_entries(body: bytes, patterns: list[str]) -> list[tuple[str, str]]:
 
 
 def sitemap_urls(fetcher: SafeFetcher, sitemaps: list[str],
-                 patterns: list[str], min_lastmod: str = "") -> list[str]:
+                 patterns: list[str], min_lastmod: str = "",
+                 attempts: int = 2) -> list[str]:
     """Tour URLs from sitemaps, following one sitemap-index level down.
 
     Freshest first (by sitemap lastmod, ISO strings compare directly);
@@ -87,7 +88,7 @@ def sitemap_urls(fetcher: SafeFetcher, sitemaps: list[str],
     stamped: dict[str, str] = {}
     children: list[str] = []
     for sitemap in sitemaps:
-        body = _fetch_sitemap(fetcher, sitemap)
+        body = _fetch_sitemap(fetcher, sitemap, attempts)
         if body is None:
             continue
         try:
@@ -106,7 +107,7 @@ def sitemap_urls(fetcher: SafeFetcher, sitemaps: list[str],
             if url not in stamped or (lastmod and lastmod > stamped[url]):
                 stamped[url] = lastmod
     for child in children:
-        body = _fetch_sitemap(fetcher, child)
+        body = _fetch_sitemap(fetcher, child, attempts)
         if body is None:
             continue
         try:
@@ -170,7 +171,7 @@ def _listing_max_page(body: bytes, page_param: str, cap: int) -> int:
 
 
 def search_page_urls(fetcher: SafeFetcher, discovery: dict,
-                     patterns: list[str]) -> list[str]:
+                     patterns: list[str], attempts: int = 2) -> list[str]:
     """Unique tour slugs from SSR paginated lists (one card link per departure).
 
     Page 1 reveals the real last page via its paging links; iteration stops
@@ -185,14 +186,16 @@ def search_page_urls(fetcher: SafeFetcher, discovery: dict,
     strip = bool(discovery.get("strip_query", True))
     seen: dict[str, None] = {}
     raw = 0
-    first = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, 1))
+    first = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, 1),
+                           attempts)
     if first is None:
         return []
     pages = _listing_max_page(first, page_param, cap)
     bodies = [first]
     log.info("search pages: walking %d pages", pages)
     for page in range(2, pages + 1):
-        body = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, page))
+        body = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, page),
+                              attempts)
         if body is None:
             continue
         bodies.append(body)
@@ -210,13 +213,14 @@ def search_page_urls(fetcher: SafeFetcher, discovery: dict,
 
 
 def discover_urls(fetcher: SafeFetcher, profile: dict,
-                  patterns: list[str], min_lastmod: str = "") -> list[str]:
+                  patterns: list[str], min_lastmod: str = "",
+                  attempts: int = 2) -> list[str]:
     """Enumerate tour URLs via the profile's declared discovery method."""
     discovery = profile.get("discovery") or {"method": "sitemap"}
     if discovery.get("method") == "search_pages" and discovery.get("entry"):
-        return search_page_urls(fetcher, discovery, patterns)
+        return search_page_urls(fetcher, discovery, patterns, attempts)
     return sitemap_urls(fetcher, profile.get("sitemaps", []), patterns,
-                        min_lastmod=min_lastmod)
+                        min_lastmod=min_lastmod, attempts=attempts)
 
 
 def _save_discovered(urls: list[str], path: Path) -> Path:
@@ -249,14 +253,7 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     status `not_modified` plus a `_state_entry` for the caller to persist
     (CSV writer ignores the private key).
     """
-    fetch_cfg = settings.get("fetch", {})
-    limiter = RateLimiter(float(fetch_cfg.get("delay_s", 1.0)))
-    fetcher = SafeFetcher(
-        timeout=float(fetch_cfg.get("timeout_s", 20)),
-        max_bytes=int(fetch_cfg.get("max_bytes", 2_000_000)),
-        user_agent=str(fetch_cfg.get("user_agent", "MLAITourSourceAuditor/0.1")),
-        limiter=limiter,
-    )
+    fetcher = make_fetcher(settings)
     origin = (urlsplit(url).hostname or "").lower()
     site_base = f"{urlsplit(url).scheme}://{origin}"
     observed = datetime.now(UTC).isoformat(timespec="seconds")
@@ -333,7 +330,9 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     rendered_text = ""
     if "browser" in profile.get("flows", []) or "combo_api_browser" in profile.get("flows", []):
         try:
-            with BrowserSession(user_agent=fetcher.user_agent) as session:
+            with BrowserSession(user_agent=fetcher.user_agent,
+                                timeout_ms=int(settings.get("browser", {}).get("timeout_ms", 60000))
+                                ) as session:
                 traffic = session.capture(url, profile, settings)
             departures: list = []
             for payload in traffic.payloads:
@@ -518,13 +517,7 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
 
 def _prime_robots_cache(urls: list[str], settings: dict, robots_cache: dict) -> None:
     """Fetch robots.txt once per origin up front; workers only read the cache."""
-    fetch_cfg = settings.get("fetch", {})
-    fetcher = SafeFetcher(
-        timeout=float(fetch_cfg.get("timeout_s", 20)),
-        max_bytes=int(fetch_cfg.get("max_bytes", 2_000_000)),
-        user_agent=str(fetch_cfg.get("user_agent", "MLAITourSourceAuditor/0.1")),
-        limiter=RateLimiter(float(fetch_cfg.get("delay_s", 1.0))),
-    )
+    fetcher = make_fetcher(settings)
     for url in urls:
         origin = (urlsplit(url).hostname or "").lower()
         site_base = f"{urlsplit(url).scheme}://{origin}"
@@ -784,26 +777,16 @@ def main(argv: list[str] | None = None) -> int:
         with args.batch.open(encoding="utf-8-sig") as handle:
             urls = [row["url"] for row in csv.DictReader(handle) if row.get("url")]
     elif args.sitemap:
-        fetch_cfg = settings.get("fetch", {})
-        fetcher = SafeFetcher(
-            timeout=float(fetch_cfg.get("timeout_s", 20)),
-            max_bytes=int(fetch_cfg.get("max_bytes", 2_000_000)),
-            user_agent=str(fetch_cfg.get("user_agent", "MLAITourSourceAuditor/0.1")),
-            limiter=RateLimiter(float(fetch_cfg.get("delay_s", 1.0))),
-        )
+        fetcher = make_fetcher(settings)
         urls = sitemap_urls(fetcher, profile.get("sitemaps", []), profile.get("tour_url_patterns", []),
-                              min_lastmod=args.since)
+                              min_lastmod=args.since,
+                              attempts=int(settings.get("sitemap", {}).get("attempts", 2)))
         print(f"sitemap urls: {len(urls)}")
     elif args.discover:
-        fetch_cfg = settings.get("fetch", {})
-        fetcher = SafeFetcher(
-            timeout=float(fetch_cfg.get("timeout_s", 20)),
-            max_bytes=int(fetch_cfg.get("max_bytes", 2_000_000)),
-            user_agent=str(fetch_cfg.get("user_agent", "MLAITourSourceAuditor/0.1")),
-            limiter=RateLimiter(float(fetch_cfg.get("delay_s", 1.0))),
-        )
+        fetcher = make_fetcher(settings)
         urls = discover_urls(fetcher, profile, profile.get("tour_url_patterns", []),
-                             min_lastmod=args.since)
+                             min_lastmod=args.since,
+                             attempts=int(settings.get("sitemap", {}).get("attempts", 2)))
         print(f"discovered urls: {len(urls)}")
     elif args.url:
         urls = [args.url]

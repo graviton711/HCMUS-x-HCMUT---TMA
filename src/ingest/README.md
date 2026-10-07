@@ -4,6 +4,8 @@ Luồng chính 5 bước: danh sách link (sitemap trong `pipeline`) → agent v
 
 Tài liệu này đặc tả hợp đồng kỹ thuật giữa Agent khảo sát (`survey.py`) và engine thu thập (`dsl.py` + `pipeline.py`).
 
+Mọi thông số vận hành (timeout, retry, workers, model survey, `min_evidence`...) nằm ở `configs/settings.yaml` theo `configs/settings.schema.json`; code chỉ giữ fallback, không phải nguồn sự thật.
+
 ## 1. Nguyên tắc cốt lõi
 
 * **Agent làm việc khó, Runner làm việc dễ:** Agent (LLM) phân tích DOM, tìm tọa độ chính xác và xuất ra `profile.yaml` thuần dữ liệu máy đọc được. Runner (`dsl.py` trong engine, chạy qua `python -m ingest`) là code cơ học thuần túy — tuyệt đối không suy đoán hay chứa logic heuristic riêng của từng website (nguyên tắc bất biến là "không heuristic per-site").

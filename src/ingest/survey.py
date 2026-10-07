@@ -70,15 +70,17 @@ def _robots_sitemaps(text: str) -> list[str]:
             if line.lower().startswith("sitemap:")]
 
 
-def _save_url(url: str, raw_dir: Path) -> str | None:
+def _save_url(url: str, raw_dir: Path, user_agent: str = USER_AGENT,
+              timeout_s: float = PREFETCH_TIMEOUT_S,
+              max_bytes: int = MAX_BODY_BYTES) -> str | None:
     name = re.sub(r"[^A-Za-z0-9._-]+", "_", urlsplit(url).path.strip("/")) or "robots.txt"
     dest = raw_dir / name
     if dest.exists():
         return None
     try:
-        req = Request(url, headers={"User-Agent": USER_AGENT})
-        with urlopen(req, timeout=PREFETCH_TIMEOUT_S) as resp:
-            body = resp.read(MAX_BODY_BYTES)
+        req = Request(url, headers={"User-Agent": user_agent})
+        with urlopen(req, timeout=timeout_s) as resp:
+            body = resp.read(max_bytes)
         dest.write_bytes(body)
         return name
     except Exception:
@@ -100,14 +102,22 @@ def _agent_env() -> dict[str, str] | None:
     return None
 
 
-def prefetch(origin: str, raw_dir: Path) -> list[str]:
+def prefetch(origin: str, raw_dir: Path, settings: dict | None = None) -> list[str]:
     """Best-effort: save robots.txt and its declared sitemaps into raw/.
 
     Mechanical work the agent would otherwise burn HTTP requests and LLM
     turns on; any failure is ignored (the agent still handles the source).
     """
+    survey_cfg = (settings or {}).get("survey", {})
+    fetch_cfg = (settings or {}).get("fetch", {})
+    user_agent = str(fetch_cfg.get("user_agent", USER_AGENT))
+    timeout_s = float(survey_cfg.get("prefetch_timeout_s", PREFETCH_TIMEOUT_S))
+    max_bytes = int(survey_cfg.get("max_body_bytes", MAX_BODY_BYTES))
+    def save(url: str) -> str | None:
+        return _save_url(url, raw_dir, user_agent, timeout_s, max_bytes)
+
     base = origin.rstrip("/")
-    robots = _save_url(f"{base}/robots.txt", raw_dir)
+    robots = save(f"{base}/robots.txt")
     if robots:
         sitemaps = _robots_sitemaps(
             (raw_dir / robots).read_text(encoding="utf-8", errors="replace"))
@@ -115,7 +125,7 @@ def prefetch(origin: str, raw_dir: Path) -> list[str]:
         sitemaps = []
     sitemaps.append(f"{base}/sitemap.xml")
     with ThreadPoolExecutor(max_workers=4) as pool:
-        names = pool.map(lambda url: _save_url(url, raw_dir), dict.fromkeys(sitemaps))
+        names = pool.map(save, dict.fromkeys(sitemaps))
         saved = [robots] if robots else []
         saved.extend(name for name in names if name)
     return saved
@@ -143,9 +153,12 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--source", required=True, help="short name, e.g. pys")
     parser.add_argument("--origin", default=None,
                         help="https://example.test/ (default: looked up from configs/sources-mvp.csv)")
-    parser.add_argument("--model", default=MODEL)
-    parser.add_argument("--variant", default=VARIANT)
-    parser.add_argument("--timeout-min", type=int, default=20)
+    parser.add_argument("--model", default=None,
+                        help="default: survey.model in settings")
+    parser.add_argument("--variant", default=None,
+                        help="default: survey.variant in settings")
+    parser.add_argument("--timeout-min", type=int, default=None,
+                        help="default: survey.timeout_min in settings")
     parser.add_argument("--format", choices=["default", "json"], default="default",
                         help="opencode output format (default: formatted readable output)")
     parser.add_argument("--output", type=Path, default=None,
@@ -184,6 +197,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ValueError as exc:
         print(f"Invalid source: {exc}", file=sys.stderr)
         return 2
+    try:
+        from .extract import load_settings
+
+        settings = load_settings()
+    except (ValueError, RuntimeError, OSError):
+        settings = {}
+    survey_cfg = settings.get("survey", {})
+    model = args.model or str(survey_cfg.get("model", MODEL))
+    variant = args.variant or str(survey_cfg.get("variant", VARIANT))
+    timeout_min = (args.timeout_min if args.timeout_min is not None
+                   else int(survey_cfg.get("timeout_min", 20)))
     out_dir = args.output or Path("artifacts/agent_surveys") / args.source
     out_dir.mkdir(parents=True, exist_ok=True)
     workdir = out_dir / "_work"
@@ -202,25 +226,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         shutil.copytree(legacy_raw, raw_dir, dirs_exist_ok=True)
 
     started = time.perf_counter()
-    prefetched = prefetch(origin, raw_dir)
+    prefetched = prefetch(origin, raw_dir, settings)
     print(f"prefetch={prefetched or 'nothing'} elapsed={time.perf_counter() - started:.1f}s",
           flush=True)
 
     task = load_agent_task(origin)
     print(f"workdir={workdir}", flush=True)
-    print(f"target={origin} model={args.model} variant={args.variant}", flush=True)
+    print(f"target={origin} model={model} variant={variant}", flush=True)
     exe = shutil.which("opencode") or shutil.which("opencode.cmd") or "opencode"
     returncode: int | None = None
     try:
         completed = subprocess.run(
-            [exe, "run", "--model", args.model, "--variant", args.variant,
+            [exe, "run", "--model", model, "--variant", variant,
              "--agent", "site-surveyor", "--dir", str(workdir),
              "--format", args.format, task],
-            timeout=args.timeout_min * 60, check=False, env=_agent_env(),
+            timeout=timeout_min * 60, check=False, env=_agent_env(),
         )
         returncode = completed.returncode
     except subprocess.TimeoutExpired:
-        print(f"agent timed out after {args.timeout_min} min; collecting partial output",
+        print(f"agent timed out after {timeout_min} min; collecting partial output",
               file=sys.stderr)
     agent_elapsed = time.perf_counter() - started
 
