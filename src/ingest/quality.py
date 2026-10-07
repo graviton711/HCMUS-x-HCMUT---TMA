@@ -1,22 +1,14 @@
-"""Category-based junk filtering, dedup, prose cleaning. No site specifics."""
+"""Evidence gate: junk filtering plus verbatim validation. Fail loud, never invent."""
 
 from __future__ import annotations
 
 import re
 
-QUOTED_ITEM = re.compile(r'"([^"\\]{8,2000})"')
-SLUG_RE = re.compile(r"^[a-z0-9\-/._]+$")
-URLISH_RE = re.compile(r"://|^/(?:[A-Za-z0-9\-._~%/?#=&]+/?)+$|\.(aspx|html?|js|css|webp|png|jpe?g|svg|woff2?)$", re.I)
-DATE_RE = re.compile(r"\d{2}/\d{2}/20\d{2}")
-CODE_SIGNS = ("function(", "=>")
+OK, BLOCKED, FETCH_FAIL, PARSE_FAIL = "ok", "blocked", "fetch_fail", "parse_fail"
+
 UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I
 )
-
-
-def letters_ratio(text: str) -> float:
-    letters = sum(1 for ch in text if ch.isalpha() or ch.isspace())
-    return letters / max(1, len(text))
 
 
 def visible_len(value: object) -> int:
@@ -70,64 +62,6 @@ def dedupe_departures(departures: list) -> tuple[list, dict]:
     return [{k: v for k, v in dep.items() if k not in shared} for dep in departures], shared
 
 
-def clean_prose(prose: str, short_words: int = 6, short_run: int = 20,
-                flight_short_run: int = 15) -> str:
-    """Keep human prose, drop code and boilerplate (generic, no site keys)."""
-    keep: list[str] = []
-    run: list[str] = []
-    shorts: list[str] = []
-
-    def flush() -> None:
-        keep.extend(run if len(run) < short_run else [])
-
-    def flush_shorts() -> None:
-        if len(shorts) < flight_short_run:
-            for item in shorts:
-                if item not in keep:
-                    keep.append(item)
-        shorts.clear()
-
-    def feed_flight(line: str) -> None:
-        for raw in QUOTED_ITEM.findall(line):
-            text = re.sub(r"\s+", " ", raw).strip()
-            if (
-                len(text) < 8
-                or letters_ratio(text) < 0.6
-                or any(sign in text for sign in CODE_SIGNS)
-                or URLISH_RE.search(text)
-                or text in keep
-            ):
-                continue
-            if len(text) >= 40 or DATE_RE.search(text):
-                flush_shorts()
-                keep.append(text)
-            elif SLUG_RE.match(text):
-                continue
-            else:
-                shorts.append(text)
-
-    def is_code(line: str) -> bool:
-        return letters_ratio(line) < 0.5 or any(sign in line for sign in CODE_SIGNS)
-
-    for line in prose.splitlines():
-        if "__next_f" in line or '["$"' in line:
-            feed_flight(line)
-            continue
-        if is_code(line):
-            flush()
-            run = []
-            continue
-        if len(line.split()) <= short_words:
-            run.append(line)
-        else:
-            flush()
-            run = []
-            keep.append(line)
-    flush()
-    flush_shorts()
-    return "\n".join(keep)
-
-
 def extract_notes(payloads: list, pattern: str, min_visible: int = 40) -> dict:
     """Notes subtrees keyed by semantic key pattern (generic, never URLs)."""
     note_pat = re.compile(pattern, re.I) if pattern else None
@@ -152,3 +86,27 @@ def extract_notes(payloads: list, pattern: str, min_visible: int = 40) -> dict:
     for payload in payloads:
         walk(payload)
     return notes
+
+
+def normalize(text: str) -> str:
+    return re.sub(r"\W+", " ", text.casefold()).strip()
+
+
+def departure_evidence(dep: dict, context: str) -> str:
+    """Spot-check one departure: key decision values verbatim in context.
+
+    Returns verified (all present), partial (some present), or unverified.
+    Generic: checks whatever decision fields the entry carries, no fixed schema.
+    """
+    context_norm = normalize(context)
+    checks = []
+    for name in ("tourCode", "salePrice", "price", "departureDate", "meetingPlace"):
+        value = dep.get(name)
+        if value is None or value == "":
+            continue
+        checks.append(normalize(str(value)) in context_norm)
+    if not checks:
+        return "unverified"
+    if all(checks):
+        return "verified"
+    return "partial" if any(checks) else "unverified"

@@ -1,10 +1,18 @@
-"""Batch orchestration: resume, budgets, exit codes. No parsing here."""
+"""Batch orchestration: resume, budgets, exit codes. Single team entry point.
+
+No parsing here; argv handling also lives here so `python -m ingest`
+needs no extra layer.
+"""
 
 from __future__ import annotations
 
+import argparse
 import csv
+import io
 import json
+import os
 import re
+import sys
 import time
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
@@ -13,10 +21,10 @@ from urllib.parse import urlsplit
 
 from shared import get_logger
 
-from .. import blocks, clean
-from ..browser import BrowserSession
-from ..fetch import RateLimiter, SafeFetcher, fetch_robots
-from ..validate import BLOCKED, FETCH_FAIL, OK, PARSE_FAIL, departure_evidence
+from .. import extract, quality
+from ..extract import load_profile, load_settings
+from ..fetch import BrowserSession, RateLimiter, SafeFetcher, fetch_robots
+from ..quality import BLOCKED, FETCH_FAIL, OK, PARSE_FAIL, departure_evidence
 
 log = get_logger("pipeline")
 
@@ -81,8 +89,7 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path) -> dict:
         "fetched_at_utc": observed,
         "profile": profile.get("name", ""),
         "title": "",
-        "json_ld": blocks.parse_json_ld(html),
-        "tour_info": None,
+        "json_ld": extract.parse_json_ld(html),
         "page_prose": "",
         "departure_schedule": None,
     }
@@ -90,35 +97,11 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path) -> dict:
     if title:
         merged["title"] = re.sub(r"\s+", " ", title.group(1)).strip()[:200]
 
-    decoded = blocks.js_unescape(html)
-    for alias in [a for names in profile.get("aliases", {}).values() for a in names]:
-        idx = decoded.find(f'"{alias}"')
-        if idx < 0:
-            continue
-        brace = decoded.find("{", idx)
-        if brace < 0:
-            continue
-        raw = blocks.balanced_slice(decoded, brace)
-        if not raw:
-            continue
-        try:
-            merged["tour_info"] = json.loads(raw)
-            break
-        except (json.JSONDecodeError, ValueError):
-            continue
+    merged["page_prose"] = extract.page_prose(html)
 
-    merged["page_prose"] = clean.clean_prose(
-        blocks.page_prose(html),
-        short_words=int(clean_cfg.get("boilerplate_short_words", 6)),
-        short_run=int(clean_cfg.get("boilerplate_short_run", 20)),
-        flight_short_run=int(clean_cfg.get("flight_short_run", 15)),
-    )
-
-    section_anchors = profile.get("section_anchors", {}) or {}
-    if section_anchors:
-        merged["sections"] = blocks.parse_sections(
-            html, section_anchors, profile.get("section_heading_keywords", {}))
-        merged["itinerary_days"] = blocks.parse_itinerary_days(html)
+    if profile.get("fields"):
+        merged["record"] = extract.crawl_fields(
+            html, profile, extract.same_origin_getter(page.url, fetcher))
 
     browser_error = ""
     rendered_text = ""
@@ -128,7 +111,7 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path) -> dict:
                 traffic = session.capture(url, profile, settings)
             departures: list = []
             for payload in traffic.payloads:
-                blocks.walk_departures(payload["data"], departures)
+                extract.walk_departures(payload["data"], departures)
             merged_deps: dict = {}
             for dep in departures:
                 key = (dep.get("departureDate"), dep.get("tourCode"))
@@ -138,38 +121,19 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path) -> dict:
                         entry[field] = value
             unique = list(merged_deps.values())
             notes_pat = profile.get("notes_key_pattern", "")
-            notes = clean.extract_notes(
+            notes = quality.extract_notes(
                 [p["data"] for p in traffic.payloads], notes_pat,
                 int(clean_cfg.get("min_visible_chars", 40))) if notes_pat else {}
-            rendered_text = blocks.page_text_only(
+            rendered_text = extract.page_text_only(
                 "\n".join(html for _, html in traffic.snapshots))
-            panels = blocks.parse_snapshots(traffic.snapshots)
             for dep in unique:
-                dmy = blocks.iso_to_dmy(dep.get("departureDate"))
-                panel = panels.get(dmy)
-                status = "parsed"
-                if not panel:
-                    panel = blocks.parse_fallback(
-                        rendered_text, dmy, str(dep.get("tourCode") or ""))
-                    status = "parsed-fallback" if panel else "missing"
-                if not panel:
-                    dep["detail_status"] = "missing"
-                    continue
-                dep["detail_status"] = status
-                for field, value in panel.items():
-                    if dep.get(field) in (None, "", [], {}):
-                        dep[field] = value
-                sale = dep.get("salePrice") or dep.get("price")
-                if isinstance(sale, (int, float)) and panel.get("tiered_prices"):
-                    values = [t["price"] for t in panel["tiered_prices"]]
-                    if values and int(sale) not in values:
-                        dep["price_mismatch"] = True
+                dep["detail_status"] = "api-only"
             presentation = set(profile.get("junk_presentation_keys", []) or [])
-            keep = clean.compile_keep(profile.get("keep_patterns", []))
-            unique = [clean.filter_dep(dep, presentation, keep,
+            keep = quality.compile_keep(profile.get("keep_patterns", []))
+            unique = [quality.filter_dep(dep, presentation, keep,
                                        int(clean_cfg.get("min_visible_chars", 40)))
                       for dep in unique]
-            unique, shared = clean.dedupe_departures(unique)
+            unique, shared = quality.dedupe_departures(unique)
             context = rendered_text + "\n" + merged["page_prose"] + "\n" + json.dumps(
                 unique, ensure_ascii=False)
             for dep in unique:
@@ -241,3 +205,84 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                 time.sleep(gap)
     log.info("batch done: wrote %s", output)
     return 0
+
+
+def _load_dotenv() -> None:
+    try:
+        text = Path(".env").read_text(encoding="utf-8")
+    except OSError:
+        return
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if key and key not in os.environ:
+            os.environ[key] = value.strip().strip("'\"")
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="tour-crawl", description="Crawl tour data by source profile.")
+    parser.add_argument("url", nargs="?", help="single tour URL")
+    parser.add_argument("--profile", "-p", default="vietravel", help="source profile name")
+    parser.add_argument("--batch", type=Path, help="CSV file with a url column")
+    parser.add_argument("--sitemap", action="store_true", help="enumerate profile sitemaps instead")
+    parser.add_argument("--limit", type=int, default=0, help="max tours (0 = all)")
+    parser.add_argument("--output", "-o", type=Path, default=None, help="CSV output path")
+    parser.add_argument("--out-dir", type=Path, default=None, help="JSON detail directory")
+    parser.add_argument("--no-browser", action="store_true", help="skip browser flow")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    if isinstance(sys.stdout, io.TextIOWrapper):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    args = _parse_args(argv)
+    _load_dotenv()
+    os.environ.setdefault("LOG_LEVEL", "INFO")
+
+    try:
+        settings = load_settings()
+        profile = load_profile(args.profile)
+    except (ValueError, RuntimeError, OSError) as exc:
+        print(f"Invalid config: {exc}", file=sys.stderr)
+        return 2
+    if args.no_browser:
+        profile = {**profile, "flows": [flow for flow in profile.get("flows", []) if "browser" not in flow]}
+
+    if args.batch:
+        with args.batch.open(encoding="utf-8-sig") as handle:
+            urls = [row["url"] for row in csv.DictReader(handle) if row.get("url")]
+    elif args.sitemap:
+        fetch_cfg = settings.get("fetch", {})
+        fetcher = SafeFetcher(
+            timeout=float(fetch_cfg.get("timeout_s", 20)),
+            max_bytes=int(fetch_cfg.get("max_bytes", 2_000_000)),
+            user_agent=str(fetch_cfg.get("user_agent", "MLAITourSourceAuditor/0.1")),
+            limiter=RateLimiter(float(fetch_cfg.get("delay_s", 1.0))),
+        )
+        urls = sitemap_urls(fetcher, profile.get("sitemaps", []), profile.get("tour_url_patterns", []))
+        print(f"sitemap urls: {len(urls)}")
+    elif args.url:
+        urls = [args.url]
+    else:
+        print("Provide a URL, --batch, or --sitemap.", file=sys.stderr)
+        return 2
+    if args.limit > 0:
+        urls = urls[: args.limit]
+
+    out_dir = args.out_dir or (Path(settings.get("output", {}).get("dir", ".local")) / "tours")
+    if len(urls) == 1 and not args.batch and not args.sitemap:
+        try:
+            row = run_tour(urls[0], profile, settings, out_dir)
+        except Exception as exc:
+            print(f"Tour failed: {type(exc).__name__}", file=sys.stderr)
+            return 1
+        print(f"status={row['status']} title={row.get('title', '')[:80]} "
+              f"departures={row.get('departures', 0)} error={row.get('error', '')}")
+        return 0 if row["status"] not in (BLOCKED, FETCH_FAIL) else 1
+
+    output = args.output or (Path(settings.get("output", {}).get("dir", ".local")) / "tours.csv")
+    out_dir = args.out_dir or (Path(settings.get("output", {}).get("dir", ".local")) / "tours")
+    return run_batch(urls, profile, settings, output, out_dir)

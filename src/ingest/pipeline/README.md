@@ -10,10 +10,10 @@ Không chứa logic parse hay site-specific nào.
 ## Input / Output
 
 - Input: 1 URL, CSV URLs, hoặc sitemap + tên profile.
-- Output: append CSV (cột ổn định: url, observed_at, profile, status, title,
+- Output: append CSV (cột cố định: url, observed_at, profile, status, title,
   departures, notes_keys, error) và JSON chi tiết từng tour; exit code theo
   taxonomy (`blocked` dừng nguồn, `fetch_fail` retry 1 lần, `parse_fail`
-  đi tiếp).
+  bỏ tiếp).
 
 ## Workflow
 
@@ -23,12 +23,14 @@ crash không mất batch) → cập nhật failure budget.
 
 ## Interface
 
-- Gọi `fetch`, `browser`, `blocks`, `clean`, `validate`, `profiles` theo đúng
-  thứ tự; là module duy nhất biết toàn bộ luồng.
+- Gọi `fetch`, `browser`, `blocks`, `clean`, `validate`, `profiles`, `dsl`
+  theo đúng thứ tự; là module duy nhất biết toàn bộ luồng.
+- Profile kiểu `fields` (agent vẽ) đi đường `dsl` strict; profile cũ kiểu
+  anchors không còn được hỗ trợ — survey lại trước khi dùng.
 - Không parse HTML, không quyết định evidence, không hardcode nguồn.
 
 ## Quyết định kỹ thuật
 
-- Chạy tuần tự từng tour (mỗi tour đã tối ưu ~60s); song song để phase sau
-  khi có số liệu ổn định — không config chết cho thứ chưa implement.
-- V1 deterministic 100%, không LLM.
+- Chạy tuần tự từng tour (mỗi tour độc lập ~60s); song song để phase sau
+  khi có số liệu ổn định, không config chết cho thứ chưa implement.
+- Vì deterministic 100%, không LLM.

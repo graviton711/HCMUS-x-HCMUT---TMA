@@ -136,8 +136,8 @@ prompt: |
   5. `unknowns.md` -- fields/pages that could not be verified + why.
 
   SELF-TEST LOOP (required before handover):
-  - The engine module `ingest.dsl` is importable (`PYTHONPATH` already includes
-    the repo `src/`; `python -m ingest.dsl --help` must work before you start).
+  - The engine module `ingest.extract` is importable (`PYTHONPATH` already includes
+    the repo `src/`; `python -m ingest.extract --help` must work before you start).
   - bs4 and yaml are already installed in the `python` on PATH; never pip install.
   - On Windows always invoke `python` (NOT `python3` — that alias points to the
     system Python without dependencies).
@@ -146,7 +146,7 @@ prompt: |
       python -c "import yaml; d=yaml.safe_load(open('profile.yaml',encoding='utf-8')); print(d['fields']['tour_name'])"
     If the printed value contains backslash-u escapes, rewrite the file.
   - Test your `profile.yaml` directly by running:
-      python -m ingest.dsl raw/tour-1.html raw/tour-2.html raw/tour-3.html --profile profile.yaml -o selftest.jsonl
+      python -m ingest.extract raw/tour-1.html raw/tour-2.html raw/tour-3.html --profile profile.yaml -o selftest.jsonl
   - Inspect `selftest.jsonl` to ensure all 18 canonical fields match Target Canonical Formats in data-contract.md.
   - If any field is empty, malformed, or has dirty HTML entities, adjust your clean expression or selectors in `profile.yaml` and re-run.
   - Maximum 5 iterations.

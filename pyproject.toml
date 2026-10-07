@@ -16,7 +16,7 @@ dev = [
 ]
 
 [project.scripts]
-tour-crawl = "tourcrawl.cli:main"
+tour-crawl = "ingest.pipeline:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -24,11 +24,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["tourcrawl*", "shared*"]
+include = ["ingest*", "shared*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src", "scripts"]
+pythonpath = ["src"]
 addopts = "-ra"
 
 # basedpyright mac dinh o che do "recommended" (bat ca rule pedantic nhu
@@ -39,7 +39,7 @@ addopts = "-ra"
 typeCheckingMode = "standard"
 reportAny = "none"
 reportUnusedCallResult = "none"
-extraPaths = ["src", "scripts"]
+extraPaths = ["src"]
 venvPath = "."
 venv = ".venv"
 

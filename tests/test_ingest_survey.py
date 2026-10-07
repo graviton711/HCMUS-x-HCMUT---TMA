@@ -1,4 +1,4 @@
-from run_site_survey import _robots_sitemaps
+from ingest.survey import _robots_sitemaps
 
 
 def test_robots_sitemaps_extracts_all_declared():

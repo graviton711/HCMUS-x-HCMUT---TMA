@@ -1,10 +1,12 @@
-# scripts — khảo sát nguồn và thu thập dữ liệu theo profile
+# ingest — thu thập tour theo profile
 
-Tài liệu đặc tả hợp đồng kỹ thuật giữa Agent khảo sát (`run_site_survey.py`) và Runner thu thập (`crawl_with_profile.py`).
+Luồng chính 5 bước: danh sách link (sitemap trong `pipeline`) → agent vẽ map (`survey.py`) → crawl hàng loạt (`python -m ingest`, trang tĩnh qua `dsl.py`, site động qua `browser` khi profile khai báo) → CSV sạch → database.
+
+Tài liệu này đặc tả hợp đồng kỹ thuật giữa Agent khảo sát (`survey.py`) và engine thu thập (`dsl.py` + `pipeline.py`).
 
 ## 1. Nguyên tắc cốt lõi
 
-* **Agent làm việc khó, Runner làm việc dễ:** Agent (LLM) phân tích DOM, tìm tọa độ chính xác và xuất ra `profile.yaml` thuần dữ liệu máy đọc được. Runner (`crawl_with_profile.py`) là script cơ học thuần túy — tuyệt đối không suy đoán hay chứa logic heuristic riêng của từng website (nguyên tắc bất biến là "không heuristic per-site", không phải số dòng; flow `api` cho phép nó vượt mốc 100 dòng ban đầu).
+* **Agent làm việc khó, Runner làm việc dễ:** Agent (LLM) phân tích DOM, tìm tọa độ chính xác và xuất ra `profile.yaml` thuần dữ liệu máy đọc được. Runner (`dsl.py` trong engine, chạy qua `python -m ingest`) là code cơ học thuần túy — tuyệt đối không suy đoán hay chứa logic heuristic riêng của từng website (nguyên tắc bất biến là "không heuristic per-site").
 * **Cấm văn xuôi trong profile:** Profile chỉ chứa selector, path, regex và primitive enum; không chứa câu điều kiện hoặc hướng dẫn bằng tiếng Anh/Việt tự nhiên.
 
 ## 2. Chuẩn Profile DSL (Machine-Readable Contract)
@@ -86,13 +88,13 @@ Trường không tồn tại trên web được đánh dấu: `status: not_obser
 
 | Script | Trách nhiệm | Input | Output |
 |---|---|---|---|
-| `run_site_survey.py` | Điều phối Agent khảo sát domain, tự kiểm thử với `crawl_with_profile.py` trên tập `raw/` | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
-| `render_url.py` | Helper độc lập render URL động qua Playwright Chromium, xuất HTML ra file; `--capture-net <dir>` ghi thêm mọi JSON response (XHR) vào `<dir>/` + index `network.json` để dò endpoint API | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
-| `crawl_with_profile.py` | Thu thập dữ liệu tour cơ học theo tọa độ profile (nghiêm ngặt < 100 dòng) | URL tour hoặc file HTML + `profile.yaml` | File JSON Lines (`.jsonl`) chuẩn hoá |
+| `survey.py` (`python -m ingest.survey`) | Điều phối Agent khảo sát domain, tự kiểm thử bằng `ingest.dsl` trên tập `raw/` | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
+| `render.py` | Helper render URL động qua Playwright Chromium, xuất HTML ra file; `--capture-net <dir>` ghi thêm mọi JSON response (XHR) vào `<dir>/` + index `network.json` để dò endpoint API | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
+| `pipeline.py` (`python -m ingest`) | Crawl hàng loạt theo profile: trang tĩnh qua `dsl.py`, site động qua `browser` khi profile khai báo flow | Danh sách URL + profile | CSV + JSON + provenance |
 
 
 
-## 4. Vận hành & tốc độ (`run_site_survey.py`)
+## 4. Vận hành & tốc độ (`survey.py`)
 
 * **Workdir dài hạn:** `artifacts/agent_surveys/<source>/_work` thay cho thư mục tạm — tồn tại qua các lần chạy nên `raw/` tích lũy tự nhiên (agent được dặn không tải lại file có sẵn); timeout/crash không mất phần đã tải. `raw/` vẫn được sao chép ra `artifacts/agent_surveys/<source>/raw` ở cuối mỗi lần chạy để làm bằng chứng.
 * **Prefetch cơ học:** trước khi khởi động agent, wrapper tải song song `robots.txt`, các sitemap khai báo trong robots và `/sitemap.xml` vào `raw/`. Đây là việc không cần LLM; agent đỡ các request đầu và ít tốn lượt LLM turn. Prefetch chỉ là best-effort — lỗi sẽ bị bỏ qua, agent tự xử lý nguồn.

@@ -1,22 +1,150 @@
-"""Strict profile-DSL field extraction (mechanical, no per-site heuristics).
+"""Read layer: profile coordinates in, verbatim records out. No guessing.
 
-Ported from the retired scripts runner into the main engine so static pages
-follow the same path as everything else: coordinates declared in YAML,
-values copied verbatim, cleaning only through reviewed `clean` expressions.
-Profiles are reviewed artifacts; `clean` runs in a restricted namespace
-(val, re, json, html) and nothing else.
+Strict field extraction from agent-authored profiles (`dsl`), raw block
+readers, and the profile/settings loader. Nothing here interprets content;
+cleaning happens only through reviewed `clean` expressions in profiles.
 """
 
 from __future__ import annotations
 
 import html as _html
 import json as _json
+import os
 import re as _re
 from collections.abc import Callable
+from html.parser import HTMLParser
+from pathlib import Path
+from types import ModuleType
 from typing import Any
 from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
+
+from .fetch import SafeFetcher
+
+DEFAULT_SETTINGS = Path("configs/settings.yaml")
+DEFAULT_PROFILES = Path("configs/profiles")
+
+
+def _resolve(path: Path) -> Path:
+    """Find configs in a checkout or an installed deployment.
+
+    Order: explicit path > TOURCRAWL_CONFIGS env > package-relative configs/
+    (repo checkout) > current-directory configs/. Deployment ships configs/
+    alongside the code; it is data, not code.
+    """
+    candidates = [path]
+    if env_root := os.getenv("TOURCRAWL_CONFIGS"):
+        candidates.append(Path(env_root) / path.name)
+    candidates.append(Path(__file__).resolve().parents[2] / path)
+    candidates.append(Path.cwd() / path)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
+def _yaml() -> ModuleType:
+    try:
+        import yaml
+    except ImportError as exc:
+        raise RuntimeError("This package requires PyYAML (see pyproject dependencies).") from exc
+    return yaml
+
+
+def load_settings(path: str | Path | None = None) -> dict:
+    yaml = _yaml()
+    target = _resolve(Path(path) if path is not None else DEFAULT_SETTINGS)
+    with target.open(encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"Settings must be a mapping: {target}")
+    return data
+
+
+def load_profile(name: str, profiles_dir: str | Path | None = None) -> dict:
+    yaml = _yaml()
+    if profiles_dir is not None:
+        target = Path(profiles_dir) / f"{name}.yaml"
+    else:
+        target = _resolve(DEFAULT_PROFILES / f"{name}.yaml")
+    if not target.exists():
+        raise ValueError(f"Unknown profile: {name} ({target} not found)")
+    with target.open(encoding="utf-8") as handle:
+        data = yaml.safe_load(handle) or {}
+    if not isinstance(data, dict) or not data.get("origin") or not data.get("flows"):
+        raise ValueError(f"Profile needs origin + flows: {target}")
+    data["name"] = name
+    return data
+
+
+_LD_JSON_RE = _re.compile(
+    r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>', _re.S | _re.I
+)
+
+
+def parse_json_ld(html: str) -> list:
+    """Every parseable JSON-LD node, in document order."""
+    blocks = []
+    for match in _LD_JSON_RE.finditer(html):
+        try:
+            data = _json.loads(match.group(1))
+        except (_json.JSONDecodeError, ValueError):
+            continue
+        blocks.extend(data if isinstance(data, list) else [data])
+    return blocks
+
+
+class _TextCollector(HTMLParser):
+    """Collects text chunks; ignores CSS visibility like a scraper should."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.chunks: list[str] = []
+
+    def handle_data(self, data):
+        text = data.strip()
+        if text:
+            self.chunks.append(text)
+
+
+def _strip_scripts(html: str) -> str:
+    return _re.sub(r"<(script|style|noscript)[\s>].*?</\1>", " ", html, flags=_re.S | _re.I)
+
+
+def page_prose(html: str) -> str:
+    """All visible text, unfiltered. Callers decide what counts as evidence."""
+    parser = _TextCollector()
+    parser.feed(_strip_scripts(html))
+    return "\n".join(parser.chunks)
+
+
+def page_text_only(html: str) -> str:
+    """All text incl. CSS-hidden nodes (parser ignores visibility)."""
+    parser = _TextCollector()
+    parser.feed(_strip_scripts(html))
+    return _re.sub(r"[ \t]+", " ", "\n".join(parser.chunks))
+
+
+def walk_departures(node, found: list) -> None:
+    """Collect every dict carrying a departureDate, containers preserved."""
+    if isinstance(node, dict):
+        if isinstance(node.get("departureDate"), str):
+            found.append(node)
+        for value in node.values():
+            walk_departures(value, found)
+    elif isinstance(node, list):
+        for value in node:
+            walk_departures(value, found)
+
+
+def iso_to_dmy(iso: object) -> str:
+    """2026-10-25T08:00:00 -> 25/10/2026 (empty when unparseable)."""
+    match = _re.match(r"(\d{4})-(\d{2})-(\d{2})", str(iso or ""))
+    if not match:
+        return ""
+    return f"{match.group(3)}/{match.group(2)}/{match.group(1)}"
+
 
 _EVAL_NAMES = {"val": None, "re": _re, "json": _json, "html": _html}
 
@@ -97,8 +225,6 @@ def extract_api_field(rule: dict, row: dict, fetch_json: Callable[[str], object]
 
 def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] | None = None) -> dict:
     """Full canonical row from one page: static fields first, api fields after."""
-    from .blocks import parse_json_ld
-
     soup = BeautifulSoup(html, "html.parser")
     json_ld = parse_json_ld(html)
     row: dict[str, object] = {}
@@ -119,49 +245,7 @@ def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] |
     return row
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Self-test entry: files (or URLs) + profile -> JSONL. Used by site surveys."""
-    import argparse
-    from pathlib import Path
-
-    import yaml
-
-    parser = argparse.ArgumentParser(prog="ingest-dsl", description=__doc__.splitlines()[0])
-    parser.add_argument("targets", nargs="+")
-    parser.add_argument("--profile", required=True)
-    parser.add_argument("-o", "--output", default="tours.jsonl")
-    args = parser.parse_args(argv)
-    profile = yaml.safe_load(Path(args.profile).read_text(encoding="utf-8"))
-    rows = []
-    fetcher = None
-    for target in args.targets:
-        if target.startswith(("http://", "https://")):
-            from .fetch import SafeFetcher
-
-            fetcher = fetcher or SafeFetcher()
-            result = fetcher.fetch(target)
-            if result.error or result.status_code != 200:
-                raise SystemExit(f"fetch failed {target}: {result.error or result.status_code}")
-            html_text = result.body.decode("utf-8", errors="replace")
-        else:
-            html_text = Path(target).read_text(encoding="utf-8", errors="replace")
-        rows.append(crawl_fields(html_text, profile))
-    out = Path(args.output)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    import json as _json_mod
-
-    out.write_text("\n".join(_json_mod.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
-    print(f"OK: wrote {len(rows)} tours to {out}")
-    return 0
-
-
-if __name__ == "__main__":
-    from shared.runtime import run_cli
-
-    raise SystemExit(run_cli(main))
-
-
-def same_origin_getter(page_url: str, fetcher) -> Callable[[str], object]:
+def same_origin_getter(page_url: str, fetcher: SafeFetcher) -> Callable[[str], object]:
     """fetch_json callback that only allows same-origin GETs through the SafeFetcher."""
     origin = (urlsplit(page_url).hostname or "").lower()
 
@@ -174,3 +258,57 @@ def same_origin_getter(page_url: str, fetcher) -> Callable[[str], object]:
         return _json.loads(result.body.decode("utf-8", errors="replace"))
 
     return fetch_json
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Self-test entry: files (or URLs) + profile -> JSONL. Used by site surveys."""
+    import argparse
+    from pathlib import Path
+
+    import yaml
+
+    parser = argparse.ArgumentParser(prog="ingest-dsl", description="Strict profile-DSL field extraction.")
+    parser.add_argument("targets", nargs="+")
+    parser.add_argument("--profile", required=True)
+    parser.add_argument("-o", "--output", default="tours.jsonl")
+    args = parser.parse_args(argv)
+    profile = yaml.safe_load(Path(args.profile).read_text(encoding="utf-8"))
+    rows = []
+    fetcher = None
+    for target in args.targets:
+        if target.startswith(("http://", "https://")):
+            fetcher = fetcher or SafeFetcher()
+            result = fetcher.fetch(target)
+            if result.error or result.status_code != 200:
+                raise SystemExit(f"fetch failed {target}: {result.error or result.status_code}")
+            html_text = result.body.decode("utf-8", errors="replace")
+        else:
+            html_text = Path(target).read_text(encoding="utf-8", errors="replace")
+        rows.append(crawl_fields(html_text, profile))
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(_json.dumps(r, ensure_ascii=False) for r in rows) + "\n", encoding="utf-8")
+    print(f"OK: wrote {len(rows)} tours to {out}")
+    return 0
+
+
+if __name__ == "__main__":
+    from shared.runtime import run_cli
+
+    raise SystemExit(run_cli(main))
+
+
+__all__ = [
+    "apply_clean",
+    "crawl_fields",
+    "extract_api_field",
+    "extract_field",
+    "iso_to_dmy",
+    "load_profile",
+    "load_settings",
+    "page_prose",
+    "page_text_only",
+    "parse_json_ld",
+    "same_origin_getter",
+    "walk_departures",
+]
