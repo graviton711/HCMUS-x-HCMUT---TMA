@@ -29,7 +29,7 @@ python -m http.server 4173 --bind 127.0.0.1 --directory prototypes/frontend-desi
 - `tour-data.js` chia sẻ fixture giữa bảng và trang nguồn; tour/offer/field quyết định URL anchor local. Miền `.example` không được fetch; ảnh chỉ minh họa điểm đến.
 - `demo-store.js` dùng SessionStorage để chia sẻ contact/source state/counters giữa các trang trong một tab. Không lưu token, yêu cầu tour hoặc nội dung chat; contact user nhập chỉ ở tab. Ngày/số liệu admin là mẫu 07/10/2026, không live. Reset chỉ khôi phục dữ liệu demo.
 - Điều hướng sang file khác dừng job mô phỏng đang chạy; backend thật có lifecycle riêng theo protocol. Form và bảng vẫn dùng fixture Nhật Bản/TP.HCM tháng 11, không chứng minh truy xuất hoặc xếp hạng đúng nhu cầu mới.
-- Dùng đường dẫn asset tương đối để chạy local hoặc dưới project path. Asset runtime hiện có được giữ; ảnh/báo cáo QA mới trong `review/batch/` chỉ local và không thuộc commit bàn giao.
+- Dùng đường dẫn asset tương đối để chạy local hoặc dưới project path. Giữ ảnh/font/license trong `assets/`; toàn bộ `review/` chỉ local, được ignore và không phải phụ thuộc runtime. Ảnh/báo cáo cũ vẫn có trong lịch sử Git; trang vào dùng ảnh điểm đến hiện có để tránh link hỏng sau khi dọn.
 
 ## Kiểm chứng đã có
 
