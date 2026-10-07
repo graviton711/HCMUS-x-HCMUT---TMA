@@ -46,7 +46,7 @@ Prototype dùng bộ Nhật Bản / TP.HCM / tháng 11/2026 có sẵn để ki�
 - Kiểm tra 1440/1280/768/390/320px, input/validation, chat đề xuất–xác nhận–hủy, sửa trực tiếp, tab/evidence/offer, loading chậm/lỗi/partial/empty/cancel, giữ kết quả cũ và Back.
 - Không gọi API ngoài hoặc đọc geolocation thật trong lượt prototype; widget mô phỏng cả loading và từ chối quyền. Demo là walkthrough tương tác; video thật chưa được cung cấp.
 
-**Kết quả 06/10:** prototype đã mở rộng, [61/61 kiểm tra](../prototypes/frontend-design/review/v2/qa-summary.json) đạt trên trang/asset local; không tràn ngang ở năm kích thước trên, console sạch. HTTP preview chưa xác minh vì kết nối localhost bị chặn trong sandbox. Token/accent, form và các màn mới vẫn cần user review; chưa nghiệm thu backend hoặc production.
+**Kết quả 06/10:** prototype đã mở rộng, **61/61 kiểm tra** đạt trên trang/asset local; không tràn ngang ở năm kích thước trên, console sạch. Ảnh/báo cáo QA chỉ local từ 07/10/2026, bản cũ vẫn có trong lịch sử Git. HTTP preview chưa xác minh vì kết nối localhost bị chặn trong sandbox. Token/accent, form và các màn mới vẫn cần user review; chưa nghiệm thu backend hoặc production.
 
 ## Khoảng thiếu cần FE–BE chốt
 

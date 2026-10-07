@@ -1,0 +1,855 @@
+{
+  "scenario": "Internal request shares canonical criteria; typed snapshots/locators before backend freshness/rank/decision",
+  "origin": "synthetic",
+  "exchanges": [
+    {
+      "method": "POST",
+      "path": "/internal/v2/crawl",
+      "request": {
+        "schema_version": "2.0-draft",
+        "request_id": "crawl_demo",
+        "trace_id": "trace_demo",
+        "deadline_at": "2026-10-07T02:31:00Z",
+        "source_ids": [
+          "source_a",
+          "source_b",
+          "source_c"
+        ],
+        "reference_targets": [],
+        "query_spec": {
+          "conditions": [
+            {
+              "id": "c_destination",
+              "field": "destinations",
+              "operator": "contains",
+              "value": {
+                "kind": "set",
+                "items": [
+                  "country:jp"
+                ]
+              },
+              "strength": "hard"
+            },
+            {
+              "id": "c_origin",
+              "field": "departure_origin",
+              "operator": "in",
+              "value": {
+                "kind": "set",
+                "items": [
+                  "city:vn:hcmc"
+                ]
+              },
+              "strength": "hard"
+            },
+            {
+              "id": "c_date",
+              "field": "departure_date",
+              "operator": "between",
+              "value": {
+                "kind": "date",
+                "value": "2026-11-10",
+                "upper": "2026-11-17"
+              },
+              "strength": "hard"
+            },
+            {
+              "id": "c_budget",
+              "field": "estimated_cost",
+              "operator": "lte",
+              "value": {
+                "kind": "budget",
+                "amount": 32000000,
+                "currency": "VND",
+                "basis": "per_adult",
+                "coverage": "tour_price",
+                "coverage_origin": "explicit"
+              },
+              "strength": "soft"
+            },
+            {
+              "id": "c_duration",
+              "field": "duration_days",
+              "operator": "near",
+              "value": {
+                "kind": "number",
+                "amount": 6
+              },
+              "strength": "soft"
+            }
+          ],
+          "hard_tree": {
+            "kind": "all",
+            "children": [
+              {
+                "kind": "predicate",
+                "condition_id": "c_destination"
+              },
+              {
+                "kind": "predicate",
+                "condition_id": "c_origin"
+              },
+              {
+                "kind": "predicate",
+                "condition_id": "c_date"
+              }
+            ]
+          },
+          "party": {
+            "adults": 2,
+            "children": []
+          },
+          "pushdown_plan": []
+        },
+        "requested_fields": [
+          "destinations",
+          "departure_origin",
+          "duration_days",
+          "departure_date",
+          "price_quotes",
+          "cancellation_policy"
+        ],
+        "excluded_tour_ids": [],
+        "candidate_limit": 20
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "schema_version": "2.0-draft",
+            "request_id": "crawl_demo",
+            "origin": "synthetic",
+            "source_results": [
+              {
+                "task": "discovery",
+                "source_id": "source_a",
+                "target_id": null,
+                "status": "ok",
+                "reason_code": null,
+                "tour_snapshot_ids": [
+                  "tour_a_snap"
+                ],
+                "offer_snapshot_ids": [
+                  "offer_a_snap"
+                ],
+                "truncated": false,
+                "checked_at": "2026-10-07T02:30:00Z",
+                "coverage": {
+                  "requested_fields": 6,
+                  "returned_fields": 5
+                }
+              },
+              {
+                "task": "discovery",
+                "source_id": "source_b",
+                "target_id": null,
+                "status": "ok",
+                "reason_code": null,
+                "tour_snapshot_ids": [
+                  "tour_b_snap"
+                ],
+                "offer_snapshot_ids": [
+                  "offer_b_snap"
+                ],
+                "truncated": false,
+                "checked_at": "2026-10-07T02:30:00Z",
+                "coverage": {
+                  "requested_fields": 6,
+                  "returned_fields": 5
+                }
+              },
+              {
+                "task": "discovery",
+                "source_id": "source_c",
+                "target_id": null,
+                "status": "partial",
+                "reason_code": "REQUESTED_FIELDS_MISSING",
+                "tour_snapshot_ids": [
+                  "tour_c_snap"
+                ],
+                "offer_snapshot_ids": [
+                  "offer_c_snap"
+                ],
+                "truncated": false,
+                "checked_at": "2026-10-07T02:30:00Z",
+                "coverage": {
+                  "requested_fields": 6,
+                  "returned_fields": 4
+                }
+              }
+            ],
+            "suppliers": [
+              {
+                "supplier_id": "supplier_a",
+                "display_name": "Lữ hành Mẫu A"
+              },
+              {
+                "supplier_id": "supplier_b",
+                "display_name": "Lữ hành Mẫu B"
+              },
+              {
+                "supplier_id": "supplier_c",
+                "display_name": "Lữ hành Mẫu C"
+              }
+            ],
+            "tours": [
+              {
+                "snapshot_id": "tour_a_snap",
+                "tour_id": "tour_a",
+                "supplier_id": "supplier_a",
+                "canonical_url": "https://supplier-a.example/tour-a",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "fields": {
+                  "destinations": {
+                    "value": [
+                      "country:jp"
+                    ],
+                    "raw_value": [
+                      "country:jp"
+                    ],
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_route_a"
+                    ]
+                  },
+                  "departure_origin": {
+                    "value": "city:vn:hcmc",
+                    "raw_value": "city:vn:hcmc",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_route_a"
+                    ]
+                  },
+                  "duration_days": {
+                    "value": 5,
+                    "raw_value": 5,
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_route_a"
+                    ]
+                  },
+                  "cancellation_policy": {
+                    "value": "Trước 30 ngày: phí 20% giá tour",
+                    "raw_value": "Trước 30 ngày: phí 20% giá tour",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_cancel_a"
+                    ]
+                  }
+                }
+              },
+              {
+                "snapshot_id": "tour_b_snap",
+                "tour_id": "tour_b",
+                "supplier_id": "supplier_b",
+                "canonical_url": "https://supplier-b.example/tour-b",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "fields": {
+                  "destinations": {
+                    "value": [
+                      "country:jp"
+                    ],
+                    "raw_value": [
+                      "country:jp"
+                    ],
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_route_b"
+                    ]
+                  },
+                  "departure_origin": {
+                    "value": "city:vn:hcmc",
+                    "raw_value": "city:vn:hcmc",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_route_b"
+                    ]
+                  },
+                  "duration_days": {
+                    "value": 6,
+                    "raw_value": 6,
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_route_b"
+                    ]
+                  },
+                  "cancellation_policy": {
+                    "value": "Trước 30 ngày: phí 30% giá tour",
+                    "raw_value": "Trước 30 ngày: phí 30% giá tour",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_cancel_b"
+                    ]
+                  }
+                }
+              },
+              {
+                "snapshot_id": "tour_c_snap",
+                "tour_id": "tour_c",
+                "supplier_id": "supplier_c",
+                "canonical_url": "https://supplier-c.example/tour-c",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "fields": {
+                  "destinations": {
+                    "value": [
+                      "country:jp"
+                    ],
+                    "raw_value": [
+                      "country:jp"
+                    ],
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_route_c"
+                    ]
+                  },
+                  "departure_origin": {
+                    "value": "city:vn:hcmc",
+                    "raw_value": "city:vn:hcmc",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_route_c"
+                    ]
+                  },
+                  "duration_days": {
+                    "value": 5,
+                    "raw_value": 5,
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_route_c"
+                    ]
+                  },
+                  "cancellation_policy": {
+                    "value": null,
+                    "raw_value": null,
+                    "data_state": "missing",
+                    "verification": "unverified",
+                    "completeness": "unknown",
+                    "observed_at": null,
+                    "evidence_ids": [],
+                    "reason_code": "FIELD_MISSING"
+                  }
+                }
+              }
+            ],
+            "offers": [
+              {
+                "snapshot_id": "offer_a_snap",
+                "offer_id": "offer_a",
+                "tour_snapshot_id": "tour_a_snap",
+                "fields": {
+                  "departure_date": {
+                    "value": "2026-11-10",
+                    "raw_value": "2026-11-10",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_date_a"
+                    ]
+                  },
+                  "availability": {
+                    "value": null,
+                    "raw_value": null,
+                    "data_state": "missing",
+                    "verification": "unverified",
+                    "completeness": "unknown",
+                    "observed_at": null,
+                    "evidence_ids": [],
+                    "reason_code": "AVAILABILITY_UNCONFIRMED"
+                  }
+                },
+                "rooming": "twin_share",
+                "price_quotes": [
+                  {
+                    "value": {
+                      "quote_id": "quote_a",
+                      "kind": "exact",
+                      "amount": 32800000,
+                      "upper_amount": null,
+                      "currency": "VND",
+                      "basis": "per_adult",
+                      "coverage": "tour_price",
+                      "age_min": null,
+                      "age_max_exclusive": null,
+                      "applicability": [
+                        {
+                          "field": "rooming",
+                          "value": "twin_share"
+                        }
+                      ]
+                    },
+                    "raw_value": "32800000 VND / người lớn",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_price_a"
+                    ]
+                  }
+                ],
+                "extra_charges": [],
+                "pricing_complete": false
+              },
+              {
+                "snapshot_id": "offer_b_snap",
+                "offer_id": "offer_b",
+                "tour_snapshot_id": "tour_b_snap",
+                "fields": {
+                  "departure_date": {
+                    "value": "2026-11-11",
+                    "raw_value": "2026-11-11",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_date_b"
+                    ]
+                  },
+                  "availability": {
+                    "value": null,
+                    "raw_value": null,
+                    "data_state": "missing",
+                    "verification": "unverified",
+                    "completeness": "unknown",
+                    "observed_at": null,
+                    "evidence_ids": [],
+                    "reason_code": "AVAILABILITY_UNCONFIRMED"
+                  }
+                },
+                "rooming": "twin_share",
+                "price_quotes": [
+                  {
+                    "value": {
+                      "quote_id": "quote_b",
+                      "kind": "exact",
+                      "amount": 29900000,
+                      "upper_amount": null,
+                      "currency": "VND",
+                      "basis": "per_adult",
+                      "coverage": "tour_price",
+                      "age_min": null,
+                      "age_max_exclusive": null,
+                      "applicability": [
+                        {
+                          "field": "rooming",
+                          "value": "twin_share"
+                        }
+                      ]
+                    },
+                    "raw_value": "29900000 VND / người lớn",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_price_b"
+                    ]
+                  }
+                ],
+                "extra_charges": [],
+                "pricing_complete": false
+              },
+              {
+                "snapshot_id": "offer_c_snap",
+                "offer_id": "offer_c",
+                "tour_snapshot_id": "tour_c_snap",
+                "fields": {
+                  "departure_date": {
+                    "value": "2026-11-12",
+                    "raw_value": "2026-11-12",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_date_c"
+                    ]
+                  },
+                  "availability": {
+                    "value": null,
+                    "raw_value": null,
+                    "data_state": "missing",
+                    "verification": "unverified",
+                    "completeness": "unknown",
+                    "observed_at": null,
+                    "evidence_ids": [],
+                    "reason_code": "AVAILABILITY_UNCONFIRMED"
+                  }
+                },
+                "rooming": "twin_share",
+                "price_quotes": [
+                  {
+                    "value": {
+                      "quote_id": "quote_c",
+                      "kind": "exact",
+                      "amount": 31200000,
+                      "upper_amount": null,
+                      "currency": "VND",
+                      "basis": "per_adult",
+                      "coverage": "tour_price",
+                      "age_min": null,
+                      "age_max_exclusive": null,
+                      "applicability": [
+                        {
+                          "field": "rooming",
+                          "value": "twin_share"
+                        }
+                      ]
+                    },
+                    "raw_value": "31200000 VND / người lớn",
+                    "data_state": "present",
+                    "verification": "supplier_published",
+                    "completeness": "partial",
+                    "observed_at": "2026-10-07T02:30:00Z",
+                    "evidence_ids": [
+                      "ev_price_c"
+                    ]
+                  }
+                ],
+                "extra_charges": [],
+                "pricing_complete": false
+              }
+            ],
+            "evidence": [
+              {
+                "id": "ev_route_a",
+                "source_id": "source_a",
+                "snapshot_id": "tour_a_snap",
+                "field_path": "fields.route",
+                "offer_snapshot_id": null,
+                "source_url": "https://supplier-a.example/tour-a",
+                "publisher": "supplier_a",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "Nhật Bản; khởi hành TP.HCM; 5 ngày.",
+                "raw_value": [
+                  "country:jp",
+                  "city:vn:hcmc",
+                  5
+                ],
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Lịch trình",
+                  "element_id": "itinerary",
+                  "css_selector": "#itinerary",
+                  "text_quote": {
+                    "exact": "Nhật Bản; khởi hành TP.HCM; 5 ngày.",
+                    "prefix": "",
+                    "suffix": ""
+                  }
+                },
+                "content_digest": "synthetic:tour_a_snap"
+              },
+              {
+                "id": "ev_date_a",
+                "source_id": "source_a",
+                "snapshot_id": "offer_a_snap",
+                "field_path": "fields.departure_date",
+                "offer_snapshot_id": "offer_a_snap",
+                "source_url": "https://supplier-a.example/tour-a",
+                "publisher": "supplier_a",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "Khởi hành 2026-11-10.",
+                "raw_value": "2026-11-10",
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Lịch khởi hành",
+                  "element_id": "departure-2026-11-10",
+                  "css_selector": "#departure-2026-11-10",
+                  "text_quote": {
+                    "exact": "Khởi hành 2026-11-10.",
+                    "prefix": "",
+                    "suffix": ""
+                  }
+                },
+                "content_digest": "synthetic:offer_a_snap"
+              },
+              {
+                "id": "ev_price_a",
+                "source_id": "source_a",
+                "snapshot_id": "offer_a_snap",
+                "field_path": "price_quotes.quote_a",
+                "offer_snapshot_id": "offer_a_snap",
+                "source_url": "https://supplier-a.example/tour-a",
+                "publisher": "supplier_a",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "lịch 2026-11-10; 32800000 VND / người lớn; phòng đôi.",
+                "raw_value": 32800000,
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Giá theo ngày",
+                  "element_id": "offer-2026-11-10",
+                  "css_selector": "#offer-2026-11-10 .adult-price",
+                  "text_quote": {
+                    "exact": "32800000 VND / người lớn",
+                    "prefix": "lịch 2026-11-10",
+                    "suffix": "phòng đôi"
+                  }
+                },
+                "content_digest": "synthetic:offer_a_snap"
+              },
+              {
+                "id": "ev_cancel_a",
+                "source_id": "source_a",
+                "snapshot_id": "tour_a_snap",
+                "field_path": "fields.cancellation_policy",
+                "offer_snapshot_id": null,
+                "source_url": "https://supplier-a.example/tour-a",
+                "publisher": "supplier_a",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "Trước 30 ngày: phí 20% giá tour",
+                "raw_value": "Trước 30 ngày: phí 20% giá tour",
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Điều kiện hủy",
+                  "element_id": null,
+                  "css_selector": ".cancellation",
+                  "text_quote": {
+                    "exact": "Trước 30 ngày: phí 20% giá tour",
+                    "prefix": "",
+                    "suffix": ""
+                  }
+                },
+                "content_digest": "synthetic:tour_a_snap"
+              },
+              {
+                "id": "ev_route_b",
+                "source_id": "source_b",
+                "snapshot_id": "tour_b_snap",
+                "field_path": "fields.route",
+                "offer_snapshot_id": null,
+                "source_url": "https://supplier-b.example/tour-b",
+                "publisher": "supplier_b",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "Nhật Bản; khởi hành TP.HCM; 6 ngày.",
+                "raw_value": [
+                  "country:jp",
+                  "city:vn:hcmc",
+                  6
+                ],
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Lịch trình",
+                  "element_id": "itinerary",
+                  "css_selector": "#itinerary",
+                  "text_quote": {
+                    "exact": "Nhật Bản; khởi hành TP.HCM; 6 ngày.",
+                    "prefix": "",
+                    "suffix": ""
+                  }
+                },
+                "content_digest": "synthetic:tour_b_snap"
+              },
+              {
+                "id": "ev_date_b",
+                "source_id": "source_b",
+                "snapshot_id": "offer_b_snap",
+                "field_path": "fields.departure_date",
+                "offer_snapshot_id": "offer_b_snap",
+                "source_url": "https://supplier-b.example/tour-b",
+                "publisher": "supplier_b",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "Khởi hành 2026-11-11.",
+                "raw_value": "2026-11-11",
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Lịch khởi hành",
+                  "element_id": "departure-2026-11-11",
+                  "css_selector": "#departure-2026-11-11",
+                  "text_quote": {
+                    "exact": "Khởi hành 2026-11-11.",
+                    "prefix": "",
+                    "suffix": ""
+                  }
+                },
+                "content_digest": "synthetic:offer_b_snap"
+              },
+              {
+                "id": "ev_price_b",
+                "source_id": "source_b",
+                "snapshot_id": "offer_b_snap",
+                "field_path": "price_quotes.quote_b",
+                "offer_snapshot_id": "offer_b_snap",
+                "source_url": "https://supplier-b.example/tour-b",
+                "publisher": "supplier_b",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "lịch 2026-11-11; 29900000 VND / người lớn; phòng đôi.",
+                "raw_value": 29900000,
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Giá theo ngày",
+                  "element_id": "offer-2026-11-11",
+                  "css_selector": "#offer-2026-11-11 .adult-price",
+                  "text_quote": {
+                    "exact": "29900000 VND / người lớn",
+                    "prefix": "lịch 2026-11-11",
+                    "suffix": "phòng đôi"
+                  }
+                },
+                "content_digest": "synthetic:offer_b_snap"
+              },
+              {
+                "id": "ev_cancel_b",
+                "source_id": "source_b",
+                "snapshot_id": "tour_b_snap",
+                "field_path": "fields.cancellation_policy",
+                "offer_snapshot_id": null,
+                "source_url": "https://supplier-b.example/tour-b",
+                "publisher": "supplier_b",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "Trước 30 ngày: phí 30% giá tour",
+                "raw_value": "Trước 30 ngày: phí 30% giá tour",
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Điều kiện hủy",
+                  "element_id": null,
+                  "css_selector": ".cancellation",
+                  "text_quote": {
+                    "exact": "Trước 30 ngày: phí 30% giá tour",
+                    "prefix": "",
+                    "suffix": ""
+                  }
+                },
+                "content_digest": "synthetic:tour_b_snap"
+              },
+              {
+                "id": "ev_route_c",
+                "source_id": "source_c",
+                "snapshot_id": "tour_c_snap",
+                "field_path": "fields.route",
+                "offer_snapshot_id": null,
+                "source_url": "https://supplier-c.example/tour-c",
+                "publisher": "supplier_c",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "Nhật Bản; khởi hành TP.HCM; 5 ngày.",
+                "raw_value": [
+                  "country:jp",
+                  "city:vn:hcmc",
+                  5
+                ],
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Lịch trình",
+                  "element_id": "itinerary",
+                  "css_selector": "#itinerary",
+                  "text_quote": {
+                    "exact": "Nhật Bản; khởi hành TP.HCM; 5 ngày.",
+                    "prefix": "",
+                    "suffix": ""
+                  }
+                },
+                "content_digest": "synthetic:tour_c_snap"
+              },
+              {
+                "id": "ev_date_c",
+                "source_id": "source_c",
+                "snapshot_id": "offer_c_snap",
+                "field_path": "fields.departure_date",
+                "offer_snapshot_id": "offer_c_snap",
+                "source_url": "https://supplier-c.example/tour-c",
+                "publisher": "supplier_c",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "Khởi hành 2026-11-12.",
+                "raw_value": "2026-11-12",
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Lịch khởi hành",
+                  "element_id": "departure-2026-11-12",
+                  "css_selector": "#departure-2026-11-12",
+                  "text_quote": {
+                    "exact": "Khởi hành 2026-11-12.",
+                    "prefix": "",
+                    "suffix": ""
+                  }
+                },
+                "content_digest": "synthetic:offer_c_snap"
+              },
+              {
+                "id": "ev_price_c",
+                "source_id": "source_c",
+                "snapshot_id": "offer_c_snap",
+                "field_path": "price_quotes.quote_c",
+                "offer_snapshot_id": "offer_c_snap",
+                "source_url": "https://supplier-c.example/tour-c",
+                "publisher": "supplier_c",
+                "observed_at": "2026-10-07T02:30:00Z",
+                "raw_quote": "lịch 2026-11-12; 31200000 VND / người lớn; phòng đôi.",
+                "raw_value": 31200000,
+                "method": "synthetic_fixture",
+                "locator": {
+                  "section_title": "Giá theo ngày",
+                  "element_id": "offer-2026-11-12",
+                  "css_selector": "#offer-2026-11-12 .adult-price",
+                  "text_quote": {
+                    "exact": "31200000 VND / người lớn",
+                    "prefix": "lịch 2026-11-12",
+                    "suffix": "phòng đôi"
+                  }
+                },
+                "content_digest": "synthetic:offer_c_snap"
+              }
+            ],
+            "issues": [
+              {
+                "code": "FIELD_MISSING",
+                "source_id": "source_c",
+                "snapshot_id": "tour_c_snap",
+                "field_path": "fields.cancellation_policy",
+                "retryable": false,
+                "explanation": "Chưa có chính sách hủy"
+              },
+              {
+                "code": "PRICE_COVERAGE_UNCONFIRMED",
+                "source_id": "source_a",
+                "snapshot_id": "offer_a_snap",
+                "field_path": "extra_charges",
+                "retryable": false,
+                "explanation": "Danh sách phụ thu rỗng không chứng minh giá hoàn chỉnh"
+              }
+            ]
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-crawler-1"
+      }
+    }
+  ]
+}
