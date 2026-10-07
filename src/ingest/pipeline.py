@@ -24,12 +24,12 @@ from shared import get_logger
 from . import extract, quality
 from .extract import load_profile, load_settings
 from .fetch import BrowserSession, RateLimiter, SafeFetcher, fetch_robots
-from .quality import BLOCKED, FETCH_FAIL, OK, PARSE_FAIL, departure_evidence
+from .quality import BLOCKED, FETCH_FAIL, OK, PARSE_FAIL, departure_evidence, verify_record
 
 log = get_logger("pipeline")
 
 CSV_COLUMNS = ["url", "observed_at", "profile", "status", "title",
-               "departures", "verified", "notes_keys", "error"]
+               "departures", "verified", "notes_keys", "record_evidence", "error"]
 
 
 def _fetch_sitemap(fetcher: SafeFetcher, sitemap: str) -> bytes | None:
@@ -146,6 +146,9 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     if profile.get("fields"):
         merged["record"] = extract.crawl_fields(
             html, profile, extract.same_origin_getter(page.url, fetcher))
+        verdict, missing = verify_record(merged["record"], html)
+        merged["record_evidence"] = verdict
+        merged["record_missing"] = missing
 
     browser_error = ""
     rendered_text = ""
@@ -207,7 +210,8 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     error = "" if status == OK else (browser_error or "empty result")
     return {"url": page.url, "observed_at": observed, "profile": merged["profile"],
             "status": status, "title": merged["title"], "departures": len(departures),
-            "verified": verified, "notes_keys": ",".join(sorted(notes.keys())), "error": error,
+            "verified": verified, "notes_keys": ",".join(sorted(notes.keys())),
+            "record_evidence": merged.get("record_evidence", ""), "error": error,
             "detail_file": str(detail_path)}
 
 

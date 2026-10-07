@@ -92,6 +92,67 @@ def normalize(text: str) -> str:
     return re.sub(r"\W+", " ", text.casefold()).strip()
 
 
+def _leaves(value: object) -> list[str]:
+    """Scalar leaves of a record value for verbatim checking."""
+    if value is None:
+        return []
+    if isinstance(value, bool):
+        return []
+    if isinstance(value, (int, float)):
+        return [re.sub(r"\D", "", str(value))]
+    if isinstance(value, str):
+        text = value.strip()
+        return [text] if text else []
+    if isinstance(value, list):
+        out: list[str] = []
+        for item in value:
+            out.extend(_leaves(item))
+        return out
+    if isinstance(value, dict):
+        out = []
+        for item in value.values():
+            out.extend(_leaves(item))
+        return out
+    return []
+
+
+def verify_record(record: dict, html: str) -> tuple[str, list[str]]:
+    """Verbatim evidence check for one static DSL record.
+
+    Every non-empty scalar leaf must appear character-for-character
+    (after normalization) in the page HTML. Returns (verdict, missing
+    fields); verdict is verified/partial/unverified. Structural keys
+    such as the source url are never checked. No fuzzy matching.
+    """
+    context_norm = normalize(html)
+    context_digits = re.sub(r"\D", "", html)
+    missing: list[str] = []
+    checked = 0
+    for key, value in record.items():
+        if key == "url":
+            continue
+        leaves = [leaf for leaf in _leaves(value) if normalize(leaf)]
+        if not leaves:
+            continue
+        checked += len(leaves)
+        ok = True
+        for leaf in leaves:
+            if leaf.isdigit():
+                if leaf not in context_digits:
+                    ok = False
+                    break
+            elif normalize(leaf) not in context_norm:
+                ok = False
+                break
+        if not ok:
+            missing.append(key)
+    if checked == 0:
+        return "unverified", missing
+    if not missing:
+        return "verified", missing
+    return "partial", missing
+
+
 def departure_evidence(dep: dict, context: str) -> str:
     """Spot-check one departure: key decision values verbatim in context.
 
