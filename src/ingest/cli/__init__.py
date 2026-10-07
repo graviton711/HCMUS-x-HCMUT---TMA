@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from shared import get_logger
+from shared.runtime import run_cli
 
 from ..fetch import RateLimiter, SafeFetcher
 from ..pipeline import run_batch, run_tour, sitemap_urls
@@ -103,4 +104,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_cli(main))
