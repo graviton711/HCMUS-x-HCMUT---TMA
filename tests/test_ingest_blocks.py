@@ -148,6 +148,33 @@ def test_cli_parses_args():
 
     args = _parse_args(["https://example.test/t", "--profile", "dulichviet", "--limit", "5"])
     assert args.url.endswith("/t") and args.profile == "dulichviet" and args.limit == 5
+    assert _parse_args(["--publish"]).publish == ""
+    assert _parse_args(["--publish", "out"]).publish == "out"
+
+
+def test_save_discovered_roundtrip(tmp_path):
+    from ingest.pipeline import _read_done, _save_discovered
+
+    path = _save_discovered(["https://example.test/du-lich-a",
+                             "https://example.test/du-lich-b"], tmp_path / "d.csv")
+    assert _read_done(path) == {"https://example.test/du-lich-a",
+                                "https://example.test/du-lich-b"}
+
+
+def test_audit_urls_from_csv_and_missing_default(tmp_path, monkeypatch):
+    import csv as _csv
+
+    import ingest.audit as audit_mod
+
+    csv_path = tmp_path / "tours.csv"
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = _csv.DictWriter(handle, fieldnames=["url"])
+        writer.writeheader()
+        writer.writerow({"url": "https://example.test/du-lich-a"})
+    assert audit_mod._urls_from_csv(csv_path) == ["https://example.test/du-lich-a"]
+    monkeypatch.setattr(audit_mod, "load_settings",
+                        lambda path=None: {"output": {"dir": str(tmp_path / "empty")}})
+    assert audit_mod.main(["--profile", "dulichviet"]) == 2
 
 
 def test_logging_level_from_env(monkeypatch):

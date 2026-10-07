@@ -98,13 +98,23 @@ def audit_urls(urls: list[str], profile: dict, settings: dict,
                        evidence_rate, failures, not failures)
 
 
+def _urls_from_csv(path: Path) -> list[str]:
+    """URL column of a batch/discovery CSV."""
+    import csv as _csv
+
+    with path.open(encoding="utf-8-sig") as handle:
+        return [row["url"].strip() for row in _csv.DictReader(handle) if row.get("url", "").strip()]
+
+
 def main(argv: list[str] | None = None) -> int:
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(prog="ingest-audit",
                                      description="Score a profile on holdout tour URLs.")
     parser.add_argument("--profile", "-p", required=True, help="profile name or YAML path")
-    parser.add_argument("--urls", type=Path, required=True, help="file with one tour URL per line")
+    parser.add_argument("--urls", type=Path, default=None,
+                        help="file with one tour URL per line "
+                             "(default: url column of <output.dir>/tours.csv)")
     parser.add_argument("--min-evidence", type=float, default=0.9,
                         help="minimum verified fraction (default 0.9)")
     parser.add_argument("--out-dir", type=Path, default=None, help="detail JSON directory")
@@ -124,8 +134,16 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"Invalid config: {exc}", file=sys.stderr)
         return 2
-    urls = [line.strip() for line in Path(args.urls).read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.strip().startswith("#")]
+    if args.urls is not None:
+        urls = [line.strip() for line in Path(args.urls).read_text(encoding="utf-8").splitlines()
+                if line.strip() and not line.strip().startswith("#")]
+    else:
+        default_csv = Path(settings.get("output", {}).get("dir", ".local")) / "tours.csv"
+        if not default_csv.exists():
+            print(f"No urls: {default_csv} not found; crawl first or pass --urls.",
+                  file=sys.stderr)
+            return 2
+        urls = _urls_from_csv(default_csv)
     result = audit_urls(urls, profile, settings, args.out_dir, args.min_evidence)
     print(f"tours={result.tours} failed_tours={len(result.failed_tours)} "
           f"evidence_rate={result.evidence_rate:.2f}")

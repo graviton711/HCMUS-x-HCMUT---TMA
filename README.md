@@ -34,10 +34,10 @@ uv run ruff check .
 ```powershell
 uv run python -m ingest.survey --source dulichviet
 uv run python -m ingest --discover --profile dulichviet --limit 5
-uv run python -m ingest <tour_url> --profile dulichviet
-uv run python -m ingest.audit --profile dulichviet --urls <file_url_list>
+uv run python -m ingest --batch .local/discovered.csv --profile dulichviet
+uv run python -m ingest.audit --profile dulichviet
 uv run python -m ingest --migrate
-uv run python -m ingest --publish <detail_dir> --profile dulichviet
+uv run python -m ingest --publish --profile dulichviet
 ```
 
 Chi tiết hợp đồng profile/discovery: `src/ingest/README.md`.

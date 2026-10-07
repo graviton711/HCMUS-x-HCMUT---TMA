@@ -219,6 +219,17 @@ def discover_urls(fetcher: SafeFetcher, profile: dict,
                         min_lastmod=min_lastmod)
 
 
+def _save_discovered(urls: list[str], path: Path) -> Path:
+    """Persist a discovery URL list for --batch (one `url` column)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=["url"])
+        writer.writeheader()
+        for url in urls:
+            writer.writerow({"url": url})
+    return path
+
+
 def _read_done(path: Path) -> set[str]:
     if not path.exists():
         return set()
@@ -550,8 +561,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--out-dir", type=Path, default=None, help="JSON detail directory")
     parser.add_argument("--no-browser", action="store_true", help="skip browser flow")
     parser.add_argument("--migrate", action="store_true", help="apply SQL migrations to the tour database and exit")
-    parser.add_argument("--publish", type=Path, default=None,
-                        help="publish detail JSONs from DIR to the tour database and exit (needs --profile)")
+    parser.add_argument("--publish", nargs="?", const="", default=None, metavar="DIR",
+                        help="publish detail JSONs to the tour database "
+                             "(default DIR: <output.dir>/tours)")
     return parser.parse_args(argv)
 
 
@@ -752,11 +764,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"migrations applied={migrate_db()}")
         return 0
 
-    if args.publish:
-        counts = publish_snapshot(args.publish, args.profile)
-        print(f"published={counts}")
-        return 0
-
     try:
         settings = load_settings()
         profile = load_profile(args.profile)
@@ -765,6 +772,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.no_browser:
         profile = {**profile, "flows": [flow for flow in profile.get("flows", []) if "browser" not in flow]}
+
+    if args.publish is not None:
+        publish_dir = (Path(args.publish) if args.publish
+                       else Path(settings.get("output", {}).get("dir", ".local")) / "tours")
+        counts = publish_snapshot(publish_dir, args.profile)
+        print(f"published={counts}")
+        return 0
 
     if args.batch:
         with args.batch.open(encoding="utf-8-sig") as handle:
@@ -798,6 +812,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.limit > 0:
         urls = urls[: args.limit]
+
+    if args.discover:
+        list_path = (args.output or
+                     (Path(settings.get("output", {}).get("dir", ".local")) / "discovered.csv"))
+        _save_discovered(urls, list_path)
+        print(f"discovered list: {list_path}")
+        return 0
 
     out_dir = args.out_dir or (Path(settings.get("output", {}).get("dir", ".local")) / "tours")
     if len(urls) == 1 and not args.batch and not args.sitemap:
