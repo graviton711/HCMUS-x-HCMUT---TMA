@@ -451,8 +451,17 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
 
 
 def _state_path(settings: dict) -> Path:
-    """Snapshot state lives beside the output dir so re-snapshots skip unchanged pages."""
+    """Snapshot state lives beside the output dir so re-snapshots skip unchanged pages.
+
+    Shared across sources on purpose: keys are full tour URLs, so entries
+    never collide between sources.
+    """
     return Path(settings.get("output", {}).get("dir", ".local")) / "_state.json"
+
+
+def _source_dir(settings: dict, source: str) -> Path:
+    """Per-source output root: <output.dir>/<source>/ (multi-source safe)."""
+    return Path(settings.get("output", {}).get("dir", ".local")) / source
 
 
 def _load_state(path: Path) -> dict:
@@ -475,7 +484,7 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
     max_fails = int(batch_cfg.get("max_consecutive_failures", 10))
     gap = float(batch_cfg.get("delay_s", 1.0))
     if out_dir is None:
-        out_dir = Path(settings.get("output", {}).get("dir", ".local")) / "tours"
+        out_dir = _source_dir(settings, str(profile.get("name", "default"))) / "tours"
     done = _read_done(output)
     state_path = _state_path(settings)
     state = _load_state(state_path)
@@ -752,7 +761,7 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                      tour_url,
                      json.dumps({"record_evidence": detail.get("record_evidence", ""),
                                  "record_missing": detail.get("record_missing", []),
-                                 "observed_at": detail.get("fetched_at_utc", "")})),
+                                 "observed_at": detail.get("fetched_at", "")})),
                 )
                 fetched = cursor.fetchone()
                 tour_id = fetched[0] if fetched else None
@@ -796,7 +805,7 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                          str(offer.get("pickup_point", ""))[:500], str(offer.get("hotel_location", ""))[:500],
                          str(offer.get("conditions", ""))[:2000],
                          detail.get("fetched_at"),
-                         json.dumps({"observed_at": detail.get("fetched_at_utc", "")})),
+                         json.dumps({"observed_at": detail.get("fetched_at", "")})),
                     )
                     counts["offers"] += 1
                 if seen_keys:
@@ -823,12 +832,13 @@ def main(argv: list[str] | None = None) -> int:
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"Invalid config: {exc}", file=sys.stderr)
         return 2
+    source = str(profile.get("name") or args.profile)
     if args.no_browser:
         profile = {**profile, "flows": [flow for flow in profile.get("flows", []) if "browser" not in flow]}
 
     if args.publish is not None:
         publish_dir = (Path(args.publish) if args.publish
-                       else Path(settings.get("output", {}).get("dir", ".local")) / "tours")
+                       else _source_dir(settings, source) / "tours")
         counts = publish_snapshot(publish_dir, args.profile)
         print(f"published={counts}")
         return 0
@@ -846,7 +856,7 @@ def main(argv: list[str] | None = None) -> int:
         fetcher = make_fetcher(settings)
         batch_cfg = settings.get("batch", {})
         list_path = (args.output or
-                     (Path(settings.get("output", {}).get("dir", ".local")) / "discovered.csv"))
+                     (_source_dir(settings, source) / "discovered.csv"))
         _save_discovered([], list_path)
         handed = 0
 
@@ -880,7 +890,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit > 0:
         urls = urls[: args.limit]
 
-    out_dir = args.out_dir or (Path(settings.get("output", {}).get("dir", ".local")) / "tours")
+    out_dir = args.out_dir or (_source_dir(settings, source) / "tours")
     if len(urls) == 1 and not args.batch and not args.sitemap:
         try:
             row = run_tour(urls[0], profile, settings, out_dir)
@@ -891,6 +901,6 @@ def main(argv: list[str] | None = None) -> int:
               f"departures={row.get('departures', 0)} error={row.get('error', '')}")
         return 0 if row["status"] not in (BLOCKED, FETCH_FAIL) else 1
 
-    output = args.output or (Path(settings.get("output", {}).get("dir", ".local")) / "tours.csv")
-    out_dir = args.out_dir or (Path(settings.get("output", {}).get("dir", ".local")) / "tours")
+    output = args.output or (_source_dir(settings, source) / "tours.csv")
+    out_dir = args.out_dir or (_source_dir(settings, source) / "tours")
     return run_batch(urls, profile, settings, output, out_dir)

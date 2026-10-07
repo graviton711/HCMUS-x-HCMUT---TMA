@@ -167,6 +167,27 @@ def test_save_discovered_roundtrip(tmp_path):
                                 "https://example.test/du-lich-b"}
 
 
+def test_default_paths_namespace_per_source(tmp_path, monkeypatch):
+    import ingest.pipeline as pipeline_mod
+    from ingest.pipeline import _source_dir, run_batch
+
+    settings = {"output": {"dir": str(tmp_path)}}
+    assert _source_dir(settings, "a") != _source_dir(settings, "b")
+    assert _source_dir(settings, "a").name == "a"
+
+    def fake_run_tour(url, profile, settings, out_dir, robots_cache=None,
+                      conditional=None):
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return {"url": url, "status": "ok", "title": "T", "departures": 0,
+                "verified": 0, "notes_keys": "", "error": ""}
+
+    monkeypatch.setattr(pipeline_mod, "run_tour", fake_run_tour)
+    out_csv = tmp_path / "out.csv"
+    assert run_batch(["https://example.test/1"], {"name": "s"}, settings,
+                     out_csv, None) == 0
+    assert (tmp_path / "s" / "tours").is_dir()
+
+
 def test_audit_urls_from_csv_and_missing_default(tmp_path, monkeypatch):
     import csv as _csv
 

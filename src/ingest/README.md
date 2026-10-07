@@ -116,8 +116,10 @@ Vận hành `search_pages`: fetch song song theo `batch.workers` (mỗi worker m
 | `survey.py` (`python -m ingest.survey`) | Điều phối Agent khảo sát domain, tự kiểm thử bằng `ingest.extract` trên tập `raw/` | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
 | `render.py` | Helper render URL động qua Playwright Chromium, xuất HTML ra file; `--capture-net <dir>` ghi thêm mọi JSON response (XHR) vào `<dir>/` + index `network.json` để dò endpoint API | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
 | `pipeline.py` (`python -m ingest`) | Crawl hàng loạt theo profile: trang tĩnh qua `dsl.py`, site động qua `browser` khi profile khai báo flow | Danh sách URL + profile | CSV + JSON + provenance |
-| | `--discover` liệt kê link theo khối `discovery` và lưu `.local/discovered.csv` cho `--batch`; `--publish` và `audit --urls` mặc định trỏ vào output của batch (`<output.dir>/tours`, `tours.csv`) | | |
+| | `--discover` liệt kê link theo khối `discovery` và lưu `.local/<source>/discovered.csv` cho `--batch`; `--publish` và `audit --urls` mặc định trỏ vào output của batch (`<output.dir>/<source>/tours`, `tours.csv`) | | |
 | Dạng thủ công (ghi đè default): `python -m ingest <tour_url>`, `--batch <csv>`, `--output`, `--out-dir`, `--publish <dir>`, `audit --urls <file>` | | | |
+
+Mọi output crawl đều namespac theo source (`.local/<source>/`) nên nhiều nguồn không ghi đè nhau; `_state.json` dùng chung vì key là URL đầy đủ. Thư mục `data/` chỉ chứa registry versioned do người quản lý (vd `data/providers.toml`), không chứa output crawl.
 
 
 

@@ -35,8 +35,8 @@ out/
 .vite/
 *.local
 
-# Local crawl artifacts
-.local/crawl-reports/
+# Local crawl artifacts (per-source outputs, state, scratch — never committed)
+.local/
 artifacts/
 
 # Data / ML artifacts; keep only the small, versioned source registry

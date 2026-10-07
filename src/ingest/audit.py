@@ -19,7 +19,7 @@ from pathlib import Path
 from shared.runtime import run_cli
 
 from .extract import load_profile, load_settings
-from .pipeline import run_tour
+from .pipeline import _source_dir, run_tour
 
 
 @dataclass
@@ -114,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", "-p", required=True, help="profile name or YAML path")
     parser.add_argument("--urls", type=Path, default=None,
                         help="file with one tour URL per line "
-                             "(default: url column of <output.dir>/tours.csv)")
+                             "(default: url column of <output.dir>/<source>/tours.csv)")
     parser.add_argument("--min-evidence", type=float, default=None,
                         help="minimum verified fraction (default: audit.min_evidence in settings)")
     parser.add_argument("--out-dir", type=Path, default=None, help="detail JSON directory")
@@ -138,7 +138,8 @@ def main(argv: list[str] | None = None) -> int:
         urls = [line.strip() for line in Path(args.urls).read_text(encoding="utf-8").splitlines()
                 if line.strip() and not line.strip().startswith("#")]
     else:
-        default_csv = Path(settings.get("output", {}).get("dir", ".local")) / "tours.csv"
+        source = str(profile.get("name") or Path(args.profile).stem)
+        default_csv = _source_dir(settings, source) / "tours.csv"
         if not default_csv.exists():
             print(f"No urls: {default_csv} not found; crawl first or pass --urls.",
                   file=sys.stderr)
