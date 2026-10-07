@@ -14,15 +14,6 @@
     },
     "sitemaps": {"type": "array", "items": {"type": "string", "format": "uri"}},
     "tour_url_patterns": {"type": "array", "items": {"type": "string"}},
-    "combo": {
-      "type": "object",
-      "properties": {
-        "path_fragment": {"type": "string"},
-        "slug_pattern": {"type": "string"},
-        "tour_code_param": {"type": "string"}
-      },
-      "additionalProperties": false
-    },
     "aliases": {
       "type": "object",
       "additionalProperties": {"type": "array", "items": {"type": "string"}}
