@@ -82,6 +82,19 @@ def test_audit_unreadable_detail_counts_as_failed_tour(tmp_path, monkeypatch):
     assert len(result.failed_tours) == 2
 
 
+def test_audit_logs_progress_per_tour(tmp_path, monkeypatch, caplog):
+    import logging
+
+    detail = _detail(tmp_path, "d1.json", {"tour_name": "T", "price": 100})
+    monkeypatch.setattr(audit_mod, "run_tour",
+                        lambda url, profile, settings, out_dir: {"detail_file": detail})
+    with caplog.at_level(logging.INFO, logger="mlai.audit"):
+        audit_urls(["https://example.test/1", "https://example.test/2"], _profile(), {})
+    lines = [r.getMessage() for r in caplog.records if r.name == "mlai.audit"]
+    assert lines == ["audit tour 1/2 https://example.test/1",
+                     "audit tour 2/2 https://example.test/2"]
+
+
 def test_main_exit_codes(tmp_path, monkeypatch):
     urls_file = tmp_path / "urls.txt"
     urls_file.write_text("https://example.test/1\n", encoding="utf-8")

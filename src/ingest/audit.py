@@ -16,10 +16,13 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from shared import get_logger
 from shared.runtime import run_cli
 
 from .extract import load_profile, load_settings
 from .pipeline import _source_dir, run_tour
+
+log = get_logger("audit")
 
 
 @dataclass
@@ -60,7 +63,8 @@ def audit_urls(urls: list[str], profile: dict, settings: dict,
     evidence_ok = 0
     evidence_total = 0
     failed_tours: list[str] = []
-    for url in urls:
+    for index, url in enumerate(urls, 1):
+        log.info("audit tour %d/%d %s", index, len(urls), url)
         try:
             row = run_tour(url, static_profile, settings, work)
         except Exception as exc:
