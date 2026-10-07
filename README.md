@@ -32,12 +32,14 @@ uv run ruff check .
 ## Chạy tối thiểu module ingest
 
 ```powershell
-uv run python -m ingest.survey --source dulichviet
-uv run python -m ingest --discover --profile dulichviet --limit 5
-uv run python -m ingest --batch .local/discovered.csv --profile dulichviet
-uv run python -m ingest.audit --profile dulichviet
+uv run python -m ingest.survey --source <source>
+uv run python -m ingest --discover --profile <source> --limit 5
+uv run python -m ingest --batch .local/discovered.csv --profile <source>
+uv run python -m ingest.audit --profile <source>
 uv run python -m ingest --migrate
-uv run python -m ingest --publish --profile dulichviet
+uv run python -m ingest --publish --profile <source>
 ```
+
+`<source>` là tên trong cột source của `configs/sources-mvp.csv`.
 
 Chi tiết hợp đồng profile/discovery: `src/ingest/README.md`.
