@@ -146,7 +146,7 @@ def test_run_batch_respects_out_dir(tmp_path, monkeypatch):
 
     calls = []
 
-    def fake_run_tour(url, profile, settings, out_dir):
+    def fake_run_tour(url, profile, settings, out_dir, robots_cache=None):
         calls.append(out_dir)
         return {"url": url, "status": "ok", "title": "T", "departures": 0,
                 "verified": 0, "notes_keys": "", "error": ""}
@@ -157,6 +157,32 @@ def test_run_batch_respects_out_dir(tmp_path, monkeypatch):
     assert run_batch(["https://example.test/1"], {}, {}, out_csv, out_json) == 0
     assert calls == [out_json]
     assert out_csv.exists()
+
+
+def test_batch_fetches_robots_once_per_origin(tmp_path, monkeypatch):
+    import ingest.pipeline as pipeline_mod
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import run_batch
+
+    robots_calls: list[str] = []
+
+    class FakeFetcher:
+        def __init__(self, *args, **kwargs):
+            self.user_agent = "test"
+
+        def fetch(self, url, origin_host=""):
+            if url.endswith("/robots.txt"):
+                robots_calls.append(url)
+                return FetchResult(url, 404, "", b"", "HTTP 404")
+            return FetchResult(url, 200, "text/html",
+                               b"<html><head><title>T</title></head><body></body></html>", None)
+
+    monkeypatch.setattr(pipeline_mod, "SafeFetcher", FakeFetcher)
+    out_csv = tmp_path / "out.csv"
+    out_json = tmp_path / "json"
+    urls = ["https://a.test/1", "https://a.test/2", "https://b.test/1"]
+    assert run_batch(urls, {}, {}, out_csv, out_json) == 0
+    assert sorted(robots_calls) == ["https://a.test/robots.txt", "https://b.test/robots.txt"]
 
 
 def test_compile_keep_is_case_insensitive_regression():

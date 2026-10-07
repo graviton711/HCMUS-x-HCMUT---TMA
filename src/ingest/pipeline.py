@@ -59,8 +59,13 @@ def _read_done(path: Path) -> set[str]:
         return {row["url"] for row in csv.DictReader(handle) if row.get("url")}
 
 
-def run_tour(url: str, profile: dict, settings: dict, out_dir: Path) -> dict:
-    """One tour end-to-end. Returns a status-tagged result dict."""
+def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
+             robots_cache: dict | None = None) -> dict:
+    """One tour end-to-end. Returns a status-tagged result dict.
+
+    Pass a shared `robots_cache` dict from batch runs so robots.txt is
+    fetched once per origin; single calls without it behave as before.
+    """
     fetch_cfg = settings.get("fetch", {})
     limiter = RateLimiter(float(fetch_cfg.get("delay_s", 1.0)))
     fetcher = SafeFetcher(
@@ -73,7 +78,12 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path) -> dict:
     site_base = f"{urlsplit(url).scheme}://{origin}"
     observed = datetime.now(UTC).isoformat(timespec="seconds")
 
-    robots = fetch_robots(fetcher, site_base, origin)
+    if robots_cache is not None and site_base in robots_cache:
+        robots = robots_cache[site_base]
+    else:
+        robots = fetch_robots(fetcher, site_base, origin)
+        if robots_cache is not None:
+            robots_cache[site_base] = robots
     if robots is not None and not robots.can_fetch(fetcher.user_agent, url):
         return {"url": url, "status": BLOCKED, "error": "robots.txt disallows URL"}
 
@@ -182,6 +192,7 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
     output.parent.mkdir(parents=True, exist_ok=True)
     new_file = not output.exists()
     fails = 0
+    robots_cache: dict = {}
     with output.open("a", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
         if new_file:
@@ -189,7 +200,7 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
         for index, url in enumerate(todo, 1):
             log.info("tour %d/%d %s", index, len(todo), url)
             try:
-                row = run_tour(url, profile, settings, out_dir)
+                row = run_tour(url, profile, settings, out_dir, robots_cache)
             except Exception as exc:
                 row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
             writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
