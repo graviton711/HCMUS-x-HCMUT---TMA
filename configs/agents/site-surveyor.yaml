@@ -15,7 +15,7 @@ prompt: |
   - Public HTTP GET only, same origin. Respect robots.txt; never fetch a
     disallowed path. No login, no CAPTCHA/paywall bypass, no POST/PUT/DELETE,
     no credentials or cookies. Max 60 requests total, >=1s apart, <=2MB each,
-    split by phase: ~15 census, ~25 dev-set, ~20 holdout/critic. A phase that
+    split by phase: ~10 census, ~30 dev-set, ~20 holdout/critic. A phase that
     runs out of budget stops; never borrow from another phase.
   - Never invent facts. Every claim needs a verbatim quote from a fetched page.
   - Write all output files inside the working directory only.
@@ -146,8 +146,16 @@ prompt: |
     booking-card IDs, hero/meta class patterns, combo vs single-tour DOM).
     Name each cluster (e.g. "ct2-standard", "combo-multi-hotel") with the
     marker quotes that define it.
-  - Sample 5 dev tours covering every cluster (at least one per cluster;
-    include one tour missing an optional section like notes/policy/surcharges).
+  - Sample 10-15 dev tours covering every cluster (at least one per
+    cluster, two where budget allows; include tours missing each optional
+    section at least once: no schedule, no notes/policy, no surcharges). Save as raw/tour-1.html
+    onwards and list their URLs in dev_urls.txt (one per line, same order).
+  - Report the coverage matrix in verify.json under "coverage": every
+    cluster with its dev tour count, and for each of offers /
+    cancellation_policy / surcharges / child_policy whether it is present
+    in at least one dev tour AND absent in at least one dev tour. A cell
+    you cannot fill (e.g. a section present everywhere) must be stated
+    explicitly with the evidence that you looked.
   - Discovery: determine how the site enumerates sellable tours (sitemap
     index, SSR search pages, or category listings) and declare the discovery
     block per src/ingest/README.md section 2.4, with raw-vs-unique counts
@@ -162,13 +170,16 @@ prompt: |
      coordinates per the discovery contract in src/ingest/README.md section 2.4),
      fields (map canonical field -> rule object as specified above).
   2. `evidence.md` -- the per-field evidence table with verbatim quotes.
-  3. `dev_urls.txt` -- the 5 dev tour URLs, one per line (rules built from these only).
+  3. `dev_urls.txt` -- the 10-15 dev tour URLs, one per line (rules built from these only).
   4. `candidate_pool.json` -- >=8 holdout candidates with cluster + rationale.
-  5. `verify.json` -- {"margin": <float>, "margin_reason": <str>} proposing how
-     far below your dev-set evidence rate the holdout bar may sit
+  5. `verify.json` -- {"margin": <float>, "margin_reason": <str>,
+     "coverage": {"<cluster>": <dev tour count>, ...},
+     "section_matrix": {"offers|cancellation_policy|surcharges|child_policy":
+     {"present": <n>, "absent": <n>}}} proposing how far below your dev-set
+     evidence rate the holdout bar may sit
      (harness computes pass = max(dev_rate - margin, floor 0.9)).
   6. `selftest.md` -- the per-field dev-set PASS/FAIL with the real JSONL output.
-  7. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html .. tour-5.html).
+  7. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html onwards).
   8. `unknowns.md` -- fields/pages that could not be verified + why.
 
   SELF-TEST LOOP (required before handover):
@@ -181,8 +192,11 @@ prompt: |
     escapes). After writing or editing it, always verify:
       python -c "import yaml; d=yaml.safe_load(open('profile.yaml',encoding='utf-8')); print(d['fields']['tour_name'])"
     If the printed value contains backslash-u escapes, rewrite the file.
-  - Test your `profile.yaml` directly by running:
-      python -m ingest.extract raw/tour-1.html raw/tour-2.html raw/tour-3.html raw/tour-4.html raw/tour-5.html --profile profile.yaml -o selftest.jsonl
+  - Test your `profile.yaml` over ALL dev tours at once (enumerate every
+    raw/tour-N.html explicitly; PowerShell does not glob for Python scripts):
+      python -m ingest.extract $(Get-ChildItem raw/tour-*.html | Select-Object -Expand FullName) --profile profile.yaml -o selftest.jsonl
+  - Prefer research()/refindall() over raw re.search().group(): a guard that
+    accepts more inputs than its extractor is a bug the critic will find.
   - Inspect `selftest.jsonl` to ensure all 19 canonical fields match Target Canonical Formats in data-contract.md.
   - If any field is empty, malformed, or has dirty HTML entities, adjust your clean expression or selectors in `profile.yaml` and re-run.
   - Maximum 5 iterations.
@@ -203,8 +217,8 @@ handover_task: |
   NOTE: raw/ has been prefetched with robots.txt and sitemap XMLs.
   If raw/ already contains robots.txt, sitemaps or tour-*.html, DO NOT re-fetch them;
   use the existing files in raw/ and only download what is missing.
-  Before handover you MUST run the self-test loop over 5
-  different tours covering every template cluster using python -m ingest.extract,
+  Before handover you MUST run the self-test loop over 10-15 dev tours
+  covering every template cluster using python -m ingest.extract,
   fix profile.yaml on any failure, and record the final result in selftest.md.
 
 fix_task: |

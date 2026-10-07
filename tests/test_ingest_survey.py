@@ -155,12 +155,42 @@ def test_check_critic_report_completeness(tmp_path):
 
 
 def test_survey_args_cover_critic_and_holdout():
-    from ingest.survey import _parse_args
+    from ingest.survey import _parse_args, resolve_rounds
 
     args = _parse_args(["--source", "example"])
-    assert (args.critic_rounds, args.holdout_n, args.seed) == (2, 3, 7)
-    args = _parse_args(["--source", "example", "--critic-rounds", "0"])
-    assert args.critic_rounds == 0
+    assert (args.critic_rounds, args.holdout_n, args.seed) == ("auto", 3, 7)
+    assert args.fix_timeout_min is None
+    assert _parse_args(["--source", "example", "--critic-rounds", "0"]).critic_rounds == "0"
+    assert resolve_rounds("auto", []) == 1
+    assert resolve_rounds("auto", ["gap"]) == 2
+    assert resolve_rounds("0", ["gap"]) == 0
+    assert resolve_rounds("3", []) == 3
+
+
+def test_property_test_cleans_and_coverage():
+    from ingest.survey import coverage_check, property_test_cleans
+
+    profile = {"fields": {
+        "safe": {"source": "css", "selector": "h1",
+                 "clean": "research(r'(\\d+)', str(val))"},
+        "boom": {"source": "css", "selector": "h1",
+                 "clean": "re.search(r'zzz', str(val)).group(1)"},
+        "plain": {"source": "css", "selector": "h1"},
+    }}
+    failures = property_test_cleans(profile)
+    assert len(failures) == 1 and failures[0].startswith("boom")
+    rows = [{"offers": [{"departure_date": "2026-10-10"}],
+             "cancellation_policy": "", "surcharges": "x", "child_policy": ""},
+            {"offers": [], "cancellation_policy": "y",
+             "surcharges": "", "child_policy": "z"}]
+    verify = {"coverage": {"clusters": {"a": 1, "b": 1},
+                           "section_matrix": {}}}
+    assert coverage_check(rows, 2, verify) == ["dev set has 2 tours, need 10-15"]
+    good_verify = {"coverage": {"clusters": {"a": 6, "b": 6},
+                                "section_matrix": {}}}
+    rows12 = rows * 6
+    assert coverage_check(rows12, 12, good_verify) == []
+    assert coverage_check(rows12, 12, {}) != []
 
 
 def test_critic_prompt_loads_and_renders():

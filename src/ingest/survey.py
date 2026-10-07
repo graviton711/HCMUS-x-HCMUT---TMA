@@ -193,8 +193,11 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         help="default: artifacts/agent_surveys/<source>")
     parser.add_argument("--promote", action="store_true",
                         help="on COMPLETE, copy profile.yaml to configs/profiles/<source>.yaml")
-    parser.add_argument("--critic-rounds", type=int, default=2,
-                        help="adversarial critic fix rounds (0 skips the critic)")
+    parser.add_argument("--critic-rounds", default="auto",
+                        help="'auto' (coverage clean -> 1 confirmation round, "
+                             "gaps -> 2 rounds), a number, or 0 to skip")
+    parser.add_argument("--fix-timeout-min", type=int, default=None,
+                        help="fix-round budget in minutes (default: min(8, timeout))")
     parser.add_argument("--holdout-n", type=int, default=3,
                         help="blind holdout tours for gates and critic")
     parser.add_argument("--seed", type=int, default=7,
@@ -290,6 +293,62 @@ def hash_file(path: Path) -> str:
     import hashlib
 
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()[:16]
+
+
+SECTION_FIELDS = ["offers", "cancellation_policy", "surcharges", "child_policy"]
+
+ADVERSARIAL_INPUTS = ["", "   ", "<div><p></p></div>", "Liên hệ", "0",
+                      "N/A", "\\u0000test"]
+
+
+def property_test_cleans(profile: dict) -> list[str]:
+    """Every clean must be total: run each against hostile inputs, fail on raise."""
+    from .extract import apply_clean
+
+    failures = []
+    for field, rule in (profile.get("fields") or {}).items():
+        code = rule.get("clean") if isinstance(rule, dict) else None
+        if not code:
+            continue
+        for bad in ADVERSARIAL_INPUTS:
+            try:
+                apply_clean({"clean": code}, bad)
+            except Exception as exc:
+                failures.append(f"{field} raises on {bad!r} ({type(exc).__name__})")
+                break
+    return failures
+
+
+def coverage_check(dev_rows: list[dict], dev_count: int, verify: dict) -> list[str]:
+    """Machine-check the agent-reported coverage matrix against dev output.
+
+    Clusters come from the agent (spot-checked by the critic); section
+    presence is recomputed here from dev rows, so a one-sided section
+    without a declared-unfillable note fails without any agent input.
+    """
+    gaps = []
+    if not 10 <= dev_count <= 15:
+        gaps.append(f"dev set has {dev_count} tours, need 10-15")
+    coverage = verify.get("coverage", {}) if isinstance(verify, dict) else {}
+    clusters = coverage.get("clusters", {}) if isinstance(coverage, dict) else {}
+    if not clusters:
+        gaps.append("verify.json declares no cluster coverage")
+    elif sum(int(v or 0) for v in clusters.values()) != dev_count:
+        gaps.append("cluster counts do not add up to dev tour count")
+    else:
+        gaps.extend(f"cluster {name} has no dev tour"
+                    for name, count in clusters.items() if not int(count or 0))
+    matrix = coverage.get("section_matrix", {}) if isinstance(coverage, dict) else {}
+    for field in SECTION_FIELDS:
+        present = sum(1 for row in dev_rows
+                      if row.get(field) not in (None, "", [], {}))
+        absent = len(dev_rows) - present
+        claimed = matrix.get(field, {}) if isinstance(matrix, dict) else {}
+        if present and not absent and not claimed.get("unfillable"):
+            gaps.append(f"{field} present in all dev tours (no absent case)")
+        if absent and not present and not claimed.get("unfillable"):
+            gaps.append(f"{field} absent in all dev tours (no present case)")
+    return gaps
 
 
 def stamp_metadata(path: Path, sample_tours: Sequence[str]) -> dict:
@@ -399,26 +458,24 @@ def fetch_holdout(urls: Sequence[str], holdout_raw: Path, settings: dict) -> lis
     return saved
 
 
-def machine_gates(profile_path: Path, dev_htmls: Sequence[Path],
-                  holdout_htmls: Sequence[Path], dev_urls: Sequence[str],
-                  holdout_urls: Sequence[str], settings: dict,
-                  gates_dir: Path, margin: float, floor: float) -> dict:
-    """Code-run gates: extract, dev/holdout audits, discovery entry check."""
+def static_gates(profile_path: Path, dev_htmls: Sequence[Path],
+                 holdout_htmls: Sequence[Path], dev_urls: Sequence[str],
+                 verify: dict, gates_dir: Path) -> dict:
+    """Cheap local gates: keys, extract, clean property tests, coverage matrix."""
     import yaml
 
-    from .audit import audit_urls
     from .extract import main as extract_main
-    from .fetch import make_fetcher
 
     report: dict = {"failures": []}
     try:
         data = yaml.safe_load(Path(profile_path).read_text(encoding="utf-8")) or {}
     except OSError as exc:
-        return {**report, "ok": False, "failures": [f"unreadable profile: {exc}"]}
+        return {"ok": False, "failures": [f"unreadable profile: {exc}"],
+                "dev_rows": []}
     missing = check_profile_keys(data)
     if missing:
-        return {**report, "ok": False,
-                "failures": [f"profile missing keys: {missing}"]}
+        return {"ok": False,
+                "failures": [f"profile missing keys: {missing}"], "dev_rows": []}
     gates_dir.mkdir(parents=True, exist_ok=True)
     report["extract_dev"] = extract_main([*[str(p) for p in dev_htmls], "--profile",
                                           str(profile_path), "-o",
@@ -426,13 +483,55 @@ def machine_gates(profile_path: Path, dev_htmls: Sequence[Path],
     report["extract_holdout"] = extract_main([*[str(p) for p in holdout_htmls],
                                               "--profile", str(profile_path), "-o",
                                               str(gates_dir / "holdout.jsonl")])
-    dev_result = audit_urls(list(dev_urls), data, settings,
-                            gates_dir / "audit_dev", 0.0)
-    threshold = pass_threshold(dev_result.evidence_rate, margin, floor)
+    if report["extract_dev"] != 0:
+        report["failures"].append("extract failed on dev set")
+    if report["extract_holdout"] != 0:
+        report["failures"].append("extract failed on holdout set")
+    dev_rows = []
+    try:
+        with (gates_dir / "dev.jsonl").open(encoding="utf-8") as handle:
+            dev_rows = [json.loads(line) for line in handle if line.strip()]
+    except (OSError, ValueError) as exc:
+        report["failures"].append(f"unreadable dev.jsonl: {exc}")
+    report["dev_rows"] = dev_rows
+    prop = property_test_cleans(data)
+    if prop:
+        report["failures"].extend(f"clean not total: {item}" for item in prop)
+    report["coverage_gaps"] = coverage_check(dev_rows, len(list(dev_urls)), verify)
+    report["failures"].extend(f"coverage gap: {gap}" for gap in report["coverage_gaps"])
+    report["ok"] = not report["failures"]
+    return report
+
+
+def audit_gates(profile_path: Path, dev_urls: Sequence[str],
+                holdout_urls: Sequence[str], settings: dict,
+                gates_dir: Path, margin: float, floor: float,
+                dev_cache: dict | None = None) -> dict:
+    """Network gates: dev audit (cached by profile hash) sets the holdout bar."""
+    import yaml
+
+    from .audit import audit_urls
+    from .fetch import make_fetcher
+
+    report: dict = {"failures": []}
+    try:
+        data = yaml.safe_load(Path(profile_path).read_text(encoding="utf-8")) or {}
+    except OSError as exc:
+        return {"ok": False, "failures": [f"unreadable profile: {exc}"]}
+    key = {"profile": hash_file(profile_path), "dev": hash_file_content(dev_urls)}
+    if dev_cache and dev_cache.get("key") == key:
+        dev_rate = float(dev_cache.get("dev_rate", 0.0))
+        report["dev_cached"] = True
+    else:
+        dev_result = audit_urls(list(dev_urls), data, settings,
+                                gates_dir / "audit_dev", 0.0)
+        dev_rate = dev_result.evidence_rate
+        report["dev_cached"] = False
+    report["dev_rate"] = dev_rate
+    threshold = pass_threshold(dev_rate, margin, floor)
+    report["threshold"] = threshold
     hold_result = audit_urls(list(holdout_urls), data, settings,
                              gates_dir / "audit_holdout", threshold)
-    report["dev_rate"] = dev_result.evidence_rate
-    report["threshold"] = threshold
     report["holdout_rate"] = hold_result.evidence_rate
     report["holdout_failures"] = hold_result.failures
     entry = (data.get("discovery") or {}).get("entry", "")
@@ -443,14 +542,27 @@ def machine_gates(profile_path: Path, dev_htmls: Sequence[Path],
             report["failures"].append(f"discovery entry unreachable: {entry}")
     else:
         report["discovery_entry_ok"] = True
-    if report["extract_dev"] != 0:
-        report["failures"].append("extract failed on dev set")
-    if report["extract_holdout"] != 0:
-        report["failures"].append("extract failed on holdout set")
     if not hold_result.passed:
         report["failures"].extend(hold_result.failures)
+    report["dev_cache_key"] = key
     report["ok"] = not report["failures"]
     return report
+
+
+def resolve_rounds(value: object, coverage_gaps: Sequence[str]) -> int:
+    """Adaptive rigor: clean coverage earns one confirmation round, gaps earn two."""
+    if isinstance(value, str) and value == "auto":
+        return 1 if not coverage_gaps else 2
+    try:
+        return max(0, int(value))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 1
+
+
+def hash_file_content(items: Sequence[str]) -> str:
+    import hashlib
+
+    return hashlib.sha256("\n".join(items).encode("utf-8")).hexdigest()[:16]
 
 
 def check_critic_report(report_path: Path, holdout: Sequence[str]) -> dict:
@@ -546,7 +658,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         verify = json.loads((out_dir / "verify.json").read_text(encoding="utf-8"))
         margin = float(verify.get("margin", 0.05))
+        if not isinstance(verify, dict):
+            verify = {}
     except (OSError, ValueError, TypeError, AttributeError):
+        verify = {}
         margin = 0.05
         gate_report["notes"].append("verify.json unreadable; margin defaulted to 0.05")
     dev_urls = read_url_list(out_dir / "dev_urls.txt")
@@ -582,17 +697,45 @@ def main(argv: Sequence[str] | None = None) -> int:
     holdout_htmls = [holdout_raw / name for name in fetched]
     profile_path = out_dir / "profile.yaml"
     floor = float(settings.get("audit", {}).get("min_evidence", PASS_FLOOR))
+    fix_timeout = (args.fix_timeout_min if args.fix_timeout_min is not None
+                   else min(8, timeout_min))
+    gates_dir = out_dir / "gates_work"
+    cache_file = gates_dir / ".dev_cache.json"
 
     def run_machine() -> dict:
-        return machine_gates(profile_path, dev_htmls, holdout_htmls, dev_urls,
-                             holdout, settings, out_dir / "gates_work",
-                             margin, floor)
+        static = static_gates(profile_path, dev_htmls, holdout_htmls, dev_urls,
+                              verify, gates_dir)
+        merged: dict = {"failures": list(static.get("failures", [])),
+                        "notes": [],
+                        "extract_dev": static.get("extract_dev"),
+                        "extract_holdout": static.get("extract_holdout"),
+                        "coverage_gaps": static.get("coverage_gaps", [])}
+        if not static.get("ok"):
+            merged["ok"] = False
+            return merged
+        try:
+            cached = json.loads(cache_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            cached = {}
+        audit = audit_gates(profile_path, dev_urls, holdout, settings,
+                            gates_dir, margin, floor,
+                            cached if isinstance(cached, dict) else None)
+        merged.update({k: v for k, v in audit.items() if k != "failures"})
+        merged["failures"].extend(audit.get("failures", []))
+        try:
+            cache_file.write_text(json.dumps({"key": audit.get("dev_cache_key"),
+                                              "dev_rate": audit.get("dev_rate", 0.0)}),
+                                  encoding="utf-8")
+        except OSError:
+            pass
+        merged["ok"] = not merged["failures"]
+        return merged
 
     gates = run_machine()
     gate_report.update({k: v for k, v in gates.items() if k != "failures"})
     gate_report["failures"] = list(gates.get("failures", []))
 
-    rounds = max(0, args.critic_rounds)
+    rounds = resolve_rounds(args.critic_rounds, gate_report.get("coverage_gaps", []))
     for round_no in range(1, rounds + 1):
         round_dir = out_dir / "_critic" / f"r{round_no}"
         round_dir.mkdir(parents=True, exist_ok=True)
@@ -627,7 +770,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         gate_report["critic_findings"] += 1
         shutil.copy2(report_path, workdir / "critic_report.md")
         run_agent("site-surveyor", workdir, load_fix_task(round_no), model,
-                  variant, timeout_min, args.format)
+                  variant, fix_timeout, args.format)
         collect_outputs(workdir, out_dir)
         gates = run_machine()
         gate_report.update({k: v for k, v in gates.items() if k != "failures"})
