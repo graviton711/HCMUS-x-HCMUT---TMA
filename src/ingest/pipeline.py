@@ -190,11 +190,14 @@ def search_page_urls(fetcher: SafeFetcher, discovery: dict,
         return []
     pages = _listing_max_page(first, page_param, cap)
     bodies = [first]
+    log.info("search pages: walking %d pages", pages)
     for page in range(2, pages + 1):
         body = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, page))
         if body is None:
             continue
         bodies.append(body)
+        if page % 10 == 0 or page == pages:
+            log.info("search pages: %d/%d", len(bodies), pages)
     for body in bodies:
         for href in _listing_links(body, entry, patterns):
             raw += 1
