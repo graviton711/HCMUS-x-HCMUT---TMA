@@ -83,7 +83,7 @@ def test_settings_has_tunable_sections():
 
     settings = load_settings()
     assert settings["sitemap"]["attempts"] == 2
-    assert settings["batch"]["workers"] == 4
+    assert settings["batch"]["workers"] == 8
     assert settings["audit"]["min_evidence"] == 0.9
     assert settings["survey"]["timeout_min"] == 20
     assert settings["survey"]["prefetch_timeout_s"] == 15

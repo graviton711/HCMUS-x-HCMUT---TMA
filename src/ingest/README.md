@@ -101,6 +101,8 @@ discovery:
 
 Quy tắc agent khi khảo sát discovery: xác định SSR hay API/JS (SSR mới dùng `search_pages`; JS thì khai `render: true` + endpoint `api` nếu có); đọc tổng số tour trên trang 1 và link trang cuối để đặt `max_pages`; mô tả hình dạng link (có `?startday=` không) để đặt `strip_query`; self-test trên 2 trang rồi đối chiếu với tập sitemap (nếu có) để chứng minh không sót.
 
+Vận hành `search_pages`: fetch song song theo `batch.workers` (mỗi worker một fetcher/limiter riêng, tốc độ tăng tuyến tính; `fetch.delay_s` là núm lịch sự duy nhất), đi theo đợt để giữ thứ tự trang ổn định; `--limit N` dừng ngay khi đủ N slug (smoke test chỉ tốn trang 1); mỗi đợt ghi nối `discovered.csv` và flush ngay nên ngắt giữa chừng vẫn giữ phần đã liệt kê. Batch crawl cũng lưu `_state.json` định kỳ, không chỉ lúc cuối.
+
 **Field `offers` (tầng ngày khởi hành cố định):** `list[dict]` — mỗi phần tử `{departure_date: "YYYY-MM-DD", price: int|null, availability: available|sold_out|unknown}`, dựng bằng biểu thức `clean` từ bảng lịch/tab của nguồn. Giá trên lịch khởi hành (nếu có) ưu tiên hơn giá bìa. Site không công bố ngày cố định → `offers: []` + khai báo `departure_pattern`. Site ẩn lịch sau tab động (kiểu Vietravel) → `offers: []` + `status: not_observed` trong `unknowns.md`, không suy đoán.
 
 ---

@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
@@ -170,13 +171,28 @@ def _listing_max_page(body: bytes, page_param: str, cap: int) -> int:
     return max(1, min(best, cap))
 
 
+def _fetch_listing_page(page: int, entry: str, page_param: str, per_page_param: str,
+                        per_page: int, attempts: int, fetcher: SafeFetcher,
+                        factory: Callable[[], SafeFetcher] | None) -> bytes | None:
+    worker = factory() if factory is not None else fetcher
+    return _fetch_sitemap(worker, _page_url(entry, page_param, per_page_param, per_page, page),
+                          attempts)
+
+
 def search_page_urls(fetcher: SafeFetcher, discovery: dict,
-                     patterns: list[str], attempts: int = 2) -> list[str]:
+                     patterns: list[str], attempts: int = 2, workers: int = 1,
+                     limit: int = 0,
+                     on_page: Callable[[int, list[str]], None] | None = None,
+                     fetcher_factory: Callable[[], SafeFetcher] | None = None) -> list[str]:
     """Unique tour slugs from SSR paginated lists (one card link per departure).
 
     Page 1 reveals the real last page via its paging links; iteration stops
-    there or at `max_pages`. `strip_query` drops per-departure params
-    (?startday=...) so tour x N dates dedupes to one slug.
+    there, at `max_pages`, or as soon as `limit` unique slugs are collected.
+    Pages after the first go out in waves of `workers` (each wave processed in
+    page order, so dedupe order is deterministic); `on_page` fires per page
+    with that page's fresh slugs so callers can persist incrementally.
+    `strip_query` drops per-departure params (?startday=...) so tour x N dates
+    dedupes to one slug.
     """
     entry = discovery.get("entry", "")
     page_param = discovery.get("page_param", "page")
@@ -186,39 +202,80 @@ def search_page_urls(fetcher: SafeFetcher, discovery: dict,
     strip = bool(discovery.get("strip_query", True))
     seen: dict[str, None] = {}
     raw = 0
+
+    def harvest(body: bytes) -> list[str]:
+        nonlocal raw
+        fresh: list[str] = []
+        for href in _listing_links(body, entry, patterns):
+            raw += 1
+            parts = urlsplit(href)
+            key = (urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+                   if strip else href.split("#")[0])
+            if key not in seen:
+                seen[key] = None
+                fresh.append(key)
+        return fresh
+
     first = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, 1),
                            attempts)
     if first is None:
         return []
+    if on_page is not None:
+        on_page(1, harvest(first))
+    else:
+        harvest(first)
+    if limit > 0 and len(seen) >= limit:
+        ordered = list(seen)[:limit]
+        log.info("search pages: %d unique tours from %d raw links over 1 page (limit hit)",
+                 len(ordered), raw)
+        return ordered
     pages = _listing_max_page(first, page_param, cap)
-    bodies = [first]
     log.info("search pages: walking %d pages", pages)
-    for page in range(2, pages + 1):
-        body = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, page),
-                              attempts)
-        if body is None:
-            continue
-        bodies.append(body)
-        if page % 10 == 0 or page == pages:
-            log.info("search pages: %d/%d", len(bodies), pages)
-    for body in bodies:
-        for href in _listing_links(body, entry, patterns):
-            raw += 1
-            parts = urlsplit(href)
-            key = urlunsplit((parts.scheme, parts.netloc, parts.path, "", "")) if strip else href.split("#")[0]
-            seen.setdefault(key, None)
-    ordered = list(seen)
-    log.info("search pages: %d unique tours from %d raw links over %d pages", len(ordered), raw, len(bodies))
+    width = 1 if workers <= 1 else max(2, workers * 2)
+    pool = ThreadPoolExecutor(max_workers=max(1, workers))
+    try:
+        for start in range(2, pages + 1, width):
+            chunk = range(start, min(start + width, pages + 1))
+            futures = {page: pool.submit(_fetch_listing_page, page, entry, page_param,
+                                         per_page_param, per_page, attempts,
+                                         fetcher, fetcher_factory)
+                       for page in chunk}
+            stopped = False
+            for page in chunk:
+                try:
+                    body = futures[page].result()
+                except Exception as exc:
+                    log.warning("search page %d failed %s", page, exc)
+                    continue
+                if body is None:
+                    continue
+                fresh = harvest(body)
+                if on_page is not None:
+                    on_page(page, fresh)
+                if limit > 0 and len(seen) >= limit:
+                    stopped = True
+                    break
+            if stopped:
+                pool.shutdown(cancel_futures=True)
+                break
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
+    ordered = list(seen)[:limit] if limit > 0 else list(seen)
+    log.info("search pages: %d unique tours from %d raw links over %d pages",
+             len(ordered), raw, pages)
     return ordered
 
 
 def discover_urls(fetcher: SafeFetcher, profile: dict,
                   patterns: list[str], min_lastmod: str = "",
-                  attempts: int = 2) -> list[str]:
+                  attempts: int = 2, workers: int = 1, limit: int = 0,
+                  on_page: Callable[[int, list[str]], None] | None = None,
+                  fetcher_factory: Callable[[], SafeFetcher] | None = None) -> list[str]:
     """Enumerate tour URLs via the profile's declared discovery method."""
     discovery = profile.get("discovery") or {"method": "sitemap"}
     if discovery.get("method") == "search_pages" and discovery.get("entry"):
-        return search_page_urls(fetcher, discovery, patterns, attempts)
+        return search_page_urls(fetcher, discovery, patterns, attempts, workers,
+                                limit, on_page, fetcher_factory)
     return sitemap_urls(fetcher, profile.get("sitemaps", []), patterns,
                         min_lastmod=min_lastmod, attempts=attempts)
 
@@ -450,6 +507,8 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                     state[url] = row.pop("_state_entry")
                 writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
                 handle.flush()
+                if index % 10 == 0:
+                    _save_state(state_path, state)
                 if row.get("status") in (FETCH_FAIL, BLOCKED):
                     fails += 1
                     if fails >= max_fails:
@@ -499,6 +558,8 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                     state[url] = row.pop("_state_entry")
                 writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
                 handle.flush()
+                if index % 10 == 0:
+                    _save_state(state_path, state)
                 if row.get("status") in (FETCH_FAIL, BLOCKED):
                     fails += 1
                     if fails >= max_fails:
@@ -784,10 +845,34 @@ def main(argv: list[str] | None = None) -> int:
         print(f"sitemap urls: {len(urls)}")
     elif args.discover:
         fetcher = make_fetcher(settings)
+        batch_cfg = settings.get("batch", {})
+        list_path = (args.output or
+                     (Path(settings.get("output", {}).get("dir", ".local")) / "discovered.csv"))
+        _save_discovered([], list_path)
+        handed = 0
+
+        def on_page(page: int, fresh: list[str], _path: Path = list_path) -> None:
+            """Append each page's fresh slugs immediately; a killed run keeps them."""
+            nonlocal handed
+            if fresh:
+                with _path.open("a", encoding="utf-8-sig", newline="") as handle:
+                    writer = csv.DictWriter(handle, fieldnames=["url"])
+                    for url in fresh:
+                        writer.writerow({"url": url})
+                        handed += 1
+            if page % 10 == 0:
+                log.info("search pages: %d slugs saved", handed)
+
         urls = discover_urls(fetcher, profile, profile.get("tour_url_patterns", []),
                              min_lastmod=args.since,
-                             attempts=int(settings.get("sitemap", {}).get("attempts", 2)))
+                             attempts=int(settings.get("sitemap", {}).get("attempts", 2)),
+                             workers=max(1, int(batch_cfg.get("workers", 4))),
+                             limit=args.limit,
+                             on_page=on_page,
+                             fetcher_factory=lambda: make_fetcher(settings))
         print(f"discovered urls: {len(urls)}")
+        print(f"discovered list: {list_path}")
+        return 0
     elif args.url:
         urls = [args.url]
     else:
@@ -795,13 +880,6 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.limit > 0:
         urls = urls[: args.limit]
-
-    if args.discover:
-        list_path = (args.output or
-                     (Path(settings.get("output", {}).get("dir", ".local")) / "discovered.csv"))
-        _save_discovered(urls, list_path)
-        print(f"discovered list: {list_path}")
-        return 0
 
     out_dir = args.out_dir or (Path(settings.get("output", {}).get("dir", ".local")) / "tours")
     if len(urls) == 1 and not args.batch and not args.sitemap:

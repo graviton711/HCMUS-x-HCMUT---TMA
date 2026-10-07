@@ -16,7 +16,7 @@ logging:
 batch:
   max_consecutive_failures: 10
   delay_s: 1.0
-  workers: 4
+  workers: 8
 sitemap:
   attempts: 2
 audit:

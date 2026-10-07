@@ -291,6 +291,53 @@ def test_make_fetcher_reads_settings():
     assert (fallback.timeout, fallback.max_bytes) == (20.0, 2000000)
 
 
+def test_search_pages_workers_match_sequential_and_limit_stops_early():
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import search_page_urls
+
+    def page(cards, last):
+        links = "".join(f'<a href="{c}">tour</a>' for c in cards)
+        paging = "".join(
+            f'<a href="/tim-kiem?q=&type=tour&perPage=50&page={n}">{n}</a>'
+            for n in range(2, last + 1))
+        return f"<html><body>{links}{paging}</body></html>".encode()
+
+    bodies = {
+        1: page(["https://example.test/du-lich-a"], 4),
+        2: page(["https://example.test/du-lich-b"], 4),
+        3: page(["https://example.test/du-lich-c"], 4),
+        4: page(["https://example.test/du-lich-d"], 4),
+    }
+    fetched: list[int] = []
+
+    class FakeFetcher(SafeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
+            import re as _re
+            match = _re.search(r"[?&]page=(\d+)", url)
+            num = int(match.group(1)) if match else 1
+            fetched.append(num)
+            return FetchResult(url, 200, "text/html", bodies[num], None)
+
+    discovery = {"method": "search_pages",
+                 "entry": "https://example.test/tim-kiem?q=&type=tour",
+                 "page_param": "page", "per_page_param": "perPage",
+                 "per_page": 50, "max_pages": 200, "strip_query": True}
+    seq = search_page_urls(FakeFetcher(), discovery, ["/du-lich-"])
+    assert seq == ["https://example.test/du-lich-a", "https://example.test/du-lich-b",
+                   "https://example.test/du-lich-c", "https://example.test/du-lich-d"]
+    assert search_page_urls(FakeFetcher(), discovery, ["/du-lich-"], workers=4) == seq
+    fetched.clear()
+    limited = search_page_urls(FakeFetcher(), discovery, ["/du-lich-"], workers=1, limit=2)
+    assert limited == seq[:2]
+    assert fetched == [1, 2]
+    seen_pages: list[tuple[int, list[str]]] = []
+    limited = search_page_urls(FakeFetcher(), discovery, ["/du-lich-"], workers=4, limit=2,
+                               on_page=lambda p, fresh: seen_pages.append((p, fresh)))
+    assert limited == seq[:2]
+    assert [p for p, _ in seen_pages] == [1, 2]
+    assert seen_pages[0][1] == ["https://example.test/du-lich-a"]
+
+
 def test_search_pages_dedupes_startday_links_and_caps_pages():
     from ingest.fetch import FetchResult
     from ingest.pipeline import discover_urls, search_page_urls
