@@ -6,10 +6,6 @@
   "type": "object",
   "required": ["origin", "flows"],
   "properties": {
-    "version": {"type": "integer", "description": "Survey iteration, stamped by the harness"},
-    "surveyed_at": {"type": "string", "description": "Vietnam local ISO time of the last gated survey"},
-    "sample_tours": {"type": "array", "items": {"type": "string"},
-                     "description": "Dev + holdout tour URLs this version was verified on"},
     "origin": {"type": "string", "description": "Apex domain, e.g. travel.com.vn"},
     "flows": {
       "type": "array",

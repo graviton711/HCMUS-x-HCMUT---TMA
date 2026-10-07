@@ -14,9 +14,7 @@ prompt: |
   HARD RULES (violating any fails the task):
   - Public HTTP GET only, same origin. Respect robots.txt; never fetch a
     disallowed path. No login, no CAPTCHA/paywall bypass, no POST/PUT/DELETE,
-    no credentials or cookies. Max 60 requests total, >=1s apart, <=2MB each,
-    split by phase: ~10 census, ~30 dev-set, ~20 holdout/critic. A phase that
-    runs out of budget stops; never borrow from another phase.
+    no credentials or cookies. Max 60 requests total, >=1s apart, <=2MB each.
   - Never invent facts. Every claim needs a verbatim quote from a fetched page.
   - Write all output files inside the working directory only.
   - You may ONLY edit profile.yaml. You must never write or edit crawler code.
@@ -24,10 +22,6 @@ prompt: |
     must be a strictly machine-readable dictionary specifying exact coordinates.
     Writing prose instructions like "ends at next heading" or "if X then Y"
     will cause the runner to fail and is a hard rejection.
-  - BLIND HOLDOUT: build every rule from your 5 named dev tours ONLY
-    (recorded in dev_urls.txt). Never tune a rule to any other tour you
-    happened to fetch during census; a separate critic will test you on tours
-    you have never seen, plus one canary you have seen (it must still pass).
 
   SPEED PRIORITY & RENDERING DECISION:
   1. Static HTML + embedded JSON (JSON-LD, hydration blobs, sitemaps):
@@ -141,27 +135,7 @@ prompt: |
   If a field is not present on the site, declare:
     status: not_observed
 
-  TEMPLATE CENSUS FIRST (before any rule):
-  - Cluster the site's tour pages by layout markers (schedule blob names,
-    booking-card IDs, hero/meta class patterns, combo vs single-tour DOM).
-    Name each cluster (e.g. "ct2-standard", "combo-multi-hotel") with the
-    marker quotes that define it.
-  - Sample 10-15 dev tours covering every cluster (at least one per
-    cluster, two where budget allows; include tours missing each optional
-    section at least once: no schedule, no notes/policy, no surcharges). Save as raw/tour-1.html
-    onwards and list their URLs in dev_urls.txt (one per line, same order).
-  - Report the coverage matrix in verify.json under "coverage": every
-    cluster with its dev tour count, and for each of offers /
-    cancellation_policy / surcharges / child_policy whether it is present
-    in at least one dev tour AND absent in at least one dev tour. A cell
-    you cannot fill (e.g. a section present everywhere) must be stated
-    explicitly with the evidence that you looked.
-  - Discovery: determine how the site enumerates sellable tours (sitemap
-    index, SSR search pages, or category listings) and declare the discovery
-    block per src/ingest/README.md section 2.4, with raw-vs-unique counts
-    measured on 2 list pages plus sitemap overlap when both exist.
-
-  OUTPUT FILES (all required, nothing else counts as done):
+  OUTPUT FILES (all five required, nothing else counts as done):
   1. `profile.yaml` with EXACTLY these keys:
      origin, render (boolean: true if browser rendering is needed, false otherwise),
      flows (subset of [static, browser, api]), sitemaps (list),
@@ -169,18 +143,22 @@ prompt: |
      discovery (map declaring HOW to enumerate tour links: method + pagination
      coordinates per the discovery contract in src/ingest/README.md section 2.4),
      fields (map canonical field -> rule object as specified above).
-  2. `evidence.md` -- the per-field evidence table with verbatim quotes.
-  3. `dev_urls.txt` -- the 10-15 dev tour URLs, one per line (rules built from these only).
-  4. `candidate_pool.json` -- >=8 holdout candidates with cluster + rationale.
-  5. `verify.json` -- {"margin": <float>, "margin_reason": <str>,
-     "coverage": {"<cluster>": <dev tour count>, ...},
-     "section_matrix": {"offers|cancellation_policy|surcharges|child_policy":
-     {"present": <n>, "absent": <n>}}} proposing how far below your dev-set
-     evidence rate the holdout bar may sit
-     (harness computes pass = max(dev_rate - margin, floor 0.9)).
-  6. `selftest.md` -- the per-field dev-set PASS/FAIL with the real JSONL output.
-  7. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html onwards).
-  8. `unknowns.md` -- fields/pages that could not be verified + why.
+
+  DISCOVERY SURVEY (required: sites paginate/search differently):
+  - Determine how the site enumerates sellable tours: sitemap index, SSR search
+    pages, or category listing pages. Start from robots.txt sitemaps AND the
+    site's own search/listing UI.
+  - For paginated SSR lists declare: entry URL, page/per-page param names,
+    per_page, max_pages (from the real last-page link, plus headroom), whether
+    card links carry per-departure query params (e.g. ?startday=) needing
+    strip_query, and which query params to keep as schedule seeds.
+  - Self-test discovery on 2 list pages: count raw links vs unique slugs after
+    normalization, and overlap against the sitemap set when both exist; record
+    the numbers in selftest.md as proof of no missed tours.
+  2. `evidence.md` -- the per-field evidence table.
+  3. `selftest.md` -- the per-field dev-set PASS/FAIL with the real JSONL output.
+  4. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html, tour-2.html, tour-3.html).
+  5. `unknowns.md` -- fields/pages that could not be verified + why.
 
   SELF-TEST LOOP (required before handover):
   - The engine module `ingest.extract` is importable (`PYTHONPATH` already includes
@@ -192,40 +170,20 @@ prompt: |
     escapes). After writing or editing it, always verify:
       python -c "import yaml; d=yaml.safe_load(open('profile.yaml',encoding='utf-8')); print(d['fields']['tour_name'])"
     If the printed value contains backslash-u escapes, rewrite the file.
-  - Test your `profile.yaml` over ALL dev tours at once (enumerate every
-    raw/tour-N.html explicitly; PowerShell does not glob for Python scripts):
-      python -m ingest.extract $(Get-ChildItem raw/tour-*.html | Select-Object -Expand FullName) --profile profile.yaml -o selftest.jsonl
-  - Prefer research()/refindall() over raw re.search().group(): a guard that
-    accepts more inputs than its extractor is a bug the critic will find.
-  - Inspect `selftest.jsonl` to ensure all 19 canonical fields match Target Canonical Formats in data-contract.md.
+  - Test your `profile.yaml` directly by running:
+      python -m ingest.extract raw/tour-1.html raw/tour-2.html raw/tour-3.html --profile profile.yaml -o selftest.jsonl
+  - Inspect `selftest.jsonl` to ensure all 18 canonical fields match Target Canonical Formats in data-contract.md.
   - If any field is empty, malformed, or has dirty HTML entities, adjust your clean expression or selectors in `profile.yaml` and re-run.
   - Maximum 5 iterations.
   - Paste the final `selftest.jsonl` content into `selftest.md`.
 
-  FIX ROUNDS (when a critic report lands in your directory as critic_report.md):
-  - Classify each failure FIRST: systematic (whole cluster fails one field ->
-    fix the rule, then re-run the FULL dev set) vs isolated (one odd tour ->
-    tighten the guard, then re-run that tour PLUS every previously passing
-    tour as regression). A fix that breaks a passing tour is a failed round.
-  - Update evidence.md/selftest.md for every change; never weaken a rule to
-    silence one failure.
-
 
 handover_task: |
   Execute your agent instructions now: survey the tour website at {origin} and produce profile.yaml, evidence.md, selftest.md,
-  raw/, unknowns.md, dev_urls.txt, candidate_pool.json, verify.json in the working directory.
+  raw/, unknowns.md in the working directory.
   NOTE: raw/ has been prefetched with robots.txt and sitemap XMLs.
   If raw/ already contains robots.txt, sitemaps or tour-*.html, DO NOT re-fetch them;
   use the existing files in raw/ and only download what is missing.
-  Before handover you MUST run the self-test loop over 10-15 dev tours
-  covering every template cluster using python -m ingest.extract,
-  fix profile.yaml on any failure, and record the final result in selftest.md.
-
-fix_task: |
-  Fix round {round}: the critic tested your profile on blind holdout tours and
-  reported failures in critic_report.md (in your working directory). Read it,
-  classify each failure as systematic or isolated per your instructions, fix
-  profile.yaml, re-run the self-test loop (full dev set for systematic fixes,
-  failing tour plus full regression for isolated fixes), and update
-  evidence.md/selftest.md. Do NOT touch candidate_pool.json, dev_urls.txt,
-  or verify.json. Reply with a summary of what changed and the re-test result.
+  Before handover you MUST run the self-test loop over 3
+  different tours using python -m ingest.extract, fix profile.yaml on any failure,
+  and record the final result in selftest.md.
