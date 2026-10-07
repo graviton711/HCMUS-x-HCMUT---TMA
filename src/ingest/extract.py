@@ -1,6 +1,6 @@
 """Read layer: profile coordinates in, verbatim records out. No guessing.
 
-Strict field extraction from agent-authored profiles (`dsl`), raw block
+Strict field extraction from agent-authored profiles, raw block
 readers, and the profile/settings loader. Nothing here interprets content;
 cleaning happens only through reviewed `clean` expressions in profiles.
 """
@@ -15,7 +15,7 @@ from collections.abc import Callable
 from html.parser import HTMLParser
 from pathlib import Path
 from types import ModuleType
-from typing import Any
+from typing import Any, Literal, overload
 from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
@@ -239,8 +239,18 @@ def extract_api_field(rule: dict, row: dict, fetch_json: Callable[[str], object]
     return apply_clean(rule, val)
 
 
+@overload
 def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] | None = None,
-                 include_raw: bool = False) -> dict | tuple[dict, dict]:
+                 *, include_raw: Literal[False] = False) -> dict[str, Any]: ...
+
+
+@overload
+def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] | None = None,
+                 *, include_raw: Literal[True]) -> tuple[dict[str, Any], dict[str, Any]]: ...
+
+
+def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] | None = None,
+                 include_raw: bool = False) -> dict[str, Any] | tuple[dict[str, Any], dict[str, Any]]:
     """Full canonical row from one page: static fields first, api fields after.
 
     With include_raw=True returns (row, raw) where raw holds pre-clean values;

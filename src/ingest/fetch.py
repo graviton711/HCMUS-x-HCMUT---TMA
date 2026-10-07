@@ -24,7 +24,7 @@ from urllib.request import Request, build_opener
 from shared import get_logger
 
 if TYPE_CHECKING:
-    from playwright.sync_api import Page
+    from playwright.sync_api import Page  # pyright: ignore[reportMissingImports]
 
 log = get_logger("fetch")
 
@@ -138,7 +138,7 @@ def fetch_robots(fetcher: SafeFetcher, site_base: str, origin_host: str):
 def render_url(url: str, output_path: str | Path, timeout: int = 30000,
                capture_net: Path | None = None) -> list[dict[str, object]]:
     """Render one dynamic URL via headless Chromium; optionally capture JSON XHR."""
-    from playwright.sync_api import sync_playwright
+    from playwright.sync_api import sync_playwright  # pyright: ignore[reportMissingImports]
 
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -209,7 +209,7 @@ class BrowserSession:
 
     def __enter__(self) -> BrowserSession:
         try:
-            from playwright.sync_api import sync_playwright
+            from playwright.sync_api import sync_playwright  # pyright: ignore[reportMissingImports]
         except ImportError as exc:
             raise RuntimeError("Playwright is not installed; install the 'browser' extra.") from exc
         self._stack = sync_playwright()

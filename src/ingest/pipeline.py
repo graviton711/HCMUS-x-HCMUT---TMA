@@ -20,7 +20,7 @@ import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from shared import get_logger
 
@@ -37,18 +37,54 @@ CSV_COLUMNS = ["url", "observed_at", "profile", "status", "title",
 
 def _fetch_sitemap(fetcher: SafeFetcher, sitemap: str) -> bytes | None:
     """One retry; None when both attempts fail (logged once)."""
+    last_error: object = "unknown"
     for _ in range(2):
         result = fetcher.fetch(sitemap)
         if result.status_code == 200 and not result.error:
             return result.body
-    log.warning("sitemap failed %s %s", sitemap, result.error or result.status_code)
+        last_error = result.error or result.status_code
+    log.warning("sitemap failed %s %s", sitemap, last_error)
     return None
 
 
+def _urlset_entries(body: bytes, patterns: list[str]) -> list[tuple[str, str]]:
+    """(url, lastmod) pairs from one urlset document; lastmod may be empty."""
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError:
+        return []
+    out: list[tuple[str, str]] = []
+    for url_node in root.iter():
+        if url_node.tag.rsplit("}", 1)[-1] != "url":
+            continue
+        loc = ""
+        lastmod = ""
+        for child in url_node:
+            tag = child.tag.rsplit("}", 1)[-1]
+            if tag == "loc" and child.text:
+                loc = child.text.strip()
+            elif tag == "lastmod" and child.text:
+                lastmod = child.text.strip()
+        if loc and any(pat in loc for pat in patterns):
+            out.append((loc, lastmod))
+    if not out:
+        for node in root.iter():
+            if node.tag.rsplit("}", 1)[-1] == "loc" and node.text:
+                url = node.text.strip()
+                if any(pat in url for pat in patterns):
+                    out.append((url, ""))
+    return out
+
+
 def sitemap_urls(fetcher: SafeFetcher, sitemaps: list[str],
-                 patterns: list[str]) -> list[str]:
-    """Tour URLs from sitemaps, following one sitemap-index level down."""
-    found: set[str] = set()
+                 patterns: list[str], min_lastmod: str = "") -> list[str]:
+    """Tour URLs from sitemaps, following one sitemap-index level down.
+
+    Freshest first (by sitemap lastmod, ISO strings compare directly);
+    `min_lastmod` drops anything older. Lastmod is a crawl-ordering hint
+    only, never published as tour data.
+    """
+    stamped: dict[str, str] = {}
     children: list[str] = []
     for sitemap in sitemaps:
         body = _fetch_sitemap(fetcher, sitemap)
@@ -66,27 +102,118 @@ def sitemap_urls(fetcher: SafeFetcher, sitemaps: list[str],
                     if child.lower().endswith(".xml"):
                         children.append(child)
             continue
-        for node in root.iter():
-            if node.tag.rsplit("}", 1)[-1] == "loc" and node.text:
-                url = node.text.strip()
-                if any(pat in url for pat in patterns):
-                    found.add(url)
+        for url, lastmod in _urlset_entries(body, patterns):
+            if url not in stamped or (lastmod and lastmod > stamped[url]):
+                stamped[url] = lastmod
     for child in children:
         body = _fetch_sitemap(fetcher, child)
         if body is None:
             continue
         try:
-            root = ET.fromstring(body)
+            ET.fromstring(body)
         except ET.ParseError:
             log.warning("sitemap unparseable %s", child)
             continue
-        for node in root.iter():
-            if node.tag.rsplit("}", 1)[-1] == "loc" and node.text:
-                url = node.text.strip()
-                if any(pat in url for pat in patterns):
-                    found.add(url)
-    log.info("sitemap urls: %d tours from %d sitemaps", len(found), len(sitemaps) + len(children))
-    return sorted(found)
+        for url, lastmod in _urlset_entries(body, patterns):
+            if url not in stamped or (lastmod and lastmod > stamped[url]):
+                stamped[url] = lastmod
+    if min_lastmod:
+        stamped = {url: stamp for url, stamp in stamped.items() if stamp >= min_lastmod}
+    ordered = sorted(stamped, key=lambda url: (stamped[url], url), reverse=True)
+    log.info("sitemap urls: %d tours from %d sitemaps", len(ordered), len(sitemaps) + len(children))
+    return ordered
+
+
+def _page_url(entry: str, page_param: str, per_page_param: str,
+              per_page: int, page: int) -> str:
+    """Entry URL with the page number (and page size) set, rest preserved."""
+    parts = urlsplit(entry)
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k != page_param]
+    query.append((page_param, str(page)))
+    if per_page_param and per_page and all(k != per_page_param for k, _ in query):
+        query.append((per_page_param, str(per_page)))
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
+
+
+_HREF_RE = re.compile(r'href="([^"]+)"|href=\'([^\']+)\'', re.I)
+
+
+def _listing_links(body: bytes, entry: str, patterns: list[str]) -> list[str]:
+    """Tour hrefs from one SSR list page, made absolute, same-origin only."""
+    html = body.decode("utf-8", errors="replace")
+    base = urlsplit(entry)
+    out: list[str] = []
+    for double_quoted, single_quoted in _HREF_RE.findall(html):
+        href = (double_quoted or single_quoted).strip()
+        if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
+            continue
+        if href.startswith("/"):
+            href = f"{base.scheme}://{base.netloc}{href}"
+        parts = urlsplit(href)
+        if parts.netloc.lower() != base.netloc.lower():
+            continue
+        if any(pat in parts.path for pat in patterns):
+            out.append(href)
+    return out
+
+
+def _listing_max_page(body: bytes, page_param: str, cap: int) -> int:
+    """Highest ?page=N seen in paging links, capped; at least 1."""
+    html = body.decode("utf-8", errors="replace")
+    best = 1
+    for double_quoted, single_quoted in _HREF_RE.findall(html):
+        href = double_quoted or single_quoted
+        for key, value in parse_qsl(urlsplit(href).query):
+            if key == page_param and value.isdigit():
+                best = max(best, int(value))
+    return max(1, min(best, cap))
+
+
+def search_page_urls(fetcher: SafeFetcher, discovery: dict,
+                     patterns: list[str]) -> list[str]:
+    """Unique tour slugs from SSR paginated lists (one card link per departure).
+
+    Page 1 reveals the real last page via its paging links; iteration stops
+    there or at `max_pages`. `strip_query` drops per-departure params
+    (?startday=...) so tour x N dates dedupes to one slug.
+    """
+    entry = discovery.get("entry", "")
+    page_param = discovery.get("page_param", "page")
+    per_page_param = discovery.get("per_page_param", "")
+    per_page = int(discovery.get("per_page") or 0)
+    cap = max(1, int(discovery.get("max_pages") or 1))
+    strip = bool(discovery.get("strip_query", True))
+    seen: dict[str, None] = {}
+    raw = 0
+    first = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, 1))
+    if first is None:
+        return []
+    pages = _listing_max_page(first, page_param, cap)
+    bodies = [first]
+    for page in range(2, pages + 1):
+        body = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, page))
+        if body is None:
+            continue
+        bodies.append(body)
+    for body in bodies:
+        for href in _listing_links(body, entry, patterns):
+            raw += 1
+            parts = urlsplit(href)
+            key = urlunsplit((parts.scheme, parts.netloc, parts.path, "", "")) if strip else href.split("#")[0]
+            seen.setdefault(key, None)
+    ordered = list(seen)
+    log.info("search pages: %d unique tours from %d raw links over %d pages", len(ordered), raw, len(bodies))
+    return ordered
+
+
+def discover_urls(fetcher: SafeFetcher, profile: dict,
+                  patterns: list[str], min_lastmod: str = "") -> list[str]:
+    """Enumerate tour URLs via the profile's declared discovery method."""
+    discovery = profile.get("discovery") or {"method": "sitemap"}
+    if discovery.get("method") == "search_pages" and discovery.get("entry"):
+        return search_page_urls(fetcher, discovery, patterns)
+    return sitemap_urls(fetcher, profile.get("sitemaps", []), patterns,
+                        min_lastmod=min_lastmod)
 
 
 def _read_done(path: Path) -> set[str]:
@@ -237,8 +364,9 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
             log.warning("browser flow failed %s %s", url, browser_error)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    slug = re.sub(r"[^a-z0-9]+", "-", page.url.lower()).strip("-")[:80]
-    detail_path = out_dir / f"tour_{slug[:60]}.json"
+    slug = re.sub(r"[^a-z0-9]+", "-", page.url.lower()).strip("-")[:50]
+    digest = hashlib.sha256(page.url.encode("utf-8")).hexdigest()[:12]
+    detail_path = out_dir / f"tour_{slug}-{digest}.json"
     detail_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     departures = (merged["departure_schedule"] or {}).get("departures", [])
@@ -411,11 +539,16 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--profile", "-p", default="vietravel", help="source profile name")
     parser.add_argument("--batch", type=Path, help="CSV file with a url column")
     parser.add_argument("--sitemap", action="store_true", help="enumerate profile sitemaps instead")
+    parser.add_argument("--discover", action="store_true",
+                        help="enumerate via the profile discovery block (search_pages or sitemap)")
     parser.add_argument("--limit", type=int, default=0, help="max tours (0 = all)")
+    parser.add_argument("--since", default="", help="only sitemap urls with lastmod >= YYYY[-MM[-DD]]")
     parser.add_argument("--output", "-o", type=Path, default=None, help="CSV output path")
     parser.add_argument("--out-dir", type=Path, default=None, help="JSON detail directory")
     parser.add_argument("--no-browser", action="store_true", help="skip browser flow")
     parser.add_argument("--migrate", action="store_true", help="apply SQL migrations to the tour database and exit")
+    parser.add_argument("--publish", type=Path, default=None,
+                        help="publish detail JSONs from DIR to the tour database and exit (needs --profile)")
     return parser.parse_args(argv)
 
 
@@ -434,6 +567,7 @@ def tour_db_url() -> str:
 def migrate_db(url: str | None = None) -> int:
     """Apply pending SQL migrations once each; returns the count applied."""
     import psycopg
+    from psycopg import sql
 
     applied = 0
     with psycopg.connect(url or tour_db_url()) as connection:
@@ -446,12 +580,162 @@ def migrate_db(url: str | None = None) -> int:
                 cursor.execute("SELECT 1 FROM schema_migrations WHERE version = %s", (path.name,))
                 if cursor.fetchone():
                     continue
-                cursor.execute(path.read_text(encoding="utf-8"))
+                # Trusted input: version-controlled migration files, not user data.
+                cursor.execute(sql.SQL(path.read_text(encoding="utf-8")))  # pyright: ignore[reportArgumentType]
                 cursor.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (path.name,))
                 applied += 1
                 log.info("applied migration %s", path.name)
         connection.commit()
     return applied
+
+
+def _int_or_none(value: object) -> int | None:
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, float, str)):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _key(*parts: object) -> str:
+    return hashlib.sha256(json.dumps(parts, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def publish_snapshot(out_dir: str | Path, profile_name: str,
+                     url: str | None = None) -> dict[str, int]:
+    """Upsert detail JSONs into providers/tours/offers. Returns row counts."""
+    import psycopg
+
+    profile = load_profile(profile_name)
+    origin = profile.get("origin", "")
+    counts = {"tours": 0, "offers": 0, "skipped": 0}
+    with psycopg.connect(url or tour_db_url()) as connection:
+        with connection.cursor() as cursor:
+            provider_key = _key("provider", origin)
+            cursor.execute(
+                """INSERT INTO providers (source_key, display_name, website, observed_at)
+                   VALUES (%s, %s, %s, NOW())
+                   ON CONFLICT (source_key) DO UPDATE SET observed_at = NOW()
+                   RETURNING id""",
+                (provider_key, profile_name, f"https://{origin}"),
+            )
+            row = cursor.fetchone()
+            provider_id = row[0] if row else None
+            if provider_id is None:
+                cursor.execute("SELECT id FROM providers WHERE source_key = %s", (provider_key,))
+                selected = cursor.fetchone()
+                if selected is None:
+                    raise RuntimeError(f"provider row missing for {provider_key}")
+                provider_id = selected[0]
+            for path in sorted(Path(out_dir).glob("tour_*.json")):
+                try:
+                    detail = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    counts["skipped"] += 1
+                    continue
+                record = detail.get("record") or {}
+                if not isinstance(record, dict) or not detail.get("url"):
+                    counts["skipped"] += 1
+                    continue
+                tour_url = detail["url"]
+                tour_key = _key("tour", tour_url)
+                cursor.execute(
+                    """INSERT INTO tours (record_key, provider_id, url, observed_at,
+                           tour_name, departure_city, destinations, route, transport,
+                           accommodation, duration_days, duration_nights, price, currency,
+                           price_type, departure_pattern, itinerary, inclusions, exclusions,
+                           cancellation_policy, surcharges, child_policy,
+                           verification_status, source_url, evidence)
+                       VALUES (%s, %s, %s, %s,
+                           %s, %s, %s, %s, %s,
+                           %s, %s, %s, %s, %s,
+                           %s, %s, %s, %s, %s,
+                           %s, %s, %s,
+                           'provider_claimed', %s, %s)
+                       ON CONFLICT (record_key) DO UPDATE SET
+                           observed_at = EXCLUDED.observed_at, tour_name = EXCLUDED.tour_name,
+                           departure_city = EXCLUDED.departure_city, destinations = EXCLUDED.destinations,
+                           route = EXCLUDED.route, transport = EXCLUDED.transport,
+                           accommodation = EXCLUDED.accommodation, duration_days = EXCLUDED.duration_days,
+                           duration_nights = EXCLUDED.duration_nights, price = EXCLUDED.price,
+                           currency = EXCLUDED.currency, price_type = EXCLUDED.price_type,
+                           departure_pattern = EXCLUDED.departure_pattern, itinerary = EXCLUDED.itinerary,
+                           inclusions = EXCLUDED.inclusions, exclusions = EXCLUDED.exclusions,
+                           cancellation_policy = EXCLUDED.cancellation_policy, surcharges = EXCLUDED.surcharges,
+                           child_policy = EXCLUDED.child_policy, evidence = EXCLUDED.evidence,
+                           updated_at = NOW()
+                       RETURNING id""",
+                    (tour_key, provider_id, tour_url, detail.get("fetched_at_utc"),
+                     str(record.get("tour_name", ""))[:500], str(record.get("departure_city", ""))[:200],
+                     json.dumps(record.get("destinations") or []),
+                     json.dumps(record.get("route") or []),
+                     str(record.get("transport", ""))[:20] or "",
+                     str(record.get("accommodation", ""))[:50],
+                     _int_or_none(record.get("duration_days")), _int_or_none(record.get("duration_nights")),
+                     _int_or_none(record.get("price")), str(record.get("currency", "VND"))[:10],
+                     str(record.get("price_type", ""))[:20] or "",
+                     str(record.get("departure_pattern", ""))[:500],
+                     str(record.get("itinerary", "")), str(record.get("inclusions", "")),
+                     str(record.get("exclusions", "")), str(record.get("cancellation_policy", "")),
+                     str(record.get("surcharges", "")), str(record.get("child_policy", "")),
+                     tour_url,
+                     json.dumps({"record_evidence": detail.get("record_evidence", ""),
+                                 "record_missing": detail.get("record_missing", []),
+                                 "observed_at": detail.get("fetched_at_utc", "")})),
+                )
+                fetched = cursor.fetchone()
+                tour_id = fetched[0] if fetched else None
+                if tour_id is None:
+                    cursor.execute("SELECT id FROM tours WHERE record_key = %s", (tour_key,))
+                    selected = cursor.fetchone()
+                    if selected is None:
+                        raise RuntimeError(f"tour row missing for {tour_key}")
+                    tour_id = selected[0]
+                counts["tours"] += 1
+                offers = record.get("offers") or []
+                if not isinstance(offers, list):
+                    offers = []
+                seen_keys = []
+                for offer in offers:
+                    if not isinstance(offer, dict):
+                        continue
+                    date = str(offer.get("departure_date", "")) or None
+                    price = _int_or_none(offer.get("price"))
+                    offer_key = _key("offer", tour_key, date, price)
+                    seen_keys.append(offer_key)
+                    cursor.execute(
+                        """INSERT INTO offers (record_key, tour_id, departure_date, price,
+                               availability, tour_code, price_by_age, single_supplement,
+                               flights, pickup_point, hotel_location, conditions,
+                               observed_at, evidence)
+                           VALUES (%s, %s, %s, %s,
+                               %s, %s, %s, %s,
+                               %s, %s, %s, %s,
+                               %s, %s)
+                           ON CONFLICT (record_key) DO UPDATE SET
+                               price = EXCLUDED.price, availability = EXCLUDED.availability,
+                               observed_at = EXCLUDED.observed_at, evidence = EXCLUDED.evidence,
+                               updated_at = NOW()""",
+                        (offer_key, tour_id, date, price,
+                         str(offer.get("availability", "unknown"))[:20] or "unknown",
+                         str(offer.get("tour_code", ""))[:100],
+                         json.dumps(offer.get("price_by_age")) if offer.get("price_by_age") is not None else None,
+                         _int_or_none(offer.get("single_supplement")),
+                         json.dumps(offer.get("flights")) if offer.get("flights") is not None else None,
+                         str(offer.get("pickup_point", ""))[:500], str(offer.get("hotel_location", ""))[:500],
+                         str(offer.get("conditions", ""))[:2000],
+                         detail.get("fetched_at_utc"),
+                         json.dumps({"observed_at": detail.get("fetched_at_utc", "")})),
+                    )
+                    counts["offers"] += 1
+                if seen_keys:
+                    cursor.execute("DELETE FROM offers WHERE tour_id = %s AND NOT (record_key = ANY(%s))",
+                                   (tour_id, seen_keys))
+        connection.commit()
+    return counts
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -463,6 +747,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.migrate:
         print(f"migrations applied={migrate_db()}")
+        return 0
+
+    if args.publish:
+        counts = publish_snapshot(args.publish, args.profile)
+        print(f"published={counts}")
         return 0
 
     try:
@@ -485,8 +774,20 @@ def main(argv: list[str] | None = None) -> int:
             user_agent=str(fetch_cfg.get("user_agent", "MLAITourSourceAuditor/0.1")),
             limiter=RateLimiter(float(fetch_cfg.get("delay_s", 1.0))),
         )
-        urls = sitemap_urls(fetcher, profile.get("sitemaps", []), profile.get("tour_url_patterns", []))
+        urls = sitemap_urls(fetcher, profile.get("sitemaps", []), profile.get("tour_url_patterns", []),
+                              min_lastmod=args.since)
         print(f"sitemap urls: {len(urls)}")
+    elif args.discover:
+        fetch_cfg = settings.get("fetch", {})
+        fetcher = SafeFetcher(
+            timeout=float(fetch_cfg.get("timeout_s", 20)),
+            max_bytes=int(fetch_cfg.get("max_bytes", 2_000_000)),
+            user_agent=str(fetch_cfg.get("user_agent", "MLAITourSourceAuditor/0.1")),
+            limiter=RateLimiter(float(fetch_cfg.get("delay_s", 1.0))),
+        )
+        urls = discover_urls(fetcher, profile, profile.get("tour_url_patterns", []),
+                             min_lastmod=args.since)
+        print(f"discovered urls: {len(urls)}")
     elif args.url:
         urls = [args.url]
     else:

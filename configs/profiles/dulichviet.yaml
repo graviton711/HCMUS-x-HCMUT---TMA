@@ -1,24 +1,133 @@
-# yaml-language-server: $schema=../profile.schema.json
-# Dulichviet source profile. Static-only: no browser, no API.
-origin: "dulichviet.com.vn"
-flows: ["static"]
+origin: dulichviet.com.vn
+render: false
+flows:
+- static
 sitemaps:
-  - "https://dulichviet.com.vn/sitemap_tour_index.xml"
-tour_url_patterns: ["/du-lich-"]
-aliases: {}
-schedule_markers:
-  heading: "Lịch khởi hành"
-  month_pattern: ""
-  date_pattern: "\\d{2}/\\d{2}/20\\d{2}"
-section_anchors:
-  highlights: ["sec-highlights"]
-  itinerary: ["sec-itinerary"]
-  schedule: ["sec-schedule"]
-  included: ["sec-included"]
-  notes: ["sec-notes"]
-  related: ["sec-related"]
-section_heading_fallback:
-  - ["h2", "h3"]
-notes_key_pattern: ""
-junk_presentation_keys: []
-keep_patterns: []
+- https://dulichviet.com.vn/sitemap.xml
+- https://dulichviet.com.vn/sitemap_tour_index.xml
+tour_url_patterns:
+- /du-lich-
+- /loai-hinh-du-lich/
+discovery:
+  method: search_pages
+  entry: https://dulichviet.com.vn/tim-kiem?q=&type=tour
+  page_param: page
+  per_page_param: perPage
+  per_page: 50
+  max_pages: 200
+  strip_query: true
+  keep_query: [startday]
+fields:
+  tour_name:
+    source: css
+    selector: h1.ct2-page-title
+  departure_city:
+    source: css
+    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(2) b
+  destinations:
+    source: css
+    selector: table
+    clean: '[re.sub(r''(?i)^\s*(khám phá|tham quan|du lịch)\s+'', '''', s).strip()
+      for s in re.split(r''\s*-\s*'', (re.search(r''Hành trình\s*(.*?)\s*Thời gian'',
+      str(val), re.S).group(1) if re.search(r''Hành trình\s*(.*?)\s*Thời gian'', str(val),
+      re.S) else str(val))) if s.strip()]'
+  route:
+    source: css
+    selector: table
+    clean: '[re.sub(r''(?i)^\s*(khám phá|tham quan|du lịch)\s+'', '''', s).strip()
+      for s in re.split(r''\s*-\s*'', (re.search(r''Hành trình\s*(.*?)\s*Thời gian'',
+      str(val), re.S).group(1) if re.search(r''Hành trình\s*(.*?)\s*Thời gian'', str(val),
+      re.S) else str(val))) if s.strip()]'
+  transport:
+    source: css
+    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(4) b
+    clean: ('mixed' if (('máy bay' in str(val).lower()) or ('may bay' in str(val).lower()))
+      and (('xe' in str(val).lower()) or ('ô tô' in str(val).lower()) or ('o to' in
+      str(val).lower())) else ('flight' if (('máy bay' in str(val).lower()) or ('may
+      bay' in str(val).lower()) or ('bay' in str(val).lower())) else ('bus' if 'xe'
+      in str(val).lower() else ('train' if (('tàu' in str(val).lower()) or ('train'
+      in str(val).lower())) else ('cruise' if (('du thuyền' in str(val).lower()) or
+      ('cruise' in str(val).lower())) else 'mixed')))))
+  accommodation:
+    source: css
+    selector: '#sec-included'
+    clean: '(''homestay'' if ''homestay'' in str(val).lower() else (''mixed'' if len(set(re.findall(r''([2-5])\s*(?:\*|sao)'',
+      str(val).lower()))) > 1 else ({''2'': ''2_star'', ''3'': ''3_star'', ''4'':
+      ''4_star'', ''5'': ''5_star''}.get((re.search(r''([2-5])\s*(?:\*|sao)'', str(val).lower()).group(1)
+      if re.search(r''([2-5])\s*(?:\*|sao)'', str(val).lower()) else ''''), ''mixed''))))'
+  duration_days:
+    source: css
+    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(1) b
+    clean: (int(re.search(r'(\d+)\s*N', str(val)).group(1)) if re.search(r'(\d+)\s*N',
+      str(val)) else (int(re.search(r'(\d+)\s*ngày', str(val).lower()).group(1)) if
+      re.search(r'(\d+)\s*ngày', str(val).lower()) else ''))
+  duration_nights:
+    source: css
+    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(1) b
+    clean: (int(re.search(r'(\d+)\s*Đ', str(val)).group(1)) if re.search(r'(\d+)\s*Đ',
+      str(val)) else (int(re.search(r'(\d+)\s*đêm', str(val).lower()).group(1)) if
+      re.search(r'(\d+)\s*đêm', str(val).lower()) else ''))
+  price:
+    source: css
+    selector: '#ct2BookHeadPrice'
+    clean: (int(re.sub(r'\D', '', str(val))) if re.search(r'\d', str(val)) else '')
+  currency:
+    source: css
+    selector: '#ct2BookHeadPrice'
+    clean: '''VND'''
+  price_type:
+    source: css
+    selector: div.ct2-book-head
+    clean: ('contact' if 'liên hệ' in str(val).lower() else ('from' if 'giá từ' in
+      str(val).lower() else 'fixed'))
+  departure_pattern:
+    source: css
+    selector: div.ct2-hero-meta > div.ct2-hero-meta-item:nth-of-type(3) b
+  offers:
+    source: css
+    selector: div#vnt-content > script:nth-of-type(7)
+    clean: 'sorted([{''departure_date'': str(d.get(''startday'', ''''))[:10], ''price'':
+      int(d.get(''final'') or d.get(''adult'') or 0), ''availability'': (''available''
+      if int(d.get(''available'') or 0) > 0 else ''sold_out''), ''price_by_age'':
+      {''adult'': int(d.get(''adult'') or 0), ''child'': int(d.get(''child'') or 0),
+      ''small_child'': int(d.get(''baby'') or 0), ''infant'': int(d.get(''infant'')
+      or 0)}, ''single_supplement'': int(d.get(''singleroom'') or 0)} | ({''hotel_location'':
+      str(d.get(''name'', '''')).strip()} if (''ch sạn'' in str(d.get(''name'', ''''))
+      or ''hotel'' in str(d.get(''name'', '''')).lower()) else {}) for d in (json.loads(re.search(r''CT2_SCHED\s*=\s*(\{.*?\});'',
+      str(val), re.S).group(1)) if re.search(r''CT2_SCHED\s*=\s*(\{.*?\});'', str(val),
+      re.S) else {}).values()], key=lambda x: (x[''departure_date''], x[''price'']))'
+  itinerary:
+    source: css
+    selector: '#sec-itinerary'
+    clean: re.sub(r'(?s)^.*?Xem tất cả\s*', '', str(val)).strip()
+  inclusions:
+    source: css
+    selector: '#sec-included'
+    clean: (re.split(r'GIÁ\s+(?:TOUR\s+)?KHÔNG BAO GỒM\s*:?|Không bao gồm\s*:', re.sub(r'(?s)^.*?\(Xem
+      thêm\)\s*', '', str(val)), flags=re.I)[0].strip())
+  exclusions:
+    source: css
+    selector: '#sec-included'
+    clean: (re.split(r'GIÁ\s+(?:TOUR\s+)?KHÔNG BAO GỒM\s*:?|Không bao gồm\s*:', re.sub(r'(?s)^.*?\(Xem
+      thêm\)\s*', '', str(val)), flags=re.I)[1].strip() if len(re.split(r'GIÁ\s+(?:TOUR\s+)?KHÔNG
+      BAO GỒM\s*:?|Không bao gồm\s*:', re.sub(r'(?s)^.*?\(Xem thêm\)\s*', '', str(val)),
+      flags=re.I)) > 1 else '')
+  cancellation_policy:
+    source: css
+    selector: '#sec-notes'
+    clean: (re.search(r'(Quy định thanh toán.*?)(Lưu ý|KÍNH CHÚC|$)', str(val), re.S
+      | re.I).group(1).strip() if re.search(r'Quy định thanh toán|phí hủy|hủy.*ngày',
+      str(val), re.I) else '\n'.join([l.strip() for l in str(val).split('\n') if any(k
+      in l.lower() for k in ['hủy', 'huỷ', 'thanh toán', 'phạt'])]))
+  surcharges:
+    source: css
+    selector: '#sec-included'
+    clean: ''' | ''.join(list(dict.fromkeys([m.group(0).strip() for m in re.finditer(r''.{0,60}(?:phụ
+      thu|phụ phí|phòng đơn|bồi dưỡng|tip|visa|hộ chiếu).{0,200}'', str(val), re.I)])))'
+  child_policy:
+    source: css
+    selector: '#sec-notes'
+    clean: (re.search(r'(Giá vé dành cho trẻ em.*?)(Quy định thanh toán|Lưu ý|KÍNH
+      CHÚC|$)', str(val), re.S | re.I).group(1).strip() if re.search(r'Giá vé dành
+      cho trẻ em', str(val), re.I) else '\n'.join([l.strip() for l in str(val).split('\n')
+      if ('trẻ em' in l.lower() or 'child' in l.lower())]))

@@ -14,6 +14,20 @@
     },
     "sitemaps": {"type": "array", "items": {"type": "string", "format": "uri"}},
     "tour_url_patterns": {"type": "array", "items": {"type": "string"}},
+    "discovery": {
+      "type": "object",
+      "properties": {
+        "method": {"type": "string", "enum": ["sitemap", "search_pages"]},
+        "entry": {"type": "string", "format": "uri"},
+        "page_param": {"type": "string"},
+        "per_page_param": {"type": "string"},
+        "per_page": {"type": "integer"},
+        "max_pages": {"type": "integer"},
+        "strip_query": {"type": "boolean"},
+        "keep_query": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    },
     "aliases": {
       "type": "object",
       "additionalProperties": {"type": "array", "items": {"type": "string"}}

@@ -129,7 +129,21 @@ prompt: |
      origin, render (boolean: true if browser rendering is needed, false otherwise),
      flows (subset of [static, browser, api]), sitemaps (list),
      tour_url_patterns (list of path substrings identifying tour-detail URLs),
+     discovery (map declaring HOW to enumerate tour links: method + pagination
+     coordinates per the discovery contract in src/ingest/README.md section 2.4),
      fields (map canonical field -> rule object as specified above).
+
+  DISCOVERY SURVEY (required: sites paginate/search differently):
+  - Determine how the site enumerates sellable tours: sitemap index, SSR search
+    pages, or category listing pages. Start from robots.txt sitemaps AND the
+    site's own search/listing UI.
+  - For paginated SSR lists declare: entry URL, page/per-page param names,
+    per_page, max_pages (from the real last-page link, plus headroom), whether
+    card links carry per-departure query params (e.g. ?startday=) needing
+    strip_query, and which query params to keep as schedule seeds.
+  - Self-test discovery on 2 list pages: count raw links vs unique slugs after
+    normalization, and overlap against the sitemap set when both exist; record
+    the numbers in selftest.md as proof of no missed tours.
   2. `evidence.md` -- the per-field evidence table.
   3. `selftest.md` -- the per-field dev-set PASS/FAIL with the real JSONL output.
   4. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html, tour-2.html, tour-3.html).

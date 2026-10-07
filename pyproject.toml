@@ -42,6 +42,7 @@ reportUnusedCallResult = "none"
 extraPaths = ["src"]
 venvPath = "."
 venv = ".venv"
+exclude = ["artifacts", ".local", "dist"]
 
 [tool.ruff]
 target-version = "py312"

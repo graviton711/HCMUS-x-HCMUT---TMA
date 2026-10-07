@@ -3,7 +3,7 @@
 import re
 
 from ingest import extract
-from ingest.fetch import UnsafeURLError, validate_public_url
+from ingest.fetch import SafeFetcher, UnsafeURLError, validate_public_url
 
 FIXTURE_HTML = """<!DOCTYPE html><html><head>
 <title>Tour Example 7N6Đ</title>
@@ -173,8 +173,8 @@ def test_sitemap_follows_index_and_retries_once():
              b'<url><loc>https://example.test/tin-tuc</loc></url></urlset>')
     calls: list[str] = []
 
-    class FakeFetcher:
-        def fetch(self, url, origin_host=""):
+    class FakeFetcher(SafeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
             calls.append(url)
             if url.endswith("tour_1.xml"):
                 return FetchResult(url, 200, "text/xml", child, None)
@@ -185,19 +185,100 @@ def test_sitemap_follows_index_and_retries_once():
     assert calls.count("https://example.test/sitemap_tour_index.xml") == 1
 
 
+def test_sitemap_orders_fresh_first_and_filters_since():
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import sitemap_urls
+
+    def urlset(*pairs):
+        body = ['<?xml version="1.0"?><urlset>']
+        for loc, lastmod in pairs:
+            body.append(f"<url><loc>{loc}</loc>")
+            if lastmod:
+                body.append(f"<lastmod>{lastmod}</lastmod>")
+            body.append("</url>")
+        body.append("</urlset>")
+        return "".join(body).encode()
+
+    pages = {
+        "https://example.test/s.xml": urlset(
+            ("https://example.test/du-lich-old", "2020-01-01T00:00:00+07:00"),
+            ("https://example.test/du-lich-new", "2026-09-01T00:00:00+07:00"),
+            ("https://example.test/du-lich-nostamp", ""),
+        ),
+    }
+
+    class FakeFetcher(SafeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
+            return FetchResult(url, 200, "text/xml", pages[url], None)
+
+    urls = sitemap_urls(FakeFetcher(), ["https://example.test/s.xml"], ["/du-lich-"])
+    assert urls == ["https://example.test/du-lich-new",
+                    "https://example.test/du-lich-old",
+                    "https://example.test/du-lich-nostamp"]
+    assert sitemap_urls(FakeFetcher(), ["https://example.test/s.xml"], ["/du-lich-"],
+                        min_lastmod="2026-01-01") == ["https://example.test/du-lich-new"]
+
+
 def test_sitemap_gives_up_after_two_failures(caplog):
     from ingest.fetch import FetchResult
     from ingest.pipeline import sitemap_urls
 
     calls: list[str] = []
 
-    class FakeFetcher:
-        def fetch(self, url, origin_host=""):
+    class FakeFetcher(SafeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
             calls.append(url)
             return FetchResult(url, 0, "", b"", "TimeoutError")
 
     assert sitemap_urls(FakeFetcher(), ["https://example.test/s.xml"], ["/du-lich-"]) == []
     assert calls == ["https://example.test/s.xml"] * 2
+
+
+def test_search_pages_dedupes_startday_links_and_caps_pages():
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import discover_urls, search_page_urls
+
+    def page(cards, last):
+        links = "".join(f'<a href="{c}">tour</a>' for c in cards)
+        paging = "".join(
+            f'<a href="/tim-kiem?q=&type=tour&perPage=50&page={n}">{n}</a>'
+            for n in range(2, last + 1))
+        return f"<html><body>{links}{paging}</body></html>".encode()
+
+    tour_a = "https://example.test/du-lich-trong-nuoc/tour-a"
+    tour_b = "https://example.test/du-lich-trong-nuoc/tour-b"
+    bodies = {
+        1: page([f"{tour_a}?startday=2026-10-16", f"{tour_a}?startday=2026-10-23",
+                 f"{tour_b}?startday=2026-10-16", "https://other.test/du-lich-x"], 3),
+        2: page([f"{tour_b}?startday=2026-11-01"], 3),
+        3: page([], 3),
+    }
+
+    class FakeFetcher(SafeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
+            import re as _re
+            match = _re.search(r"[?&]page=(\d+)", url)
+            num = int(match.group(1)) if match else 1
+            return FetchResult(url, 200, "text/html", bodies[num], None)
+
+    discovery = {"method": "search_pages",
+                 "entry": "https://example.test/tim-kiem?q=&type=tour",
+                 "page_param": "page", "per_page_param": "perPage",
+                 "per_page": 50, "max_pages": 200, "strip_query": True}
+    assert search_page_urls(FakeFetcher(), discovery, ["/du-lich-"]) == [tour_a, tour_b]
+    profile = {"discovery": discovery}
+    assert discover_urls(FakeFetcher(), profile, ["/du-lich-"]) == [tour_a, tour_b]
+    assert discover_urls(FakeFetcher(), {}, ["/du-lich-"]) == []
+    capped = dict(discovery, max_pages=1)
+    seen: list[str] = []
+
+    class CountingFetcher(FakeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
+            seen.append(url)
+            return super().fetch(url, origin_host, extra_headers)
+
+    assert search_page_urls(CountingFetcher(), capped, ["/du-lich-"]) == [tour_a, tour_b]
+    assert all("page=2" not in u and "page=3" not in u for u in seen)
 
 
 def test_run_batch_respects_out_dir(tmp_path, monkeypatch):
@@ -227,11 +308,11 @@ def test_batch_fetches_robots_once_per_origin(tmp_path, monkeypatch):
 
     robots_calls: list[str] = []
 
-    class FakeFetcher:
+    class FakeFetcher(SafeFetcher):
         def __init__(self, *args, **kwargs):
             self.user_agent = "test"
 
-        def fetch(self, url, origin_host=""):
+        def fetch(self, url, origin_host="", extra_headers=None):
             if url.endswith("/robots.txt"):
                 robots_calls.append(url)
                 return FetchResult(url, 404, "", b"", "HTTP 404")
@@ -286,7 +367,7 @@ def test_conditional_fetch_skips_unchanged_pages(tmp_path, monkeypatch):
     digest = _hashlib.sha256(body).hexdigest()
     seen_headers: list = []
 
-    class FakeFetcher:
+    class FakeFetcher(SafeFetcher):
         def __init__(self, *args, **kwargs):
             self.user_agent = "test"
 
@@ -333,7 +414,7 @@ def test_state_file_round_trip_and_corrupt_recovery(tmp_path, monkeypatch):
     _save_state(tmp_path / "s.json", {"u": {"hash": "h"}})
     assert _load_state(tmp_path / "s.json") == {"u": {"hash": "h"}}
 
-    class FakeFetcher:
+    class FakeFetcher(SafeFetcher):
         def __init__(self, *args, **kwargs):
             self.user_agent = "test"
 
@@ -388,8 +469,43 @@ def test_migrate_db_applies_each_sql_once(monkeypatch, tmp_path):
         def cursor(self): return FakeCursor()
         def commit(self): pass
 
-    fake_psycopg = types.SimpleNamespace(connect=lambda _url: FakeConn())
+    fake_sql = types.SimpleNamespace(SQL=lambda text: text)
+    fake_psycopg = types.SimpleNamespace(connect=lambda _url: FakeConn(), sql=fake_sql)
     monkeypatch.setitem(sys.modules, 'psycopg', fake_psycopg)
     assert migrate_db('postgresql://unused') == 1
     assert any('CREATE TABLE t1' in q for q in seen)
     assert any('schema_migrations' in q for q in seen)
+
+
+def test_publish_snapshot_upserts_tours_and_offers(monkeypatch, tmp_path):
+    import json as _json
+    import sys as _sys
+    import types as _types
+
+    from ingest.pipeline import publish_snapshot
+
+    detail = {'url': 'https://example.test/t', 'fetched_at_utc': '2026-10-07T00:00:00+00:00', 'record_evidence': 'verified', 'record_missing': [], 'record': {'tour_name': 'T', 'price': 100, 'currency': 'VND', 'duration_days': 3, 'offers': [{'departure_date': '2026-11-18', 'price': 100, 'availability': 'available'}]}}
+    (tmp_path / 'tour_x.json').write_text(_json.dumps(detail), encoding='utf-8')
+    (tmp_path / 'notes.txt').write_text('ignore me', encoding='utf-8')
+    seen = []
+
+    class FakeCursor:
+        def __enter__(self): return self
+        def __exit__(self, *a): return None
+        def execute(self, q, p=()): seen.append(q)
+        def fetchone(self): return (7,)
+
+    class FakeConn:
+        def __enter__(self): return self
+        def __exit__(self, *a): return None
+        def cursor(self): return FakeCursor()
+        def commit(self): pass
+
+    monkeypatch.setitem(_sys.modules, 'psycopg',
+                        _types.SimpleNamespace(connect=lambda _url: FakeConn()))
+    monkeypatch.setattr('ingest.pipeline.tour_db_url', lambda: 'postgresql://unused')
+    counts = publish_snapshot(tmp_path, 'dulichviet')
+    assert counts == {'tours': 1, 'offers': 1, 'skipped': 0}
+    assert any('INSERT INTO tours' in q for q in seen)
+    assert any('INSERT INTO offers' in q for q in seen)
+    assert any('INSERT INTO providers' in q for q in seen)

@@ -60,6 +60,7 @@ def test_extract_field_section():
     soup = BeautifulSoup(HTML_SAMPLE, "html.parser")
     rule = {"source": "section", "start_label": "Lich trinh", "stop_labels": ["Gia tour bao gom"]}
     val = extract_field(soup, [], rule)
+    assert isinstance(val, str)
     assert "Ha Noi - Ha Giang" in val
     assert "Dong Van - Meo Vac" in val
     assert "Xe du lich" not in val
@@ -100,8 +101,10 @@ def test_extract_api_field_missing_placeholder_returns_none():
 
 
 def test_same_origin_getter_refuses_cross_origin():
-    class FakeFetcher:
-        def fetch(self, url, origin):
+    from ingest.fetch import SafeFetcher
+
+    class FakeFetcher(SafeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
             raise AssertionError("must not fetch cross-origin")
 
     getter = same_origin_getter("https://example.test/tour-1", FakeFetcher())

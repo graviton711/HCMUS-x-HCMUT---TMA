@@ -80,6 +80,25 @@ Agent khảo sát tự chủ quyết định cấu hình render dựa trên bả
 
 Trường không tồn tại trên web được đánh dấu: `status: not_observed`.
 
+## 2.4. Hợp đồng Discovery (khai báo cách tìm link tour)
+
+Mỗi site phân trang/search khác nhau nên agent phải khảo sát và khai báo khối `discovery` trong `profile.yaml`. Engine chỉ chạy cơ học theo khai báo, cấm rẽ nhánh theo tên site.
+
+```yaml
+discovery:
+  method: sitemap            # sitemap | search_pages (mặc định sitemap khi thiếu khối này)
+  # --- search_pages: danh sách SSR phân trang, mỗi card link 1 lần/ngày khởi hành ---
+  entry: "https://site/tim-kiem?q=&type=tour"  # trang 1 (đã chứa link trang 2..N)
+  page_param: page            # tên query param số trang
+  per_page_param: perPage     # tên query param cỡ trang (optional)
+  per_page: 50
+  max_pages: 200              # trần an toàn; engine dừng ở số trang thực tế nhỏ hơn
+  strip_query: true            # lột ?startday=... để dedupe về slug duy nhất
+  keep_query: [startday]      # dự trữ: param lịch để seed offers ở bước sau
+```
+
+Quy tắc agent khi khảo sát discovery: xác định SSR hay API/JS (SSR mới dùng `search_pages`; JS thì khai `render: true` + endpoint `api` nếu có); đọc tổng số tour trên trang 1 và link trang cuối để đặt `max_pages`; mô tả hình dạng link (có `?startday=` không) để đặt `strip_query`; self-test trên 2 trang rồi đối chiếu với tập sitemap (nếu có) để chứng minh không sót.
+
 **Field `offers` (tầng ngày khởi hành cố định):** `list[dict]` — mỗi phần tử `{departure_date: "YYYY-MM-DD", price: int|null, availability: available|sold_out|unknown}`, dựng bằng biểu thức `clean` từ bảng lịch/tab của nguồn. Giá trên lịch khởi hành (nếu có) ưu tiên hơn giá bìa. Site không công bố ngày cố định → `offers: []` + khai báo `departure_pattern`. Site ẩn lịch sau tab động (kiểu Vietravel) → `offers: []` + `status: not_observed` trong `unknowns.md`, không suy đoán.
 
 ---
