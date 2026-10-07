@@ -49,6 +49,15 @@ def load_agent_spec(path: str | Path | None = None) -> str:
 
 AGENT_SPEC = load_agent_spec()
 
+
+def load_agent_task(origin: str, path: str | Path | None = None) -> str:
+    """Handover task rendered from YAML with the target origin filled in."""
+    import yaml
+
+    data = yaml.safe_load(Path(path or DEFAULT_AGENT_SPEC).read_text(encoding="utf-8"))
+    return data["handover_task"].format(origin=origin)
+
+
 EXPECTED = ["profile.yaml", "evidence.md", "selftest.md", "unknowns.md", "raw"]
 
 USER_AGENT = "MLAITourSourceAuditor/0.1"
@@ -154,17 +163,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"prefetch={prefetched or 'nothing'} elapsed={time.perf_counter() - started:.1f}s",
           flush=True)
 
-    task = (
-        "Execute your agent instructions now: survey the tour website at "
-        f"{args.origin} and produce profile.yaml, evidence.md, selftest.md, "
-        "raw/, unknowns.md in the working directory. "
-        "NOTE: raw/ has been prefetched with robots.txt and sitemap XMLs. "
-        "If raw/ already contains robots.txt, sitemaps or tour-*.html, DO NOT re-fetch them; "
-        "use the existing files in raw/ and only download what is missing. "
-        "Before handover you MUST run the self-test loop over 3 "
-        "different tours using python -m ingest.dsl, fix profile.yaml on any failure, "
-        "and record the final result in selftest.md."
-    )
+    task = load_agent_task(args.origin)
     print(f"workdir={workdir}", flush=True)
     print(f"target={args.origin} model={args.model} variant={args.variant}", flush=True)
     exe = shutil.which("opencode") or shutil.which("opencode.cmd") or "opencode"

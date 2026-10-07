@@ -20,3 +20,12 @@ def test_robots_sitemaps_case_insensitive_and_empty():
         "https://example.test/s.xml",
     ]
     assert _robots_sitemaps("User-agent: *\nDisallow: /") == []
+
+
+def test_agent_task_renders_origin_without_placeholders():
+    from ingest.survey import load_agent_task
+
+    task = load_agent_task('https://example.test/')
+    assert 'https://example.test/' in task
+    assert '{' not in task and '}' not in task
+    assert 'ingest.dsl' not in task
