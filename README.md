@@ -31,6 +31,12 @@ uv run ruff check .
 ## Chạy tối thiểu module ingest
 
 ```powershell
+uv run python -m ingest.run --source <source>
+```
+
+Chạy lẻ từng bước khi cần:
+
+```powershell
 uv run python -m ingest.survey --source <source>
 uv run python -m ingest --discover --profile <source> --limit 5
 uv run python -m ingest --batch --profile <source>
