@@ -20,7 +20,6 @@ flowchart LR
 - [Hợp đồng dữ liệu và API](docs/data-contract.md)
 - [Phân công và quy ước Git](docs/team-workflow.md)
 - [Wireframe](docs/wireframes.md)
-- [Quy ước danh mục nhà cung cấp](docs/provider-registry.md)
 
 ## Phát triển
 

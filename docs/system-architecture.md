@@ -1,10 +1,10 @@
 # Kiến trúc hệ thống
 
-**Trạng thái:** Kiến trúc mục tiêu cho team review. Repo hiện chưa có module nào được implement.
+**Trạng thái:** Kiến trúc mục tiêu cho team review. Module ingest đã implement (`src/ingest` + Supabase tour); UI/API/compare theo sơ đồ dưới vẫn là mục tiêu.
 
 ## Lát cắt MVP
 
-MVP đầu tiên nhận 2–3 URL tour để so sánh. Backend và frontend tích hợp bằng fixture `Tour`/`Offer` chuẩn hóa trước; tìm tour theo mô tả nhu cầu và truy vấn nguồn thật sẽ phát triển sau. Hợp đồng field/evidence và request/response nằm ở [data contract](data-contract.md). Crawler hiện tại chỉ audit khả năng trích xuất của website, không phải kho dữ liệu tour runtime.
+MVP đầu tiên nhận 2–3 URL tour để so sánh. Backend và frontend tích hợp bằng fixture `Tour`/`Offer` chuẩn hóa trước; tìm tour theo mô tả nhu cầu và truy vấn nguồn thật sẽ phát triển sau. Hợp đồng field/evidence và request/response nằm ở [data contract](data-contract.md). Tầng ingest vừa audit khả năng trích xuất (selftest/audit) vừa là kho dữ liệu tour runtime (snapshot → Supabase).
 
 ## Sơ đồ tổng quan
 
@@ -66,7 +66,7 @@ flowchart TD
 |---|---|
 | Web UI | Nhận nhu cầu/URL; hiển thị bảng so sánh, dữ liệu thiếu và evidence. |
 | API / điều phối | Chọn luồng truy vấn, nguồn đủ điều kiện và điều phối các bước xử lý. |
-| Danh mục nhà cung cấp | `configs/profiles/<nguồn>.yaml` là nguồn chuẩn trong Git: origin, sitemaps, pattern URL tour, alias field và pattern lọc. Kết quả khảo sát nguồn (quyền crawl, field có/thiếu, giới hạn, ngày kiểm tra) ghi theo [provider registry](provider-registry.md). Danh mục được cập nhật có chủ đích, không dò toàn bộ Internet. |
+| Danh mục nhà cung cấp | `configs/profiles/<nguồn>.yaml` là nguồn chuẩn trong Git: origin, sitemaps, pattern URL tour, khối discovery, field DSL. Kết quả khảo sát nguồn (quyền crawl, field có/thiếu, giới hạn, ngày kiểm tra) nằm ở `artifacts/agent_surveys/<nguồn>/`. Danh mục được cập nhật có chủ đích, không dò toàn bộ Internet. |
 | Source adapters | Ưu tiên JSON-LD/JSON/API được phép; chỉ bổ sung adapter theo nguồn khi định dạng khác nhau. Không lấy matching toàn trang làm dữ kiện quyết định. |
 | Chuẩn hóa và kiểm tra | Ánh xạ field vào schema chung, giữ giá trị gốc, nguồn, phương pháp, trạng thái xác minh và thời điểm quan sát; từ chối field không đạt kiểm tra. |
 | Kho dữ liệu | Lưu hồ sơ nhà cung cấp, hồ sơ tour ổn định và snapshot offer biến động riêng biệt. |
@@ -76,7 +76,7 @@ flowchart TD
 ## Quy tắc dữ liệu và thời gian
 
 - Hồ sơ/capability nhà cung cấp có thể được khảo sát và làm mới trước.
-- Tour và offer chỉ lấy theo nhu cầu hoặc URL đang so sánh; không crawl trước toàn bộ tour.
+- Tour và offer lấy theo nhu cầu/URL đang so sánh hoặc theo đợt discovery định kỳ (search_pages/sitemap → batch → Supabase); không dò toàn bộ Internet ngoài danh mục nguồn.
 - Trong MVP, bộ so sánh dùng fixture chuẩn hóa theo data contract; adapter/crawl runtime có thể thay fixture sau mà không đổi giao diện frontend.
 - Giá, ngày khởi hành, tình trạng chỗ và phụ thu luôn gắn `observed_at`. Có thể dùng cache khi triển khai, nhưng phải hiển thị thời điểm và cảnh báo dữ liệu cũ; chưa chốt TTL.
 - Nếu nguồn bị robots/điều khoản chặn hoặc không trả field sạch, không gọi endpoint đó; trả trạng thái không hỗ trợ/thiếu dữ liệu thay vì suy đoán.
@@ -85,6 +85,6 @@ flowchart TD
 ## Giả định và quyết định còn mở
 
 - Phạm vi là web demo; contract API dùng JSON, nhưng framework UI/backend, database và hosting chưa chốt.
-- Danh mục nguồn hiện được team quản lý trong Git (`configs/profiles/*.yaml` và kết quả khảo sát ở `docs/provider-registry.md`); không có bản Google Sheets song song. Nếu sau này cần giao diện cho người không quen Git, phải chuyển nguồn chuẩn thay vì duy trì hai bản.
+- Danh mục nguồn hiện được team quản lý trong Git (`configs/profiles/*.yaml` và kết quả khảo sát ở `artifacts/agent_surveys/<nguồn>/`); không có bản Google Sheets song song. Nếu sau này cần giao diện cho người không quen Git, phải chuyển nguồn chuẩn thay vì duy trì hai bản.
 - Cách đo độ phù hợp, trọng số tiêu chí, độ tin cậy nguồn và chính sách freshness cần chốt sau khi có bộ dữ liệu mẫu và wireframe được review.
 - Phải kiểm tra quyền truy cập và khả năng trích xuất theo từng nguồn trước khi đưa nguồn vào luồng so sánh.

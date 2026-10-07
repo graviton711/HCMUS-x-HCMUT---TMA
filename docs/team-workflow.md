@@ -12,7 +12,7 @@ Owner chính chịu trách nhiệm tích hợp phần của mình; cả ba vẫn
 
 ## Git và tích hợp
 
-- Dùng `main` làm nhánh tích hợp; không giữ nhánh `backend`/`frontend` sống lâu.
-- Tạo branch ngắn theo đầu việc, dùng `_` để phân tách từ, ví dụ `feat/compare_api`, `feat/comparison_ui`, `feat/tour_data`.
+- Dùng `main` làm nhánh tích hợp; tránh nhánh sống lâu, merge sớm và thường xuyên.
+- Tạo branch ngắn theo đầu việc, ví dụ `feat/supplier_crawler_agent`, `feature/minh-phu`, `feat/compare_api`.
 - Mở PR nhỏ vào `main`, review và chạy test/lint trước khi merge. Trong lúc làm, cập nhật branch từ `main` thường xuyên để tránh phát triển trên bản cũ.
 - Frontend và backend dùng chung contract; nếu cần đổi request/response hoặc field, cập nhật contract và báo bên còn lại trước khi merge.
