@@ -29,3 +29,23 @@ def test_agent_task_renders_origin_without_placeholders():
     assert 'https://example.test/' in task
     assert '{' not in task and '}' not in task
     assert 'ingest.dsl' not in task
+
+
+def test_mvp_sources_csv_matches_profiles():
+    import csv
+    from pathlib import Path
+    from urllib.parse import urlsplit
+
+    import yaml
+
+    root = Path('configs')
+    with (root / 'sources-mvp.csv').open(encoding='utf-8') as handle:
+        rows = list(csv.DictReader(handle))
+    assert len(rows) >= 1
+    assert list(rows[0].keys()) == ['source', 'url']
+    yaml_names = {p.stem for p in (root / 'profiles').glob('*.yaml')}
+    for r in rows:
+        host = (urlsplit(r['url']).hostname or '').lower()
+        matched = [n for n in yaml_names
+                   if yaml.safe_load(((root / 'profiles') / (n + '.yaml')).read_text(encoding='utf-8'))['origin'] == host]
+        assert len(matched) == 1, f"no unique profile for {r['url']}: {matched}"
