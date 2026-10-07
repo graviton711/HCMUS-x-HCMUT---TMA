@@ -140,6 +140,44 @@ def test_logging_level_from_env(monkeypatch):
     assert get_logger("envtest2").getEffectiveLevel() == logging.INFO
 
 
+def test_sitemap_follows_index_and_retries_once():
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import sitemap_urls
+
+    index = (b'<?xml version="1.0"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+             b'<sitemap><loc>https://example.test/sitemap/tour_1.xml</loc></sitemap></sitemapindex>')
+    child = (b'<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+             b'<url><loc>https://example.test/du-lich-ha-long</loc></url>'
+             b'<url><loc>https://example.test/tin-tuc</loc></url></urlset>')
+    calls: list[str] = []
+
+    class FakeFetcher:
+        def fetch(self, url, origin_host=""):
+            calls.append(url)
+            if url.endswith("tour_1.xml"):
+                return FetchResult(url, 200, "text/xml", child, None)
+            return FetchResult(url, 200, "text/xml", index, None)
+
+    urls = sitemap_urls(FakeFetcher(), ["https://example.test/sitemap_tour_index.xml"], ["/du-lich-"])
+    assert urls == ["https://example.test/du-lich-ha-long"]
+    assert calls.count("https://example.test/sitemap_tour_index.xml") == 1
+
+
+def test_sitemap_gives_up_after_two_failures(caplog):
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import sitemap_urls
+
+    calls: list[str] = []
+
+    class FakeFetcher:
+        def fetch(self, url, origin_host=""):
+            calls.append(url)
+            return FetchResult(url, 0, "", b"", "TimeoutError")
+
+    assert sitemap_urls(FakeFetcher(), ["https://example.test/s.xml"], ["/du-lich-"]) == []
+    assert calls == ["https://example.test/s.xml"] * 2
+
+
 def test_run_batch_respects_out_dir(tmp_path, monkeypatch):
     import ingest.pipeline as pipeline_mod
     from ingest.pipeline import run_batch

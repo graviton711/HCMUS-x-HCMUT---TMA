@@ -1,3 +1,5 @@
+import pytest
+
 from ingest.survey import _robots_sitemaps
 
 
@@ -28,7 +30,7 @@ def test_agent_task_renders_origin_without_placeholders():
     task = load_agent_task('https://example.test/')
     assert 'https://example.test/' in task
     assert '{' not in task and '}' not in task
-    assert 'ingest.dsl' not in task
+    assert 'ingest.extract' in task
 
 
 def test_mvp_sources_csv_matches_profiles():
@@ -49,3 +51,11 @@ def test_mvp_sources_csv_matches_profiles():
         matched = [n for n in yaml_names
                    if yaml.safe_load(((root / 'profiles') / (n + '.yaml')).read_text(encoding='utf-8'))['origin'] == host]
         assert len(matched) == 1, f"no unique profile for {r['url']}: {matched}"
+
+
+def test_resolve_origin_reads_mvp_scope_list():
+    from ingest.survey import resolve_origin
+
+    assert resolve_origin('dulichviet') == 'https://dulichviet.com.vn'
+    with pytest.raises(ValueError, match='exactly one row'):
+        resolve_origin('khong-ton-tai')

@@ -267,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
 
     import yaml
 
-    parser = argparse.ArgumentParser(prog="ingest-dsl", description="Strict profile-DSL field extraction.")
+    parser = argparse.ArgumentParser(prog="ingest-extract", description="Strict profile-DSL field extraction.")
     parser.add_argument("targets", nargs="+")
     parser.add_argument("--profile", required=True)
     parser.add_argument("-o", "--output", default="tours.jsonl")

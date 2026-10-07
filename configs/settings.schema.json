@@ -46,10 +46,7 @@
     "clean": {
       "type": "object",
       "properties": {
-        "min_visible_chars": {"type": "integer"},
-        "boilerplate_short_words": {"type": "integer"},
-        "boilerplate_short_run": {"type": "integer"},
-        "flight_short_run": {"type": "integer"}
+        "min_visible_chars": {"type": "integer"}
       },
       "additionalProperties": true
     }

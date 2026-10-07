@@ -32,23 +32,57 @@ CSV_COLUMNS = ["url", "observed_at", "profile", "status", "title",
                "departures", "verified", "notes_keys", "error"]
 
 
+def _fetch_sitemap(fetcher: SafeFetcher, sitemap: str) -> bytes | None:
+    """One retry; None when both attempts fail (logged once)."""
+    for _ in range(2):
+        result = fetcher.fetch(sitemap)
+        if result.status_code == 200 and not result.error:
+            return result.body
+    log.warning("sitemap failed %s %s", sitemap, result.error or result.status_code)
+    return None
+
+
 def sitemap_urls(fetcher: SafeFetcher, sitemaps: list[str],
                  patterns: list[str]) -> list[str]:
+    """Tour URLs from sitemaps, following one sitemap-index level down."""
     found: set[str] = set()
+    children: list[str] = []
     for sitemap in sitemaps:
-        result = fetcher.fetch(sitemap)
-        if result.status_code != 200 or result.error:
-            log.warning("sitemap failed %s %s", sitemap, result.error or result.status_code)
+        body = _fetch_sitemap(fetcher, sitemap)
+        if body is None:
             continue
         try:
-            root = ET.fromstring(result.body)
+            root = ET.fromstring(body)
         except ET.ParseError:
+            log.warning("sitemap unparseable %s", sitemap)
+            continue
+        if root.tag.rsplit("}", 1)[-1] == "sitemapindex":
+            for node in root.iter():
+                if node.tag.rsplit("}", 1)[-1] == "loc" and node.text:
+                    child = node.text.strip()
+                    if child.lower().endswith(".xml"):
+                        children.append(child)
             continue
         for node in root.iter():
             if node.tag.rsplit("}", 1)[-1] == "loc" and node.text:
                 url = node.text.strip()
                 if any(pat in url for pat in patterns):
                     found.add(url)
+    for child in children:
+        body = _fetch_sitemap(fetcher, child)
+        if body is None:
+            continue
+        try:
+            root = ET.fromstring(body)
+        except ET.ParseError:
+            log.warning("sitemap unparseable %s", child)
+            continue
+        for node in root.iter():
+            if node.tag.rsplit("}", 1)[-1] == "loc" and node.text:
+                url = node.text.strip()
+                if any(pat in url for pat in patterns):
+                    found.add(url)
+    log.info("sitemap urls: %d tours from %d sitemaps", len(found), len(sitemaps) + len(children))
     return sorted(found)
 
 

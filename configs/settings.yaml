@@ -20,6 +20,3 @@ output:
   dir: ".local"
 clean:
   min_visible_chars: 40
-  boilerplate_short_words: 6
-  boilerplate_short_run: 20
-  flight_short_run: 15

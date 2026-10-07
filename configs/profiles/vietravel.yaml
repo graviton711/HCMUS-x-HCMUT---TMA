@@ -6,10 +6,6 @@ sitemaps:
   - "https://travel.com.vn/du-lich/sitemap.xml"
   - "https://travel.com.vn/chuong-trinh/sitemap.xml"
 tour_url_patterns: ["/chuong-trinh/", "/du-lich/"]
-combo:
-  path_fragment: "/combo-du-lich/"
-  slug_pattern: "cpc([A-Za-z0-9]+)\\.aspx"
-  tour_code_param: "tourCode"
 aliases:
   tour_name: ["pageTitle", "name"]
   tour_code: ["tourCode"]

@@ -1,4 +1,4 @@
-"""Offline tests for ingest.dsl strict profile extraction. No network, no browser."""
+"""Offline tests for ingest.extract strict profile extraction. No network, no browser."""
 
 from __future__ import annotations
 

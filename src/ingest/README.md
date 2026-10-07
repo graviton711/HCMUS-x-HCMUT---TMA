@@ -73,10 +73,10 @@ Agent khảo sát tự chủ quyết định cấu hình render dựa trên bả
 **Quy trình Agent tự quyết định:**
 1. Khảo sát static HTML trước: Tải HTML tĩnh và kiểm tra các trường canonical.
 2. Nếu các trường cốt lõi bị rỗng do client-side rendering:
-   - Chuyển sang flow browser: Dùng `render_url.py` để lấy DOM hoàn chỉnh sau render vào `raw/tour-*.html`.
+   - Chuyển sang flow browser: Dùng `python -m ingest.render` để lấy DOM hoàn chỉnh sau render vào `raw/tour-*.html`.
    - Xác định tọa độ (CSS selector / section / label_sibling) trên DOM đã render.
    - Khai báo `render: true` và `flows: [browser]` trong `profile.yaml`.
-3. Tự kiểm thử (`crawl_with_profile.py`): Chạy kiểm thử trên các file đã render trong `raw/` và xác nhận kết quả trên file `.jsonl`.
+3. Tự kiểm thử (`python -m ingest.extract`): Chạy kiểm thử trên các file đã render trong `raw/` và xác nhận kết quả trên file `.jsonl`.
 
 Trường không tồn tại trên web được đánh dấu: `status: not_observed`.
 
@@ -88,7 +88,7 @@ Trường không tồn tại trên web được đánh dấu: `status: not_obser
 
 | Script | Trách nhiệm | Input | Output |
 |---|---|---|---|
-| `survey.py` (`python -m ingest.survey`) | Điều phối Agent khảo sát domain, tự kiểm thử bằng `ingest.dsl` trên tập `raw/` | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
+| `survey.py` (`python -m ingest.survey`) | Điều phối Agent khảo sát domain, tự kiểm thử bằng `ingest.extract` trên tập `raw/` | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
 | `render.py` | Helper render URL động qua Playwright Chromium, xuất HTML ra file; `--capture-net <dir>` ghi thêm mọi JSON response (XHR) vào `<dir>/` + index `network.json` để dò endpoint API | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
 | `pipeline.py` (`python -m ingest`) | Crawl hàng loạt theo profile: trang tĩnh qua `dsl.py`, site động qua `browser` khi profile khai báo flow | Danh sách URL + profile | CSV + JSON + provenance |
 

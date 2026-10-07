@@ -121,10 +121,28 @@ def prefetch(origin: str, raw_dir: Path) -> list[str]:
     return saved
 
 
+SOURCES_CSV = Path(__file__).resolve().parents[2] / "configs" / "sources-mvp.csv"
+
+
+def resolve_origin(source: str, csv_path: str | Path | None = None) -> str:
+    """Look up the origin URL for a source in the frozen MVP scope list."""
+    import csv
+
+    target = Path(csv_path or SOURCES_CSV)
+    if not target.exists():
+        raise ValueError(f"sources list not found: {target}")
+    with target.open(encoding="utf-8") as handle:
+        hits = [row["url"].strip() for row in csv.DictReader(handle) if row.get("source") == source]
+    if len(hits) != 1:
+        raise ValueError(f"source {source!r} must match exactly one row in {target} (found {len(hits)})")
+    return hits[0]
+
+
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a site-survey agent.")
     parser.add_argument("--source", required=True, help="short name, e.g. pys")
-    parser.add_argument("--origin", required=True, help="https://example.test/")
+    parser.add_argument("--origin", default=None,
+                        help="https://example.test/ (default: looked up from configs/sources-mvp.csv)")
     parser.add_argument("--model", default=MODEL)
     parser.add_argument("--variant", default=VARIANT)
     parser.add_argument("--timeout-min", type=int, default=20)
@@ -139,6 +157,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = _parse_args(argv)
+    try:
+        origin = args.origin or resolve_origin(args.source)
+    except ValueError as exc:
+        print(f"Invalid source: {exc}", file=sys.stderr)
+        return 2
     out_dir = args.output or Path("artifacts/agent_surveys") / args.source
     out_dir.mkdir(parents=True, exist_ok=True)
     workdir = out_dir / "_work"
@@ -159,13 +182,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         shutil.copytree(legacy_raw, raw_dir, dirs_exist_ok=True)
 
     started = time.perf_counter()
-    prefetched = prefetch(args.origin, raw_dir)
+    prefetched = prefetch(origin, raw_dir)
     print(f"prefetch={prefetched or 'nothing'} elapsed={time.perf_counter() - started:.1f}s",
           flush=True)
 
-    task = load_agent_task(args.origin)
+    task = load_agent_task(origin)
     print(f"workdir={workdir}", flush=True)
-    print(f"target={args.origin} model={args.model} variant={args.variant}", flush=True)
+    print(f"target={origin} model={args.model} variant={args.variant}", flush=True)
     exe = shutil.which("opencode") or shutil.which("opencode.cmd") or "opencode"
     returncode: int | None = None
     try:
