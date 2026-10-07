@@ -748,7 +748,7 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                 if selected is None:
                     raise RuntimeError(f"provider row missing for {provider_key}")
                 provider_id = selected[0]
-            for path in sorted(Path(out_dir).glob("tour_*.json")):
+            for index, path in enumerate(sorted(Path(out_dir).glob("tour_*.json")), 1):
                 try:
                     detail = json.loads(path.read_text(encoding="utf-8"))
                 except (OSError, ValueError):
@@ -852,6 +852,8 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                 if seen_keys:
                     cursor.execute("DELETE FROM offers WHERE tour_id = %s AND NOT (record_key = ANY(%s))",
                                    (tour_id, seen_keys))
+                if index % 25 == 0:
+                    log.info("publish %d tours (%d offers)", counts["tours"], counts["offers"])
         connection.commit()
     return counts
 
