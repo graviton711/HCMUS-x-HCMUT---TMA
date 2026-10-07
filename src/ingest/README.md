@@ -123,6 +123,7 @@ Vận hành `search_pages`: fetch song song theo `batch.workers` (mỗi worker m
 | Script | Trách nhiệm | Input | Output |
 |---|---|---|---|
 | `survey.py` (`python -m ingest.survey`) | Điều phối Agent khảo sát domain, tự kiểm thử bằng `ingest.extract` trên tập `raw/` | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
+| Critic + gates (trong `survey.py`) | Sau surveyor: chia holdout mù (pool agent đề xuất hoặc sample sitemap độc lập), fetch holdout bằng wrapper, chạy gates máy (schema keys, extract dev+holdout, audit holdout ≥ `max(dev_rate-margin, floor)`, discovery entry reachable), rồi cho critic phá tối đa 2 vòng (báo cáo phải phủ mọi holdout URL). COMPLETE chỉ khi gates xanh; đóng dấu `version/surveyed_at/sample_tours` | profile + holdout | `gates.md`, `critic_report_rN.md` |
 | `render.py` | Helper render URL động qua Playwright Chromium, xuất HTML ra file; `--capture-net <dir>` ghi thêm mọi JSON response (XHR) vào `<dir>/` + index `network.json` để dò endpoint API | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
 | `pipeline.py` (`python -m ingest`) | Crawl hàng loạt theo profile: trang tĩnh qua `dsl.py`, site động qua `browser` khi profile khai báo flow | Danh sách URL + profile | CSV + JSON + provenance |
 | `run.py` (`python -m ingest.run --source <source>`) | Chạy full chuỗi một lệnh: survey (`--promote`) → discover → batch → audit (gate publish) → migrate → publish; dừng ngay ở bước fail đầu tiên | source trong `configs/sources-mvp.csv` | DB tour |
