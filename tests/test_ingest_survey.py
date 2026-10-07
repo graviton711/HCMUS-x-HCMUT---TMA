@@ -68,7 +68,8 @@ def test_promote_copies_profile_into_configs(tmp_path):
     out_dir.mkdir()
     (out_dir / "profile.yaml").write_text("origin: example.test\n", encoding="utf-8")
     dest = promote_profile(out_dir, "example", tmp_path / "profiles")
-    assert dest.read_text(encoding="utf-8") == "origin: example.test\n"
+    assert dest.read_text(encoding="utf-8").startswith(
+        "# yaml-language-server: $schema=../profile.schema.json\norigin: example.test\n")
     with pytest.raises(ValueError, match="no profile.yaml"):
         promote_profile(tmp_path / "empty", "example", tmp_path / "profiles")
     assert _parse_args(["--source", "example", "--promote"]).promote is True

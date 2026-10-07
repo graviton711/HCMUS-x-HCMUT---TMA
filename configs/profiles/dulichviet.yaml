@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../profile.schema.json
 origin: dulichviet.com.vn
 render: false
 flows:

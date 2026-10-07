@@ -167,7 +167,11 @@ def promote_profile(out_dir: Path, source: str,
     dest_dir = Path(profiles_dir) if profiles_dir is not None else DEFAULT_PROFILES_DIR
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{source}.yaml"
-    shutil.copy2(src, dest)
+    text = src.read_text(encoding="utf-8")
+    header = "# yaml-language-server: $schema=../profile.schema.json\n"
+    if not text.startswith("# yaml-language-server:"):
+        text = header + text
+    dest.write_text(text, encoding="utf-8")
     return dest
 
 
