@@ -40,10 +40,11 @@ Chạy lẻ từng bước khi cần:
 uv run python -m ingest.survey --source <source>
 uv run python -m ingest --discover --profile <source> --limit 5
 uv run python -m ingest --batch --profile <source>
-uv run python -m ingest.audit --profile <source>
 uv run python -m ingest --migrate
 uv run python -m ingest --publish --profile <source>
 ```
+
+Audit (`uv run python -m ingest.audit --profile <source>`) không nằm trong chain — chỉ chạy tay khi đổi profile hoặc thêm nguồn mới.
 
 `<source>` là tên trong cột source của `configs/sources-mvp.csv`.
 

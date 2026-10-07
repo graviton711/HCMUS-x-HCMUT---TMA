@@ -1,9 +1,11 @@
-"""Full source chain in one command: survey -> discover -> batch -> audit -> migrate -> publish.
+"""Full source chain in one command: survey -> discover -> batch -> migrate -> publish.
 
 Steps compose through the per-source defaults (no paths passed): discover
-writes `<output.dir>/<source>/discovered.csv`, batch reads it, audit scores
-`<source>/tours.csv`, publish ships `<source>/tours/`. Audit gates publish:
-a failing audit stops the chain before anything reaches the database.
+writes `<output.dir>/<source>/discovered.csv`, batch reads it, publish ships
+`<source>/tours/`. No separate audit pass: batch already scores per-tour
+evidence while crawling, so a second full crawl adds cost without new
+information. Run `python -m ingest.audit` by hand when the profile changes
+or for a new source.
 
 Usage:
     uv run python -m ingest.run --source dulichviet
@@ -19,7 +21,6 @@ from collections.abc import Sequence
 
 from shared.runtime import run_cli
 
-from . import audit as audit_mod
 from . import pipeline as pipeline_mod
 from . import survey as survey_mod
 
@@ -31,8 +32,6 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         help="max tours through discover+batch (0 = all)")
     parser.add_argument("--skip-survey", action="store_true",
                         help="reuse the promoted profile instead of re-surveying")
-    parser.add_argument("--skip-audit", action="store_true",
-                        help="publish even when the audit gate fails (not recommended)")
     return parser.parse_args(argv)
 
 
@@ -47,20 +46,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     steps.extend([
         ("discover", ["--discover", "--profile", args.source, *limit]),
         ("batch", ["--batch", "--profile", args.source, *limit]),
-        ("audit", ["--profile", args.source]),
         ("migrate", ["--migrate"]),
         ("publish", ["--publish", "--profile", args.source]),
     ])
     runners = {"survey": survey_mod.main, "discover": pipeline_mod.main,
-               "batch": pipeline_mod.main, "audit": audit_mod.main,
+               "batch": pipeline_mod.main,
                "migrate": pipeline_mod.main, "publish": pipeline_mod.main}
     for name, step_argv in steps:
         print(f"=== run: {name} ===", flush=True)
         code = runners[name](step_argv)
         if code != 0:
-            if name == "audit" and args.skip_audit:
-                print("audit failed but --skip-audit given; continuing", flush=True)
-                continue
             print(f"run stopped at {name} (exit {code})", file=sys.stderr)
             return code
     print("run COMPLETE", flush=True)
