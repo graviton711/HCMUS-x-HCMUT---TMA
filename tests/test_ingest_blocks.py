@@ -235,6 +235,35 @@ def test_batch_fetches_robots_once_per_origin(tmp_path, monkeypatch):
     assert sorted(robots_calls) == ["https://a.test/robots.txt", "https://b.test/robots.txt"]
 
 
+def test_concurrent_batch_keeps_input_order(tmp_path, monkeypatch):
+    import csv as _csv
+    import threading
+
+    import ingest.pipeline as pipeline_mod
+    from ingest.pipeline import run_batch
+
+    gate = threading.Event()
+
+    def fake_run_tour(url, profile, settings, out_dir, robots_cache=None):
+        if "slow.test" in url:
+            assert gate.wait(timeout=30)
+        else:
+            gate.set()
+        return {"url": url, "status": "ok", "title": "T", "departures": 0,
+                "verified": 0, "notes_keys": "", "error": ""}
+
+    monkeypatch.setattr(pipeline_mod, "run_tour", fake_run_tour)
+    monkeypatch.setattr(pipeline_mod, "fetch_robots", lambda *a: None)
+    out_csv = tmp_path / "out.csv"
+    out_json = tmp_path / "json"
+    settings = {"batch": {"workers": 2, "delay_s": 0, "max_consecutive_failures": 10}}
+    urls = ["https://slow.test/1", "https://fast.test/2"]
+    assert run_batch(urls, {"flows": ["static"]}, settings, out_csv, out_json) == 0
+    with out_csv.open(encoding="utf-8-sig") as handle:
+        rows = list(_csv.DictReader(handle))
+    assert [r["url"] for r in rows] == urls
+
+
 def test_compile_keep_is_case_insensitive_regression():
     from ingest.quality import compile_keep, filter_dep
 

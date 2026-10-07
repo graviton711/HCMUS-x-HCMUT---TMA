@@ -13,8 +13,10 @@ import json
 import os
 import re
 import sys
+import threading
 import time
 import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -231,29 +233,95 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
     new_file = not output.exists()
     fails = 0
     robots_cache: dict = {}
-    with output.open("a", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
-        if new_file:
-            writer.writeheader()
-        for index, url in enumerate(todo, 1):
-            log.info("tour %d/%d %s", index, len(todo), url)
+    workers = max(1, int(batch_cfg.get("workers", 4)))
+    needs_browser = "browser" in profile.get("flows", []) or "combo_api_browser" in profile.get("flows", [])
+    if workers == 1 or needs_browser:
+        if needs_browser and workers > 1:
+            log.info("browser flow runs sequentially; workers=%d applies to static tours", workers)
+        with output.open("a", encoding="utf-8-sig", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
+            if new_file:
+                writer.writeheader()
+            for index, url in enumerate(todo, 1):
+                log.info("tour %d/%d %s", index, len(todo), url)
+                try:
+                    row = run_tour(url, profile, settings, out_dir, robots_cache)
+                except Exception as exc:
+                    row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
+                writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
+                handle.flush()
+                if row.get("status") in (FETCH_FAIL, BLOCKED):
+                    fails += 1
+                    if fails >= max_fails:
+                        log.error("failure budget exhausted (%d)", fails)
+                        return 1
+                else:
+                    fails = 0
+                if index < len(todo):
+                    time.sleep(gap)
+        log.info("batch done: wrote %s", output)
+        return 0
+
+    _prime_robots_cache(todo, settings, robots_cache)
+    origin_locks: dict[str, threading.Lock] = {}
+    locks_guard = threading.Lock()
+
+    def crawl_one(url: str) -> dict:
+        origin = (urlsplit(url).hostname or "").lower()
+        with locks_guard:
+            lock = origin_locks.setdefault(origin, threading.Lock())
+        with lock:
             try:
                 row = run_tour(url, profile, settings, out_dir, robots_cache)
             except Exception as exc:
                 row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
-            writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
-            handle.flush()
-            if row.get("status") in (FETCH_FAIL, BLOCKED):
-                fails += 1
-                if fails >= max_fails:
-                    log.error("failure budget exhausted (%d)", fails)
-                    return 1
-            else:
-                fails = 0
-            if index < len(todo):
-                time.sleep(gap)
+            time.sleep(gap)
+            return row
+
+    with output.open("a", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
+        if new_file:
+            writer.writeheader()
+        pool = ThreadPoolExecutor(max_workers=workers)
+        try:
+            futures = [pool.submit(crawl_one, url) for url in todo]
+            for index, (url, future) in enumerate(zip(todo, futures, strict=True), 1):
+                log.info("tour %d/%d %s", index, len(todo), url)
+                try:
+                    row = future.result()
+                except BaseException:
+                    pool.shutdown(cancel_futures=True)
+                    raise
+                writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
+                handle.flush()
+                if row.get("status") in (FETCH_FAIL, BLOCKED):
+                    fails += 1
+                    if fails >= max_fails:
+                        log.error("failure budget exhausted (%d)", fails)
+                        pool.shutdown(cancel_futures=True)
+                        return 1
+                else:
+                    fails = 0
+        finally:
+            pool.shutdown(cancel_futures=True)
     log.info("batch done: wrote %s", output)
     return 0
+
+
+def _prime_robots_cache(urls: list[str], settings: dict, robots_cache: dict) -> None:
+    """Fetch robots.txt once per origin up front; workers only read the cache."""
+    fetch_cfg = settings.get("fetch", {})
+    fetcher = SafeFetcher(
+        timeout=float(fetch_cfg.get("timeout_s", 20)),
+        max_bytes=int(fetch_cfg.get("max_bytes", 2_000_000)),
+        user_agent=str(fetch_cfg.get("user_agent", "MLAITourSourceAuditor/0.1")),
+        limiter=RateLimiter(float(fetch_cfg.get("delay_s", 1.0))),
+    )
+    for url in urls:
+        origin = (urlsplit(url).hostname or "").lower()
+        site_base = f"{urlsplit(url).scheme}://{origin}"
+        if site_base not in robots_cache:
+            robots_cache[site_base] = fetch_robots(fetcher, site_base, origin)
 
 
 def _load_dotenv() -> None:
