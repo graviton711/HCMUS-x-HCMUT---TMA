@@ -6,6 +6,8 @@ Tài liệu này đặc tả hợp đồng kỹ thuật giữa Agent khảo sát
 
 Mọi thông số vận hành (timeout, retry, workers, model survey, `min_evidence`...) nằm ở `configs/settings.yaml` theo `configs/settings.schema.json`; code chỉ giữ fallback, không phải nguồn sự thật.
 
+Mọi timestamp quan sát (`observed_at`, `fetched_at`) đều là giờ Việt Nam (`Asia/Ho_Chi_Minh`, `shared.now_vn_iso`), ISO-8601 kèm offset.
+
 ## 1. Nguyên tắc cốt lõi
 
 * **Agent làm việc khó, Runner làm việc dễ:** Agent (LLM) phân tích DOM, tìm tọa độ chính xác và xuất ra `profile.yaml` thuần dữ liệu máy đọc được. Runner (`dsl.py` trong engine, chạy qua `python -m ingest`) là code cơ học thuần túy — tuyệt đối không suy đoán hay chứa logic heuristic riêng của từng website (nguyên tắc bất biến là "không heuristic per-site").

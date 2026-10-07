@@ -19,11 +19,10 @@ import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from shared import get_logger
+from shared import get_logger, now_vn_iso
 
 from . import extract, quality
 from .extract import load_profile, load_settings
@@ -313,7 +312,7 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     fetcher = make_fetcher(settings)
     origin = (urlsplit(url).hostname or "").lower()
     site_base = f"{urlsplit(url).scheme}://{origin}"
-    observed = datetime.now(UTC).isoformat(timespec="seconds")
+    observed = now_vn_iso()
 
     if robots_cache is not None and site_base in robots_cache:
         robots = robots_cache[site_base]
@@ -359,7 +358,7 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     clean_cfg = settings.get("clean", {})
     merged: dict = {
         "url": page.url,
-        "fetched_at_utc": observed,
+        "fetched_at": observed,
         "profile": profile.get("name", ""),
         "title": "",
         "json_ld": extract.parse_json_ld(html),
@@ -427,7 +426,7 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
                 "notes": notes,
                 "interactions": traffic.interactions,
                 "rendered_text": rendered_text,
-                "fetched_at_utc": observed,
+        "fetched_at": observed,
             }
         except Exception as exc:
             browser_error = f"{type(exc).__name__}: {exc}"[:200]
@@ -737,7 +736,7 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                            child_policy = EXCLUDED.child_policy, evidence = EXCLUDED.evidence,
                            updated_at = NOW()
                        RETURNING id""",
-                    (tour_key, provider_id, tour_url, detail.get("fetched_at_utc"),
+                    (tour_key, provider_id, tour_url, detail.get("fetched_at"),
                      str(record.get("tour_name", ""))[:500], str(record.get("departure_city", ""))[:200],
                      json.dumps(record.get("destinations") or []),
                      json.dumps(record.get("route") or []),
@@ -796,7 +795,7 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                          json.dumps(offer.get("flights")) if offer.get("flights") is not None else None,
                          str(offer.get("pickup_point", ""))[:500], str(offer.get("hotel_location", ""))[:500],
                          str(offer.get("conditions", ""))[:2000],
-                         detail.get("fetched_at_utc"),
+                         detail.get("fetched_at"),
                          json.dumps({"observed_at": detail.get("fetched_at_utc", "")})),
                     )
                     counts["offers"] += 1

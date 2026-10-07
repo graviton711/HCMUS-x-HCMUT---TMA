@@ -143,6 +143,12 @@ def test_verify_record_flags_value_synthesized_without_source():
     assert verify_record(record, {"currency": ""}, "<p>anything</p>") == ("unverified", ["currency"])
 
 
+def test_timestamps_use_vietnam_time():
+    from shared import now_vn_iso
+
+    assert now_vn_iso().endswith("+07:00")
+
+
 def test_cli_parses_args():
     from ingest.pipeline import _parse_args
 
@@ -588,7 +594,7 @@ def test_publish_snapshot_upserts_tours_and_offers(monkeypatch, tmp_path):
 
     from ingest.pipeline import publish_snapshot
 
-    detail = {'url': 'https://example.test/t', 'fetched_at_utc': '2026-10-07T00:00:00+00:00', 'record_evidence': 'verified', 'record_missing': [], 'record': {'tour_name': 'T', 'price': 100, 'currency': 'VND', 'duration_days': 3, 'offers': [{'departure_date': '2026-11-18', 'price': 100, 'availability': 'available'}]}}
+    detail = {'url': 'https://example.test/t', 'fetched_at': '2026-10-07T00:00:00+07:00', 'record_evidence': 'verified', 'record_missing': [], 'record': {'tour_name': 'T', 'price': 100, 'currency': 'VND', 'duration_days': 3, 'offers': [{'departure_date': '2026-11-18', 'price': 100, 'availability': 'available'}]}}
     (tmp_path / 'tour_x.json').write_text(_json.dumps(detail), encoding='utf-8')
     (tmp_path / 'notes.txt').write_text('ignore me', encoding='utf-8')
     seen = []
