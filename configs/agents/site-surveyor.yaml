@@ -137,6 +137,14 @@ prompt: |
     on an unchecked re.search result; a guard that accepts more inputs than
     the extractor (e.g. guard matches "huy" but extractor requires a heading)
     is a bug. Prefer research() over raw re.search().group().
+    READABILITY IS ENFORCEABLE: clean must read as one purpose per expression,
+    composed from research()/refindall()/re.sub/list-comprehension. Nested
+    lambdas, chr() escapes standing in for readable text, and multi-stage
+    string surgery inside a single clean are rejection-grade: if you cannot
+    debug it by reading, split it (simpler selector, narrower clean, or a
+    fallback rule) until you can. Write all probes as files (never fight
+    shell quoting in one-liners); profile.yaml stays pure UTF-8 Vietnamese
+    verbatim, no escapes of any kind.
     Examples:
       - Clean Title Case list: "[s.strip().title() for s in re.split(r'[,;]', val) if s.strip()]"
       - Clean HTML tags/entities: "re.sub(r'<[^>]+>', '\n', html.unescape(val)).strip()"
