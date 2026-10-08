@@ -52,13 +52,12 @@ Pipeline v2 lọc structured hard conditions trước khi cắt pool, kiểm tra
 
 Frontend đang PLANNING; chưa production UI hoặc chốt stack. Ngày 06/10/2026 user chốt **Giấy & Mực**, Newsreader + Be Vietnam Pro; flow mới **Giới thiệu → form + xác nhận → Kết quả**, criteria rộng/sửa trực tiếp/chat có diff xác nhận, bảng kiểm chứng + Phân tích AI, log/loading mock và accent/motion. Token/màn chi tiết còn review; G1–G13/D1–D5 giữ phần backend cần chốt.
 
-- [Roadmap 7 phase và todo frontend](docs/frontend-plan.md)
-- [Quyết định review nhóm 06/10/2026](docs/frontend-review-2026-10-06.md), [prototype minh họa](prototypes/frontend-design/README.md)
+- [Prototype frontend](prototypes/frontend-design/README.md)
 - [Flow và trạng thái UI](docs/frontend-flows.md)
 - [Hướng tích hợp API v1 theo code](docs/frontend-api-integration.md)
-- [Checklist contract và khoảng thiếu cần trao đổi với BE](docs/frontend-backend-checklist.md)
+- [Giao thức frontend v2](docs/frontend-protocol-v2.md)
 - [Đối chiếu crawler/backend và công việc tích hợp dữ liệu](docs/frontend-crawler-integration.md)
-- [Chuẩn bị skill/thiết kế](docs/frontend-design-preparation.md), [module frontend](src/frontend/README.md)
+- [module frontend](src/frontend/README.md)
 
 ## Kiểm tra backend
 

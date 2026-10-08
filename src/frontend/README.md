@@ -1,9 +1,7 @@
 # Module frontend
 
 **Trạng thái:** PLANNING. Thư mục hiện chỉ chứa tài liệu; stack và cấu trúc source cuối cùng chốt ở P2.
-**Tài liệu:** [Planning](../../docs/frontend-plan.md), [flow](../../docs/frontend-flows.md), [checklist FE–BE](../../docs/frontend-backend-checklist.md), [tích hợp v1](../../docs/frontend-api-integration.md), [HTTP contract](../../docs/api-contract.md), [domain](../../docs/backend-contracts.md), [schemas](../../contracts/README.md).
-
-**P3 design review:** User chốt **Giấy & Mực**, Newsreader + Be Vietnam Pro ngày 06/10; [review nhóm](../../docs/frontend-review-2026-10-06.md) cập nhật ba màn/chat/analysis/activity. [Lịch sử A/B](../../docs/frontend-design-review.md), [prototype HTML/CSS/JS](../../prototypes/frontend-design/README.md) ngoài `src/`; fixture chỉ review bố cục/tương tác, không DTO/client/mock runtime P4, không chứng minh G9–G13 hoặc chốt stack. P3.3–P3.7 còn mở; module vẫn chỉ có tài liệu.
+**Tài liệu:** [flow](../../docs/frontend-flows.md), [tích hợp v1](../../docs/frontend-api-integration.md), [HTTP contract](../../docs/api-contract.md), [domain](../../docs/backend-contracts.md), [schemas](../../contracts/README.md).
 
 ## Trách nhiệm
 
@@ -20,7 +18,7 @@ Giới thiệu → form nhu cầu + URL và xác nhận → kết quả. BE tự
 
 ## Workflow
 
-Theo [review điều khiển](../../docs/frontend-review-controls.md): sửa field/slider/chat tự cuộn tới diff/xác nhận. Confirm cập nhật criteria; Tìm kiếm hoặc lệnh chat chạy theo criteria đã xác nhận. UI không hiện revision; snapshot/bảo vệ revision giữ nội bộ. Form/kết quả/processing đều thuộc nav Tìm tour; Liên hệ/Hỗ trợ là bề mặt phụ. Mức sở thích còn G14, chưa mapping vào API/ranking policy.
+Theo review điều khiển: sửa field/slider/chat tự cuộn tới diff/xác nhận. Confirm cập nhật criteria; Tìm kiếm hoặc lệnh chat chạy theo criteria đã xác nhận. UI không hiện revision; snapshot/bảo vệ revision giữ nội bộ. Form/kết quả/processing đều thuộc nav Tìm tour; Liên hệ/Hỗ trợ là bề mặt phụ. Mức sở thích còn G14, chưa mapping vào API/ranking policy.
 
 Giới thiệu → form/session/draft/validate + chat ghi chú → review và xác nhận ngay form → màn 3 skeleton/activity → BE retrieval/đánh giá/rank/chọn nhóm/so sánh/analysis → render bảng/analysis/evidence. Sửa trực tiếp/chat tạo diff → confirm atomic revision → Tìm kiếm bằng nút/chat theo yêu cầu đã xác nhận; nhóm khác qua chat, Retry lỗi riêng. Nhóm/snapshots do BE chọn; G9–G14 mở, polling/terminal/error v1 làm nền.
 

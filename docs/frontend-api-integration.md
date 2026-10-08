@@ -1,7 +1,7 @@
 # Frontend tích hợp backend v1
 
 **Trạng thái:** Ghi nhận từ backend `0b7e59f`, đã merge/tham chiếu trên `feature/minh-phu` ngày 03/10/2026; dùng để review P1/P2, chưa thay việc FE + BE chốt contract. Tourcrawl/scripts cũng đã merge nhưng chưa nối với gateway; API mặc định vẫn fixture, `origin=synthetic`. Chi tiết ở [đối chiếu crawler](frontend-crawler-integration.md).
-**Nguồn chuẩn:** [HTTP contract](api-contract.md), [domain contract](backend-contracts.md), [schema sinh từ models](../contracts/README.md). Tài liệu ghi API **hiện có**, chưa đủ [flow ba màn/chat/phân tích/activity](frontend-flows.md); khoảng thiếu [C1–C11 và G1–G13](frontend-backend-checklist.md). Nhu cầu UI cập nhật ngày 06/10/2026 không tự thay endpoint/payload v1.
+**Nguồn chuẩn:** [HTTP contract](api-contract.md), [domain contract](backend-contracts.md), [schema sinh từ models](../contracts/README.md). Tài liệu ghi API **hiện có**, chưa đủ [flow ba màn/chat/phân tích/activity](frontend-flows.md); khoảng thiếu C1–C11 và G1–G13 (ghi chú review nội bộ). Nhu cầu UI cập nhật ngày 06/10/2026 không tự thay endpoint/payload v1.
 **Đối chiếu:** [routes](../src/api/app.py), [DTO](../src/api/dto.py), [models nhu cầu](../src/domain/requirements.py), [Fact/evidence](../src/domain/crawl.py), [decision engine](../src/decision/engine.py), [store](../src/api/store.py), [settings](../src/api/settings.py).
 
 ## Endpoint và response thực tế
@@ -30,7 +30,7 @@ V1 `mode=discover|compare_urls`. Discover nhận **text hoặc form**, không nh
 
 **Ranking / G10:** BE rank, tự chọn tối đa ba gợi ý khác nhau và so sánh luôn; trả lý do/criteria/offer/evidence/quality/coverage/budget/policy. Engine hiện chỉ candidates/groups/evaluations/trade_offs, chưa ranking/nhóm tự động/vòng phương án khác; thứ tự mảng hoặc số eligible không phải rank. DTO/công thức/budget 20 chưa chốt, FE không lấy ba phần tử đầu làm đề xuất hay cho user sàng lọc pool.
 
-**Form cá nhân hóa / C1/G4:** Bộ field mẫu bắt buộc điểm đến/khởi hành/ngày/người lớn/ngân sách per_adult và default 5 ngày ưu tiên/trẻ em 0/budget ưu tiên với coverage giá tour theo [review 06/10](frontend-review-2026-10-06.md) chưa thay validation/mapping contract. URL-only không ép bộ field này; trẻ em chưa rõ tuổi giữ blocker giá. Widget vị trí/thời tiết và demo chỉ minh họa, provider/API thật chưa chốt.
+**Form cá nhân hóa / C1/G4:** Bộ field mẫu bắt buộc điểm đến/khởi hành/ngày/người lớn/ngân sách per_adult và default 5 ngày ưu tiên/trẻ em 0/budget ưu tiên với coverage giá tour theo review 06/10 chưa thay validation/mapping contract. URL-only không ép bộ field này; trẻ em chưa rõ tuổi giữ blocker giá. Widget vị trí/thời tiết và demo chỉ minh họa, provider/API thật chưa chốt.
 
 **Chat / G11:** Chưa API chat context hoặc preview proposal không commit. Sửa trực tiếp/chat cần diff → xác nhận atomic theo expected revision, hủy/làm rõ/stale proposal/409 và giữ snapshot kết quả cũ. Không gọi PATCH text để preview: parse thành công v1 sẽ commit. Chat nhóm khác vẫn cần G9/exclusion; không dùng chuỗi hội thoại tự dựng làm DTO runtime.
 
@@ -38,7 +38,7 @@ V1 `mode=discover|compare_urls`. Discover nhận **text hoặc form**, không nh
 
 **Activity / G13:** Nhật ký bước thật cần thứ tự/thời điểm/phase/source status/terminal; v1 chưa stream các bước rank/analysis. Prototype dùng skeleton/log success/chậm/partial/empty/error/cancel có nhãn mock. Runtime chỉ phản ánh phase/activity nhận được, không suy tiến độ từ thời gian chờ hoặc tự chạy log thành công.
 
-**Điều khiển tìm / G14:** Theo [review mới](frontend-review-controls.md), confirmation cập nhật criteria; nút Tìm kiếm hoặc chat yêu cầu tìm mới tạo comparison. Revision giữ nội bộ, UI dùng trạng thái có nghĩa. Slider sở thích mẫu 0–5 chưa mapping vào preference tree/ranking policy/DTO; không tự gửi `pref_*` của prototype qua v1.
+**Điều khiển tìm / G14:** Theo review mới, confirmation cập nhật criteria; nút Tìm kiếm hoặc chat yêu cầu tìm mới tạo comparison. Revision giữ nội bộ, UI dùng trạng thái có nghĩa. Slider sở thích mẫu 0–5 chưa mapping vào preference tree/ranking policy/DTO; không tự gửi `pref_*` của prototype qua v1.
 
 - Text: 1–8.000 ký tự; form: tối đa 50 conditions. URL tối đa 2.048 ký tự, HTTP(S), không credentials, port chỉ 80/443, không khoảng trắng/control/backslash; trùng hoàn toàn bị từ chối. Canonical dedup/giới hạn số cột discovery còn cần review C5.
 - Condition: `{id, field, operator, value, strength}`; mặc định form là `hard`. FE gán ID khi tạo condition/child; sau response dùng ID thực tế. Backend tạo provenance, FE không gửi source quote tự dựng.

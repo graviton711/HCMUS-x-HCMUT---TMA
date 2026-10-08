@@ -1,8 +1,8 @@
 # Wireframe low-fi
 
-**Trạng thái:** PLANNING, sửa ngày 06/10/2026 theo [review nhóm](frontend-review-2026-10-06.md). Giấy & Mực đã chốt style; token và ba màn mới còn P3.3–P3.7. Mẫu chỉ minh họa bố cục/hành vi, chưa public response hoặc frontend production.
+**Trạng thái:** PLANNING, sửa ngày 06/10/2026 theo review nhóm. Giấy & Mực đã chốt style; token và ba màn mới còn P3.3–P3.7. Mẫu chỉ minh họa bố cục/hành vi, chưa public response hoặc frontend production.
 
-**Bổ sung mới:** [Review điều khiển/navigation](frontend-review-controls.md): navbar Giới thiệu/Tìm tour/Liên hệ/Hỗ trợ, form và kết quả đều thuộc Tìm tour. Heading kết quả có Tìm kiếm + trạng thái bằng chữ; bỏ số revision trên UI. Cột yêu cầu có slider sở thích; Sửa tự cuộn tới xác nhận, confirm chỉ cập nhật, nút/chat mới tìm. Chữ nội dung 14–16px, mobile giữ bảng cuộn riêng. Bố cục thấp dưới đây giữ vai trò nền, không mô tả token chi tiết mới.
+**Bổ sung mới:** Review điều khiển/navigation: navbar Giới thiệu/Tìm tour/Liên hệ/Hỗ trợ, form và kết quả đều thuộc Tìm tour. Heading kết quả có Tìm kiếm + trạng thái bằng chữ; bỏ số revision trên UI. Cột yêu cầu có slider sở thích; Sửa tự cuộn tới xác nhận, confirm chỉ cập nhật, nút/chat mới tìm. Chữ nội dung 14–16px, mobile giữ bảng cuộn riêng. Bố cục thấp dưới đây giữ vai trò nền, không mô tả token chi tiết mới.
 
 **Flow:** Giới thiệu → form nhu cầu và xác nhận tại chỗ → Kết quả/so sánh có trạng thái xử lý. Evidence là panel. Bỏ stepper và màn Review riêng; không thêm màn chọn tour từ pool.
 

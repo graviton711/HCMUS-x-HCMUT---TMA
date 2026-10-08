@@ -1,18 +1,6 @@
 # Đối chiếu frontend, backend và crawler
 
-**Trạng thái:** PLANNING trên `feature/minh-phu`, ngày 03/10/2026. Giữ G1–G8/D1–D5; bổ sung G9 theo flow URL + retrieval chung ở [checklist](frontend-backend-checklist.md). Merge code có sẵn không đồng nghĩa pipeline nguồn thật hoặc flow hợp nhất đã tích hợp.
-
-## Nguồn tham khảo và phạm vi merge
-
-| Nhánh lấy từ origin | Commit đối chiếu | Nội dung |
-|---|---|---|
-| backend | `0b7e59f` | API v1, models, worker, decision engine, fixture và HTTP crawler gateway |
-| feat/supplier_crawler_docs | `4b720a9` | Data contract cũ, team/provider docs, configs và package tourcrawl; không chỉ có tài liệu |
-| feat/supplier_crawler_agent | `6f84417` | Kế thừa nhánh docs, thêm 3 script khảo sát/crawl/verify profile, ignore artifacts |
-
-Mọi merge, xử lý conflict và chỉnh tài liệu chỉ ở `feature/minh-phu`. Nhánh `backend` giữ commit ban đầu, không nhận commit frontend; các nhánh nguồn chỉ fetch/tham khảo. Planning frontend trước đó đã được chuyển về nhánh của Minh Phú.
-
-Conflict package phải hợp nhất, không chọn nguyên một phía: giữ dependencies/CLI backend; thêm BeautifulSoup/PyYAML, CLI tour-crawl và browser extra của crawler. Package discovery chứa cả modules backend, tourcrawl và shared; pytest giữ async config và src path. Giữ quy tắc lint backend, bổ sung src path của crawler; sinh lại uv.lock từ pyproject đã hợp nhất. Các quyết định này chỉ phục vụ merge code đã có.
+**Phạm vi:** đối chiếu API v1 và output tourcrawl để frontend giữ đúng ranh giới dữ liệu. D1–D5 bên dưới là các yêu cầu tích hợp; runtime v2 hiện hành nằm ở [backend-v2-runtime.md](backend-v2-runtime.md).
 
 ## Pipeline hiện có và phần chưa nối
 
@@ -41,7 +29,7 @@ FE tiếp tục gọi **API v1 duy nhất**. CLI/CSV/raw JSON không phải endp
 
 Trong pipeline, context dùng kiểm tra departure có cả JSON của chính departure đã trích; phép match này không chứng minh bằng nguồn độc lập. `price_mismatch` phải giữ như dữ liệu xung đột/chưa xác minh, không chọn giá thuận lợi. Data contract cũ hard/soft + LLM text comparison là yêu cầu tham khảo; decision engine v1 hiện chưa thực hiện so sánh nội dung mềm bằng LLM.
 
-## Việc cần chốt thêm cho dữ liệu thật
+## Yêu cầu tích hợp dữ liệu thật
 
 | ID | Công việc / điều kiện hoàn thành | Owner | Phụ thuộc frontend |
 |---|---|---|---|
@@ -54,10 +42,3 @@ Trong pipeline, context dùng kiểm tra departure có cả JSON của chính de
 Quan sát cần xử lý ở D4: fetch_robots có thể trả None khi lỗi; run_tour hiện chỉ chặn khi có parser và disallow, chưa dừng khi không kiểm tra được robots. Source access gating của BE vẫn cần chốt trước khi nguồn thật đi vào kết quả người dùng. Đây là vấn đề code hiện hữu cần owner sửa/nghiệm thu, không tự thay production crawler trong giai đoạn planning.
 
 Ưu tiên D1 cùng G9/G1/G2/G8. Crawler cung cấp dữ kiện URL và capability tìm kiếm; BE giữ criteria chung/dedup/source provenance. Các đường lấy title/price/itinerary giúp chuẩn bị adapter nhưng không đóng gap chỉ vì có code trích xuất; API public phải đúng schema/evidence và scenario được nghiệm thu.
-
-## Kiểm tra sau merge
-
-- Kiểm tra merge ancestry, không còn conflict markers, pyproject/uv.lock hợp lệ và không mất CLI/module của một phía.
-- Chạy tests offline backend + tourcrawl và lint theo cấu hình đã hợp nhất; không gọi NIM/crawl thật để xác nhận merge.
-- Giữ 38 task frontend/C1–C11/FLOW-1–6; bổ sung D1–D5, không cắt yêu cầu khi data chưa đáp ứng.
-- Đã sync lockfile vào môi trường riêng `.uv/merge-env` (giữ `.venv` cũ); **107 tests passed**, lint `src tests scripts` đạt. API tests dùng SQLite tạm/fixture/NIM stub; chưa chạy NIM/site survey/browser/crawl nguồn thật hoặc frontend E2E.

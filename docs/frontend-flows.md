@@ -1,7 +1,7 @@
 # Luồng và trạng thái frontend
 
-**Trạng thái:** PLANNING, sửa ngày 06/10/2026 theo [review nhóm](frontend-review-2026-10-06.md): chốt Giấy & Mực; Giới thiệu → form + xác nhận → Kết quả. Review không còn là màn riêng; bỏ stepper. V1 còn tách mode/chưa ranking/chat preview/phân tích/activity; G9–G13 cần chốt. Budget 20 và cách đếm tour URL vẫn là đề xuất, chưa benchmark hoặc implement.
-**Liên quan:** [planning](frontend-plan.md), [wireframe](wireframes.md), [checklist FE–BE](frontend-backend-checklist.md), [API hiện tại](frontend-api-integration.md).
+**Trạng thái:** PLANNING, sửa ngày 06/10/2026 theo review nhóm: chốt Giấy & Mực; Giới thiệu → form + xác nhận → Kết quả. Review không còn là màn riêng; bỏ stepper. V1 còn tách mode/chưa ranking/chat preview/phân tích/activity; G9–G13 cần chốt. Budget 20 và cách đếm tour URL vẫn là đề xuất, chưa benchmark hoặc implement.
+**Liên quan:** [wireframe](wireframes.md), [giao thức v2](frontend-protocol-v2.md), [API v1](frontend-api-integration.md).
 
 ## Flow mặc định
 
