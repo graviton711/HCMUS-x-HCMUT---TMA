@@ -1,0 +1,534 @@
+{
+  "scenario": "Structured input is explicitly confirmed; date window is chosen by user, not inferred from a single day",
+  "origin": "synthetic",
+  "exchanges": [
+    {
+      "method": "POST",
+      "path": "/v2/requirements",
+      "request": {
+        "input": {
+          "kind": "structured",
+          "form": {
+            "conditions": [
+              {
+                "id": "c_destination",
+                "field": "destinations",
+                "operator": "contains",
+                "value": {
+                  "kind": "set",
+                  "items": [
+                    "country:jp"
+                  ]
+                },
+                "strength": "hard"
+              },
+              {
+                "id": "c_origin",
+                "field": "departure_origin",
+                "operator": "in",
+                "value": {
+                  "kind": "set",
+                  "items": [
+                    "city:vn:hcmc"
+                  ]
+                },
+                "strength": "hard"
+              },
+              {
+                "id": "c_date",
+                "field": "departure_date",
+                "operator": "between",
+                "value": {
+                  "kind": "date",
+                  "value": "2026-11-10",
+                  "upper": "2026-11-17"
+                },
+                "strength": "hard"
+              },
+              {
+                "id": "c_budget",
+                "field": "estimated_cost",
+                "operator": "lte",
+                "value": {
+                  "kind": "budget",
+                  "amount": 35000000,
+                  "currency": "VND",
+                  "basis": "per_adult",
+                  "coverage": "tour_price",
+                  "coverage_origin": "explicit"
+                },
+                "strength": "soft"
+              },
+              {
+                "id": "c_duration",
+                "field": "duration_days",
+                "operator": "near",
+                "value": {
+                  "kind": "number",
+                  "amount": 5
+                },
+                "strength": "soft"
+              }
+            ],
+            "hard_tree": {
+              "kind": "all",
+              "children": [
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_destination"
+                },
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_origin"
+                },
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_date"
+                }
+              ]
+            },
+            "preference_tree": {
+              "kind": "all",
+              "children": [
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_budget"
+                },
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_duration"
+                }
+              ]
+            },
+            "party": {
+              "adults": 2,
+              "children": []
+            },
+            "preference_levels": {
+              "cost": {
+                "level": 3,
+                "origin": "system_default"
+              },
+              "comfort": {
+                "level": 3,
+                "origin": "system_default"
+              },
+              "pace": {
+                "level": 3,
+                "origin": "system_default"
+              },
+              "culture": {
+                "level": 3,
+                "origin": "system_default"
+              }
+            },
+            "reference_urls": [],
+            "notes": ""
+          }
+        },
+        "reference_urls": []
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "req_demo",
+            "revision": 1,
+            "input_kind": "structured",
+            "conditions": [
+              {
+                "id": "c_destination",
+                "field": "destinations",
+                "operator": "contains",
+                "value": {
+                  "kind": "set",
+                  "items": [
+                    "country:jp"
+                  ]
+                },
+                "strength": "hard",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_destination",
+                    "submitted_value": {
+                      "kind": "set",
+                      "items": [
+                        "country:jp"
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c_origin",
+                "field": "departure_origin",
+                "operator": "in",
+                "value": {
+                  "kind": "set",
+                  "items": [
+                    "city:vn:hcmc"
+                  ]
+                },
+                "strength": "hard",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_origin",
+                    "submitted_value": {
+                      "kind": "set",
+                      "items": [
+                        "city:vn:hcmc"
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c_date",
+                "field": "departure_date",
+                "operator": "between",
+                "value": {
+                  "kind": "date",
+                  "value": "2026-11-10",
+                  "upper": "2026-11-17"
+                },
+                "strength": "hard",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_date",
+                    "submitted_value": {
+                      "kind": "date",
+                      "value": "2026-11-10",
+                      "upper": "2026-11-17"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c_budget",
+                "field": "estimated_cost",
+                "operator": "lte",
+                "value": {
+                  "kind": "budget",
+                  "amount": 35000000,
+                  "currency": "VND",
+                  "basis": "per_adult",
+                  "coverage": "tour_price",
+                  "coverage_origin": "explicit"
+                },
+                "strength": "soft",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_budget",
+                    "submitted_value": {
+                      "kind": "budget",
+                      "amount": 35000000,
+                      "currency": "VND",
+                      "basis": "per_adult",
+                      "coverage": "tour_price",
+                      "coverage_origin": "explicit"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c_duration",
+                "field": "duration_days",
+                "operator": "near",
+                "value": {
+                  "kind": "number",
+                  "amount": 5
+                },
+                "strength": "soft",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_duration",
+                    "submitted_value": {
+                      "kind": "number",
+                      "amount": 5
+                    }
+                  }
+                ]
+              }
+            ],
+            "hard_tree": {
+              "kind": "all",
+              "children": [
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_destination"
+                },
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_origin"
+                },
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_date"
+                }
+              ]
+            },
+            "preference_tree": {
+              "kind": "all",
+              "children": [
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_budget"
+                },
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_duration"
+                }
+              ]
+            },
+            "party": {
+              "adults": 2,
+              "children": []
+            },
+            "preference_levels": {
+              "cost": {
+                "level": 3,
+                "origin": "system_default"
+              },
+              "comfort": {
+                "level": 3,
+                "origin": "system_default"
+              },
+              "pace": {
+                "level": 3,
+                "origin": "system_default"
+              },
+              "culture": {
+                "level": 3,
+                "origin": "system_default"
+              }
+            },
+            "reference_urls": [],
+            "notes": "",
+            "readiness": {
+              "can_collect_data": true,
+              "can_evaluate_hard_constraints": true,
+              "blockers": []
+            },
+            "provenance": {
+              "source": "user_confirmed_form",
+              "date_window_origin": "user",
+              "budget_coverage_origin": "user"
+            },
+            "created_at": "2026-10-07T02:30:00Z"
+          }
+        }
+      },
+      "headers": {
+        "Idempotency-Key": "synthetic-requirements-1"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/v2/requirements/req_demo/revisions/1",
+      "response": {
+        "status": 200,
+        "body": {
+          "schema_version": "2.0-draft",
+          "request_id": "request_demo",
+          "data": {
+            "id": "req_demo",
+            "revision": 1,
+            "input_kind": "structured",
+            "conditions": [
+              {
+                "id": "c_destination",
+                "field": "destinations",
+                "operator": "contains",
+                "value": {
+                  "kind": "set",
+                  "items": [
+                    "country:jp"
+                  ]
+                },
+                "strength": "hard",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_destination",
+                    "submitted_value": {
+                      "kind": "set",
+                      "items": [
+                        "country:jp"
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c_origin",
+                "field": "departure_origin",
+                "operator": "in",
+                "value": {
+                  "kind": "set",
+                  "items": [
+                    "city:vn:hcmc"
+                  ]
+                },
+                "strength": "hard",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_origin",
+                    "submitted_value": {
+                      "kind": "set",
+                      "items": [
+                        "city:vn:hcmc"
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c_date",
+                "field": "departure_date",
+                "operator": "between",
+                "value": {
+                  "kind": "date",
+                  "value": "2026-11-10",
+                  "upper": "2026-11-17"
+                },
+                "strength": "hard",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_date",
+                    "submitted_value": {
+                      "kind": "date",
+                      "value": "2026-11-10",
+                      "upper": "2026-11-17"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c_budget",
+                "field": "estimated_cost",
+                "operator": "lte",
+                "value": {
+                  "kind": "budget",
+                  "amount": 35000000,
+                  "currency": "VND",
+                  "basis": "per_adult",
+                  "coverage": "tour_price",
+                  "coverage_origin": "explicit"
+                },
+                "strength": "soft",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_budget",
+                    "submitted_value": {
+                      "kind": "budget",
+                      "amount": 35000000,
+                      "currency": "VND",
+                      "basis": "per_adult",
+                      "coverage": "tour_price",
+                      "coverage_origin": "explicit"
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "c_duration",
+                "field": "duration_days",
+                "operator": "near",
+                "value": {
+                  "kind": "number",
+                  "amount": 5
+                },
+                "strength": "soft",
+                "sources": [
+                  {
+                    "kind": "form",
+                    "field_path": "form.conditions.c_duration",
+                    "submitted_value": {
+                      "kind": "number",
+                      "amount": 5
+                    }
+                  }
+                ]
+              }
+            ],
+            "hard_tree": {
+              "kind": "all",
+              "children": [
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_destination"
+                },
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_origin"
+                },
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_date"
+                }
+              ]
+            },
+            "preference_tree": {
+              "kind": "all",
+              "children": [
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_budget"
+                },
+                {
+                  "kind": "predicate",
+                  "condition_id": "c_duration"
+                }
+              ]
+            },
+            "party": {
+              "adults": 2,
+              "children": []
+            },
+            "preference_levels": {
+              "cost": {
+                "level": 3,
+                "origin": "system_default"
+              },
+              "comfort": {
+                "level": 3,
+                "origin": "system_default"
+              },
+              "pace": {
+                "level": 3,
+                "origin": "system_default"
+              },
+              "culture": {
+                "level": 3,
+                "origin": "system_default"
+              }
+            },
+            "reference_urls": [],
+            "notes": "",
+            "readiness": {
+              "can_collect_data": true,
+              "can_evaluate_hard_constraints": true,
+              "blockers": []
+            },
+            "provenance": {
+              "source": "user_confirmed_form",
+              "date_window_origin": "user",
+              "budget_coverage_origin": "user"
+            },
+            "created_at": "2026-10-07T02:30:00Z"
+          }
+        }
+      }
+    }
+  ]
+}

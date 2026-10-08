@@ -1,0 +1,64 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "expected_revision": {
+      "minimum": 1,
+      "title": "Expected Revision",
+      "type": "integer"
+    },
+    "candidate_limit": {
+      "default": 100,
+      "maximum": 500,
+      "minimum": 3,
+      "title": "Candidate Limit",
+      "type": "integer"
+    },
+    "max_scenarios": {
+      "default": 32,
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Max Scenarios",
+      "type": "integer"
+    },
+    "condition_ids": {
+      "items": {
+        "maxLength": 128,
+        "minLength": 1,
+        "pattern": "^[a-zA-Z0-9_.:-]+$",
+        "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Condition Ids",
+      "type": "array"
+    },
+    "include_soft": {
+      "default": true,
+      "title": "Include Soft",
+      "type": "boolean"
+    },
+    "include_pairs": {
+      "default": true,
+      "title": "Include Pairs",
+      "type": "boolean"
+    },
+    "max_budget_increase_ratio": {
+      "default": 0.25,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Max Budget Increase Ratio",
+      "type": "number"
+    },
+    "max_date_shift_days": {
+      "default": 7,
+      "maximum": 30,
+      "minimum": 0,
+      "title": "Max Date Shift Days",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "expected_revision"
+  ],
+  "title": "CreateWhatIf",
+  "type": "object"
+}

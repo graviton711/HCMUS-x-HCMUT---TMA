@@ -1,0 +1,393 @@
+[
+  {
+    "id": "tet_original",
+    "text": "Tết Nguyên đán năm nay e dự định đi du lịch ghép đoàn bằng xe ô tô từ Hải Phòng đi dọc miền trung vào Đà Nẵng hoặc Tây Nguyên.\nCty nào uy tín và dv tốt, giá hợp lý, tour có các điểm đẹp gần gũi thiên nhiên e tham khảo ạ.\nTừ 27/12 âm đến mùng 4 Tết ạ.",
+    "expected": {
+      "fields": [
+        "departure_origin",
+        "transport",
+        "destinations",
+        "tour_type",
+        "route",
+        "supplier_reputation",
+        "service_quality",
+        "price_value",
+        "nature",
+        "departure_date",
+        "return_date"
+      ],
+      "conditions": [
+        {
+          "field": "departure_origin",
+          "value": {
+            "members": [
+              {
+                "entity_id": "city:vn:haiphong",
+                "status": "resolved"
+              }
+            ]
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "transport",
+          "scope": "main_journey",
+          "value": {
+            "members": [
+              {
+                "entity_id": "motor_vehicle"
+              }
+            ]
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "destinations",
+          "operator": "contains_any",
+          "value": {
+            "members": [
+              {
+                "entity_id": "city:vn:danang"
+              },
+              {
+                "entity_id": "region:vn:central_highlands"
+              }
+            ]
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "tour_type",
+          "value": {
+            "members": [
+              {
+                "entity_id": "join_group"
+              }
+            ]
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "route",
+          "strength": "unresolved",
+          "scope": "itinerary"
+        },
+        {
+          "field": "supplier_reputation",
+          "strength": "soft",
+          "value": {
+            "metric_policy": null
+          }
+        },
+        {
+          "field": "service_quality",
+          "strength": "soft",
+          "value": {
+            "metric_policy": null
+          }
+        },
+        {
+          "field": "price_value",
+          "strength": "soft",
+          "value": {
+            "metric_policy": null
+          }
+        },
+        {
+          "field": "nature",
+          "strength": "soft",
+          "scope": "itinerary"
+        },
+        {
+          "field": "departure_date",
+          "value": {
+            "calendar": "vietnamese_lunar",
+            "semantics": "ambiguous",
+            "holiday_year": null,
+            "resolved_date": null,
+            "day": 27,
+            "month": 12
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "return_date",
+          "value": {
+            "calendar": "vietnamese_lunar",
+            "semantics": "ambiguous",
+            "holiday_year": null,
+            "resolved_date": null,
+            "day": 4,
+            "month": 1
+          },
+          "strength": "hard"
+        }
+      ],
+      "reasons": [
+        "CONDITION_STRENGTH_REQUIRED",
+        "TEMPORAL_SEMANTICS_REQUIRED",
+        "DATE_YEAR_REQUIRED"
+      ],
+      "absent_questions": [
+        "SEARCH_SCOPE_REQUIRED",
+        "UNKNOWN_ENTITY"
+      ],
+      "party": {
+        "adults": null,
+        "children": []
+      }
+    },
+    "patch": "Tết 2027. Đây là khoảng thời gian tôi có thể đi. Đi dọc miền Trung chỉ là ưu tiên.",
+    "patch_changed_fields": [
+      "departure_date",
+      "return_date",
+      "route"
+    ],
+    "patch_expected": {
+      "conditions": [
+        {
+          "field": "departure_date",
+          "operator": "gte",
+          "value": {
+            "resolved_date": "2027-02-03",
+            "year": 2026
+          }
+        },
+        {
+          "field": "return_date",
+          "operator": "lte",
+          "value": {
+            "resolved_date": "2027-02-09",
+            "year": 2027
+          }
+        },
+        {
+          "field": "route",
+          "strength": "soft"
+        }
+      ],
+      "reasons": [],
+      "readiness": {
+        "status": "ready"
+      }
+    }
+  },
+  {
+    "id": "tet_availability",
+    "text": "Tết Nguyên đán năm nay e dự định đi du lịch ghép đoàn bằng xe ô tô từ Hải Phòng đi dọc miền trung vào Đà Nẵng hoặc Tây Nguyên.\nCty nào uy tín và dv tốt, giá hợp lý, tour có các điểm đẹp gần gũi thiên nhiên e tham khảo ạ.\nTừ 27/12 âm đến mùng 4 Tết ạ.\nĐây là khoảng thời gian tôi có thể đi, không bắt buộc khởi hành đúng ngày 27/12 âm. Tour phải về không muộn hơn mùng 4 Tết.",
+    "expected": {
+      "fields": [
+        "departure_origin",
+        "transport",
+        "destinations",
+        "tour_type",
+        "route",
+        "supplier_reputation",
+        "service_quality",
+        "price_value",
+        "nature",
+        "departure_date",
+        "return_date"
+      ],
+      "conditions": [
+        {
+          "field": "departure_date",
+          "operator": "gte",
+          "value": {
+            "semantics": "availability",
+            "holiday_year": null,
+            "resolved_date": null
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "return_date",
+          "operator": "lte",
+          "value": {
+            "semantics": "availability",
+            "holiday_year": null,
+            "resolved_date": null
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "supplier_reputation",
+          "strength": "soft"
+        },
+        {
+          "field": "service_quality",
+          "strength": "soft"
+        },
+        {
+          "field": "price_value",
+          "strength": "soft"
+        },
+        {
+          "field": "nature",
+          "strength": "soft"
+        }
+      ],
+      "reasons": [
+        "CONDITION_STRENGTH_REQUIRED",
+        "DATE_YEAR_REQUIRED"
+      ]
+    }
+  },
+  {
+    "id": "paraphrase_known_year",
+    "text": "Tôi muốn tour ghép đoàn đến Tây Nguyên hoặc Đà Nẵng, đi bằng xe ô tô từ Hải Phòng. Ưu tiên đi dọc miền Trung, công ty đáng tin cậy, dịch vụ tốt, giá phải chăng và gần thiên nhiên. Tết 2027, từ 27/12 âm đến mùng 4 Tết là khoảng thời gian tôi có thể đi.",
+    "expected": {
+      "conditions": [
+        {
+          "field": "destinations",
+          "operator": "contains_any",
+          "value": {
+            "members": [
+              {
+                "entity_id": "region:vn:central_highlands"
+              },
+              {
+                "entity_id": "city:vn:danang"
+              }
+            ]
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "route",
+          "strength": "soft"
+        },
+        {
+          "field": "transport",
+          "scope": "main_journey",
+          "value": {
+            "members": [
+              {
+                "entity_id": "motor_vehicle"
+              }
+            ]
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "supplier_reputation",
+          "strength": "soft"
+        },
+        {
+          "field": "service_quality",
+          "strength": "soft"
+        },
+        {
+          "field": "price_value",
+          "strength": "soft"
+        },
+        {
+          "field": "nature",
+          "strength": "soft"
+        },
+        {
+          "field": "departure_date",
+          "operator": "gte",
+          "value": {
+            "resolved_date": "2027-02-03"
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "return_date",
+          "operator": "lte",
+          "value": {
+            "resolved_date": "2027-02-09"
+          },
+          "strength": "hard"
+        }
+      ],
+      "absent_fields": [
+        "estimated_cost",
+        "duration_days",
+        "duration_nights"
+      ],
+      "reasons": [],
+      "party": {
+        "adults": null,
+        "children": []
+      }
+    }
+  },
+  {
+    "id": "partial_or",
+    "text": "Tôi muốn đi Đà Nẵng hoặc Vùng XYZ. Không cần ưu tiên thiên nhiên, chỉ ưu tiên giá hợp lý.",
+    "expected": {
+      "conditions": [
+        {
+          "field": "destinations",
+          "operator": "contains_any",
+          "value": {
+            "members": [
+              {
+                "entity_id": "city:vn:danang",
+                "status": "resolved"
+              },
+              {
+                "entity_id": null,
+                "status": "catalog_missing"
+              }
+            ]
+          },
+          "strength": "hard"
+        },
+        {
+          "field": "price_value",
+          "strength": "soft"
+        }
+      ],
+      "absent_fields": [
+        "nature",
+        "estimated_cost"
+      ],
+      "readiness": {
+        "scope_coverage": "partial"
+      },
+      "absent_questions": [
+        "SEARCH_SCOPE_REQUIRED",
+        "UNKNOWN_ENTITY"
+      ]
+    }
+  },
+  {
+    "id": "hard_metric",
+    "text": "Đi Đà Nẵng. Công ty bắt buộc uy tín. Dịch vụ tốt và giá hợp lý là ưu tiên.",
+    "expected": {
+      "conditions": [
+        {
+          "field": "supplier_reputation",
+          "strength": "hard",
+          "operator": "requires",
+          "value": {
+            "metric_policy": null
+          }
+        },
+        {
+          "field": "service_quality",
+          "strength": "soft"
+        },
+        {
+          "field": "price_value",
+          "strength": "soft"
+        }
+      ],
+      "absent_fields": [
+        "estimated_cost"
+      ],
+      "reasons": [
+        "METRIC_UNSUPPORTED"
+      ],
+      "readiness": {
+        "status": "unsupported"
+      },
+      "absent_questions": [
+        "METRIC_UNSUPPORTED"
+      ]
+    }
+  }
+]

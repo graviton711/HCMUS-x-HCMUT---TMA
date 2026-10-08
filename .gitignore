@@ -39,6 +39,9 @@ out/
 .local/
 artifacts/
 
+# Prototype review screenshots/reports — local only; runtime assets stay tracked
+/prototypes/frontend-design/review/
+
 # Data / ML artifacts; keep only the small, versioned source registry
 data/*
 !data/providers.toml

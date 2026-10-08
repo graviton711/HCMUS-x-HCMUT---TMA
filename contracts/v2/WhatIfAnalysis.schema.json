@@ -1,0 +1,712 @@
+{
+  "$defs": {
+    "ConditionGroup": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "strength": {
+          "enum": [
+            "hard",
+            "soft"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "condition_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Condition Ids",
+          "type": "array"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Fields",
+          "type": "array"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "strength",
+        "condition_ids",
+        "fields",
+        "label"
+      ],
+      "title": "ConditionGroup",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Population": {
+      "additionalProperties": false,
+      "properties": {
+        "eligible": {
+          "minimum": 0,
+          "title": "Eligible",
+          "type": "integer"
+        },
+        "ineligible": {
+          "minimum": 0,
+          "title": "Ineligible",
+          "type": "integer"
+        },
+        "unknown": {
+          "minimum": 0,
+          "title": "Unknown",
+          "type": "integer"
+        },
+        "eligible_candidate_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Eligible Candidate Ids",
+          "type": "array"
+        },
+        "has_hard_constraints": {
+          "title": "Has Hard Constraints",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "eligible",
+        "ineligible",
+        "unknown",
+        "eligible_candidate_ids",
+        "has_hard_constraints"
+      ],
+      "title": "Population",
+      "type": "object"
+    },
+    "RankChange": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "before": {
+          "$ref": "#/$defs/RankingItem"
+        },
+        "after": {
+          "$ref": "#/$defs/RankingItem"
+        },
+        "rank_delta": {
+          "title": "Rank Delta",
+          "type": "integer"
+        },
+        "evidence_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "before",
+        "after",
+        "rank_delta",
+        "evidence_ids"
+      ],
+      "title": "RankChange",
+      "type": "object"
+    },
+    "RankingItem": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "score_lower": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score Lower"
+        },
+        "score_upper": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Score Upper"
+        },
+        "coverage": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Coverage"
+        },
+        "tied": {
+          "title": "Tied",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "rank",
+        "score_lower",
+        "score_upper",
+        "coverage",
+        "tied"
+      ],
+      "title": "RankingItem",
+      "type": "object"
+    },
+    "RestrictionRatio": {
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "computed",
+            "blocked",
+            "not_applicable"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "numerator": {
+          "minimum": 0,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "denominator": {
+          "minimum": 0,
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Percent"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "meaning": {
+          "default": "Tỷ lệ lựa chọn đạt kịch bản nhưng đã bị yêu cầu gốc loại có bằng chứng, trong snapshot đã đọc.",
+          "title": "Meaning",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "numerator",
+        "denominator"
+      ],
+      "title": "RestrictionRatio",
+      "type": "object"
+    },
+    "WhatIfScenario": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "remove_hard_group",
+            "remove_soft_group",
+            "relax_bound",
+            "remove_hard_pair"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "group_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "title": "Group Ids",
+          "type": "array"
+        },
+        "condition_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Condition Ids",
+          "type": "array"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "measured",
+            "insufficient_data"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "population": {
+          "$ref": "#/$defs/Population"
+        },
+        "additional_candidate_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Additional Candidate Ids",
+          "type": "array"
+        },
+        "proven_blocked_candidate_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Proven Blocked Candidate Ids",
+          "type": "array"
+        },
+        "previously_unknown_candidate_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Previously Unknown Candidate Ids",
+          "type": "array"
+        },
+        "joint_only_candidate_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Joint Only Candidate Ids",
+          "type": "array"
+        },
+        "restriction_ratio": {
+          "$ref": "#/$defs/RestrictionRatio"
+        },
+        "top_before": {
+          "items": {
+            "$ref": "#/$defs/RankingItem"
+          },
+          "title": "Top Before",
+          "type": "array"
+        },
+        "top_after": {
+          "items": {
+            "$ref": "#/$defs/RankingItem"
+          },
+          "title": "Top After",
+          "type": "array"
+        },
+        "top_changed": {
+          "title": "Top Changed",
+          "type": "boolean"
+        },
+        "rank_changes": {
+          "items": {
+            "$ref": "#/$defs/RankChange"
+          },
+          "title": "Rank Changes",
+          "type": "array"
+        },
+        "rank_changes_truncated": {
+          "title": "Rank Changes Truncated",
+          "type": "boolean"
+        },
+        "witnesses": {
+          "items": {
+            "$ref": "#/$defs/Witness"
+          },
+          "title": "Witnesses",
+          "type": "array"
+        },
+        "witnesses_truncated": {
+          "title": "Witnesses Truncated",
+          "type": "boolean"
+        },
+        "edits": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          "title": "Edits",
+          "type": "array"
+        },
+        "tradeoffs": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          "title": "Tradeoffs",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "minimal_within_tested_subsets": {
+          "default": false,
+          "title": "Minimal Within Tested Subsets",
+          "type": "boolean"
+        },
+        "insight": {
+          "title": "Insight",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "group_ids",
+        "condition_ids",
+        "label",
+        "state",
+        "population",
+        "additional_candidate_ids",
+        "proven_blocked_candidate_ids",
+        "previously_unknown_candidate_ids",
+        "restriction_ratio",
+        "top_before",
+        "top_after",
+        "top_changed",
+        "rank_changes",
+        "rank_changes_truncated",
+        "witnesses",
+        "witnesses_truncated",
+        "edits",
+        "tradeoffs",
+        "limitations",
+        "insight"
+      ],
+      "title": "WhatIfScenario",
+      "type": "object"
+    },
+    "Witness": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Title"
+        },
+        "canonical_url": {
+          "title": "Canonical Url",
+          "type": "string"
+        },
+        "tour_snapshot_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Tour Snapshot Id",
+          "type": "string"
+        },
+        "offer_snapshot_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Offer Snapshot Id"
+        },
+        "original_status": {
+          "enum": [
+            "pass",
+            "fail",
+            "unknown"
+          ],
+          "title": "Original Status",
+          "type": "string"
+        },
+        "original_evaluations": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          "title": "Original Evaluations",
+          "type": "array"
+        },
+        "scenario_evaluations": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          "title": "Scenario Evaluations",
+          "type": "array"
+        },
+        "evidence_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "title",
+        "canonical_url",
+        "tour_snapshot_id",
+        "offer_snapshot_id",
+        "original_status",
+        "original_evaluations",
+        "scenario_evaluations",
+        "evidence_ids"
+      ],
+      "title": "Witness",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Id",
+      "type": "string"
+    },
+    "comparison_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Comparison Id",
+      "type": "string"
+    },
+    "requirement_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Requirement Id",
+      "type": "string"
+    },
+    "revision": {
+      "minimum": 1,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "policy_version": {
+      "default": "what-if-v1",
+      "title": "Policy Version",
+      "type": "string"
+    },
+    "origin": {
+      "enum": [
+        "source",
+        "synthetic"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "evaluated_at": {
+      "title": "Evaluated At",
+      "type": "string"
+    },
+    "scope": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Scope",
+      "type": "object"
+    },
+    "baseline": {
+      "$ref": "#/$defs/Population"
+    },
+    "baseline_top": {
+      "items": {
+        "$ref": "#/$defs/RankingItem"
+      },
+      "title": "Baseline Top",
+      "type": "array"
+    },
+    "groups": {
+      "items": {
+        "$ref": "#/$defs/ConditionGroup"
+      },
+      "title": "Groups",
+      "type": "array"
+    },
+    "scenarios": {
+      "items": {
+        "$ref": "#/$defs/WhatIfScenario"
+      },
+      "title": "Scenarios",
+      "type": "array"
+    },
+    "candidates": {
+      "items": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "type": "object"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "semantic_assessment": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Semantic Assessment",
+      "type": "object"
+    },
+    "explanation": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Explanation",
+      "type": "object"
+    },
+    "limits": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Limits",
+      "type": "object"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "comparison_id",
+    "requirement_id",
+    "revision",
+    "origin",
+    "evaluated_at",
+    "scope",
+    "baseline",
+    "baseline_top",
+    "groups",
+    "scenarios",
+    "candidates",
+    "semantic_assessment",
+    "explanation",
+    "limits",
+    "limitations"
+  ],
+  "title": "WhatIfAnalysis",
+  "type": "object"
+}

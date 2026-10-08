@@ -1,0 +1,96 @@
+{
+  "$defs": {
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "record_key": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Record Key",
+      "type": "string"
+    },
+    "field": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-zA-Z0-9_.:-]+$",
+      "title": "Field",
+      "type": "string"
+    },
+    "value": {
+      "$ref": "#/$defs/JsonValue"
+    },
+    "url": {
+      "title": "Url",
+      "type": "string"
+    },
+    "raw_value": {
+      "maxLength": 10000,
+      "minLength": 1,
+      "title": "Raw Value",
+      "type": "string"
+    },
+    "raw_quote": {
+      "maxLength": 10000,
+      "minLength": 1,
+      "title": "Raw Quote",
+      "type": "string"
+    },
+    "locator": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Locator",
+      "type": "string"
+    },
+    "method": {
+      "enum": [
+        "json_ld",
+        "json",
+        "api",
+        "html"
+      ],
+      "title": "Method",
+      "type": "string"
+    },
+    "observed_at": {
+      "title": "Observed At",
+      "type": "string"
+    },
+    "scope": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scope"
+    },
+    "completeness": {
+      "default": "unknown",
+      "enum": [
+        "complete",
+        "partial",
+        "unknown"
+      ],
+      "title": "Completeness",
+      "type": "string"
+    }
+  },
+  "required": [
+    "record_key",
+    "field",
+    "value",
+    "url",
+    "raw_value",
+    "raw_quote",
+    "locator",
+    "method",
+    "observed_at"
+  ],
+  "title": "CatalogFieldProof",
+  "type": "object"
+}

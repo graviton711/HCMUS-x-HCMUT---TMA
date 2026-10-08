@@ -1,0 +1,1046 @@
+{
+  "$defs": {
+    "Budget": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "budget",
+          "default": "budget",
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Amount"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Currency"
+        },
+        "basis": {
+          "anyOf": [
+            {
+              "enum": [
+                "per_adult",
+                "per_person",
+                "group_total"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Basis"
+        },
+        "coverage": {
+          "default": "tour_price",
+          "enum": [
+            "tour_price",
+            "trip_total"
+          ],
+          "title": "Coverage",
+          "type": "string"
+        },
+        "coverage_origin": {
+          "default": "system_default",
+          "enum": [
+            "explicit",
+            "system_default"
+          ],
+          "title": "Coverage Origin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "title": "Budget",
+      "type": "object"
+    },
+    "Child": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "age": {
+          "anyOf": [
+            {
+              "maximum": 17,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Age"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Child",
+      "type": "object"
+    },
+    "DateValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "date",
+          "default": "date",
+          "title": "Kind",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "DateValue",
+      "type": "object"
+    },
+    "EntityMember": {
+      "additionalProperties": false,
+      "properties": {
+        "raw": {
+          "maxLength": 800,
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "entity_type": {
+          "enum": [
+            "place",
+            "transport",
+            "service",
+            "supplier",
+            "tour_type"
+          ],
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "entity_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity Id"
+        },
+        "status": {
+          "enum": [
+            "resolved",
+            "catalog_missing"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw",
+        "entity_type",
+        "status"
+      ],
+      "title": "EntityMember",
+      "type": "object"
+    },
+    "EntitySetValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "entities",
+          "default": "entities",
+          "title": "Kind",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/EntityMember"
+          },
+          "maxItems": 30,
+          "minItems": 1,
+          "title": "Members",
+          "type": "array"
+        },
+        "catalog_version": {
+          "title": "Catalog Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "members",
+        "catalog_version"
+      ],
+      "title": "EntitySetValue",
+      "type": "object"
+    },
+    "FormConditionV2": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "operator": {
+          "title": "Operator",
+          "type": "string"
+        },
+        "value": {
+          "discriminator": {
+            "mapping": {
+              "budget": "#/$defs/Budget",
+              "date": "#/$defs/DateValue",
+              "entities": "#/$defs/EntitySetValue",
+              "number": "#/$defs/NumberValue",
+              "qualitative": "#/$defs/QualitativeValue",
+              "set": "#/$defs/SetValue",
+              "temporal": "#/$defs/TemporalValue",
+              "unresolved": "#/$defs/UnresolvedValue"
+            },
+            "propertyName": "kind"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NumberValue"
+            },
+            {
+              "$ref": "#/$defs/SetValue"
+            },
+            {
+              "$ref": "#/$defs/DateValue"
+            },
+            {
+              "$ref": "#/$defs/Budget"
+            },
+            {
+              "$ref": "#/$defs/UnresolvedValue"
+            },
+            {
+              "$ref": "#/$defs/EntitySetValue"
+            },
+            {
+              "$ref": "#/$defs/TemporalValue"
+            },
+            {
+              "$ref": "#/$defs/QualitativeValue"
+            }
+          ],
+          "title": "Value"
+        },
+        "strength": {
+          "default": "hard",
+          "enum": [
+            "hard",
+            "soft",
+            "unresolved"
+          ],
+          "title": "Strength",
+          "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "main_journey",
+                "itinerary"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        }
+      },
+      "required": [
+        "id",
+        "field",
+        "operator",
+        "value"
+      ],
+      "title": "FormConditionV2",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "NumberValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "number",
+          "default": "number",
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "maximum": 1000000000000000,
+          "minimum": 0,
+          "title": "Amount",
+          "type": "integer"
+        },
+        "upper": {
+          "anyOf": [
+            {
+              "maximum": 1000000000000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper"
+        }
+      },
+      "required": [
+        "amount"
+      ],
+      "title": "NumberValue",
+      "type": "object"
+    },
+    "Party": {
+      "additionalProperties": false,
+      "properties": {
+        "adults": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Adults"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Child"
+          },
+          "maxItems": 20,
+          "title": "Children",
+          "type": "array"
+        },
+        "rooming": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rooming"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/SourceReference"
+          },
+          "maxItems": 50,
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "title": "Party",
+      "type": "object"
+    },
+    "PreferenceLevel": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "maximum": 5,
+          "minimum": 0,
+          "title": "Level",
+          "type": "integer"
+        },
+        "origin": {
+          "default": "user",
+          "enum": [
+            "user",
+            "system_default"
+          ],
+          "title": "Origin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "title": "PreferenceLevel",
+      "type": "object"
+    },
+    "Preferences": {
+      "additionalProperties": false,
+      "properties": {
+        "cost": {
+          "$ref": "#/$defs/PreferenceLevel"
+        },
+        "comfort": {
+          "$ref": "#/$defs/PreferenceLevel"
+        },
+        "pace": {
+          "$ref": "#/$defs/PreferenceLevel"
+        },
+        "culture": {
+          "$ref": "#/$defs/PreferenceLevel"
+        }
+      },
+      "title": "Preferences",
+      "type": "object"
+    },
+    "QualitativeValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "qualitative",
+          "default": "qualitative",
+          "title": "Kind",
+          "type": "string"
+        },
+        "concept": {
+          "enum": [
+            "supplier_reputation",
+            "service_quality",
+            "price_value",
+            "nature"
+          ],
+          "title": "Concept",
+          "type": "string"
+        },
+        "raw": {
+          "maxLength": 800,
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "metric_policy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metric Policy"
+        }
+      },
+      "required": [
+        "concept",
+        "raw"
+      ],
+      "title": "QualitativeValue",
+      "type": "object"
+    },
+    "SetValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "set",
+          "default": "set",
+          "title": "Kind",
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "minItems": 1,
+          "title": "Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "title": "SetValue",
+      "type": "object"
+    },
+    "SourceReference": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "text",
+            "form",
+            "system_default"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "message_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Message Id"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "maxLength": 8000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End"
+        },
+        "field_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field Path"
+        },
+        "submitted_value": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "SourceReference",
+      "type": "object"
+    },
+    "StructuredForm": {
+      "additionalProperties": false,
+      "properties": {
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/FormConditionV2"
+          },
+          "maxItems": 50,
+          "title": "Conditions",
+          "type": "array"
+        },
+        "party": {
+          "$ref": "#/$defs/Party"
+        },
+        "hard_tree": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tree"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "preference_tree": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tree"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "preference_levels": {
+          "$ref": "#/$defs/Preferences"
+        },
+        "notes": {
+          "default": "",
+          "maxLength": 8000,
+          "title": "Notes",
+          "type": "string"
+        }
+      },
+      "title": "StructuredForm",
+      "type": "object"
+    },
+    "StructuredInput": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "structured",
+          "title": "Kind",
+          "type": "string"
+        },
+        "form": {
+          "$ref": "#/$defs/StructuredForm"
+        }
+      },
+      "required": [
+        "kind",
+        "form"
+      ],
+      "title": "StructuredInput",
+      "type": "object"
+    },
+    "TemporalValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "temporal",
+          "default": "temporal",
+          "title": "Kind",
+          "type": "string"
+        },
+        "raw": {
+          "maxLength": 800,
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "calendar": {
+          "enum": [
+            "gregorian",
+            "vietnamese_lunar",
+            "unresolved"
+          ],
+          "title": "Calendar",
+          "type": "string"
+        },
+        "group_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Group Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "start",
+            "end",
+            "single"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "semantics": {
+          "enum": [
+            "availability",
+            "exact",
+            "departure_window",
+            "ambiguous",
+            "single"
+          ],
+          "title": "Semantics",
+          "type": "string"
+        },
+        "day": {
+          "anyOf": [
+            {
+              "maximum": 31,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Day"
+        },
+        "month": {
+          "anyOf": [
+            {
+              "maximum": 12,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Month"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "maximum": 2099,
+              "minimum": 2000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year"
+        },
+        "year_origin": {
+          "anyOf": [
+            {
+              "enum": [
+                "explicit",
+                "holiday_anchor"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year Origin"
+        },
+        "holiday": {
+          "anyOf": [
+            {
+              "const": "tet",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Holiday"
+        },
+        "holiday_year": {
+          "anyOf": [
+            {
+              "maximum": 2099,
+              "minimum": 2001,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Holiday Year"
+        },
+        "leap": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Leap"
+        },
+        "resolved_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved Date"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "converter_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Converter Version"
+        }
+      },
+      "required": [
+        "raw",
+        "calendar",
+        "group_id",
+        "role",
+        "semantics"
+      ],
+      "title": "TemporalValue",
+      "type": "object"
+    },
+    "TextInput": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "text",
+          "title": "Kind",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "title": "TextInput",
+      "type": "object"
+    },
+    "Tree": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "all",
+            "any",
+            "predicate"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "condition_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[a-zA-Z0-9_.:-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition Id"
+        },
+        "children": {
+          "items": {
+            "$ref": "#/$defs/Tree"
+          },
+          "maxItems": 50,
+          "title": "Children",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Tree",
+      "type": "object"
+    },
+    "UnresolvedValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "unresolved",
+          "default": "unresolved",
+          "title": "Kind",
+          "type": "string"
+        },
+        "raw": {
+          "maxLength": 8000,
+          "title": "Raw",
+          "type": "string"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw",
+        "reason"
+      ],
+      "title": "UnresolvedValue",
+      "type": "object"
+    },
+    "UrlInput": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "urls",
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "UrlInput",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "input": {
+      "discriminator": {
+        "mapping": {
+          "structured": "#/$defs/StructuredInput",
+          "text": "#/$defs/TextInput",
+          "urls": "#/$defs/UrlInput"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/StructuredInput"
+        },
+        {
+          "$ref": "#/$defs/TextInput"
+        },
+        {
+          "$ref": "#/$defs/UrlInput"
+        }
+      ],
+      "title": "Input"
+    },
+    "reference_urls": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 5,
+      "title": "Reference Urls",
+      "type": "array"
+    },
+    "timezone": {
+      "default": "Asia/Ho_Chi_Minh",
+      "title": "Timezone",
+      "type": "string"
+    }
+  },
+  "required": [
+    "input"
+  ],
+  "title": "CreateRequirementV2",
+  "type": "object"
+}

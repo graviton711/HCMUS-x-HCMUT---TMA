@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "SourceCapability": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "supplier_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Supplier Id",
+          "type": "string"
+        },
+        "approved_domains": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Approved Domains",
+          "type": "array"
+        },
+        "access_status": {
+          "enum": [
+            "approved",
+            "blocked",
+            "unchecked"
+          ],
+          "title": "Access Status",
+          "type": "string"
+        },
+        "checked_at": {
+          "title": "Checked At",
+          "type": "string"
+        },
+        "modes": {
+          "items": {
+            "enum": [
+              "discover",
+              "compare_urls"
+            ],
+            "type": "string"
+          },
+          "title": "Modes",
+          "type": "array"
+        },
+        "searchable_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Searchable Fields",
+          "type": "array"
+        },
+        "returned_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Returned Fields",
+          "type": "array"
+        },
+        "pushdown_semantics": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Pushdown Semantics",
+          "type": "object"
+        },
+        "limits": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Limits",
+          "type": "object"
+        },
+        "freshness_seconds": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Freshness Seconds",
+          "type": "object"
+        }
+      },
+      "required": [
+        "source_id",
+        "supplier_id",
+        "approved_domains",
+        "access_status",
+        "checked_at",
+        "modes"
+      ],
+      "title": "SourceCapability",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "display_name": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "capability": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SourceCapability"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "domain": {
+      "anyOf": [
+        {
+          "maxLength": 253,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Domain"
+    },
+    "capabilities": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Capabilities"
+    },
+    "profile_ref": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Profile Ref",
+      "type": "string"
+    },
+    "policy_ref": {
+      "default": "manual_review_required",
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Policy Ref",
+      "type": "string"
+    }
+  },
+  "required": [
+    "display_name",
+    "profile_ref"
+  ],
+  "title": "SourceCreate",
+  "type": "object"
+}

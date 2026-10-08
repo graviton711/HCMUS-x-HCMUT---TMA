@@ -1,0 +1,8 @@
+{
+  "mode": "compare_urls",
+  "urls": [
+    "https://tour-demo.invalid/tour-a",
+    "https://tour-demo.invalid/tour-b",
+    "https://tour-demo.invalid/tour-c"
+  ]
+}
