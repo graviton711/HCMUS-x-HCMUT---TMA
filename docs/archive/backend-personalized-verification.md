@@ -1,6 +1,6 @@
 # Nghiệm thu personalized core — 08/10/2026
 
-Triển khai trên `backend` theo [policy](personalized-requirement-policy.md), ngân sách form là trần bắt buộc. Không sửa frontend, catalog Supabase hoặc application DB đang dùng; smoke dùng SQLite trong memory. Credentials vẫn nằm trong `.env`, artifacts chỉ lưu public responses.
+Triển khai trên `backend` theo [policy](../personalized-requirement-policy.md), ngân sách form là trần bắt buộc. Không sửa frontend, catalog Supabase hoặc application DB đang dùng; smoke dùng SQLite trong memory. Credentials vẫn nằm trong `.env`, artifacts chỉ lưu public responses.
 
 ## Offline
 
@@ -41,4 +41,4 @@ Việc dữ liệu tiếp theo: mở catalog địa danh/transport theo records 
 
 ## Frontend sử dụng
 
-Đọc `completeness.fields`, `readiness.can_confirm/can_search`, semantic issues/questions để tự điền và hỏi đúng phần thiếu. 201 có thể là confirmed Requirement hoặc draft với proposal_id. Giữ revision/version thật; form budget hard lte VND/per_adult/tour_price. Chưa tích hợp prototype UI; [hướng dẫn từng bước](../examples/backend-personalized-v2.md), [contract frontend](frontend-protocol-v2.md).
+Đọc `completeness.fields`, `readiness.can_confirm/can_search`, semantic issues/questions để tự điền và hỏi đúng phần thiếu. 201 có thể là confirmed Requirement hoặc draft với proposal_id. Giữ revision/version thật; form budget hard lte VND/per_adult/tour_price. Chưa tích hợp prototype UI; [hướng dẫn từng bước](../../examples/backend-personalized-v2.md), [contract frontend](../frontend-protocol-v2.md).

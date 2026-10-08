@@ -41,7 +41,7 @@ Audit đi qua bounded retrieval không có hard predicates, sample tối đa 100
 - URL-only miễn; hybrid không bypass; legacy revisions/readiness bị stale phải revalidate trước confirm/search/worker. Không network trong offline tests; live NIM/Supabase dùng application DB tạm, tách khỏi tests deterministic.
 - Full regression, Ruff, schemas v2/export và v1 giữ nguyên; cập nhật kết quả thực tế và hướng dẫn FE/test sau kiểm chứng.
 
-Kết quả thực tế: [nghiệm thu và giới hạn](backend-personalized-verification.md), [test từng bước](../examples/backend-personalized-v2.md).
+Kết quả thực tế: [nghiệm thu và giới hạn](archive/backend-personalized-verification.md), [test từng bước](../examples/backend-personalized-v2.md).
 # Catalog trust policy hiện hành
 
 [catalog-validation-v1](catalog-validation-policy.md) thay yêu cầu proof website mọi field bằng trust có cấu hình + kiểm tra catalog. Các phần cũ nói unverified/unknown áp dụng cho nguồn chưa opt-in hoặc field không đạt kiểm tra; price qualifiers/freshness vẫn bắt buộc, completeness/readiness của user không đổi.

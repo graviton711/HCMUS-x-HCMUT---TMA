@@ -1,6 +1,6 @@
 # Ca test extraction: tour ghép đoàn dịp Tết
 
-Trạng thái: giữ baseline review ngày 07/10/2026 bên dưới; semantic v2 đã implement và kiểm chứng ngày 08/10/2026. Baseline thử một lượt qua `/v2/requirements` → worker NIM → proposal, DB tạm, không confirm/comparison/crawl. Parser cũ `vi-conditions-v5`, model `nvidia/nemotron-3-super-120b-a12b`; có một repair. [Test runtime mới](../examples/backend-semantic-v2.md), [kết quả kiểm chứng](requirements-evaluation.md).
+Trạng thái: giữ baseline review ngày 07/10/2026 bên dưới; semantic v2 đã implement và kiểm chứng ngày 08/10/2026. Baseline thử một lượt qua `/v2/requirements` → worker NIM → proposal, DB tạm, không confirm/comparison/crawl. Parser cũ `vi-conditions-v5`, model `nvidia/nemotron-3-super-120b-a12b`; có một repair. [Test runtime mới](../../examples/backend-semantic-v2.md), [kết quả kiểm chứng](requirements-evaluation.md).
 
 ## Input nguyên văn
 

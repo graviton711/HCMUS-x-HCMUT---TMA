@@ -18,12 +18,10 @@ Trạng thái sau merge (08/10/2026): tầng ingest đã implement (`src/ingest`
 - [Proposal và phân tích bài toán](docs/idea.md)
 - [Kiến trúc hệ thống](docs/system-architecture.md)
 - [Wireframe](docs/wireframes.md)
-- [Kế hoạch backend để thảo luận](docs/backend-plan.md)
 - [Contract dữ liệu backend — bản nháp](docs/backend-contracts.md)
 - [Module hiểu yêu cầu — bản nháp](src/requirements/README.md)
 - [Contract crawler và mẫu JSON — bản nháp](docs/crawler-contract.md)
 - [Contract API cho frontend — bản nháp](docs/api-contract.md)
-- [Bộ tình huống đánh giá tiếng Việt](docs/requirements-evaluation.md)
 - [Phân công/quy ước Git](docs/team-workflow.md), [registry nguồn](docs/provider-registry.md)
 - [Phạm vi MVP tour](docs/tour-mvp-scope.md), [đề bài TMA](docs/TMA.md)
 
@@ -64,13 +62,13 @@ NIM đọc `NVIDIA_NIM_API` và `NVIDIA_NIM_MODEL` từ `.env` hiện có. Ngân
 
 Đọc kho tour thật bằng `DATA_PROVIDER=supabase` và `SUPABASE_TOUR_DB_URL`. Dùng API **v2**; [khởi động và test Supabase từng bước](examples/backend-supabase-v2.md). `uv run tour-backend probe-supabase` kiểm tra kết nối/counts bằng transaction chỉ đọc. SQLite vẫn lưu phiên, nhu cầu và kết quả; Supabase lưu catalog do crawler cập nhật.
 
-Semantic extraction v2 (`requirements-v2.2`) giữ ghép đoàn, tuyến đường, các ưu tiên định tính và khoảng lịch âm; hỏi năm/ý nghĩa khoảng trước khi quy đổi. [Test ca Tết từng bước](examples/backend-semantic-v2.md), [contract frontend/crawler](docs/requirements-semantics.md), [kết quả kiểm chứng](docs/requirements-evaluation.md). Cần tạo request mới sau khi restart để thử parser mới; lịch sử không tự được trích xuất lại.
+Semantic extraction v2 (`requirements-v2.2`) giữ ghép đoàn, tuyến đường, các ưu tiên định tính và khoảng lịch âm; hỏi năm/ý nghĩa khoảng trước khi quy đổi. [Test ca Tết từng bước](examples/backend-semantic-v2.md), [contract frontend/crawler](docs/requirements-semantics.md), [kết quả kiểm chứng](docs/archive/requirements-evaluation.md). Cần tạo request mới sau khi restart để thử parser mới; lịch sử không tự được trích xuất lại.
 
-Pipeline v2 lọc structured hard conditions trước khi cắt pool, kiểm tra toàn bộ yêu cầu trên từng offer; LLM đánh giá ưu tiên ngữ nghĩa bằng trích dẫn, backend tính ranking với coverage/khoảng điểm. Hard/soft độc lập kiểu dữ liệu. [Hướng dẫn test và đọc output](examples/backend-retrieval-semantic-v2.md), [kết quả và phần dữ liệu còn thiếu](docs/backend-retrieval-assessment-results.md).
+Pipeline v2 lọc structured hard conditions trước khi cắt pool, kiểm tra toàn bộ yêu cầu trên từng offer; LLM đánh giá ưu tiên ngữ nghĩa bằng trích dẫn, backend tính ranking với coverage/khoảng điểm. Hard/soft độc lập kiểu dữ liệu. [Hướng dẫn test và đọc output](examples/backend-retrieval-semantic-v2.md), [kết quả và phần dữ liệu còn thiếu](docs/archive/backend-retrieval-assessment-results.md).
 
-Form/text v2 dùng chung năm core fields trước confirm/search; draft được phép thiếu, ngân sách form là hard cap giá tour/người lớn. Xem [flow mới và typed answers](examples/backend-personalized-v2.md), [nghiệm thu](docs/backend-personalized-verification.md). `uv run tour-backend audit-supabase` đọc catalog và xuất báo cáo chất lượng có giới hạn; không cập nhật rows hoặc tạo dữ liệu tour.
+Form/text v2 dùng chung năm core fields trước confirm/search; draft được phép thiếu, ngân sách form là hard cap giá tour/người lớn. Xem [flow mới và typed answers](examples/backend-personalized-v2.md), [nghiệm thu](docs/archive/backend-personalized-verification.md). `uv run tour-backend audit-supabase` đọc catalog và xuất báo cáo chất lượng có giới hạn; không cập nhật rows hoặc tạo dữ liệu tour.
 
-Sau comparison, v2 có phân tích nếu bỏ/nới điều kiện: đọc snapshot rộng, giữ hard/soft và AND/OR, đo lựa chọn/thứ hạng thay đổi, công khai bằng chứng và tỷ lệ có mẫu số. Kịch bản tạo proposal để review; chưa tự đổi nhu cầu. [Hướng dẫn test](examples/backend-what-if-v2.md), [policy](docs/what-if-analysis.md), [kết quả kiểm chứng](docs/backend-what-if-verification.md).
+Sau comparison, v2 có phân tích nếu bỏ/nới điều kiện: đọc snapshot rộng, giữ hard/soft và AND/OR, đo lựa chọn/thứ hạng thay đổi, công khai bằng chứng và tỷ lệ có mẫu số. Kịch bản tạo proposal để review; chưa tự đổi nhu cầu. [Hướng dẫn test](examples/backend-what-if-v2.md), [policy](docs/what-if-analysis.md), [kết quả kiểm chứng](docs/archive/backend-what-if-verification.md).
 
 - [Hướng dẫn frontend, payload và cấu hình](examples/README.md)
 - [Runtime, lệnh kiểm tra và giới hạn](docs/backend-runtime.md)
@@ -104,4 +102,4 @@ Gọi NIM thật (tách khỏi tests offline): `uv run tour-backend probe-nim`; 
 
 Crawler chuẩn duy nhất là `src/ingest` (3 profile audit, Supabase ~1200 tour live): survey agent vẽ map → discover (sitemap/search_pages) → batch → audit tay → publish. Chạy `uv run python -m ingest.run` (all sources) hoặc lẻ từng bước ở mục ingest phía trên; chi tiết ở `src/ingest/README.md`. Browser flow cần `uv sync --extra browser`.
 
-HTTP crawler giữ [contract v1](docs/crawler-contract.md); Supabase có [reader/adapter v2](src/data_access/supabase/README.md). Không cần bulk backfill proof: crawler cần làm rõ price qualifiers/cadence và các field mơ hồ; quote bổ sung có chọn lọc. Backend chưa tự đặt TTL hoặc gọi live crawler khi URL vắng trong kho. [Hướng dẫn cấu hình](examples/backend-catalog-validation.md), [nghiệm thu hiện hành](docs/backend-catalog-validation-verification.md); [baseline trước policy mới](docs/supabase-tour-integration-plan.md).
+HTTP crawler giữ [contract v1](docs/crawler-contract.md); Supabase có [reader/adapter v2](src/data_access/supabase/README.md). Không cần bulk backfill proof: crawler cần làm rõ price qualifiers/cadence và các field mơ hồ; quote bổ sung có chọn lọc. Backend chưa tự đặt TTL hoặc gọi live crawler khi URL vắng trong kho. [Hướng dẫn cấu hình](examples/backend-catalog-validation.md), [nghiệm thu hiện hành](docs/archive/backend-catalog-validation-verification.md); [baseline trước policy mới](docs/supabase-tour-integration-plan.md).

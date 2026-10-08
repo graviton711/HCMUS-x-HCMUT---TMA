@@ -68,4 +68,4 @@ AI có thể giúp hiểu yêu cầu ngôn ngữ tự nhiên và trình bày so 
 
 ## Phạm vi tài liệu liên quan
 
-Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Kiến trúc mục tiêu và wireframe đã chốt; công việc frontend ở [frontend-plan.md](frontend-plan.md), backend ở [backend-plan.md](backend-plan.md). Backend v1 và tourcrawl đã có code riêng; việc nối hai phần và frontend được theo dõi ở [frontend-crawler-integration.md](frontend-crawler-integration.md).
+Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Kiến trúc mục tiêu và wireframe đã chốt; công việc frontend ở [frontend-plan.md](frontend-plan.md), backend ở [backend-plan.md](archive/backend-plan.md). Backend v1 và tourcrawl đã có code riêng; việc nối hai phần và frontend được theo dõi ở [frontend-crawler-integration.md](frontend-crawler-integration.md).

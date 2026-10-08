@@ -1,6 +1,6 @@
 # Nghiệm thu catalog validation — 08/10/2026
 
-Backend trên `backend`, theo [policy](catalog-validation-policy.md). Supabase chỉ đọc, test API live dùng SQLite `:memory:`. Không sửa schema/rows/RLS, frontend, credentials hoặc commit/push. `.env` local bật đúng ba domain catalog hiện có; code default allowlist vẫn rỗng. TTL volatile giữ rỗng vì nhóm chưa chốt cadence.
+Backend trên `backend`, theo [policy](../catalog-validation-policy.md). Supabase chỉ đọc, test API live dùng SQLite `:memory:`. Không sửa schema/rows/RLS, frontend, credentials hoặc commit/push. `.env` local bật đúng ba domain catalog hiện có; code default allowlist vẫn rỗng. TTL volatile giữ rỗng vì nhóm chưa chốt cadence.
 
 ## Đã triển khai
 
@@ -31,4 +31,4 @@ Kho mới đã có một số record Hải Phòng, nên kết luận “không c
 3. Làm rõ phương tiện chính, loại tour, ngày về và số chỗ nếu nguồn có. Không suy từ mixed/available/duration một cách ngầm định.
 4. Frontend chỉ cần nhận enum catalog_validated và nhãn “Dữ liệu crawler đã qua kiểm tra”, đọc reason_code và link nguồn; chưa sửa frontend trong đợt này.
 
-Khởi động/test: [hướng dẫn](../examples/backend-catalog-validation.md).
+Khởi động/test: [hướng dẫn](../../examples/backend-catalog-validation.md).

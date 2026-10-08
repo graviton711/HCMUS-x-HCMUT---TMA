@@ -2,7 +2,7 @@
 
 Chạy từ repo root: `uv sync`, `uv run tour-backend serve`; restart server sau sửa. Dùng `/docs`, tạo session và Authorize bằng token như [walkthrough v2](backend-v2.md). Không nhập IDs minh họa như IDs thật.
 
-[Kết quả đã chạy và giới hạn](../docs/backend-personalized-verification.md): 358 offline tests; hai input thật + follow-up minh họa đã đi qua NIM/Supabase. Comparison thành công vẫn có thể không có recommendation vì catalog thiếu proof/freshness.
+[Kết quả đã chạy và giới hạn](../docs/archive/backend-personalized-verification.md): 358 offline tests; hai input thật + follow-up minh họa đã đi qua NIM/Supabase. Comparison thành công vẫn có thể không có recommendation vì catalog thiếu proof/freshness.
 
 ## 1. Đọc contract mới
 

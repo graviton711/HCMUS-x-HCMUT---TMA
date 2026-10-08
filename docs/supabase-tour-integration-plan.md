@@ -89,4 +89,4 @@ Acquisition chuyển sang catalog sẵn có theo yêu cầu user. Thực hiện 
 Field proofs/price qualifiers/cadence và dữ liệu provider/origin khác vẫn cần crawler bổ sung; freshness chưa tự được đặt. URL-only còn usable để xem/đối chiếu raw data, không phải chứng minh tour phù hợp hoặc giá cuối cùng.
 # Policy hiện hành và baseline lịch sử
 
-[catalog-validation-v1](catalog-validation-policy.md) thay yêu cầu proof từng field bằng nguồn opt-in + validation; v1 giữ nguyên, Supabase chỉ đọc. [Nghiệm thu hiện hành](backend-catalog-validation-verification.md). Các số liệu/verification và kế hoạch bên dưới lưu baseline trước policy mới, không mô tả counts hay quyền trust hiện tại.
+[catalog-validation-v1](catalog-validation-policy.md) thay yêu cầu proof từng field bằng nguồn opt-in + validation; v1 giữ nguyên, Supabase chỉ đọc. [Nghiệm thu hiện hành](archive/backend-catalog-validation-verification.md). Các số liệu/verification và kế hoạch bên dưới lưu baseline trước policy mới, không mô tả counts hay quyền trust hiện tại.

@@ -4,7 +4,7 @@ Real Supabase catalog: use API **v2** and [this walkthrough](backend-supabase-v2
 
 Backend v2: [request walkthrough](backend-v2.md), [runtime/limitations](../docs/backend-v2-runtime.md), [generated schemas](../contracts/v2/). The v1 walkthrough below remains valid. `protocol-v2/` contains design fixtures, not server-generated responses.
 
-Structured hard filter → per-offer pool → semantic assessment → deterministic ranking: [new flow and test guide](backend-retrieval-semantic-v2.md), [verification results](../docs/backend-retrieval-assessment-results.md).
+Structured hard filter → per-offer pool → semantic assessment → deterministic ranking: [new flow and test guide](backend-retrieval-semantic-v2.md), [verification results](../docs/archive/backend-retrieval-assessment-results.md).
 
 Five core inputs across form/text/edits: [personalized walkthrough](backend-personalized-v2.md). `uv run python examples/check-personalized-v2.py` explicitly calls real NIM and the configured Supabase reader, uses isolated in-memory application SQLite, and saves public responses under ignored `data/live-tests/`. It tests the original Japan/Tet inputs, then supplies **synthetic** adult/budget/year/window/route answers for Tet. It does not use a running server, change catalog rows, or save session tokens. Prerequisites: existing root `.env`, `DATA_PROVIDER=supabase`, valid NIM/catalog credentials. Technical failures return a nonzero exit code; recommendations still depend on catalog proof/freshness.
 

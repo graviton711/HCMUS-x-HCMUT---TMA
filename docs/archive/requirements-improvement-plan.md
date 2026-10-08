@@ -1,6 +1,6 @@
 # Cải thiện extraction nhu cầu tour
 
-Trạng thái: đã implement phạm vi semantic v2 trên `feature/minh-phu`, kiểm chứng ngày 08/10/2026. Baseline và input ở [ca Tết](requirements-case-tet.md), gold rộng/kết quả ở [requirements-evaluation](requirements-evaluation.md). Contract ở [semantic runtime](requirements-semantics.md), [hướng dẫn test](../examples/backend-semantic-v2.md).
+Trạng thái: đã implement phạm vi semantic v2 trên `feature/minh-phu`, kiểm chứng ngày 08/10/2026. Baseline và input ở [ca Tết](requirements-case-tet.md), gold rộng/kết quả ở [requirements-evaluation](requirements-evaluation.md). Contract ở [semantic runtime](../requirements-semantics.md), [hướng dẫn test](../../examples/backend-semantic-v2.md).
 
 ## Những điểm user đã chốt
 
