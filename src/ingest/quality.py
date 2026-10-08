@@ -218,6 +218,40 @@ def verify_record(record: dict, raw: dict, html: str) -> tuple[str, list[str]]:
     return "partial", missing
 
 
+OFFER_KEY_MAP = {
+    "departureDate": "departure_date",
+    "salePrice": "price",
+    "tourCode": "tour_code",
+    "meetingPlace": "pickup_point",
+    "hotelName": "hotel_location",
+}
+
+OFFER_SORT_KEYS = ("departure_date", "price")
+
+
+def normalize_offer(dep: dict) -> dict:
+    """Map browser camelCase to the contract snake_case; unknown keys pass through."""
+    if not isinstance(dep, dict):
+        return dep
+    out: dict = {}
+    for key, value in dep.items():
+        out[OFFER_KEY_MAP.get(key, key)] = value
+    return out
+
+
+def sort_offers(offers: list) -> list:
+    """Deterministic Runner ordering so profiles never sort in `clean` (no lambda)."""
+    if not isinstance(offers, list):
+        return offers
+    try:
+        return sorted(offers, key=lambda d: (
+            str(d.get("departure_date", "")) if isinstance(d, dict) else "",
+            d.get("price", 0) if isinstance(d, dict) and isinstance(d.get("price"), (int, float)) else 0,
+        ))
+    except TypeError:
+        return offers
+
+
 def departure_evidence(dep: dict, context: str) -> str:
     """Spot-check one departure: key decision values verbatim in context.
 
@@ -226,7 +260,8 @@ def departure_evidence(dep: dict, context: str) -> str:
     """
     context_norm = normalize(context)
     checks = []
-    for name in ("tourCode", "salePrice", "price", "departureDate", "meetingPlace"):
+    for name in ("tour_code", "tourCode", "price", "salePrice",
+                 "departure_date", "departureDate", "pickup_point", "meetingPlace"):
         value = dep.get(name)
         if value is None or value == "":
             continue

@@ -44,3 +44,13 @@ def test_run_chain_skip_survey_and_limit(monkeypatch):
     assert survey.calls == []
     assert pipeline.calls[0] == ["--discover", "--profile", "s", "--limit", "5"]
     assert pipeline.calls[1] == ["--batch", "--profile", "s", "--limit", "5"]
+
+
+def test_run_chain_all_sources_without_flag(monkeypatch):
+    survey, pipeline = _patch(monkeypatch)
+    survey.list_sources = lambda: ["dulichviet", "vietravel", "saigontourist"]
+    assert run_mod.main([]) == 0
+    assert [c[1] for c in survey.calls] == ["dulichviet", "vietravel", "saigontourist"]
+    assert survey.calls[0] == ["--source", "dulichviet", "--promote"]
+    stepped = [c for c in pipeline.calls if c[0] == "--discover"]
+    assert [c[2] for c in stepped] == ["dulichviet", "vietravel", "saigontourist"]

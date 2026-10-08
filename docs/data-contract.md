@@ -180,6 +180,6 @@ Response:
 }
 ```
 
-## Ngoài phạm vi contract
+## Ghi chú field
 
-Đã cắt khỏi bộ field chuẩn vì không tạo giá trị so sánh: `tour_code` (user dùng `url` để xem trực tiếp), `route` dạng string gộp, `transport` tách riêng, license claims ép buộc.
+`tour_code` dùng `url` để xem trực tiếp khi hiển thị, nhưng vẫn giữ trong `Offer` khi nguồn công bố để đối chiếu đặt chỗ. `route` lưu dạng list có thứ tự (không dùng string gộp). `transport` là enum chuẩn. `license_claims` giữ ở `Provider` dạng tự khai báo, không dùng làm bằng chứng xác minh.

@@ -13,7 +13,7 @@ flowchart LR
     R --> U
 ```
 
-Đây là kiến trúc mục tiêu; repo hiện chưa có implementation, các tài liệu dưới đây là bản review.
+Đây là kiến trúc mục tiêu; tầng ingest đã implement (`src/ingest` + Supabase tour), UI/API/compare theo sơ đồ vẫn là mục tiêu, các tài liệu dưới đây là bản review.
 
 - [Proposal và phân tích bài toán](docs/idea.md)
 - [Kiến trúc hệ thống](docs/system-architecture.md)
@@ -34,6 +34,8 @@ uv run ruff check .
 uv run python -m ingest.run --source <source>
 ```
 
+Bỏ `--source`/`--profile` nghĩa là chạy tất cả (`sources-mvp.csv` / `configs/profiles/`); URL lẻ không kèm profile thì suy ra từ origin.
+
 Chạy lẻ từng bước khi cần:
 
 ```powershell
@@ -44,7 +46,7 @@ uv run python -m ingest --migrate
 uv run python -m ingest --publish --profile <source>
 ```
 
-Audit (`uv run python -m ingest.audit --profile <source>`) không nằm trong chain — chỉ chạy tay khi đổi profile hoặc thêm nguồn mới.
+Audit (`uv run python -m ingest.audit --profile <source>`) không nằm trong chain — chỉ chạy tay khi đổi profile hoặc thêm nguồn mới. `--output`/`--out-dir`/`--batch <csv>`/`--publish <dir>`/audit `--urls`/`--out-dir` đi với đúng một source; chạy all thì dùng đường dẫn mặc định theo từng source.
 
 `<source>` là tên trong cột source của `configs/sources-mvp.csv`.
 

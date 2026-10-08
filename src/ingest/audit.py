@@ -115,17 +115,52 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(prog="ingest-audit",
                                      description="Score a profile on holdout tour URLs.")
-    parser.add_argument("--profile", "-p", required=True, help="profile name or YAML path")
+    parser.add_argument("--profile", "-p", default=None,
+                        help="profile name or YAML path (default: all profiles)")
     parser.add_argument("--urls", type=Path, default=None,
                         help="file with one tour URL per line "
-                             "(default: url column of <output.dir>/<source>/tours.csv)")
+                             "(default: url column of <output.dir>/<source>/tours.csv; "
+                             "needs a single --profile)")
     parser.add_argument("--min-evidence", type=float, default=None,
                         help="minimum verified fraction (default: audit.min_evidence in settings)")
-    parser.add_argument("--out-dir", type=Path, default=None, help="detail JSON directory")
+    parser.add_argument("--out-dir", type=Path, default=None,
+                        help="detail JSON directory (needs a single --profile)")
     args = parser.parse_args(argv)
     try:
         settings = load_settings()
-        candidate = Path(args.profile)
+    except (ValueError, RuntimeError, OSError) as exc:
+        print(f"Invalid config: {exc}", file=sys.stderr)
+        return 2
+    if args.profile is None:
+        from .pipeline import list_profiles
+
+        try:
+            targets = list_profiles()
+        except (ValueError, OSError) as exc:
+            print(f"Invalid config: {exc}", file=sys.stderr)
+            return 2
+        if args.urls is not None or args.out_dir is not None:
+            print("--urls/--out-dir need a single --profile; rerun per profile.",
+                  file=sys.stderr)
+            return 2
+    else:
+        targets = [args.profile]
+    if not targets:
+        print("No profiles in configs/profiles/; survey a source first.", file=sys.stderr)
+        return 2
+    worst = 0
+    for target in targets:
+        if len(targets) > 1:
+            print(f"=== audit: {target} ===", flush=True)
+        code = _audit_one(args, settings, target)
+        if code != 0:
+            worst = worst or code
+    return worst
+
+
+def _audit_one(args: argparse.Namespace, settings: dict, target: str) -> int:
+    try:
+        candidate = Path(target)
         if candidate.exists():
             import yaml
 
@@ -134,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError(f"not a profile YAML: {candidate}")
             profile = data
         else:
-            profile = load_profile(args.profile)
+            profile = load_profile(target)
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"Invalid config: {exc}", file=sys.stderr)
         return 2
@@ -142,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         urls = [line.strip() for line in Path(args.urls).read_text(encoding="utf-8").splitlines()
                 if line.strip() and not line.strip().startswith("#")]
     else:
-        source = str(profile.get("name") or Path(args.profile).stem)
+        source = str(profile.get("name") or Path(target).stem)
         default_csv = _source_dir(settings, source) / "tours.csv"
         if not default_csv.exists():
             print(f"No urls: {default_csv} not found; crawl first or pass --urls.",

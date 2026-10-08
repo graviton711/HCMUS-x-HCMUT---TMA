@@ -4,7 +4,7 @@ Bài toán gốc ở `idea.md` (không sửa). Demo Day 17/10/2026.
 
 ## Phạm vi
 
-- Nguồn: 3–5 site lữ hành, bắt đầu từ `dulichviet`. Thêm site mới chỉ bằng `python -m ingest.survey --promote` kèm selftest PASS; cấm parser viết tay per-site ngoài profile YAML.
+- Nguồn: 3–5 site lữ hành, bắt đầu từ `dulichviet`. Thêm site mới chỉ bằng `python -m ingest.survey --source <source> --promote` kèm selftest PASS và `audit` PASS; cấm parser viết tay per-site ngoài profile YAML, cấm sửa profile tay (resurvey để tái sinh).
 - Demo: 1 tuyến khóa cứng (Đà Nẵng 4 ngày) chạy canned data. Live crawl là đường phụ — fail thì fallback canned, không fail demo.
 - Không điểm số bí mật: mọi thứ tự hiển thị đều kèm lý do tính bằng code từ field có nguồn. Không "học preference", chỉ lưu lựa chọn đã chốt. Không nhận thời gian thực.
 

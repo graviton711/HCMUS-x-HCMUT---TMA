@@ -27,7 +27,8 @@ from . import survey as survey_mod
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the full ingest chain for one source.")
-    parser.add_argument("--source", required=True, help="short name in configs/sources-mvp.csv")
+    parser.add_argument("--source", default=None,
+                        help="short name in configs/sources-mvp.csv (default: all sources)")
     parser.add_argument("--limit", type=int, default=0,
                         help="max tours through discover+batch (0 = all)")
     parser.add_argument("--skip-survey", action="store_true",
@@ -39,15 +40,40 @@ def main(argv: Sequence[str] | None = None) -> int:
     if isinstance(sys.stdout, io.TextIOWrapper):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = _parse_args(argv)
-    limit = ["--limit", str(args.limit)] if args.limit > 0 else []
+    if args.source:
+        sources = [args.source]
+    else:
+        try:
+            sources = survey_mod.list_sources()
+        except ValueError as exc:
+            print(f"Invalid source: {exc}", file=sys.stderr)
+            return 2
+        if not sources:
+            print("No sources in configs/sources-mvp.csv.", file=sys.stderr)
+            return 2
+    worst = 0
+    for source in sources:
+        if len(sources) > 1:
+            print(f"=== run: {source} ===", flush=True)
+        code = _run_source(source, args.limit, args.skip_survey)
+        if code != 0:
+            print(f"run {source} stopped (exit {code})", file=sys.stderr)
+            worst = worst or code
+    if worst == 0:
+        print("run COMPLETE", flush=True)
+    return worst
+
+
+def _run_source(source: str, limit: int, skip_survey: bool) -> int:
+    limited = ["--limit", str(limit)] if limit > 0 else []
     steps: list[tuple[str, list[str]]] = []
-    if not args.skip_survey:
-        steps.append(("survey", ["--source", args.source, "--promote"]))
+    if not skip_survey:
+        steps.append(("survey", ["--source", source, "--promote"]))
     steps.extend([
-        ("discover", ["--discover", "--profile", args.source, *limit]),
-        ("batch", ["--batch", "--profile", args.source, *limit]),
+        ("discover", ["--discover", "--profile", source, *limited]),
+        ("batch", ["--batch", "--profile", source, *limited]),
         ("migrate", ["--migrate"]),
-        ("publish", ["--publish", "--profile", args.source]),
+        ("publish", ["--publish", "--profile", source]),
     ])
     runners = {"survey": survey_mod.main, "discover": pipeline_mod.main,
                "batch": pipeline_mod.main,

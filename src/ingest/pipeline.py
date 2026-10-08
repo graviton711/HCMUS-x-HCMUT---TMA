@@ -12,13 +12,13 @@ import hashlib
 import io
 import json
 import os
+import queue
 import re
 import sys
 import threading
 import time
 import xml.etree.ElementTree as ET
-from collections.abc import Callable, Sequence
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable, Generator, Sequence
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -231,34 +231,35 @@ def search_page_urls(fetcher: SafeFetcher, discovery: dict,
     pages = _listing_max_page(first, page_param, cap)
     log.info("search pages: walking %d pages", pages)
     width = 1 if workers <= 1 else max(2, workers * 2)
-    pool = ThreadPoolExecutor(max_workers=max(1, workers))
-    try:
-        for start in range(2, pages + 1, width):
-            chunk = range(start, min(start + width, pages + 1))
-            futures = {page: pool.submit(_fetch_listing_page, page, entry, page_param,
-                                         per_page_param, per_page, attempts,
-                                         fetcher, fetcher_factory)
-                       for page in chunk}
-            stopped = False
-            for page in chunk:
-                try:
-                    body = futures[page].result()
-                except Exception as exc:
-                    log.warning("search page %d failed %s", page, exc)
-                    continue
-                if body is None:
-                    continue
-                fresh = harvest(body)
-                if on_page is not None:
-                    on_page(page, fresh)
-                if limit > 0 and len(seen) >= limit:
-                    stopped = True
-                    break
-            if stopped:
-                pool.shutdown(cancel_futures=True)
+    for start in range(2, pages + 1, width):
+        chunk = list(range(start, min(start + width, pages + 1)))
+        wave_stop = threading.Event()
+        drain = _map_ordered(
+            lambda page, _e=entry, _pp=page_param, _ppp=per_page_param,
+            _n=per_page, _a=attempts, _f=fetcher, _ff=fetcher_factory:
+            _fetch_listing_page(page, _e, _pp, _ppp, _n, _a, _f, _ff),
+            chunk, workers, wave_stop)
+        stopped = False
+        for index, outcome in drain:
+            page = chunk[index]
+            if isinstance(outcome, BaseException):
+                if not isinstance(outcome, Exception):
+                    drain.close()
+                    raise outcome
+                log.warning("search page %d failed %s", page, outcome)
+                continue
+            body = outcome
+            if body is None:
+                continue
+            fresh = harvest(body)
+            if on_page is not None:
+                on_page(page, fresh)
+            if limit > 0 and len(seen) >= limit:
+                stopped = True
                 break
-    finally:
-        pool.shutdown(wait=True, cancel_futures=True)
+        drain.close()
+        if stopped:
+            break
     ordered = list(seen)[:limit] if limit > 0 else list(seen)
     log.info("search pages: %d unique tours from %d raw links over %d pages",
              len(ordered), raw, pages)
@@ -297,6 +298,64 @@ def _read_done(path: Path) -> set[str]:
     with path.open(encoding="utf-8-sig") as handle:
         return {row["url"] for row in csv.DictReader(handle)
                 if row.get("url") and row.get("status") not in (FETCH_FAIL, BLOCKED)}
+
+
+def _map_ordered(func: Callable, items: Sequence, workers: int,
+                 stop: threading.Event) -> Generator:
+    """Run func(item) on daemon threads; yield (index, outcome) in submit order.
+
+    Threads are daemon so Ctrl+C (FastExit/KeyboardInterrupt via run_cli)
+    returns within one poll tick (~0.2s) instead of waiting for in-flight
+    network calls; the caller must flush its own progress (CSV/_state) on
+    early exit. func exceptions arrive as values for the caller to handle.
+    Breaking out of the iteration stops the pool.
+    """
+    inbox: queue.Queue = queue.Queue()
+    outbox: queue.Queue = queue.Queue()
+    jobs = list(items)
+    for index, item in enumerate(jobs):
+        inbox.put((index, item))
+    for _ in range(max(1, workers)):
+        inbox.put(None)
+
+    def _worker() -> None:
+        while not stop.is_set():
+            try:
+                job = inbox.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            try:
+                if job is None:
+                    return
+                index, item = job
+                try:
+                    outbox.put((index, func(item)))
+                except BaseException as exc:  # never strand the ordered drain
+                    outbox.put((index, exc))
+            finally:
+                inbox.task_done()
+
+    for number in range(max(1, workers)):
+        thread = threading.Thread(target=_worker, name=f"ingest-pool-{number}", daemon=True)
+        thread.start()
+    try:
+        buffered: dict[int, object] = {}
+        next_index = 0
+        yielded = 0
+        while yielded < len(jobs):
+            if stop.is_set():
+                return
+            try:
+                index, outcome = outbox.get(timeout=0.2)
+            except queue.Empty:
+                continue
+            buffered[index] = outcome
+            while next_index in buffered:
+                yield next_index, buffered.pop(next_index)
+                next_index += 1
+                yielded += 1
+    finally:
+        stop.set()
 
 
 def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
@@ -417,6 +476,8 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
                                        int(clean_cfg.get("min_visible_chars", 40)))
                       for dep in unique]
             unique, shared = quality.dedupe_departures(unique)
+            unique = [quality.normalize_offer(dep) for dep in unique]
+            unique = quality.sort_offers(unique)
             context = rendered_text + "\n" + merged["page_prose"] + "\n" + json.dumps(
                 unique, ensure_ascii=False)
             for dep in unique:
@@ -438,7 +499,9 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     slug = re.sub(r"[^a-z0-9]+", "-", page.url.lower()).strip("-")[:50]
     digest = hashlib.sha256(page.url.encode("utf-8")).hexdigest()[:12]
     detail_path = out_dir / f"tour_{slug}-{digest}.json"
-    detail_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp_path = detail_path.with_name(detail_path.name + ".tmp")
+    tmp_path.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp_path, detail_path)
 
     departures = (merged["departure_schedule"] or {}).get("departures", [])
     notes = (merged["departure_schedule"] or {}).get("notes", {})
@@ -537,67 +600,85 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
             writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
             if new_file:
                 writer.writeheader()
-            for index, url in enumerate(todo, 1):
-                log.info("tour %d/%d %s", index, len(todo), url)
-                try:
-                    row = run_tour(url, profile, settings, out_dir, robots_cache,
-                                   state.get(url))
-                except Exception as exc:
-                    row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
-                if "_state_entry" in row:
-                    state[url] = row.pop("_state_entry")
-                if row.get("detail_file"):
-                    detail_paths.append(row["detail_file"])
-                writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
-                handle.flush()
-                if index % 10 == 0:
-                    _save_state(state_path, state)
-                if row.get("status") in (FETCH_FAIL, BLOCKED):
-                    fails += 1
-                    if fails >= max_fails:
-                        log.error("failure budget exhausted (%d)", fails)
+            try:
+                for index, url in enumerate(todo, 1):
+                    log.info("tour %d/%d %s", index, len(todo), url)
+                    try:
+                        row = run_tour(url, profile, settings, out_dir, robots_cache,
+                                       state.get(url))
+                    except Exception as exc:
+                        row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
+                    if "_state_entry" in row:
+                        state[url] = row.pop("_state_entry")
+                    if row.get("detail_file"):
+                        detail_paths.append(row["detail_file"])
+                    writer.writerow({k: row.get(k, "") for k in CSV_COLUMNS})
+                    handle.flush()
+                    if index % 10 == 0:
                         _save_state(state_path, state)
-                        return 1
-                else:
-                    fails = 0
-                if index < len(todo):
-                    time.sleep(gap)
+                    if row.get("status") in (FETCH_FAIL, BLOCKED):
+                        fails += 1
+                        if fails >= max_fails:
+                            log.error("failure budget exhausted (%d)", fails)
+                            _save_state(state_path, state)
+                            return 1
+                    else:
+                        fails = 0
+                    if index < len(todo):
+                        time.sleep(gap)
+            except BaseException:
+                _save_state(state_path, state)
+                raise
         _save_state(state_path, state)
         _write_quality(settings, profile, detail_paths)
         log.info("batch done: wrote %s", output)
         return 0
 
     _prime_robots_cache(todo, settings, robots_cache)
-    origin_locks: dict[str, threading.Lock] = {}
-    locks_guard = threading.Lock()
+    polite_gap = max(float(batch_cfg.get("delay_s", 1.0)),
+                     float(settings.get("fetch", {}).get("delay_s", 1.0)))
+    origin_next: dict[str, float] = {}
+    polite_guard = threading.Lock()
+
+    def _polite_wait(origin: str) -> None:
+        """Space request starts per origin; parse stays parallel.
+
+        The old per-origin mutex held the whole tour (fetch+parse+sleep),
+        serializing single-source batches to 1 worker. Spacing only the
+        start keeps the politeness knob while letting workers overlap.
+        """
+        wait_for = 0.0
+        now = time.monotonic()
+        with polite_guard:
+            start_at = max(now, origin_next.get(origin, now))
+            origin_next[origin] = start_at + polite_gap
+            wait_for = start_at - now
+        if wait_for > 0:
+            time.sleep(wait_for)
 
     def crawl_one(url: str) -> dict:
-        origin = (urlsplit(url).hostname or "").lower()
-        with locks_guard:
-            lock = origin_locks.setdefault(origin, threading.Lock())
-        with lock:
-            try:
-                row = run_tour(url, profile, settings, out_dir, robots_cache,
-                               state.get(url))
-            except Exception as exc:
-                row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
-            time.sleep(gap)
-            return row
+        _polite_wait((urlsplit(url).hostname or "").lower())
+        try:
+            row = run_tour(url, profile, settings, out_dir, robots_cache,
+                           state.get(url))
+        except Exception as exc:
+            row = {"url": url, "status": FETCH_FAIL, "error": f"{type(exc).__name__}"}
+        return row
 
     with output.open("a", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
         if new_file:
             writer.writeheader()
-        pool = ThreadPoolExecutor(max_workers=workers)
+        stop = threading.Event()
+        drain = _map_ordered(crawl_one, todo, workers, stop)
         try:
-            futures = [pool.submit(crawl_one, url) for url in todo]
-            for index, (url, future) in enumerate(zip(todo, futures, strict=True), 1):
+            for position, outcome in drain:
+                url = todo[position]
+                index = position + 1
                 log.info("tour %d/%d %s", index, len(todo), url)
-                try:
-                    row = future.result()
-                except BaseException:
-                    pool.shutdown(cancel_futures=True)
-                    raise
+                if isinstance(outcome, BaseException):
+                    raise outcome
+                row = outcome
                 if "_state_entry" in row:
                     state[url] = row.pop("_state_entry")
                 if row.get("detail_file"):
@@ -610,13 +691,17 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                     fails += 1
                     if fails >= max_fails:
                         log.error("failure budget exhausted (%d)", fails)
-                        pool.shutdown(cancel_futures=True)
+                        stop.set()
+                        drain.close()
                         _save_state(state_path, state)
                         return 1
                 else:
                     fails = 0
-        finally:
-            pool.shutdown(cancel_futures=True)
+        except BaseException:
+            stop.set()
+            drain.close()
+            _save_state(state_path, state)
+            raise
     _save_state(state_path, state)
     _write_quality(settings, profile, detail_paths)
     log.info("batch done: wrote %s", output)
@@ -651,7 +736,8 @@ def _load_dotenv() -> None:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="tour-crawl", description="Crawl tour data by source profile.")
     parser.add_argument("url", nargs="?", help="single tour URL")
-    parser.add_argument("--profile", "-p", default="dulichviet", help="source profile name")
+    parser.add_argument("--profile", "-p", default=None,
+                        help="source profile name (default: all profiles, or inferred from URL)")
     parser.add_argument("--batch", nargs="?", const="", default=None, metavar="CSV",
                         help="crawl URLs from a CSV file with a url column "
                              "(default: <output.dir>/<source>/discovered.csv)")
@@ -722,6 +808,38 @@ def _key(*parts: object) -> str:
     return hashlib.sha256(json.dumps(parts, ensure_ascii=False).encode("utf-8")).hexdigest()
 
 
+def _field_meta(record: dict, record_raw: dict, missing: list,
+                tour_url: str, observed_at: str) -> dict:
+    """Per-field wrapper for the contract: flat columns stay for filtering,
+    this JSON keeps {status, raw_value, evidence[]} so UI/audit can trace."""
+    missing_set = set(missing or [])
+    meta: dict = {}
+    for field, value in record.items():
+        if field == "offers":
+            continue
+        empty = value in (None, "", [], {})
+        if empty:
+            status = "not_observed"
+        elif field in missing_set:
+            status = "partial"
+        else:
+            status = "observed"
+        raw = record_raw.get(field, "") if isinstance(record_raw, dict) else ""
+        if isinstance(raw, str) and len(raw) > 500:
+            raw = raw[:500]
+        meta[str(field)] = {
+            "status": status,
+            "raw_value": raw,
+            "evidence": [{
+                "source_url": tour_url,
+                "observed_at": observed_at,
+                "extraction_method": "profile_dsl",
+                "verification_status": "provider_claimed",
+            }],
+        }
+    return meta
+
+
 def publish_snapshot(out_dir: str | Path, profile_name: str,
                      url: str | None = None) -> dict[str, int]:
     """Upsert detail JSONs into providers/tours/offers. Returns row counts."""
@@ -760,19 +878,23 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                     continue
                 tour_url = detail["url"]
                 tour_key = _key("tour", tour_url)
+                observed = detail.get("fetched_at", "")
+                record_raw = detail.get("record_raw") if isinstance(detail.get("record_raw"), dict) else {}
+                record_missing = detail.get("record_missing") or []
+                field_meta = _field_meta(record, record_raw, record_missing, tour_url, observed)
                 cursor.execute(
                     """INSERT INTO tours (record_key, provider_id, url, observed_at,
                            tour_name, departure_city, destinations, route, transport,
                            accommodation, duration_days, duration_nights, price, currency,
                            price_type, departure_pattern, itinerary, inclusions, exclusions,
                            cancellation_policy, surcharges, child_policy,
-                           verification_status, source_url, evidence)
+                           verification_status, source_url, evidence, field_meta)
                        VALUES (%s, %s, %s, %s,
                            %s, %s, %s, %s, %s,
                            %s, %s, %s, %s, %s,
                            %s, %s, %s, %s, %s,
                            %s, %s, %s,
-                           'provider_claimed', %s, %s)
+                           'provider_claimed', %s, %s, %s)
                        ON CONFLICT (record_key) DO UPDATE SET
                            observed_at = EXCLUDED.observed_at, tour_name = EXCLUDED.tour_name,
                            departure_city = EXCLUDED.departure_city, destinations = EXCLUDED.destinations,
@@ -784,6 +906,7 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                            inclusions = EXCLUDED.inclusions, exclusions = EXCLUDED.exclusions,
                            cancellation_policy = EXCLUDED.cancellation_policy, surcharges = EXCLUDED.surcharges,
                            child_policy = EXCLUDED.child_policy, evidence = EXCLUDED.evidence,
+                           field_meta = EXCLUDED.field_meta,
                            updated_at = NOW()
                        RETURNING id""",
                     (tour_key, provider_id, tour_url, detail.get("fetched_at"),
@@ -802,7 +925,8 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                      tour_url,
                      json.dumps({"record_evidence": detail.get("record_evidence", ""),
                                  "record_missing": detail.get("record_missing", []),
-                                 "observed_at": detail.get("fetched_at", "")})),
+                                 "observed_at": detail.get("fetched_at", "")}),
+                     json.dumps(field_meta, ensure_ascii=False)),
                 )
                 fetched = cursor.fetchone()
                 tour_id = fetched[0] if fetched else None
@@ -828,14 +952,15 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                         """INSERT INTO offers (record_key, tour_id, departure_date, price,
                                availability, tour_code, price_by_age, single_supplement,
                                flights, pickup_point, hotel_location, conditions,
-                               observed_at, evidence)
+                               observed_at, evidence, field_meta)
                            VALUES (%s, %s, %s, %s,
                                %s, %s, %s, %s,
                                %s, %s, %s, %s,
-                               %s, %s)
+                               %s, %s, %s)
                            ON CONFLICT (record_key) DO UPDATE SET
                                price = EXCLUDED.price, availability = EXCLUDED.availability,
                                observed_at = EXCLUDED.observed_at, evidence = EXCLUDED.evidence,
+                               field_meta = EXCLUDED.field_meta,
                                updated_at = NOW()""",
                         (offer_key, tour_id, date, price,
                          str(offer.get("availability", "unknown"))[:20] or "unknown",
@@ -846,7 +971,9 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                          str(offer.get("pickup_point", ""))[:500], str(offer.get("hotel_location", ""))[:500],
                          str(offer.get("conditions", ""))[:2000],
                          detail.get("fetched_at"),
-                         json.dumps({"observed_at": detail.get("fetched_at", "")})),
+                         json.dumps({"observed_at": detail.get("fetched_at", "")}),
+                         json.dumps({"source_url": tour_url, "observed_at": observed,
+                                     "verification_status": "provider_claimed"}, ensure_ascii=False)),
                     )
                     counts["offers"] += 1
                 if seen_keys:
@@ -871,18 +998,94 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         settings = load_settings()
-        profile = load_profile(args.profile)
     except (ValueError, RuntimeError, OSError) as exc:
         print(f"Invalid config: {exc}", file=sys.stderr)
         return 2
-    source = str(profile.get("name") or args.profile)
+
+    if args.profile:
+        targets = [args.profile]
+    elif args.url:
+        try:
+            targets = [infer_profile_for_url(args.url)]
+        except ValueError as exc:
+            print(f"Invalid config: {exc}", file=sys.stderr)
+            return 2
+    else:
+        try:
+            targets = list_profiles()
+        except (ValueError, OSError) as exc:
+            print(f"Invalid config: {exc}", file=sys.stderr)
+            return 2
+    if not targets:
+        print("No profiles in configs/profiles/; survey a source first.", file=sys.stderr)
+        return 2
+    if len(targets) > 1 and (args.output or args.out_dir):
+        print("--output/--out-dir need a single --profile; rerun per profile.", file=sys.stderr)
+        return 2
+    if len(targets) > 1 and args.batch is not None and args.batch != "" and args.publish is not None:
+        print("--batch <csv> needs a single --profile; rerun per profile.", file=sys.stderr)
+        return 2
+    if len(targets) > 1 and args.publish not in (None, ""):
+        print("--publish <dir> needs a single --profile; rerun per profile.", file=sys.stderr)
+        return 2
+
+    worst = 0
+    for name in targets:
+        if len(targets) > 1:
+            print(f"=== ingest: {name} ===", flush=True)
+        try:
+            profile = load_profile(name)
+        except (ValueError, RuntimeError, OSError) as exc:
+            print(f"Invalid config: {exc}", file=sys.stderr)
+            return 2
+        code = _run_profile(args, settings, profile, name)
+        if code != 0:
+            print(f"ingest {name} exit {code}", file=sys.stderr)
+            worst = worst or code
+    return worst
+
+
+def list_profiles(profiles_dir: str | Path | None = None) -> list[str]:
+    """All profile names in scope order (default when --profile is omitted)."""
+    from .extract import DEFAULT_PROFILES, _resolve
+
+    root = Path(profiles_dir) if profiles_dir is not None else _resolve(DEFAULT_PROFILES)
+    if not root.is_dir():
+        raise ValueError(f"profiles dir not found: {root}")
+    return sorted(path.stem for path in root.glob("*.yaml"))
+
+
+def infer_profile_for_url(url: str, profiles_dir: str | Path | None = None) -> str:
+    """Profile whose origin matches a single tour URL (www-tolerant)."""
+    from .extract import load_profile
+
+    host = (urlsplit(url).hostname or "").lower()
+    host = host[4:] if host.startswith("www.") else host
+    if not host:
+        raise ValueError(f"not an absolute URL: {url}")
+    hits = []
+    for name in list_profiles(profiles_dir):
+        try:
+            origin = str(load_profile(name, profiles_dir).get("origin", "")).lower()
+        except (ValueError, RuntimeError, OSError):
+            continue
+        origin = origin[4:] if origin.startswith("www.") else origin
+        if origin and host == origin:
+            hits.append(name)
+    if len(hits) != 1:
+        raise ValueError(f"url {url!r} must match exactly one profile (found {hits})")
+    return hits[0]
+
+
+def _run_profile(args: argparse.Namespace, settings: dict, profile: dict, name: str) -> int:
+    source = str(profile.get("name") or name)
     if args.no_browser:
         profile = {**profile, "flows": [flow for flow in profile.get("flows", []) if "browser" not in flow]}
 
     if args.publish is not None:
         publish_dir = (Path(args.publish) if args.publish
                        else _source_dir(settings, source) / "tours")
-        counts = publish_snapshot(publish_dir, args.profile)
+        counts = publish_snapshot(publish_dir, name)
         print(f"published={counts}")
         return 0
 
@@ -928,6 +1131,10 @@ def main(argv: list[str] | None = None) -> int:
                              limit=args.limit,
                              on_page=on_page,
                              fetcher_factory=lambda: make_fetcher(settings))
+        if handed == 0 and urls:
+            capped = urls[: args.limit] if args.limit > 0 else urls
+            _save_discovered(capped, list_path)
+            urls = capped
         print(f"discovered urls: {len(urls)}")
         print(f"discovered list: {list_path}")
         return 0

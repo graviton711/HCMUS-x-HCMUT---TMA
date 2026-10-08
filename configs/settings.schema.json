@@ -10,7 +10,10 @@
         "timeout_s": {"type": "number"},
         "max_bytes": {"type": "integer"},
         "delay_s": {"type": "number"},
-        "user_agent": {"type": "string"}
+        "user_agent": {"type": "string"},
+        "retries": {"type": "integer"},
+        "retry_backoff_s": {"type": "number"},
+        "dns_ttl_s": {"type": "number"}
       },
       "additionalProperties": true
     },

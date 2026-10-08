@@ -324,6 +324,11 @@ def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] |
         for field in deferred:
             row[field] = ""
             raw[field] = ""
+    offers = row.get("offers")
+    if isinstance(offers, list):
+        from .quality import normalize_offer, sort_offers
+
+        row["offers"] = sort_offers([normalize_offer(d) for d in offers])
     if include_raw:
         return row, raw
     return row

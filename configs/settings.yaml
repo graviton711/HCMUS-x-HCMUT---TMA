@@ -3,8 +3,11 @@
 fetch:
   timeout_s: 20
   max_bytes: 2000000
-  delay_s: 1.0
+  delay_s: 0.5
   user_agent: "MLAITourSourceAuditor/0.1"
+  retries: 2
+  retry_backoff_s: 1.0
+  dns_ttl_s: 300
 browser:
   timeout_ms: 60000
   max_tabs: 12
@@ -15,7 +18,7 @@ logging:
   level: "INFO"  # may be overridden by LOG_LEVEL env
 batch:
   max_consecutive_failures: 10
-  delay_s: 1.0
+  delay_s: 0.5
   workers: 8
 sitemap:
   attempts: 2

@@ -647,6 +647,50 @@ def test_compile_keep_is_case_insensitive_regression():
     assert out == {"tourCode": "X1", "departureDate": "2026-10-04", "salePrice": 100}
 
 
+def test_map_ordered_keeps_order_and_stops_early():
+    import threading
+
+    from ingest.pipeline import _map_ordered
+
+    stop = threading.Event()
+    assert list(_map_ordered(lambda u: str(u).upper(), ["b", "a"], 2, stop)) == [
+        (0, "B"), (1, "A")]
+
+    stopped = threading.Event()
+    stopped.set()
+    assert list(_map_ordered(lambda u: u, ["x"], 2, stopped)) == []
+
+    assert list(_map_ordered(lambda u: 1 / 0, ["x"], 1, threading.Event())) == [
+        (0, ZeroDivisionError)] or True
+    outcomes = list(_map_ordered(lambda u: 1 / 0, ["x"], 1, threading.Event()))
+    assert len(outcomes) == 1 and isinstance(outcomes[0][1], ZeroDivisionError)
+
+
+def test_run_batch_saves_state_on_interrupt(tmp_path, monkeypatch):
+    import pytest
+
+    import ingest.pipeline as pipeline_mod
+    from ingest.pipeline import _load_state, run_batch
+
+    def fake_run_tour(url, profile, settings, out_dir, robots_cache=None,
+                      conditional=None):
+        if "boom" in url:
+            raise KeyboardInterrupt()
+        return {"url": url, "status": "ok", "title": "T", "departures": 0,
+                "verified": 0, "notes_keys": "", "error": "",
+                "_state_entry": {"hash": "h", "observed_at": "t",
+                                 "etag": "", "last_modified": ""}}
+
+    monkeypatch.setattr(pipeline_mod, "run_tour", fake_run_tour)
+    out_csv = tmp_path / "out.csv"
+    settings = {"output": {"dir": str(tmp_path / "home")},
+                "batch": {"workers": 2, "delay_s": 0, "max_consecutive_failures": 10}}
+    with pytest.raises(KeyboardInterrupt):
+        run_batch(["https://example.test/1", "https://example.test/boom",
+                   "https://example.test/3"], {}, settings, out_csv, tmp_path / "json")
+    assert "https://example.test/1" in _load_state(tmp_path / "home" / "_state.json")
+
+
 
 
 
@@ -752,4 +796,41 @@ def test_quality_fallback_compare_and_batch_snapshot(tmp_path, monkeypatch):
     snapshot = _json.loads((tmp_path / 'home' / 's' / 'quality.json').read_text(encoding='utf-8'))
     assert snapshot['summary']['tours'] == 1 and snapshot['warnings'] == []
     assert snapshot['observed_at'].endswith('+07:00')
+
+
+def test_list_and_infer_profiles():
+    from ingest.pipeline import infer_profile_for_url, list_profiles
+
+    names = list_profiles()
+    assert {"dulichviet", "vietravel", "saigontourist"} <= set(names)
+    assert infer_profile_for_url("https://travel.com.vn/chuong-trinh/x-pid-1") == "vietravel"
+    assert infer_profile_for_url("https://www.dulichviet.com.vn/du-lich-x") == "dulichviet"
+
+
+def test_infer_profile_rejects_unknown_url():
+    import pytest
+
+    from ingest.pipeline import infer_profile_for_url
+
+    with pytest.raises(ValueError, match="exactly one profile"):
+        infer_profile_for_url("https://unknown.test/tour-1")
+
+
+def test_all_mode_guards_need_single_profile():
+    from ingest import pipeline as pipeline_mod
+
+    assert pipeline_mod.main(["--discover", "--output", "x.csv"]) == 2
+    assert pipeline_mod.main(["--batch", "some.csv"]) == 2
+    assert pipeline_mod.main(["--publish", "some/dir"]) == 2
+    assert pipeline_mod.main(["https://unknown.test/tour-1"]) == 2
+
+
+def test_bare_publish_runs_all_profiles(monkeypatch, tmp_path):
+    import ingest.pipeline as pipeline_mod
+
+    published: list = []
+    monkeypatch.setattr(pipeline_mod, "publish_snapshot",
+                        lambda out_dir, profile: published.append(profile) or {"tours": 0})
+    assert pipeline_mod.main(["--publish"]) == 0
+    assert sorted(published) == ["dulichviet", "saigontourist", "vietravel"]
 

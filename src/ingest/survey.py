@@ -90,7 +90,7 @@ def _save_url(url: str, raw_dir: Path, user_agent: str = USER_AGENT,
 def _agent_env() -> dict[str, str] | None:
     """PATH with the project .venv first, so the agent's `python` is the venv
     (bs4/yaml/playwright ready) and it never pip-installs into system Python."""
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     for bin_dir, exe in ((".venv/Scripts", "python.exe"), (".venv/bin", "python")):
         if (root / bin_dir / exe).exists():
             env = dict(os.environ)
@@ -148,9 +148,21 @@ def resolve_origin(source: str, csv_path: str | Path | None = None) -> str:
     return hits[0]
 
 
+def list_sources(csv_path: str | Path | None = None) -> list[str]:
+    """All source short names in scope order (default when --source is omitted)."""
+    import csv
+
+    target = Path(csv_path or SOURCES_CSV)
+    if not target.exists():
+        raise ValueError(f"sources list not found: {target}")
+    with target.open(encoding="utf-8") as handle:
+        return [row["source"].strip() for row in csv.DictReader(handle) if row.get("source", "").strip()]
+
+
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a site-survey agent.")
-    parser.add_argument("--source", required=True, help="short name, e.g. pys")
+    parser.add_argument("--source", default=None,
+                        help="short name, e.g. pys (default: all sources in configs/sources-mvp.csv)")
     parser.add_argument("--origin", default=None,
                         help="https://example.test/ (default: looked up from configs/sources-mvp.csv)")
     parser.add_argument("--model", default=None,
@@ -193,9 +205,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = _parse_args(argv)
     try:
-        origin = args.origin or resolve_origin(args.source)
+        sources = [args.source] if args.source else list_sources()
     except ValueError as exc:
         print(f"Invalid source: {exc}", file=sys.stderr)
+        return 2
+    if not sources:
+        print("No sources in configs/sources-mvp.csv.", file=sys.stderr)
+        return 2
+    if len(sources) > 1 and (args.origin or args.output):
+        print("--origin/--output need a single --source; rerun per source.", file=sys.stderr)
         return 2
     try:
         from .extract import load_settings
@@ -208,7 +226,24 @@ def main(argv: Sequence[str] | None = None) -> int:
     variant = args.variant or str(survey_cfg.get("variant", VARIANT))
     timeout_min = (args.timeout_min if args.timeout_min is not None
                    else int(survey_cfg.get("timeout_min", 20)))
-    out_dir = args.output or Path("artifacts/agent_surveys") / args.source
+    worst = 0
+    for source in sources:
+        try:
+            origin = args.origin or resolve_origin(source)
+        except ValueError as exc:
+            print(f"Invalid source: {exc}", file=sys.stderr)
+            return 2
+        print(f"=== survey: {source} ===", flush=True)
+        code = _run_one(args, source, origin, settings, model, variant, timeout_min)
+        if code != 0:
+            print(f"survey {source} exit {code}", file=sys.stderr)
+            worst = worst or code
+    return worst
+
+
+def _run_one(args: argparse.Namespace, source: str, origin: str, settings: dict,
+             model: str, variant: str, timeout_min: int) -> int:
+    out_dir = args.output or Path("artifacts/agent_surveys") / source
     out_dir.mkdir(parents=True, exist_ok=True)
     workdir = out_dir / "_work"
     agent_dir = workdir / ".opencode" / "agents"
@@ -266,7 +301,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     print("COMPLETE: profile.yaml, evidence.md, unknowns.md, raw/ all present")
     if args.promote:
-        dest = promote_profile(out_dir, args.source)
+        dest = promote_profile(out_dir, source)
         print(f"promoted={dest}", flush=True)
     return 0
 

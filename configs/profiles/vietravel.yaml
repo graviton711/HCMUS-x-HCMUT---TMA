@@ -1,0 +1,91 @@
+# yaml-language-server: $schema=../profile.schema.json
+origin: travel.com.vn
+render: false
+flows:
+- static
+sitemaps:
+- https://travel.com.vn/chuong-trinh/sitemap.xml
+- https://travel.com.vn/du-lich/sitemap.xml
+tour_url_patterns:
+- /chuong-trinh/
+- -pid-
+discovery:
+  method: sitemap
+  strip_query: true
+  keep_query: [fromDate]
+fields:
+  tour_name:
+    source: json_ld
+    entity: Product
+    path: name
+  departure_city:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: 'research(r''\\"departureName\\":\\"([^\\]+)'', str(val))'
+  destinations:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: '[s.strip().title() for s in refindall(r''\\"label\\":\\"([^\\]+)'', research(r''\\"breadCrumbs\\":\[(.*?)\],\\"pageId'', str(val), flags=re.S)) if s.strip() and s.strip().lower() not in ["trong nước", "nước ngoài", "miền bắc", "miền trung", "miền nam", "miền tây", "miền tây nam bộ", "tây nguyên", "đông nam bộ", "châu á", "châu âu", "châu mỹ", "châu phi", "châu úc", "đông nam á", "đông bắc á", "tour du thuyền", "united states of america"]] or [research(r''\\"listVisitLocation\\":\[\\"([^\\]+)'', str(val)).strip().title()]'
+  route:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: '[s.strip() for t in refindall(r''\\"title\\":\\"([^\\]+)'', str(val)) for s in re.split(r''\s*[–—-]\s*|\s*✈\s*'', t) if s.strip()]'
+  transport:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: '("mixed" if "," in research(r''\\"transport\\":\\"([^\\]+)'', str(val)) else ("flight" if "Máy bay" in research(r''\\"transport\\":\\"([^\\]+)'', str(val)) else ("train" if "Tàu" in research(r''\\"transport\\":\\"([^\\]+)'', str(val)) else ("cruise" if "Du thuyền" in research(r''\\"transport\\":\\"([^\\]+)'', str(val)) else "bus"))))'
+  accommodation:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: '("" if not research(r''\\"hotel\\":\\"([^\\]+)'', str(val)) else ("homestay" if "homestay" in research(r''\\"hotel\\":\\"([^\\]+)'', str(val)).lower() else ("mixed" if "," in research(r''\\"hotel\\":\\"([^\\]+)'', str(val)) else ("5_star" if "5 sao" in research(r''\\"hotel\\":\\"([^\\]+)'', str(val)) else ("4_star" if "4 sao" in research(r''\\"hotel\\":\\"([^\\]+)'', str(val)) else ("3_star" if "3 sao" in research(r''\\"hotel\\":\\"([^\\]+)'', str(val)) else "mixed"))))))'
+  duration_days:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: 'int(research(r''\\"dayStay\\":([0-9]+)'', str(val)) or 0)'
+  duration_nights:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: 'int(research(r''\\"dayStayText\\":\\"\d+N([0-9]+)'', str(val)) or 0)'
+  price:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: 'int(research(r''\\"minPrice\\":([0-9]+)'', str(val)) or 0) or ""'
+  currency:
+    source: json_ld
+    entity: Product
+    path: offers.priceCurrency
+    clean: '"VND" if "vnd" in str(val).lower() or "đ" in str(val).lower() else str(val).strip()'
+  price_type:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: '("from" if research(r''\\"minPrice\\":([0-9]+)'', str(val)) else "contact")'
+  departure_pattern:
+    status: not_observed
+  offers:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: '[]'
+  itinerary:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: '"\n\n".join([n.strip() + ": " + t.strip() + "\n" + re.sub(r''<[^>]+>'', " ", html.unescape(json.loads("\"" + m + "\""))).strip() + "\n" + ("" if d.startswith("$") else re.sub(r''<[^>]+>'', " ", html.unescape(json.loads("\"" + d + "\""))).strip()) for n, t, m, d in zip(refindall(r''\\"name\\":\\"(Ngày [^\\]+)'', str(val)), refindall(r''\\"title\\":\\"([^\\]+)'', str(val)), refindall(r''\\"mealInfor\\":\\"(.*?)\\",\\"description'', str(val), flags=re.S), refindall(r''\\"description\\":\\"(.*?)\\",\\"imageUrl'', str(val), flags=re.S))])'
+  inclusions:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: 're.sub(r''<[^>]+>'', "\n", html.unescape(json.loads("\"" + ("" if research(r''\\"priceIncluded\\":\\"(.*?)\\",\\"priceNotIncluded'', str(val), flags=re.S).startswith("$") else research(r''\\"priceIncluded\\":\\"(.*?)\\",\\"priceNotIncluded'', str(val), flags=re.S)) + "\""))).strip()'
+  exclusions:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: 're.sub(r''<[^>]+>'', "\n", html.unescape(json.loads("\"" + ("" if research(r''\\"priceNotIncluded\\":\\"(.*?)\\",\\"noteChildrenPrice'', str(val), flags=re.S).startswith("$") else research(r''\\"priceNotIncluded\\":\\"(.*?)\\",\\"noteChildrenPrice'', str(val), flags=re.S)) + "\""))).strip()'
+  cancellation_policy:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: '"\n".join([p for p in [re.sub(r''<[^>]+>'', "\n", html.unescape(json.loads("\"" + ("" if research(r''\\"noteTransferCancel\\":\\"(.*?)\\",\\"transferCancelConditions'', str(val), flags=re.S).startswith("$") else research(r''\\"noteTransferCancel\\":\\"(.*?)\\",\\"transferCancelConditions'', str(val), flags=re.S)) + "\""))).strip(), re.sub(r''<[^>]+>'', "\n", html.unescape(json.loads("\"" + ("" if research(r''\\"transferCancelConditions\\":\\"(.*?)\\",\\"holidayCancelConditions'', str(val), flags=re.S).startswith("$") else research(r''\\"transferCancelConditions\\":\\"(.*?)\\",\\"holidayCancelConditions'', str(val), flags=re.S)) + "\""))).strip(), re.sub(r''<[^>]+>'', "\n", html.unescape(json.loads("\"" + ("" if research(r''\\"holidayCancelConditions\\":\\"(.*?)\\",\\"caseOfForceMajeure'', str(val), flags=re.S).startswith("$") else research(r''\\"holidayCancelConditions\\":\\"(.*?)\\",\\"caseOfForceMajeure'', str(val), flags=re.S)) + "\""))).strip(), re.sub(r''<[^>]+>'', "\n", html.unescape(json.loads("\"" + ("" if research(r''\\"caseOfForceMajeure\\":\\"(.*?)\\",\\"contact'', str(val), flags=re.S).startswith("$") else research(r''\\"caseOfForceMajeure\\":\\"(.*?)\\",\\"contact'', str(val), flags=re.S)) + "\""))).strip()] if p])'
+  surcharges:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: '"\n".join([ln.strip() for ln in re.sub(r''<[^>]+>'', "\n", html.unescape(json.loads("\"" + ("" if research(r''\\"priceNotIncluded\\":\\"(.*?)\\",\\"noteChildrenPrice'', str(val), flags=re.S).startswith("$") else research(r''\\"priceNotIncluded\\":\\"(.*?)\\",\\"noteChildrenPrice'', str(val), flags=re.S)) + "\""))).strip().split("\n") if re.search("(?i)(phụ thu|phòng đơn|single|tết|tip|visa|hộ chiếu|ngày lễ|dịp lễ)", ln)])'
+  child_policy:
+    source: css
+    selector: 'script:-soup-contains("tourInfoData")'
+    clean: 're.sub(r''<[^>]+>'', "\n", html.unescape(json.loads("\"" + ("" if research(r''\\"noteChildrenPrice\\":\\"(.*?)\\",\\"paymentConditions'', str(val), flags=re.S).startswith("$") else research(r''\\"noteChildrenPrice\\":\\"(.*?)\\",\\"paymentConditions'', str(val), flags=re.S)) + "\""))).strip()'

@@ -1,16 +1,16 @@
 # ingest — thu thập tour theo profile
 
-Luồng chính 5 bước: danh sách link (sitemap trong `pipeline`) → agent vẽ map (`survey.py`) → crawl hàng loạt (`python -m ingest`, trang tĩnh qua `dsl.py`, site động qua `browser` khi profile khai báo) → CSV sạch → database.
+Luồng chính 5 bước: danh sách link (sitemap trong `pipeline`) → agent vẽ map (`survey.py`) → crawl hàng loạt (`python -m ingest`, trang tĩnh qua `extract.py`, site động qua `browser` khi profile khai báo) → CSV sạch → database.
 
-Tài liệu này đặc tả hợp đồng kỹ thuật giữa Agent khảo sát (`survey.py`) và engine thu thập (`dsl.py` + `pipeline.py`).
+Tài liệu này đặc tả hợp đồng kỹ thuật giữa Agent khảo sát (`survey.py`) và engine thu thập (`extract.py` + `pipeline.py`).
 
-Mọi thông số vận hành (timeout, retry, workers, model survey, `min_evidence`...) nằm ở `configs/settings.yaml` theo `configs/settings.schema.json`; code chỉ giữ fallback, không phải nguồn sự thật.
+Mọi thông số vận hành (timeout, retry, workers, model survey, `min_evidence`...) nằm ở `configs/settings.yaml` theo `configs/settings.schema.json`; code chỉ giữ fallback, không phải nguồn sự thật. Transport dùng connection reuse theo thread + `Accept-Encoding: gzip`, DNS cache `fetch.dns_ttl_s`, retry `fetch.retries` lần với backoff cho lỗi thoáng qua (timeout/reset/5xx/429, không retry lỗi SSL cert hay 4xx).
 
 Mọi timestamp quan sát (`observed_at`, `fetched_at`) đều là giờ Việt Nam (`Asia/Ho_Chi_Minh`, `shared.now_vn_iso`), ISO-8601 kèm offset.
 
 ## 1. Nguyên tắc cốt lõi
 
-* **Agent làm việc khó, Runner làm việc dễ:** Agent (LLM) phân tích DOM, tìm tọa độ chính xác và xuất ra `profile.yaml` thuần dữ liệu máy đọc được. Runner (`dsl.py` trong engine, chạy qua `python -m ingest`) là code cơ học thuần túy — tuyệt đối không suy đoán hay chứa logic heuristic riêng của từng website (nguyên tắc bất biến là "không heuristic per-site").
+* **Agent làm việc khó, Runner làm việc dễ:** Agent (LLM) phân tích DOM, tìm tọa độ chính xác và xuất ra `profile.yaml` thuần dữ liệu máy đọc được. Runner (`extract.py` trong engine, chạy qua `python -m ingest`) là code cơ học thuần túy — tuyệt đối không suy đoán hay chứa logic heuristic riêng của từng website (nguyên tắc bất biến là "không heuristic per-site"). Runner tự sort `offers` theo `(departure_date, price)` và normalize về snake_case nên agent chỉ trích list unsorted, không sort/không `lambda` trong `clean`.
 * **Cấm văn xuôi trong profile:** Profile chỉ chứa selector, path, regex và primitive enum; không chứa câu điều kiện hoặc hướng dẫn bằng tiếng Anh/Việt tự nhiên.
 
 ## 2. Chuẩn Profile DSL (Machine-Readable Contract)
@@ -86,7 +86,7 @@ Agent khảo sát tự chủ quyết định cấu hình render dựa trên bả
 **Quy trình Agent tự quyết định:**
 1. Khảo sát static HTML trước: Tải HTML tĩnh và kiểm tra các trường canonical.
 2. Nếu các trường cốt lõi bị rỗng do client-side rendering:
-   - Chuyển sang flow browser: Dùng `python -m ingest.render` để lấy DOM hoàn chỉnh sau render vào `raw/tour-*.html`.
+   - Chuyển sang flow browser: Dùng `python -m ingest.render` (file thật `render.py`, được copy thành `render_url.py` trong workdir survey) để lấy DOM hoàn chỉnh sau render vào `raw/tour-*.html`.
    - Xác định tọa độ (CSS selector / section / label_sibling) trên DOM đã render.
    - Khai báo `render: true` và `flows: [browser]` trong `profile.yaml`.
 3. Tự kiểm thử (`python -m ingest.extract`): Chạy kiểm thử trên các file đã render trong `raw/` và xác nhận kết quả trên file `.jsonl`.
@@ -112,9 +112,9 @@ discovery:
 
 Quy tắc agent khi khảo sát discovery: xác định SSR hay API/JS (SSR mới dùng `search_pages`; JS thì khai `render: true` + endpoint `api` nếu có); đọc tổng số tour trên trang 1 và link trang cuối để đặt `max_pages`; mô tả hình dạng link (có `?startday=` không) để đặt `strip_query`; self-test trên 2 trang rồi đối chiếu với tập sitemap (nếu có) để chứng minh không sót.
 
-Vận hành `search_pages`: fetch song song theo `batch.workers` (mỗi worker một fetcher/limiter riêng, tốc độ tăng tuyến tính; `fetch.delay_s` là núm lịch sự duy nhất), đi theo đợt để giữ thứ tự trang ổn định; `--limit N` dừng ngay khi đủ N slug (smoke test chỉ tốn trang 1); mỗi đợt ghi nối `discovered.csv` và flush ngay nên ngắt giữa chừng vẫn giữ phần đã liệt kê. Batch crawl cũng lưu `_state.json` định kỳ, không chỉ lúc cuối.
+Vận hành `search_pages`: fetch song song theo `batch.workers` (mỗi worker một fetcher/limiter riêng, tốc độ tăng tuyến tính; `fetch.delay_s` là núm lịch sự duy nhất), đi theo đợt để giữ thứ tự trang ổn định; `--limit N` dừng ngay khi đủ N slug (smoke test chỉ tốn trang 1); mỗi đợt ghi nối `discovered.csv` và flush ngay nên ngắt giữa chừng vẫn giữ phần đã liệt kê. Batch crawl cũng lưu `_state.json` định kỳ, không chỉ lúc cuối. Batch crawl cách request cùng origin bằng start-spacing (`max(batch.delay_s, fetch.delay_s)` giữa các lần bắt đầu fetch) thay vì mutex ôm cả tour, nên parse song song mà vẫn lịch sự.
 
-**Field `offers` (tầng ngày khởi hành cố định):** `list[dict]` — mỗi phần tử `{departure_date: "YYYY-MM-DD", price: int|null, availability: available|sold_out|unknown}`, dựng bằng biểu thức `clean` từ bảng lịch/tab của nguồn. Giá trên lịch khởi hành (nếu có) ưu tiên hơn giá bìa. Site không công bố ngày cố định → `offers: []` + khai báo `departure_pattern`. Site ẩn lịch sau tab động (kiểu Vietravel) → `offers: []` + `status: not_observed` trong `unknowns.md`, không suy đoán.
+**Field `offers` (tầng ngày khởi hành cố định):** `list[dict]` snake_case duy nhất — mỗi phần tử `{departure_date: "YYYY-MM-DD", price: int|null, availability: available|sold_out|unknown}`, dựng bằng biểu thức `clean` từ bảng lịch/tab của nguồn (chỉ trích list unsorted, Runner tự sort theo `(departure_date, price)` và normalize camelCase→snake_case sau capture browser). Giá trên lịch khởi hành (nếu có) ưu tiên hơn giá bìa. Site không công bố ngày cố định → `offers: []` + khai báo `departure_pattern`. Site ẩn lịch sau tab động (kiểu Vietravel) → `offers: []` + `status: not_observed` trong `unknowns.md`, không suy đoán.
 
 ---
 
@@ -123,8 +123,8 @@ Vận hành `search_pages`: fetch song song theo `batch.workers` (mỗi worker m
 | Script | Trách nhiệm | Input | Output |
 |---|---|---|---|
 | `survey.py` (`python -m ingest.survey`) | Điều phối Agent khảo sát domain, tự kiểm thử bằng `ingest.extract` trên tập `raw/` | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
-| `render.py` | Helper render URL động qua Playwright Chromium, xuất HTML ra file; `--capture-net <dir>` ghi thêm mọi JSON response (XHR) vào `<dir>/` + index `network.json` để dò endpoint API | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
-| `pipeline.py` (`python -m ingest`) | Crawl hàng loạt theo profile: trang tĩnh qua `dsl.py`, site động qua `browser` khi profile khai báo flow | Danh sách URL + profile | CSV + JSON + provenance |
+| `render.py` | Helper render URL động qua Playwright Chromium, xuất HTML ra file; `--capture-net <dir>` ghi thêm mọi JSON response (XHR) vào `<dir>/` + index `network.json` để dò endpoint API. File thật là `render.py`, khi survey được copy thành `render_url.py` trong workdir (`survey.py` copy) nên docs agent ghi `render_url.py` | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
+| `pipeline.py` (`python -m ingest`) | Crawl hàng loạt theo profile: trang tĩnh qua `extract.py`, site động qua `browser` khi profile khai báo flow | Danh sách URL + profile | CSV + JSON + provenance |
 | `run.py` (`python -m ingest.run --source <source>`) | Chạy full chuỗi một lệnh: survey (`--promote`) → discover → batch → migrate → publish; dừng ngay ở bước fail đầu tiên. Không audit trong chain (batch đã chấm evidence từng tour; audit chạy tay khi đổi profile/nguồn mới) | source trong `configs/sources-mvp.csv` | DB tour |
 | | `--discover` liệt kê link theo khối `discovery` và lưu `.local/<source>/discovered.csv` cho `--batch`; `--publish` và `audit --urls` mặc định trỏ vào output của batch (`<output.dir>/<source>/tours`, `tours.csv`) | | |
 | Dạng thủ công (ghi đè default): `python -m ingest <tour_url>`, `--batch <csv>`, `--output`, `--out-dir`, `--publish <dir>`, `audit --urls <file>` | | | |
@@ -144,3 +144,4 @@ Mỗi batch ghi `.local/<source>/quality.json`: số tour, giá trung bình, t�
 * **Timing log:** mỗi lần chạy in elapsed của từng giai đoạn (prefetch, agent, tổng) kèm mã trả về của opencode để biết nghẽn ở đâu.
 * **Môi trường dependency:** wrapper đưa `.venv/Scripts` (hoặc `.venv/bin`) lên đầu `PATH` của tiến trình opencode — agent gõ `python` là venv của dự án, có sẵn `bs4`/`pyyaml`/`playwright`, không `pip install` vào Python hệ thống. Agent chỉ được gọi `python`, không gọi `python3` (trên Windows alias này trỏ về Python hệ thống, thiếu dependency). Không tìm thấy `.venv` thì giữ nguyên PATH (agent tự lo như cũ).
 * **Quy tắc UTF-8:** `profile.yaml` phải chứa tiếng Việt verbatim (UTF-8 thuần, cấm `\uXXXX`). Sau khi ghi, agent bắt buộc kiểm tra bằng `yaml.safe_load` và in một field tiếng Việt; nếu ra escape thì ghi lại file.
+* **Ngắt an toàn:** batch/discover chạy daemon pool (`_map_ordered`), drain theo thứ tự với timeout 0.2s; Ctrl+C (FastExit qua `run_cli`, exit 130) lưu CSV/`_state.json` đã flush rồi thoát ngay mà không chờ request đang bay. Detail JSON ghi qua file `.tmp` + `os.replace` nên không corrupt khi ngắt giữa chừng.

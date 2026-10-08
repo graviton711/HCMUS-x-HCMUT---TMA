@@ -54,9 +54,10 @@ def test_mvp_sources_csv_matches_profiles():
 
 
 def test_resolve_origin_reads_mvp_scope_list():
-    from ingest.survey import resolve_origin
+    from ingest.survey import list_sources, resolve_origin
 
     assert resolve_origin('dulichviet') == 'https://dulichviet.com.vn'
+    assert list_sources() == ['dulichviet', 'vietravel', 'saigontourist']
     with pytest.raises(ValueError, match='exactly one row'):
         resolve_origin('khong-ton-tai')
 

@@ -1,0 +1,88 @@
+# yaml-language-server: $schema=../profile.schema.json
+origin: saigontourist.net
+render: false
+flows:
+- static
+sitemaps:
+- https://saigontourist.net/sitemap.xml
+tour_url_patterns:
+- /tour/
+discovery:
+  method: sitemap
+fields:
+  tour_name:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: 'research(r"\\\"item\\\":\{\\\"id\\\":\\\"\d+\\\",\\\"title\\\":\\\"(.+?)\\\"", str(val))'
+  departure_city:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: 'research(r"\\\"start_place\\\":\{\\\"id\\\":\\\"\d+\\\",\\\"name\\\":\\\"(.+?)\\\"", str(val))'
+  destinations:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: 'list(dict.fromkeys([s.strip().title() for s in refindall(r"\\\"destinations\\\":\{\\\"id\\\":\\\"\d+\\\",\\\"name\\\":\\\"(.+?)\\\"", str(val)) if s.strip()]))'
+  route:
+    source: css
+    selector: span:-soup-contains("Hành trình:")
+    clean: '[s.strip() for part in research(r"Hành trình:(.*)", str(val)).split("→") for s in part.split(",") if s.strip()]'
+  transport:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: '("" if not (t := research(r"\\\"transport\\\":\\\"(.+?)\\\"", str(val))) else ("bus" if ("xe" in t.lower() and "máy bay" not in t.lower() and "air" not in t.lower()) else ("cruise" if ("du thuyền" in t or "cruise" in t.lower()) else ("train" if ("tàu hỏa" in t.lower() or "train" in t.lower()) else "flight"))))'
+  accommodation:
+    source: css
+    selector: script:-soup-contains("Giá tour")
+    clean: '("homestay" if "homestay" in str(val).lower() else ("mixed" if (len(set(refindall(r"([2-5])\s*(?:sao|\*)", str(val).lower()))) > 1 or research(r"([2-5])\s*-\s*([2-5])\s*(?:sao|\*)", str(val).lower())) else ({"2": "2_star", "3": "3_star", "4": "4_star", "5": "5_star"}.get(research(r"([2-5])\s*(?:sao|\*)", str(val).lower()), ""))))'
+  duration_days:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: 'int(research(r"\\\"duration_days\\\":(\d+)", str(val)) or 0) or ""'
+  duration_nights:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: '(int(research(r"\\\"duration_nights\\\":(\d+)", str(val))) if research(r"\\\"duration_nights\\\":(\d+)", str(val)) else "")'
+  price:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: 'int(research(r"\\\"min_price\\\":\\\"(\d+)\\\"", str(val)) or 0) or ""'
+  currency:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: '"VND"'
+  price_type:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: '("from" if refindall(r"\\\"start_date\\\":\\\"20\d\d-", str(val)) else "contact")'
+  departure_pattern:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: 'research(r"\\\"highlight_label\\\":\\\"(.+?)\\\"", str(val))'
+  offers:
+    source: css
+    selector: script:-soup-contains("tour_codes")
+    clean: '[{"departure_date": d, "price": int(a), "availability": "sold_out" if st == "0" else "available", "tour_code": c, "price_by_age": {"adult": int(a), "child": int(ch), "infant": int(i)}} | ({"single_supplement": int(research(r"Phụ thu phòng đơn.+?\\\"price\\\":(\d+)", str(val)) or 0)} if research(r"Phụ thu phòng đơn.+?\\\"price\\\":(\d+)", str(val)) else {}) for (c, d, a, ch, i, st) in refindall(r"\{\\\"id\\\":\\\"\d+\\\",\\\"code\\\":\\\"(.+?)\\\",\\\"start_date\\\":\\\"(\d{4}-\d{2}-\d{2}).+?\\\"price_adult\\\":(\d+),\\\"price_child\\\":(\d+),\\\"price_infant\\\":(\d+),\\\"remaining_seats\\\":(\d+)", str(val))]'
+  itinerary:
+    source: css
+    selector: '#gtm-section-itinerary'
+    clean: 're.sub(r"\s*(Ngày \d{1,2})", r"\n\1", str(val)).strip()'
+  inclusions:
+    source: css
+    selector: script:-soup-contains("Giá tour")
+    clean: 're.sub(r"<[^>]+>", "\n", html.unescape(json.loads("\"" + (research(r"Giá tour (?:trọn gói )?bao gồm:?(.*?)Giá tour (?:trọn gói )?không bao gồm", str(val), flags=re.S) or research(r"Giá tour (?:trọn gói )?bao gồm:?(.*?)\\u003c/ul\\u003e", str(val), flags=re.S)) + "\""))).strip()'
+  exclusions:
+    source: css
+    selector: script:-soup-contains("Giá tour")
+    clean: 're.sub(r"<[^>]+>", "\n", html.unescape(json.loads("\"" + (research(r"Giá tour (?:trọn gói )?không bao gồm:?(.*?)\\u003c/ul\\u003e", str(val), flags=re.S) or research(r"Giá tour (?:trọn gói )?không bao gồm:?.*?\\u003c/p\\u003e(.*?)\\u003c/p\\u003e", str(val), flags=re.S)) + "\""))).strip()'
+  child_policy:
+    source: css
+    selector: script:-soup-contains("Giá tour")
+    clean: 're.sub(r"<[^>]+>", "\n", html.unescape(json.loads("\"" + research(r"(?:Giá|Vé)(?: vé)? trẻ em:?(.*)\\u003c/ul\\u003e", __import__("unicodedata").normalize("NFC", str(val)), flags=re.S | re.I) + "\""))).strip()'
+  cancellation_policy:
+    source: css
+    selector: script:-soup-contains("Trường hợp hủy")
+    clean: 're.sub(r"<[^>]+>", "\n", html.unescape(json.loads("\"" + (research(r"Trường hợp hủy(.*?)(Ghi chú khác|Lưu ý)", str(val), flags=re.S | re.I) or research(r"Trường hợp hủy(.*)\\u003c/p\\u003e", str(val), flags=re.S | re.I)) + "\""))).strip()'
+  surcharges:
+    source: css
+    selector: script:-soup-contains("Giá tour")
+    clean: '"\n".join(dict.fromkeys([s.strip() for s in refindall(r"[^\n]*\b(?:phụ thu|phòng đơn|single|tip|visa|tết|hộ chiếu|ngày lễ|dịp lễ)\b[^\n]*", re.sub(r"<[^>]+>", "\n", html.unescape(json.loads("\"" + (research(r"Giá tour (?:trọn gói )?không bao gồm:?(.*)\\u003c/ul\\u003e", str(val), flags=re.S) or research(r"Giá tour (?:trọn gói )?không bao gồm:?(.*)\\u003c/p\\u003e", str(val), flags=re.S | re.I)) + "\""))), flags=re.I) if s.strip()]))'

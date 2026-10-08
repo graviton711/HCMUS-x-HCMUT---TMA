@@ -29,13 +29,13 @@ fields:
     source: css
     selector: 'table:-soup-contains("Hành trình")'
     clean: '[re.sub(r''(?i)^\s*(khám phá|tham quan|du lịch(\s+khách\s+đoàn)?(\s+tour)?)\s+'',
-      '''', s).strip() for s in re.split(r''\s*-\s*'', (research(r''Hành trình\s*(.*?)\s*(?:Thời
+      '''', s).strip() for s in re.split(r''\s*[-–—]\s*'', (research(r''Hành trình\s*(.*?)\s*(?:Thời
       gian|Lịch trình)'', str(val), flags=re.S|re.I) or "")) if s.strip()]'
   route:
     source: css
     selector: 'table:-soup-contains("Hành trình")'
     clean: '[re.sub(r''(?i)^\s*(khám phá|tham quan|du lịch(\s+khách\s+đoàn)?(\s+tour)?)\s+'',
-      '''', s).strip() for s in re.split(r''\s*-\s*'', (research(r''Hành trình\s*(.*?)\s*(?:Thời
+      '''', s).strip() for s in re.split(r''\s*[-–—]\s*'', (research(r''Hành trình\s*(.*?)\s*(?:Thời
       gian|Lịch trình)'', str(val), flags=re.S|re.I) or "")) if s.strip()]'
   transport:
     source: css
@@ -49,7 +49,7 @@ fields:
       ('cruise' in str(val).lower())) else 'mixed')))))
   accommodation:
     source: css
-    selector: '#sec-included'
+    selector: '#sec-included, #sec-notes'
     clean: '(''homestay'' if ''homestay'' in str(val).lower() else (''mixed'' if len(set(refindall(r''([2-5])\s*(?:\*|sao)'',
       str(val).lower()))) > 1 else ({''2'': ''2_star'', ''3'': ''3_star'', ''4'':
       ''4_star'', ''5'': ''5_star''}.get(research(r''([2-5])\s*(?:\*|sao)'', str(val).lower()),
@@ -85,7 +85,7 @@ fields:
   offers:
     source: css
     selector: 'div#vnt-content script:-soup-contains("CT2_SCHED")'
-    clean: 'sorted([{''departure_date'': str(d.get(''startday'', ''''))[:10], ''price'':
+    clean: '[{''departure_date'': str(d.get(''startday'', ''''))[:10], ''price'':
       int(d.get(''final'') or d.get(''adult'') or 0), ''availability'': (''available''
       if int(d.get(''available'') or 0) > 0 else ''sold_out''), ''price_by_age'':
       {''adult'': int(d.get(''adult'') or 0), ''child'': int(d.get(''child'') or 0),
@@ -93,23 +93,25 @@ fields:
       or 0)}, ''single_supplement'': int(d.get(''singleroom'') or 0)} | ({''hotel_location'':
       str(d.get(''name'', '''')).strip()} if (''ch sạn'' in str(d.get(''name'', ''''))
       or ''hotel'' in str(d.get(''name'', '''')).lower()) else {}) for d in json.loads(research(r''CT2_SCHED\s*=\s*(\{.*?\});'',
-      str(val), flags=re.S) or ''{}'').values()], key=lambda x: (x[''departure_date''],
-      x[''price'']))'
+      str(val), flags=re.S) or ''{}'').values()]'
   itinerary:
     source: css
     selector: '#sec-itinerary'
     clean: re.sub(r'(?s)^.*?Xem tất cả\s*', '', str(val)).strip()
   inclusions:
     source: css
-    selector: '#sec-included'
-    clean: (re.split(r'GIÁ\s+(?:TOUR\s+)?KHÔNG\s+BAO\s+GỒ\s*M\s*:?|Không\s+bao\s+gồ\s*m\s*:',
-      re.sub(r'(?s)^.*?\(Xem thêm\)\s*', '', str(val)), flags=re.I)[0].strip())
+    selector: '#sec-included, #sec-notes'
+    clean: (research(r'((?:GIÁ\s+TOUR\s+|Giá\s+tour\s+|DỊCH\s+VỤ\s+|GIÁ\s+|Giá\s+)?BAO\s*GỒ\s*M[\s\S]*?)(?=GIÁ\s+(?:TOUR\s+)?KHÔNG\s+BAO\s+GỒ\s*M\s*:?|(?-i:KHÔNG\s+BAO\s+GỒ\s*M)|Không\s+bao\s+gồ\s*m\s*:|Quy
+      định thanh toán|QUY ĐỊNH MUA|ĐĂNG KÝ TOUR|ĐIỀU KIỆN HỦY TOUR|Điều kiện khi đăng
+      ký|Giá vé|GIÁ VÉ|QUY ĐỊNH VÉ|$)', re.sub(r'(?s)^.*?\(Xem thêm\)\s*', '', str(val)),
+      flags=re.S|re.I))
   exclusions:
     source: css
-    selector: '#sec-included'
-    clean: (re.split(r'GIÁ\s+(?:TOUR\s+)?KHÔNG\s+BAO\s+GỒ\s*M\s*:?|Không\s+bao\s+gồ\s*m\s*:',
-      re.sub(r'(?s)^.*?\(Xem thêm\)\s*', '', str(val)), flags=re.I)[1].strip() if len(re.split(r'GIÁ\s+(?:TOUR\s+)?KHÔNG\s+BAO\s+GỒ\s*M\s*:?|Không\s+bao\s+gồ\s*m\s*:',
-      re.sub(r'(?s)^.*?\(Xem thêm\)\s*', '', str(val)), flags=re.I)) > 1 else '')
+    selector: '#sec-included, #sec-notes'
+    clean: (research(r'((?:GIÁ\s+(?:TOUR\s+)?KHÔNG\s+BAO\s+GỒ\s*M\s*:?|(?-i:KHÔNG\s+BAO\s+GỒ\s*M)|Không\s+bao\s+gồ\s*m\s*:)[\s\S]*?)(?=Quy
+      định thanh toán|QUY ĐỊNH MUA|ĐĂNG KÝ TOUR|ĐIỀU KIỆN HỦY TOUR|Điều kiện khi đăng
+      ký|Giá vé|GIÁ VÉ|QUY ĐỊNH VÉ|LƯU Ý|CÁC LƯU Ý|KÍNH CHÚC|$)', re.sub(r'(?s)^.*?\(Xem
+      thêm\)\s*', '', str(val)), flags=re.S|re.I) or "")
   cancellation_policy:
     source: css
     selector: '#sec-notes'
@@ -119,14 +121,14 @@ fields:
       cọc)\b(?:\s+\S+){0,30}', str(val), flags=re.I)))))
   surcharges:
     source: css
-    selector: '#sec-included'
+    selector: '#sec-included, #sec-notes'
     clean: ''' ''.join(list(dict.fromkeys(refindall(r''(?:\S+\s+){0,12}\b(?:phụ thu|phụ
       phí|phòng đơn|giường đơn|bồi dưỡng|tip|visa|hộ chiếu)\b(?:\s+\S+){0,30}'', str(val),
       flags=re.I))))'
   child_policy:
     source: css
     selector: '#sec-notes'
-    clean: (research(r'((?:Giá|QUY ĐỊNH).*?(?:VÉ|vé).*?(?:TRẺ EM|trẻ em).*?)(?=QUY ĐỊNH
-      MUA|ĐĂNG KÝ|ĐIỀU KIỆN|Điều kiện|Quy định thanh toán|CÁC LƯU Ý|LƯU Ý|HƯỚNG DẪN|Lưu
-      ý|KÍNH CHÚC|$)', __import__('unicodedata').normalize('NFC', str(val)), flags=re.S|re.I)
-      or "")
+    clean: (research(r'((?:Giá\s*vé|GIÁ\s*VÉ|QUY\s*ĐỊNH\s*VÉ).{0,40}?(?:TRẺ\s*EM|trẻ\s*em)[\s\S]*?)(?=QUY
+      ĐỊNH MUA|ĐĂNG KÝ|ĐIỀU KIỆN|Điều kiện|Quy định thanh toán|CÁC LƯU Ý|LƯU Ý|HƯỚNG
+      DẪN|Lưu ý|KÍNH CHÚC|$)', __import__('unicodedata').normalize('NFC', str(val)),
+      flags=re.S|re.I) or "")
