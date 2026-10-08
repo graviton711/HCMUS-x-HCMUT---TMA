@@ -1,6 +1,6 @@
 # Kiểm chứng structured retrieval và semantic assessment — 08/10/2026
 
-Triển khai trên `feature/minh-phu`, theo [policy đã chốt](../retrieval-semantic-ranking.md). Không thay schema hoặc ghi vào Supabase; application DB của live smoke là SQLite in-memory. [Hướng dẫn test](../../examples/backend-retrieval-semantic-v2.md).
+Triển khai trên `feature/minh-phu`, theo [policy đã chốt](../../src/decision/retrieval-semantic-ranking.md). Không thay schema hoặc ghi vào Supabase; application DB của live smoke là SQLite in-memory. [Hướng dẫn test](../../examples/backend-retrieval-semantic-v2.md).
 
 ## Hai input thật với NVIDIA NIM và Supabase
 
@@ -28,4 +28,4 @@ Artifacts local không có session token: `data/live-tests/retrieval-semantic-20
 
 Các counterexample bao gồm ghép ngày/giá khác offer, thiếu coverage offers, pool filter/unknown, thứ tự ranking khi score chỉ phủ 20% ưu tiên, giá khác currency, citation sai/trùng/thiếu/incomplete negative, repair/timeout/replay/input budget, cancel/source pause và hết freshness trong NIM wait. API không publish snapshot sau cancel/pause; hết TTL đưa về unknown.
 
-Offline tests dùng fake NIM/crawler/SQL và application DB tạm, tách khỏi smoke mạng thật. [Runtime hiện tại](../backend-v2-runtime.md#nghiệm-thu).
+Offline tests dùng fake NIM/crawler/SQL và application DB tạm, tách khỏi smoke mạng thật. [Runtime hiện tại](../../src/api/backend-v2-runtime.md#nghiệm-thu).

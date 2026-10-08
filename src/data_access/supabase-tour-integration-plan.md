@@ -2,30 +2,6 @@
 
 User yêu cầu implement ngày 08/10/2026, trên `feature/minh-phu`. Baseline kiểm tra bên dưới được giữ để đối chiếu. Không ghi URL kết nối, mật khẩu, API key vào tài liệu. Kho Supabase chỉ được đọc; không tự migrate bảng, sửa RLS hay khởi động crawler.
 
-## Baseline trước implementation — 08/10/2026
-
-- Settings chỉ hỗ trợ `DATA_PROVIDER=fixture/http`, bỏ qua ba biến `SUPABASE_TOUR_*`. HTTP vẫn gọi crawler, chưa đọc kho tour. Server đang chạy báo `synthetic`, trong khi `.env` khai báo `http`; cấu hình process đang chạy có thể khác file.
-- PostgreSQL kết nối được: 1 provider (`dulichviet`), 234 tours, 2.373 offers; không có offer mồ côi. Migrations hiện có: `001_tour_schema.sql`, `002_tour_evidence.sql`.
-- Cả bốn bảng bật RLS, không có policy. GET bằng publishable key trả 200 và zero visible rows; không có nghĩa database trống.
-- Registry cấu hình vẫn là `replace_with_real_source`, unchecked. Registry SQLite có nguồn demo active và placeholder paused. Crawler endpoint hiện không kết nối được.
-- SQLite là application store (sessions/requirements/proposals/jobs/comparisons/snapshots); Supabase hiện là catalog nguồn (providers/tours/offers). `DATABASE_URL` của app chưa hỗ trợ PostgreSQL; không thay nó bằng tour DB URL.
-
-## Chất lượng catalog
-
-Các số dưới phản ánh giá trị được lưu, chưa xác minh lại trang nhà cung cấp.
-
-| Quan sát | Hệ quả với adapter/evaluator |
-|---|---|
-| 234 tour ghi khởi hành Hồ Chí Minh; 0 Hải Phòng; 9 tour có chuỗi Đà Nẵng/Tây Nguyên trong destinations | Ca Tết Hải Phòng có thể không có ứng viên phù hợp; không tự nới origin hoặc thêm tour giả. Kiểm tra cả chất lượng field xuất phát. |
-| 234 tour có `price_type=from`, currency VND; offers có giá theo adult/child/infant/small_child nhưng thiếu kind/basis/coverage/age brackets riêng | Giữ nghĩa giá từ; chưa chứng minh giá đủ nhóm hoặc áp giá trẻ em đúng tuổi. Không giả định giá offer là exact từ một con số. |
-| `evidence` tour chỉ có observed_at/record_missing/record_evidence; offer chỉ có observed_at, trên toàn bộ records | Có provenance của record, chưa có quote/locator/method/binding cho từng field theo runtime. `record_evidence=verified` không là xác minh độc lập. |
-| 234 canonical_url rỗng; 33 destinations chứa alias điểm xuất phát; 31 chứa chuỗi ghép nhiều địa danh | Dùng URL gốc làm locator khi cần, giữ canonicalization rule; chuẩn hóa alias/route nhưng không suy canonical hoặc điểm đến chỉ từ tiêu đề. |
-| Transport: 194 mixed, 39 bus, 1 flight | mixed chưa chứng minh main_journey bằng ô tô; scope phải có bằng chứng riêng. |
-| Availability: 2.296 available, 77 sold_out; không có số chỗ | Không ánh xạ available thành số chỗ tùy ý; cần thống nhất policy cho trạng thái đặt chỗ trong contract. |
-| 2.373 offers thiếu flights/pickup_point/conditions; 488 single_supplement bằng 0 | Null/rỗng/0 chưa tự chứng minh không có chuyến bay, điều kiện hoặc phụ thu. |
-| Không có return_date; có tour days/nights không theo days=nights+1 | Không tự tính ngày về theo công thức chung; cần lịch trình/giờ và rule có provenance. |
-| Tour observed_at từ 07/10/2026 12:41:51 đến 15:50:34 UTC; lịch khởi hành 07/10/2026–03/08/2027 | Giữ observed_at thật khi đọc DB, không đổi thành thời điểm truy vấn. TTL/cadence còn cần chốt; không coi available là hiện thời. |
-
 ## Phương án đề xuất
 
 Thêm provider đọc PostgreSQL từ `SUPABASE_TOUR_DB_URL` qua repository riêng ở data_access; tên cấu hình đề xuất `supabase` **chưa được runtime chấp nhận**. Backend giữ API v2 và application store SQLite trong lát cắt này.
@@ -78,15 +54,3 @@ Acquisition chuyển sang catalog sẵn có theo yêu cầu user. Thực hiện 
 - Discovery dùng positive canonical matches để ưu tiên retrieval, không lọc SQL loại các field unverified/unknown; giới hạn pool/truncation được công bố. URL lookup bỏ fragment/UTM thông dụng, không đoán canonical hoặc bỏ query chức năng. Stable IDs/hash, exclusions và fairness giữa tours trong offer pagination.
 - Ca Hải Phòng không có origin matching được lưu; do dữ kiện chưa có proof, evaluator có thể trả unknown thay vì fail. Không khẳng định không có tour trên thị trường hoặc thay đổi origin.
 
-## Nghiệm thu — 08/10/2026
-
-- Offline: **276 tests passed** (155 baseline + 89 semantic + 32 Supabase). Ruff và diff whitespace đạt; export 22 v2 schemas, hash schemas v1 giữ nguyên. Có cases budget/party omission + duplicate dates repair, URL lỗi isolation, fair offer budget/truncation, provider domain đổi, bad proofs, deadline/errors, record binding, owner isolation và registry pause.
-- PostgreSQL live: probe `transaction_read_only=on`, 1 provider/234 tours/2.373 offers. Dùng application SQLite tạm trong các API smoke, không sửa catalog/RLS hoặc dữ liệu phiên thật.
-- URL-only hai URL có thật → job succeeded, 2 columns/3 offers, 2 recommendations dạng similar, không có personalized evaluations. Discovery structured → 20 columns/48 offers, hybrid cũng chạy; raw prices hiện được, hard evaluations unknown và không có recommendation cá nhân hóa do thiếu proof.
-- NIM text → proposal → confirm → Supabase comparison: giữ đúng Nhật Bản/TP.HCM/ngày 03-11-2026/budget 30 triệu VND per_adult tour_price, party 1 người lớn; comparison succeeded, origin source, 20 preview giá và ONLY_UNVERIFIED. Một lượt smoke đầu phát hiện date duplicates thay budget/party; đã thêm guard/prompt và regression, lượt live sau sửa đúng. Không dùng kết quả này làm chỉ số accuracy tổng quát.
-- `DATA_PROVIDER=supabase` là cấu hình local để sử dụng reader mới. Server cũ phải dừng/restart; frontend prototype vẫn dùng mock. [Hướng dẫn khởi động/test](../examples/backend-supabase-v2.md).
-
-Field proofs/price qualifiers/cadence và dữ liệu provider/origin khác vẫn cần crawler bổ sung; freshness chưa tự được đặt. URL-only còn usable để xem/đối chiếu raw data, không phải chứng minh tour phù hợp hoặc giá cuối cùng.
-# Policy hiện hành và baseline lịch sử
-
-[catalog-validation-v1](catalog-validation-policy.md) thay yêu cầu proof từng field bằng nguồn opt-in + validation; v1 giữ nguyên, Supabase chỉ đọc. [Nghiệm thu hiện hành](archive/backend-catalog-validation-verification.md). Các số liệu/verification và kế hoạch bên dưới lưu baseline trước policy mới, không mô tả counts hay quyền trust hiện tại.

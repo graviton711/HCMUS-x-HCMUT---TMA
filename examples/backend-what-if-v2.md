@@ -114,4 +114,4 @@ Lệnh đầu chạy offline bằng dữ liệu synthetic. Lệnh sau đọc Sup
 
 `.env`: `DATA_PROVIDER=supabase` và cấu hình catalog/NIM hiện có. `WHAT_IF_EXPLANATION_ENABLED=false` tắt riêng bước chọn insight; metrics và template vẫn có. Timeout mặc định `WHAT_IF_EXPLANATION_TIMEOUT_SECONDS=15`; lỗi NIM giữ kết quả tính toán bằng fallback. Script live có `--skip-nim` để chỉ kiểm catalog/API.
 
-Policy/giới hạn: [what-if-analysis](../docs/what-if-analysis.md). Không tìm optimum toàn cục; minimal chỉ trong các singleton/cặp đã thử.
+Policy/giới hạn: [what-if-analysis](../src/api/what-if-analysis.md). Không tìm optimum toàn cục; minimal chỉ trong các singleton/cặp đã thử.

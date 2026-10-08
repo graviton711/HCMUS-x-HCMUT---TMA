@@ -1,6 +1,6 @@
 # Backend: kế hoạch phát triển
 
-**Trạng thái:** Backend v1 đã triển khai cho discover/compare_urls. User chốt ngân sách mặc định là giá tour. Crawler thật chưa có mẫu; phạm vi kiểm tra và lệnh chạy ở [backend-runtime.md](../backend-runtime.md).
+**Trạng thái:** Backend v1 đã triển khai cho discover/compare_urls. User chốt ngân sách mặc định là giá tour. Crawler thật chưa có mẫu; phạm vi kiểm tra và lệnh chạy ở [backend-runtime.md](../../src/api/backend-runtime.md).
 
 ## Kết luận từ docs hiện tại
 
@@ -23,7 +23,7 @@
 
 Crawler phải cung cấp cả khả năng **tìm ứng viên theo nhu cầu**, không chỉ đọc một URL. Nếu nguồn chỉ hỗ trợ URL, backend trả giới hạn capability rõ ràng; không hứa tìm toàn bộ tour.
 
-Hai luồng dùng chung domain/decision engine nhưng khác acquisition và presentation; xem [backend-flows.md](../backend-flows.md). Trong so sánh URL, giữ mọi target user đã chọn, kể cả target không đạt hoặc nguồn lỗi. Không tự tìm tour khác để thay target đó.
+Hai luồng dùng chung domain/decision engine nhưng khác acquisition và presentation; xem [backend-flows.md](../../src/api/backend-flows.md). Trong so sánh URL, giữ mọi target user đã chọn, kể cả target không đạt hoặc nguồn lỗi. Không tự tìm tour khác để thay target đó.
 
 ## Các module dự kiến
 
@@ -35,7 +35,7 @@ Hai luồng dùng chung domain/decision engine nhưng khác acquisition và pres
 | `decision` | QuerySpec + snapshots → đánh giá từng condition, comparison, trade-off | Tính chi phí → lọc ba trạng thái → so sánh → evidence links | Logic xác định được; thiếu dữ liệu không thành pass; không có điểm AI bí mật |
 | `api` | HTTP request → revision, job progress hoặc comparison response | Validate → điều phối modules → persist → response | Business logic nằm ngoài route; crawler chậm không giữ request vô hạn |
 
-Tài liệu cạnh module: [domain](../../src/domain/README.md), [requirements](../../src/requirements/README.md), [data_access](../../src/data_access/README.md), [decision](../../src/decision/README.md), [api](../../src/api/README.md). Contract tổng quan ở [backend-contracts.md](../backend-contracts.md), tích hợp crawler ở [crawler-contract.md](../crawler-contract.md), HTTP ở [api-contract.md](../api-contract.md).
+Tài liệu cạnh module: [domain](../../src/domain/README.md), [requirements](../../src/requirements/README.md), [data_access](../../src/data_access/README.md), [decision](../../src/decision/README.md), [api](../../src/api/README.md). Contract tổng quan ở [backend-contracts.md](../../src/domain/backend-contracts.md), tích hợp crawler ở [crawler-contract.md](../../src/data_access/crawler-contract.md), HTTP ở [api-contract.md](../../src/api/api-contract.md).
 
 ## Hướng kỹ thuật đề xuất
 
@@ -49,7 +49,7 @@ Một backend Python chia module, cùng một dịch vụ API. Đề xuất Fast
 
 JSON theo schema chỉ bảo đảm hình dạng, không chứng minh nghĩa đúng. Không dùng điểm confidence LLM tự khai làm xác suất chính xác.
 
-**Provider đã xác nhận:** NVIDIA hosted NIM, model `nvidia/nemotron-3-super-120b-a12b`; cấu hình hiện nằm tại `.env` ở root với `NVIDIA_NIM_API` và `NVIDIA_NIM_MODEL`. Probe nhỏ đã gọi được API; chưa đủ kết luận chất lượng tiếng Việt hoặc bảo đảm schema enforcement. Cấu hình, kết quả và các giới hạn ở [nvidia-nim.md](../nvidia-nim.md).
+**Provider đã xác nhận:** NVIDIA hosted NIM, model `nvidia/nemotron-3-super-120b-a12b`; cấu hình hiện nằm tại `.env` ở root với `NVIDIA_NIM_API` và `NVIDIA_NIM_MODEL`. Probe nhỏ đã gọi được API; chưa đủ kết luận chất lượng tiếng Việt hoặc bảo đảm schema enforcement. Cấu hình, kết quả và các giới hạn ở [nvidia-nim.md](../../src/requirements/nvidia-nim.md).
 
 Storage cần giữ revision yêu cầu, job, snapshot và evidence để replay. Đề xuất SQLite cho dev local một backend/worker, qua repository + SQLAlchemy; dùng transaction ngắn và revision/lease conditional updates. Deployment nhiều process/host đề xuất PostgreSQL, chốt khi biết hosting. Bảng/trách nhiệm ở [API module](../../src/api/README.md); database được tạo khi app khởi động. Chưa cần vector database cho bộ lọc có cấu trúc; chỉ cân nhắc khi đã đo nhu cầu tìm ngữ nghĩa lịch trình.
 
@@ -86,7 +86,7 @@ Các query/job khóa vào revision và snapshot cụ thể; sửa tiêu chí t�
 
 - Provider/model đã được user chọn là NVIDIA NIM/Nemotron 3 Super. Cần chốt ngân sách/quota, cấu hình reasoning sau gold evaluation và xác minh mức bảo đảm structured output của hosted endpoint.
 - Cả hai luồng đã được user chọn. Người crawl cần review contract đề xuất và xác nhận danh mục nguồn/field/search capability thực sự hỗ trợ.
-- Chính sách ngôn ngữ và readiness đề xuất ở [backend-flows.md](../backend-flows.md); luôn cho user xem/sửa cách hiểu. Bộ gold ở [requirements-evaluation.md](requirements-evaluation.md).
+- Chính sách ngôn ngữ và readiness đề xuất ở [backend-flows.md](../../src/api/backend-flows.md); luôn cho user xem/sửa cách hiểu. Bộ gold ở [requirements-evaluation.md](requirements-evaluation.md).
 - Chính sách freshness theo field/nguồn và cách xử lý giá thiếu phụ thu; không chốt TTL tùy ý trước mẫu thật.
 - Hosting/public database, thời gian lưu nhu cầu/log và mức auth cần cho demo. Dev storage mặc định đề xuất SQLite; không log toàn bộ nội dung cá nhân hoặc key mặc định.
 

@@ -1,6 +1,6 @@
 # Hai luồng backend và chính sách hiểu yêu cầu
 
-**Trạng thái:** Đã triển khai cả hai luồng; crawler thật đã tích hợp qua Supabase reader. User chốt ngày 01/10/2026: budget coverage mặc định tour_price. Xem thêm luồng v2 (proposal/what-if/admin) ở [backend-v2-runtime.md](backend-v2-runtime.md); Supabase reader hiện tại ở [supabase-tour-integration-plan.md](supabase-tour-integration-plan.md).
+**Trạng thái:** Đã triển khai cả hai luồng; crawler thật đã tích hợp qua Supabase reader. User chốt ngày 01/10/2026: budget coverage mặc định tour_price. Xem thêm luồng v2 (proposal/what-if/admin) ở [backend-v2-runtime.md](backend-v2-runtime.md); Supabase reader hiện tại ở [supabase-tour-integration-plan.md](../data_access/supabase-tour-integration-plan.md).
 
 ## Discover: nhập nhu cầu
 

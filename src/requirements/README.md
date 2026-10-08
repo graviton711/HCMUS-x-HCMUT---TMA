@@ -1,24 +1,24 @@
 # Requirements — hiểu và chuẩn hóa nhu cầu
 
-Completeness v2 thuộc `completeness.py`, sau semantic normalization: năm thông tin cá nhân hóa, targeted questions và prerequisites confirm/search dùng chung. Giữ required/strength/data-proof độc lập; URL-only miễn, hybrid vẫn cần core. [Policy và answer contract](../../docs/personalized-requirement-policy.md).
+Completeness v2 thuộc `completeness.py`, sau semantic normalization: năm thông tin cá nhân hóa, targeted questions và prerequisites confirm/search dùng chung. Giữ required/strength/data-proof độc lập; URL-only miễn, hybrid vẫn cần core. [Policy và answer contract](personalized-requirement-policy.md).
 
 Generation schema giới hạn answer IDs theo reason được hỗ trợ, yêu cầu đủ answers tường minh cả mixed message và giới hạn operation targets vào condition IDs. Loại tour trống từ từ “tour” chung bị từ chối và bounded repair; không tự loại condition hoặc tự tạo loại tour.
 
-Party duplicate guard yêu cầu NIM repair khi một unsupported condition chỉ phát lại quote số người đã có trong party; không tự xóa câu có yêu cầu bổ sung. [Retrieval/assessment contract](../../docs/retrieval-semantic-ranking.md).
+Party duplicate guard yêu cầu NIM repair khi một unsupported condition chỉ phát lại quote số người đã có trong party; không tự xóa câu có yêu cầu bổ sung. [Retrieval/assessment contract](../decision/retrieval-semantic-ranking.md).
 
-INITIAL coverage validation giữ numeric budget/số người lớn tường minh và chặn predicate trùng dù khác ID; lỗi được gom vào một lượt NIM repair, không tự điền slots. Chi tiết và giới hạn grammar ở [semantic contract](../../docs/requirements-semantics.md).
+INITIAL coverage validation giữ numeric budget/số người lớn tường minh và chặn predicate trùng dù khác ID; lỗi được gom vào một lượt NIM repair, không tự điền slots. Chi tiết và giới hạn grammar ở [semantic contract](requirements-semantics.md).
 
-Semantic v2 implementation: `catalog.py` lookup theo type/hierarchy; `temporal.py` giữ lịch/interval và đổi lịch âm có kiểm chứng; `semantic.py` normalization, issue/readiness và targeted answers. Input raw slots/quote → value typed/trace → proposal; fields/outputs và policies ở [requirements-semantics](../../docs/requirements-semantics.md). V1 giữ parser riêng, có guard không ghép lunar quote thành ngày dương khi trả lời năm.
+Semantic v2 implementation: `catalog.py` lookup theo type/hierarchy; `temporal.py` giữ lịch/interval và đổi lịch âm có kiểm chứng; `semantic.py` normalization, issue/readiness và targeted answers. Input raw slots/quote → value typed/trace → proposal; fields/outputs và policies ở [requirements-semantics](requirements-semantics.md). V1 giữ parser riêng, có guard không ghép lunar quote thành ngày dương khi trả lời năm.
 
 `signals.py` dùng chung các tín hiệu định tính có hỗ trợ và polarity để kiểm tra grounded quote/omission; không thay parser hoặc hứa hiểu mọi diễn đạt. `evaluation_v2.py` chạy NIM thật qua cùng parser/resolver v2, so semantic assertions trong `tests/fixtures/requirements-semantic.json`; `uv run tour-backend evaluate-nim-v2 --repeat 2 --output data/evaluation-v2.local.json`. Ca độc lập, có kiểm tra update theo context; không tạo session hoặc ghi DB. Báo từng assertion, latency, repair và lỗi, không suy accuracy tổng quát từ smoke set.
 
 `prompts_v2.py` là system prompt riêng cho v2, không nối whitelist/policy unsupported v1 vào prompt v2. Giữ cùng chính sách budget/party/operations/control mức ưu tiên; thêm entities/temporal/qualitative/answers. Coverage kiểm tra cả omission của câu trả lời rõ ràng cho clarification hiện có. Route thiếu strength rõ được giữ unresolved theo policy; scope route luôn itinerary.
 
-V2: `v2.py` mở rộng extraction slots cho preference level, URLs và notes; cùng bounded repair/quote grounding. Outputs chỉ đi vào proposal, không tự commit. Intent classifier chọn refs trong comparison; câu trả lời dùng facts/metrics đã kiểm tra. Xem [backend-v2-runtime](../../docs/backend-v2-runtime.md).
+V2: `v2.py` mở rộng extraction slots cho preference level, URLs và notes; cùng bounded repair/quote grounding. Outputs chỉ đi vào proposal, không tự commit. Intent classifier chọn refs trong comparison; câu trả lời dùng facts/metrics đã kiểm tra. Xem [backend-v2-runtime](../api/backend-v2-runtime.md).
 
 NIM extraction v2 bắt buộc trả cả ba slot keys (URLs/notes nullable); guard phát hiện model bỏ sót control mức 0–5 được nêu tường minh rồi bounded repair một lần. Guard chỉ kiểm tra completeness, không thay NIM bằng regex lấy conditions. Level mơ hồ không được tự suy. Live smoke Nhật + cost=4 thành công; bộ gold toàn diện còn cần chạy riêng.
 
-**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
+**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../api/backend-runtime.md).
 
 ## Trách nhiệm và input/output
 
@@ -41,9 +41,9 @@ Sửa form/answer đã có cấu trúc đi thẳng qua normalize/validation, kh�
 ## Quyết định kỹ thuật đề xuất
 
 - Hybrid extraction + deterministic validation; dùng native structured output nếu provider hỗ trợ, vẫn kiểm tra nghĩa độc lập. Prompt/schema/model version được ghi lại cho đánh giá và replay.
-- Gateway đầu tiên dùng NVIDIA NIM với model user chọn `nvidia/nemotron-3-super-120b-a12b`; [cấu hình và probe](../../docs/nvidia-nim.md). Một probe JSON thành công không thay kiểm tra schema/grounding ở backend.
+- Gateway đầu tiên dùng NVIDIA NIM với model user chọn `nvidia/nemotron-3-super-120b-a12b`; [cấu hình và probe](nvidia-nim.md). Một probe JSON thành công không thay kiểm tra schema/grounding ở backend.
 - Rules chỉ normalize/validate, không dùng regex như lời hứa hiểu mọi nhu cầu. Model timeout/refusal/invalid output trả lỗi rõ; tối đa một repair có kiểm soát, không retry vô hạn hoặc tự giả dữ liệu.
-- Hard/soft và defaults theo [backend-flows.md](../../docs/backend-flows.md): search scope như “muốn đi Nhật” là hard; “muốn hotel 4 sao” đề xuất soft; “tầm” là soft near, không tự sinh range. Giữ unresolved khi scope/ý nghĩa chưa rõ.
+- Hard/soft và defaults theo [backend-flows.md](../api/backend-flows.md): search scope như “muốn đi Nhật” là hard; “muốn hotel 4 sao” đề xuất soft; “tầm” là soft near, không tự sinh range. Giữ unresolved khi scope/ý nghĩa chưa rõ.
 - Không thêm child age, currency/budget basis, năm của ngày hoặc mức sao khách sạn chưa được nói. Defaults dùng cho hệ thống như locale/timezone phải công khai; không giả thành lời user.
 - Lưu trace theo revision và reason codes; raw text chỉ giữ theo retention đã chốt. API key nằm ở backend, không xuất vào response/log.
 

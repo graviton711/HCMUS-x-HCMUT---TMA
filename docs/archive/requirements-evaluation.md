@@ -4,7 +4,7 @@
 
 Smoke set có thể chạy: `tests/fixtures/requirements-smoke.json` kiểm tra một tập con quan trọng, độc lập mỗi request. `uv run tour-backend evaluate-nim --output data/evaluation.local.json` gọi NIM thật, so normalized fields/readiness/patch preservation và ghi latency. Đây chưa phải full gold 50+15, không dùng kết quả smoke để tuyên bố độ chính xác tổng quát.
 
-Ca thực tế [tour ghép đoàn dịp Tết](requirements-case-tet.md) giữ baseline 07/10/2026 và expectations sau thay đổi. Semantic production v2/resolvers/coverage/targeted answers đã implement; [contract](../requirements-semantics.md), [test API từng bước](../../examples/backend-semantic-v2.md).
+Ca thực tế [tour ghép đoàn dịp Tết](requirements-case-tet.md) giữ baseline 07/10/2026 và expectations sau thay đổi. Semantic production v2/resolvers/coverage/targeted answers đã implement; [contract](../../src/requirements/requirements-semantics.md), [test API từng bước](../../examples/backend-semantic-v2.md).
 
 ## Kiểm chứng semantic v2 — 08/10/2026
 
@@ -22,7 +22,7 @@ uv run tour-backend evaluate-nim-v2 --repeat 2 --output data/evaluation-v2.local
 
 Report chứa input test/diagnostics ở `data/` đã Git-ignore; không đưa key hoặc raw input người dùng thật vào commit. Package `vi-lunaire==2026.4.11` được pin; các anchors tham chiếu và giới hạn nằm trong `tests/fixtures/lunar-reference.json`. Daily round-trip là kiểm tra consistency, không chứng minh toàn bộ lịch 2000–2099 bằng một oracle độc lập.
 
-Reference cho date tương đối: 01/10/2026 10:00 tại Asia/Ho_Chi_Minh. Cases độc lập, không đặt nhiều case không liên quan trong cùng prompt NIM. Hard/soft theo policy đề xuất ở [backend-flows.md](../backend-flows.md).
+Reference cho date tương đối: 01/10/2026 10:00 tại Asia/Ho_Chi_Minh. Cases độc lập, không đặt nhiều case không liên quan trong cùng prompt NIM. Hard/soft theo policy đề xuất ở [backend-flows.md](../../src/api/backend-flows.md).
 
 ## 50 câu một lượt
 

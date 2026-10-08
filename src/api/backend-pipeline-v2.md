@@ -1,6 +1,6 @@
 # Pipeline backend, crawler và kho dữ liệu — mẫu v2
 
-**Trạng thái:** đặc tả đã được user duyệt; backend implementation ngày 07/10/2026. [Runtime/giới hạn](backend-v2-runtime.md) ghi phần đã chạy/test và phần còn cần crawler/deployment; nội dung dưới giữ mục tiêu pipeline theo [giao thức v2](frontend-protocol-v2.md). Owner: BE điều phối/giá/decision/public DTO/admin; crawler thu thập/normalization có provenance; FE state/render/review.
+**Trạng thái:** đặc tả đã được user duyệt; backend implementation ngày 07/10/2026. [Runtime/giới hạn](backend-v2-runtime.md) ghi phần đã chạy/test và phần còn cần crawler/deployment; nội dung dưới giữ mục tiêu pipeline theo [giao thức v2](../../docs/frontend-protocol-v2.md). Owner: BE điều phối/giá/decision/public DTO/admin; crawler thu thập/normalization có provenance; FE state/render/review.
 
 ## 1. Quyết định kiến trúc
 
@@ -16,7 +16,7 @@ Stack production/storage engine vẫn chốt P2/backend deployment; đặc tả 
 
 ## 2. Các giai đoạn và input/output
 
-Phần retrieval/evaluation/ranking mở rộng theo [structured retrieval và semantic assessment](retrieval-semantic-ranking.md), được user duyệt triển khai 08/10/2026. LLM assessment nằm giữa prepared pool và pure ranking; không thay hard eligibility.
+Phần retrieval/evaluation/ranking mở rộng theo [structured retrieval và semantic assessment](../decision/retrieval-semantic-ranking.md), được user duyệt triển khai 08/10/2026. LLM assessment nằm giữa prepared pool và pure ranking; không thay hard eligibility.
 
 | Stage | Input | Output / điều kiện |
 |---|---|---|
@@ -71,7 +71,7 @@ Local runtime: session24h/retention7ngày như v1; hosting config công bố exp
 - Distinct sessions = số session_id có activity user trong interval, không page view/requests. user_messages = tin user đã accepted, không assistant/tool/log. comparison_runs = comparisons đã accepted, retry cùng idempotency key không tăng; breakdown theo terminal state, active riêng. From/to `[from,to)` được normalize timezone rõ.
 - Overview có updated_at/metric_definition_version/source health/contact backlog/active jobs; null cho metric chưa thu thập. Không tạo token/cost estimate nếu không có usage thật. Session detail chỉ timestamps/counts/job stage/status/trace metadata mặc định.
 - New contact có idempotency/client submission id, text escaped/sanitized, category `feedback|data_issue|support`, reply_to optional/email validate, context session/comparison refs owned. Xử lý `new → in_progress → resolved`, có thể reopen; version check và audit. Internal note không xuất cho user, không tự gửi email.
-- Admin production phải auth/roles phía server; role viewer/operator/admin theo [protocol](frontend-protocol-v2.md). Demo admin chỉ mô phỏng quyền; không được dùng trang static làm bảo vệ dữ liệu thật.
+- Admin production phải auth/roles phía server; role viewer/operator/admin theo [protocol](../../docs/frontend-protocol-v2.md). Demo admin chỉ mô phỏng quyền; không được dùng trang static làm bảo vệ dữ liệu thật.
 - Source detail hiển thị access approval/last checked/capability/field coverage/profile version/last run+error. Pause/refresh/check đều có version/audit/job; source bị blocked/unchecked không bật bằng UI.
 
 ## 6. Điều kiện bàn giao cho BE/crawler

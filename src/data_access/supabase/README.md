@@ -1,8 +1,8 @@
 # Supabase tour catalog
 
-Policy hiện hành: [catalog-validation-v1](../../../docs/catalog-validation-policy.md). Nguồn opt-in qua `SUPABASE_TOUR_TRUSTED_DOMAINS` được dùng field đã kiểm tra dưới trạng thái `catalog_validated`, giữ provenance database_record; website proof là đường bổ sung. Giá thiếu qualifiers, mixed transport, field thiếu và freshness chưa cấu hình vẫn unknown. Không cần backfill proof mọi field. Các đoạn proof bên dưới mô tả đường website proof, không là prerequisite cho catalog opt-in.
+Policy hiện hành: [catalog-validation-v1](catalog-validation-policy.md). Nguồn opt-in qua `SUPABASE_TOUR_TRUSTED_DOMAINS` được dùng field đã kiểm tra dưới trạng thái `catalog_validated`, giữ provenance database_record; website proof là đường bổ sung. Giá thiếu qualifiers, mixed transport, field thiếu và freshness chưa cấu hình vẫn unknown. Không cần backfill proof mọi field. Các đoạn proof bên dưới mô tả đường website proof, không là prerequisite cho catalog opt-in.
 
-`audit.py` tạo báo cáo aggregate từ **pool retrieval có giới hạn** qua đúng reader/adapter/validator, không claim audit toàn kho nếu scan/pool/offers bị cắt. `uv run tour-backend audit-supabase --output data/catalog-audit.local.json` chỉ đọc catalog, không tạo application DB, không gọi NIM/crawler. Report công bố counts/coverage, catalog_validated/proof/value, thiếu qualifiers và các field adapter chưa hỗ trợ. TTL audit lấy config bootstrap tường minh, không đại diện toàn bộ registry persisted/admin của app; không tự đặt TTL hoặc nâng independent verification. [Policy](../../../docs/catalog-validation-policy.md).
+`audit.py` tạo báo cáo aggregate từ **pool retrieval có giới hạn** qua đúng reader/adapter/validator, không claim audit toàn kho nếu scan/pool/offers bị cắt. `uv run tour-backend audit-supabase --output data/catalog-audit.local.json` chỉ đọc catalog, không tạo application DB, không gọi NIM/crawler. Report công bố counts/coverage, catalog_validated/proof/value, thiếu qualifiers và các field adapter chưa hỗ trợ. TTL audit lấy config bootstrap tường minh, không đại diện toàn bộ registry persisted/admin của app; không tự đặt TTL hoặc nâng independent verification. [Policy](catalog-validation-policy.md).
 
 ## Trách nhiệm và interface
 
@@ -16,7 +16,7 @@ Reader PostgreSQL read-only + adapter records providers/tours/offers → CrawlRe
 4. Adapter chuẩn hóa bằng catalog chung, giữ raw/missing/conflict/scope. Hash toàn bộ record + observed_at để tạo snapshot bất biến.
 5. Gateway validate toàn bộ references/domain/time rồi API lưu snapshots cùng comparison. DB row update không sửa comparison cũ.
 
-Retrieval/per-offer coverage theo [contract](../../../docs/retrieval-semantic-ranking.md). SQL dùng IDs sau evidence validation; chưa có raw-field trusted index. Registry persisted truyền vào reader để freshness theo đúng policy hiện hành.
+Retrieval/per-offer coverage theo [contract](../../decision/retrieval-semantic-ranking.md). SQL dùng IDs sau evidence validation; chưa có raw-field trusted index. Registry persisted truyền vào reader để freshness theo đúng policy hiện hành.
 
 ## Quyết định
 
@@ -55,4 +55,4 @@ Price kind/basis/coverage/age/applicability không được đoán từ text. Hi
 Xem kế hoạch và baseline chất lượng ở docs/supabase-tour-integration-plan.md. Tests dùng fake repository/engine và rows tổng hợp; CLI probe/kiểm chứng API live dùng read-only DB + application DB tạm, không nằm trong test suite offline.
 # What-if acquisition
 
-Theo [policy](../../../docs/what-if-analysis.md), analysis đọc bounded tối đa500 tours trong một transaction; không loại hard fail hoặc cắt pool20, không dùng date anchor khi chọn offers. Scan/offer limits và proof validation vẫn áp dụng, báo coverage/truncation; không ghi catalog. Comparison bình thường giữ retrieval policy hiện tại.
+Theo [policy](../../api/what-if-analysis.md), analysis đọc bounded tối đa500 tours trong một transaction; không loại hard fail hoặc cắt pool20, không dùng date anchor khi chọn offers. Scan/offer limits và proof validation vẫn áp dụng, báo coverage/truncation; không ghi catalog. Comparison bình thường giữ retrieval policy hiện tại.

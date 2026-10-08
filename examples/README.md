@@ -2,7 +2,7 @@
 
 Real Supabase catalog: use API **v2** and [this walkthrough](backend-supabase-v2.md). The v1 fixture examples below require `DATA_PROVIDER=fixture`; `.invalid` URLs do not refer to Supabase records.
 
-Backend v2: [request walkthrough](backend-v2.md), [runtime/limitations](../docs/backend-v2-runtime.md), [generated schemas](../contracts/v2/). The v1 walkthrough below remains valid. `protocol-v2/` contains design fixtures, not server-generated responses.
+Backend v2: [request walkthrough](backend-v2.md), [runtime/limitations](../src/api/backend-v2-runtime.md), [generated schemas](../contracts/v2/). The v1 walkthrough below remains valid. `protocol-v2/` contains design fixtures, not server-generated responses.
 
 Structured hard filter → per-offer pool → semantic assessment → deterministic ranking: [new flow and test guide](backend-retrieval-semantic-v2.md), [verification results](../docs/archive/backend-retrieval-assessment-results.md).
 
@@ -32,4 +32,4 @@ Optional environment settings are illustrated by `backend.env.example`; keep cre
 [Hướng dẫn test sau comparison](backend-what-if-v2.md); `check-what-if-v2.py` kiểm API với application SQLite in-memory và Supabase read-only, lưu public artifacts riêng; không ghi catalog hoặc `.env`. Gửi structured equivalents cho ca Nhật và ca Tết đã bổ sung **synthetic** số người/trần giá/năm/nghĩa khoảng; không gọi lại extraction. Script có một NIM insight-selection probe riêng trên metrics synthetic, dùng `--skip-nim` để bỏ probe đó. Không gộp probe synthetic vào kết quả tour thật.
 # Catalog validation
 
-`backend-catalog-validation.md` giải thích cấu hình trust/TTL và kiểm chứng Supabase read-only theo [policy](../docs/catalog-validation-policy.md); không cần bulk proof backfill.
+`backend-catalog-validation.md` giải thích cấu hình trust/TTL và kiểm chứng Supabase read-only theo [policy](../src/data_access/supabase/catalog-validation-policy.md); không cần bulk proof backfill.

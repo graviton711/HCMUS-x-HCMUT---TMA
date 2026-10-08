@@ -1,10 +1,10 @@
 # API và điều phối
 
-What-if resource/job lifecycle dùng cùng Store cancellation/recovery/retention và owner/CAS guards; source/snapshot/evidence được lưu độc lập parent comparison. [Policy](../../docs/what-if-analysis.md).
+What-if resource/job lifecycle dùng cùng Store cancellation/recovery/retention và owner/CAS guards; source/snapshot/evidence được lưu độc lập parent comparison. [Policy](what-if-analysis.md).
 
-Implementation v2 theo [backend-v2-runtime](../../docs/backend-v2-runtime.md), module [v2](v2/README.md). Schema 2 additive thêm proposals/events/snapshot indexes/registry/contact/audit; các bảng và routes v1 được giữ. Không coi các đặc tả admin/prototype là endpoint đã hoàn tất khi chưa có tests tương ứng.
+Implementation v2 theo [backend-v2-runtime](backend-v2-runtime.md), module [v2](v2/README.md). Schema 2 additive thêm proposals/events/snapshot indexes/registry/contact/audit; các bảng và routes v1 được giữ. Không coi các đặc tả admin/prototype là endpoint đã hoàn tất khi chưa có tests tương ứng.
 
-**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
+**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](backend-runtime.md).
 
 ## Trách nhiệm / input-output
 
@@ -14,7 +14,7 @@ Nhận DTO HTTP, kiểm tra session/ownership, tạo requirement revision và du
 
 Swagger dùng OpenAPI HTTP bearer (`SessionBearer`): tạo session rồi dán riêng token vào nút **Authorize**; UI tự gửi Authorization cho các route cần session. Không khai báo Authorization như header nhập tay. Request examples tách URL-only và text; comparison đầu tiên chỉ minh họa requirement_id/revision lấy từ response thật, không tự điền offer selection/reuse.
 
-V2 dùng [personalized-core-v1](../../docs/personalized-requirement-policy.md) sau semantic normalization: form đầy đủ/rõ tạo revision 1; form thiếu/chưa rõ tạo draft + proposal 201; text parse thành proposal 202. Confirm/search/worker cùng kiểm lại năm core fields, trả 409 kèm completeness khi cần bổ sung. API không tin readiness đã persisted; history cũ vẫn giữ nguyên. URL-only có profile riêng.
+V2 dùng [personalized-core-v1](../requirements/personalized-requirement-policy.md) sau semantic normalization: form đầy đủ/rõ tạo revision 1; form thiếu/chưa rõ tạo draft + proposal 201; text parse thành proposal 202. Confirm/search/worker cùng kiểm lại năm core fields, trả 409 kèm completeness khi cần bổ sung. API không tin readiness đã persisted; history cũ vẫn giữ nguyên. URL-only có profile riêng.
 
 ## Workflow và interfaces
 
@@ -60,4 +60,4 @@ Session được lưu ngay khi POST session thành công; requirement/revision v
 Không giữ transaction trong lúc gọi NIM/crawler. Claim/commit bằng conditional update có status/lease/revision predicate và kiểm tra row count=1; ORM version counter không thay tất cả CAS này. Commit result + terminal job state atomically; cancellation/late response kiểm tra lại trước commit.
 # Catalog configuration
 
-[catalog-validation-v1](../../docs/catalog-validation-policy.md): Settings thêm trusted domain allowlist (mặc định rỗng) và volatile TTL map (mặc định rỗng). Chỉ Supabase v2 nhận dữ liệu catalog đã kiểm tra; credentials không xuất ra API/log. Registry persisted bị giới hạn bởi cấu hình trust hiện hành.
+[catalog-validation-v1](../data_access/supabase/catalog-validation-policy.md): Settings thêm trusted domain allowlist (mặc định rỗng) và volatile TTL map (mặc định rỗng). Chỉ Supabase v2 nhận dữ liệu catalog đã kiểm tra; credentials không xuất ra API/log. Registry persisted bị giới hạn bởi cấu hình trust hiện hành.

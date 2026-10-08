@@ -54,7 +54,7 @@ Mỗi trường trong `fields.<field_name>` phải tuân thủ đúng một tron
 
 ### 2.2. Cơ chế làm sạch dữ liệu (`clean` & `transform`)
 
-Để đảm bảo dữ liệu đầu ra đạt đúng chuẩn Target Canonical của [docs/data-contract.md](file:///d:/GSpace/MLAI/docs/data-contract.md) mà không nhồi heuristic vào Runner, **Agent trực tiếp cung cấp code làm sạch qua thuộc tính `clean`**:
+Để đảm bảo dữ liệu đầu ra đạt đúng chuẩn Target Canonical của [docs/data-contract.md](../../docs/data-contract.md) mà không nhồi heuristic vào Runner, **Agent trực tiếp cung cấp code làm sạch qua thuộc tính `clean`**:
 
 * **`clean` (Khuyến nghị cốt lõi):** Biểu thức Python một dòng hoặc lambda string biến đổi giá trị thô `val`.
   Môi trường thực thi cung cấp sẵn: biến `val`, các module `re`, `json`, `html`,

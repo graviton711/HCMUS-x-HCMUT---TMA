@@ -12,7 +12,7 @@ TTL rỗng giữ ngày/giá/availability chưa rõ freshness. Nhóm chốt chu k
 
 Ba hostname trên là các nguồn đang có trong catalog nhóm ở lần kiểm tra 08/10/2026, đã cấu hình trong `.env` local. Code default allowlist vẫn `[]`; khi có provider mới cần thêm domain rõ ràng sau khi nhóm nhận nguồn đó. Config không được commit credentials.
 
-Sau khi restart `uv run tour-backend serve`, flow requirement/proposal/confirm/comparison/what-if giữ nguyên. `catalog_validated` là dữ liệu crawler đã kiểm tra theo [policy](../docs/catalog-validation-policy.md). `supplier_published` vẫn là proof website. Không trạng thái nào khẳng định chất lượng/uy tín độc lập.
+Sau khi restart `uv run tour-backend serve`, flow requirement/proposal/confirm/comparison/what-if giữ nguyên. `catalog_validated` là dữ liệu crawler đã kiểm tra theo [policy](../src/data_access/supabase/catalog-validation-policy.md). `supplier_published` vẫn là proof website. Không trạng thái nào khẳng định chất lượng/uy tín độc lập.
 
 Kiểm kho không tạo session hoặc ghi catalog:
 

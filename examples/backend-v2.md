@@ -1,12 +1,12 @@
 # Gọi backend v2 và nối frontend
 
-Runtime: [phạm vi/giới hạn](../docs/backend-v2-runtime.md). Contract request/response: [schemas v2](../contracts/v2/). `/v1` tiếp tục dùng được; frontend mới dùng `/v2` cho proposal và một bảng nhu cầu + URL.
+Runtime: [phạm vi/giới hạn](../src/api/backend-v2-runtime.md). Contract request/response: [schemas v2](../contracts/v2/). `/v1` tiếp tục dùng được; frontend mới dùng `/v2` cho proposal và một bảng nhu cầu + URL.
 
 ## Khởi động
 
 Từ repo root: `uv sync`, `uv run tour-backend serve`. Sau sửa code, Ctrl+C và chạy lại. Mở `http://127.0.0.1:8000/docs`, tìm nhóm **v2**. Backend đọc NIM từ `.env` hiện có; không đưa key NIM vào frontend.
 
-Mặc định `DATA_PROVIDER=fixture`: chỉ ba tour mô phỏng, origin `synthetic`. Các URL dưới là fixture IDs, không được fetch trên Internet. Crawler thật cần `DATA_PROVIDER=http`, `CRAWLER_URL`, `CRAWLER_REGISTRY_PATH` và endpoint chấp nhận [contract v1](../docs/crawler-contract.md); chưa nối thẳng JSON/CSV `tourcrawl`.
+Mặc định `DATA_PROVIDER=fixture`: chỉ ba tour mô phỏng, origin `synthetic`. Các URL dưới là fixture IDs, không được fetch trên Internet. Crawler thật cần `DATA_PROVIDER=http`, `CRAWLER_URL`, `CRAWLER_REGISTRY_PATH` và endpoint chấp nhận [contract v1](../src/data_access/crawler-contract.md); chưa nối thẳng JSON/CSV `tourcrawl`.
 
 1. `POST /v2/sessions`, không body/auth → `data.token` và `data.id`.
 2. Swagger **Authorize → SessionBearer**, dán riêng token. Khi gọi từ FE, gửi `Authorization: Bearer <token>`.
@@ -125,7 +125,7 @@ Có proposal đang pending thì request merge phải thêm `proposal_id` và `ex
 
 Contact public `POST /v2/contacts`: category `feedback|data_issue|support`, message (≤4.000), reply_to optional, client_submission_id để retry, context.session_id/comparison_id phải owned. Lưu ticket `new`; không gửi email.
 
-Admin dùng token riêng theo [runtime config](../docs/backend-v2-runtime.md), Swagger AdminBearer. API có overview `[from,to)` UTC, sources/create/check/approve/pause/refresh/runs, contacts xử lý CAS, audit, sessions/activity metadata với paging. Job nguồn đọc tại `GET /v2/admin/jobs/{id}`. Viewer bị lược email/message/internal notes; operator chỉ pause/refresh nguồn đã duyệt và xử lý ticket; admin thêm policy/approval. Không dùng token session làm admin.
+Admin dùng token riêng theo [runtime config](../src/api/backend-v2-runtime.md), Swagger AdminBearer. API có overview `[from,to)` UTC, sources/create/check/approve/pause/refresh/runs, contacts xử lý CAS, audit, sessions/activity metadata với paging. Job nguồn đọc tại `GET /v2/admin/jobs/{id}`. Viewer bị lược email/message/internal notes; operator chỉ pause/refresh nguồn đã duyệt và xử lý ticket; admin thêm policy/approval. Không dùng token session làm admin.
 
 Source mới gửi capabilities đầy đủ theo schema; nguồn unchecked/paused, check phải qua trusted checker đã cấu hình rồi approve, sau đó PATCH active. CLI chưa có checker robots/terms thật; job sẽ trả `ACCESS_CHECKER_NOT_CONFIGURED` nếu chưa nối. Không bật nguồn bằng cách sửa status trên UI.
 

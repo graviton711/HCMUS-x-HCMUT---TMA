@@ -1,10 +1,10 @@
 # Data access
 
-`GatewayV2.collect_analysis` đọc một universe bounded không hard-filter để tính baseline và what-if cùng snapshot. Supabase có analysis flag riêng và một transaction; URL-only giữ scope URL, HTTP scope do upstream giới hạn. [Policy](../../docs/what-if-analysis.md).
+`GatewayV2.collect_analysis` đọc một universe bounded không hard-filter để tính baseline và what-if cùng snapshot. Supabase có analysis flag riêng và một transaction; URL-only giữ scope URL, HTTP scope do upstream giới hạn. [Policy](../api/what-if-analysis.md).
 
-V2 adapter (`v2.py`) gộp reference/discovery qua gateway hiện hữu, giữ task errors và deadline, dùng runtime registry của Store. Transport upstream v1 được công bố rõ; crawler extraction/profile vẫn do owner crawler phụ trách. Xem [backend-v2-runtime](../../docs/backend-v2-runtime.md).
+V2 adapter (`v2.py`) gộp reference/discovery qua gateway hiện hữu, giữ task errors và deadline, dùng runtime registry của Store. Transport upstream v1 được công bố rõ; crawler extraction/profile vẫn do owner crawler phụ trách. Xem [backend-v2-runtime](../api/backend-v2-runtime.md).
 
-**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
+**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../api/backend-runtime.md).
 
 ## Trách nhiệm / input-output
 
@@ -30,13 +30,13 @@ Input: QuerySpec hoặc URL targets, source registry, deadline và snapshot sele
 Acceptance: field sai không thành fact; lỗi một source không mất source khác; rollback không tạo evidence refs mồ côi; reused snapshots/crawler/fixture cho cùng schema; dữ liệu mô phỏng không mang nhãn thật.
 ## Semantic v2 adapter
 
-Gateway v2 compile values mới sang crawler v1 bằng adapter có markers, không drop/narrow OR hoặc scoped intents. Snapshot v2 semantic facts có schema/evidence binding; nguồn hiện chưa trả field thì missing. [Contract](../../docs/requirements-semantics.md).
+Gateway v2 compile values mới sang crawler v1 bằng adapter có markers, không drop/narrow OR hoặc scoped intents. Snapshot v2 semantic facts có schema/evidence binding; nguồn hiện chưa trả field thì missing. [Contract](../requirements/requirements-semantics.md).
 
 ## Kho tour Supabase — implementation
 
 Provider `supabase` dùng PostgreSQL reader chỉ đọc và [adapter v2](supabase/README.md) để lấy `providers/tours/offers`; không dùng REST publishable key để vượt RLS. API v1 từ chối acquisition với provider này; fixture/http vẫn có contract cũ. Pool chia sẻ giữa request, đóng khi shutdown; schema/permission/deadline errors được che thông tin kết nối.
 
-Header scan có giới hạn, ưu tiên địa danh canonical, full records/offers chỉ lấy cho pool đã chọn. URL hỏng được cách ly; không mất target hợp lệ khác. Database record provenance không chứng minh website facts; preview có raw prices/itinerary/offer metadata, evaluator giữ unknown nếu chưa đủ proof/freshness. [Kế hoạch và nghiệm thu](../../docs/supabase-tour-integration-plan.md), [test từng bước](../../examples/backend-supabase-v2.md).
+Header scan có giới hạn, ưu tiên địa danh canonical, full records/offers chỉ lấy cho pool đã chọn. URL hỏng được cách ly; không mất target hợp lệ khác. Database record provenance không chứng minh website facts; preview có raw prices/itinerary/offer metadata, evaluator giữ unknown nếu chưa đủ proof/freshness. [Kế hoạch và nghiệm thu](supabase-tour-integration-plan.md), [test từng bước](../../examples/backend-supabase-v2.md).
 # Catalog validation boundary
 
-[Policy](../../docs/catalog-validation-policy.md): Gateway v2 dùng FactV2 để giữ catalog_validated, validate receipt source/capability. HTTP/fixture không được khai báo catalog_validated hoặc receipt. Không nâng dữ liệu unverified thành supplier_published.
+[Policy](supabase/catalog-validation-policy.md): Gateway v2 dùng FactV2 để giữ catalog_validated, validate receipt source/capability. HTTP/fixture không được khai báo catalog_validated hoặc receipt. Không nâng dữ liệu unverified thành supplier_published.

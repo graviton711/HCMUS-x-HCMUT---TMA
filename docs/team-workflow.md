@@ -5,7 +5,7 @@
 | Phần | Owner chính | Trách nhiệm |
 |---|---|---|
 | Crawl và data | **Thái Sơn** | Khảo sát nguồn, trích xuất/làm sạch data, giữ provenance; báo backend các field còn thiếu hoặc nguồn không lấy được. |
-| Backend | **Minh Khôi** | API, chuẩn hóa đầu vào, logic so sánh và trade-off; fixture/HTTP runtime theo [API v1](api-contract.md), [domain](backend-contracts.md) và [crawler contract](crawler-contract.md). |
+| Backend | **Minh Khôi** | API, chuẩn hóa đầu vào, logic so sánh và trade-off; fixture/HTTP runtime theo [API v1](../src/api/api-contract.md), [domain](../src/domain/backend-contracts.md) và [crawler contract](../src/data_access/crawler-contract.md). |
 | Frontend | **Minh Phú** | Hai luồng nhu cầu/URL, kết quả, dữ liệu thiếu, trade-off và evidence; review flow/public response fixtures theo [planning](frontend-plan.md). |
 
 Owner chính chịu trách nhiệm tích hợp phần của mình; cả ba vẫn review và hỗ trợ chéo. Không cần chờ crawler hoàn tất mới bắt đầu backend/frontend.

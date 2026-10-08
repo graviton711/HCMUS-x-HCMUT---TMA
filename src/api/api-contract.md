@@ -1,8 +1,8 @@
 # HTTP contract v1 để frontend tích hợp
 
-**Mục tiêu frontend 07/10:** [protocol v2 mẫu](frontend-protocol-v2.md) và [JSON exchanges](../examples/protocol-v2/README.md) bổ sung multi-edit/chat preview/atomic confirm, unified pipeline, table metadata/evidence/admin/contact. Phần bên dưới mô tả **v1 hiện hữu**; v2 chưa implement và không tương thích request trực tiếp vào v1.
+**Mục tiêu frontend 07/10:** [protocol v2 mẫu](../../docs/frontend-protocol-v2.md) và [JSON exchanges](../../examples/protocol-v2/README.md) bổ sung multi-edit/chat preview/atomic confirm, unified pipeline, table metadata/evidence/admin/contact. Phần bên dưới mô tả **v1 hiện hữu**; v2 chưa implement và không tương thích request trực tiếp vào v1.
 
-**Trạng thái:** Endpoints v1 đã implement và kiểm thử với temporary SQLite/fixture/NIM stub. Request schemas ở [contracts](../contracts/README.md), ví dụ chạy ở [examples](../examples/README.md). Dữ liệu tour mặc định là synthetic.
+**Trạng thái:** Endpoints v1 đã implement và kiểm thử với temporary SQLite/fixture/NIM stub. Request schemas ở [contracts](../../contracts/README.md), ví dụ chạy ở [examples](../../examples/README.md). Dữ liệu tour mặc định là synthetic.
 
 ## Tạo và sửa nhu cầu
 
@@ -19,7 +19,7 @@
 
 Text → HTTP 202, `{requirement_id, revision: 0, job_id, status: "queued"}`. Khi parse thành công, revision 1 có thể ready hoặc needs_clarification. Revision chỉ là bản hiểu đã validate, không phải bằng chứng mọi thông tin đã đủ. Form hợp lệ không cần LLM có thể trả 201 + revision 1.
 
-`GET /v1/requirements/{id}` trả current revision/status, input summary, targets, party, conditions/hard tree/preferences, unresolved, clarifications và readiness. SourceReference/span theo [backend-contracts.md](backend-contracts.md). Timestamp reference do server ghi tại lúc nhận lượt nói; timezone là input hợp lệ, không cho client tùy ý đổi clock server.
+`GET /v1/requirements/{id}` trả current revision/status, input summary, targets, party, conditions/hard tree/preferences, unresolved, clarifications và readiness. SourceReference/span theo [backend-contracts.md](../domain/backend-contracts.md). Timestamp reference do server ghi tại lúc nhận lượt nói; timezone là input hợp lệ, không cho client tùy ý đổi clock server.
 
 `PATCH /v1/requirements/{id}` cần `expected_revision`, và đúng một nhóm `text`, `answers`, hoặc `edits`. Structured edits chỉ dùng whitelist field/condition paths; không cho JSON patch tùy ý.
 

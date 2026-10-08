@@ -1,6 +1,6 @@
 # NVIDIA NIM — cấu hình và probe
 
-**Trạng thái:** Đã có NIM gateway, grounded parser, giới hạn một repair và runner smoke. Các probe lịch sử dưới đây không thay kết quả kiểm tra hiện tại ở [backend-runtime.md](backend-runtime.md).
+**Trạng thái:** Đã có NIM gateway, grounded parser, giới hạn một repair và runner smoke. Các probe lịch sử dưới đây không thay kết quả kiểm tra hiện tại ở [backend-runtime.md](../api/backend-runtime.md).
 
 ## Cấu hình đã xác nhận
 
@@ -45,7 +45,7 @@ Không gán tỷ lệ accuracy từ ba ca này. Probe không kiểm tra normaliz
 4. Gold evaluation so sánh `none/low/high`, prompt và sampling trên cùng bộ tiếng Việt. Chọn cấu hình theo semantic accuracy, false-ready, latency và token usage; không chọn `none` chỉ vì probe nhanh.
 5. Khi implement gateway, phân biệt lỗi credential, rate limit, timeout, upstream/202 pending và malformed/truncated content. Retry/repair có giới hạn và nằm trong tổng deadline; không trả draft giả khi model lỗi.
 
-Các quyết định schema/backend khác vẫn là bản nháp ở [backend-plan.md](archive/backend-plan.md) và [requirements README](../src/requirements/README.md).
+Các quyết định schema/backend khác vẫn là bản nháp ở [backend-plan.md](../../docs/archive/backend-plan.md) và [requirements README](../../src/requirements/README.md).
 
 ## Probe tiếp theo: sáu ca, ba mức reasoning
 
@@ -59,10 +59,10 @@ Một request cho mỗi `none/low/high`, chạy độc lập đồng thời trê
 
 Field `hotel_action` trong prompt thử chưa định nghĩa đủ semantics cho initial creation nên không dùng nó chấm điểm. Không công bố accuracy/winner từ thử nghiệm này; batch case cũng khác cách gọi production.
 
-Hệ quả: một request production chỉ có context của một requirement; gold chạy từng case riêng. Vẫn cần evidence-grounding và invariant cho patch/removal. Async parse job giữ UI theo dõi được, timeout thành terminal error; không tự hạ model/profile để che lỗi. Chọn profile sau bộ [gold](archive/requirements-evaluation.md), không chỉ theo latency của probe.
+Hệ quả: một request production chỉ có context của một requirement; gold chạy từng case riêng. Vẫn cần evidence-grounding và invariant cho patch/removal. Async parse job giữ UI theo dõi được, timeout thành terminal error; không tự hạ model/profile để che lỗi. Chọn profile sau bộ [gold](../../docs/archive/requirements-evaluation.md), không chỉ theo latency của probe.
 
 ## Gateway hiện tại (02/10/2026)
 
 `src/requirements/nim.py` dùng schema riêng cho initial/update, đưa schema vào prompt và kiểm tra lại ở backend. Native response_format được gửi nhưng không được coi là bảo đảm schema enforcement. Prompt `vi-conditions-v5`, raw quotes/values, operator whitelist, source spans và condition-tree references đều được kiểm tra; tối đa một repair có feedback cụ thể.
 
-Sau khi sửa normalization chuỗi tiền kèm currency/basis và schema update, smoke 8 ca + 2 patch đạt ở lần chạy cuối. Các thử trước từng bị chặn vì field/operator sai, reference thiếu và raw amount chưa được normalize. Full gold và held-out vẫn chưa chạy. Báo cáo local tại `data/evaluation-final.local.json`, phạm vi xác minh ở [runtime](backend-runtime.md).
+Sau khi sửa normalization chuỗi tiền kèm currency/basis và schema update, smoke 8 ca + 2 patch đạt ở lần chạy cuối. Các thử trước từng bị chặn vì field/operator sai, reference thiếu và raw amount chưa được normalize. Full gold và held-out vẫn chưa chạy. Báo cáo local tại `data/evaluation-final.local.json`, phạm vi xác minh ở [runtime](../api/backend-runtime.md).

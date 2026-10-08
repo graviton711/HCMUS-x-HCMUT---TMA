@@ -1,6 +1,6 @@
 # Crawler ↔ backend: contract v1 đề xuất
 
-**Mẫu UI mục tiêu 07/10:** [pipeline v2](backend-pipeline-v2.md) và [protocol/evidence](frontend-protocol-v2.md) định nghĩa stage/DTO chung URL+retrieval, giá/offer/policies, locator+deep-link/fallback, source registry/admin. Xem [JSON mẫu](../examples/protocol-v2/README.md). Đây là yêu cầu bổ sung đề xuất; v1 bên dưới vẫn là baseline code, crawler thật chưa đáp ứng.
+**Mẫu UI mục tiêu 07/10:** [pipeline v2](../api/backend-pipeline-v2.md) và [protocol/evidence](../../docs/frontend-protocol-v2.md) định nghĩa stage/DTO chung URL+retrieval, giá/offer/policies, locator+deep-link/fallback, source registry/admin. Xem [JSON mẫu](../../examples/protocol-v2/README.md). Đây là yêu cầu bổ sung đề xuất; v1 bên dưới vẫn là baseline code, crawler thật chưa đáp ứng.
 
 **Trạng thái:** Backend đã có CrawlRequest/CrawlResult models, JSON Schema, fixture gateway và HTTP gateway. Crawler thật chưa có mẫu và chưa tích hợp. Ví dụ dưới chỉ là dữ liệu mô phỏng.
 
@@ -25,7 +25,7 @@
 | `evidence` | Evidence id, URL, publisher, snapshot ref, extraction method, locator, raw quote/value, observed_at |
 | `issues` | Code, source/target/snapshot/field path, explanation, retryable; không thay field thiếu bằng dữ kiện suy đoán |
 
-`TourSnapshot`: snapshot_id, tour_id, supplier_id, canonical_url, observed_at, fields. Fields dùng catalog ở [backend-contracts.md](backend-contracts.md), dữ liệu tĩnh như destination/origin/duration/hotel/shopping/services/policies.
+`TourSnapshot`: snapshot_id, tour_id, supplier_id, canonical_url, observed_at, fields. Fields dùng catalog ở [backend-contracts.md](../domain/backend-contracts.md), dữ liệu tĩnh như destination/origin/duration/hotel/shopping/services/policies.
 
 `OfferSnapshot`: snapshot_id, offer_id, tour_snapshot_id, fields cho departure/return/availability, price_quotes và extra_charges. Offer id chỉ đại diện một tập điều kiện khởi hành/giá áp dụng; giá khác ngày hoặc cấu hình phải tách quote/offer, không overwrite.
 

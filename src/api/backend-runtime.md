@@ -1,6 +1,6 @@
 # Backend v1: chạy và tích hợp
 
-Backend v2 được bổ sung ngày 07/10/2026, giữ các routes v1 bên dưới. SQLite hiện schema 2 và tự migrate từ 1. Luồng proposal/admin/events và giới hạn nghiệm thu mới tại [backend-v2-runtime](backend-v2-runtime.md); request examples tại [backend-v2](../examples/backend-v2.md).
+Backend v2 được bổ sung ngày 07/10/2026, giữ các routes v1 bên dưới. SQLite hiện schema 2 và tự migrate từ 1. Luồng proposal/admin/events và giới hạn nghiệm thu mới tại [backend-v2-runtime](backend-v2-runtime.md); request examples tại [backend-v2](../../examples/backend-v2.md).
 
 **Trạng thái 02/10/2026:** Có implementation, 85 tests offline đạt và hai luồng chạy qua ASGI API với worker thật. NIM live smoke đạt 8/8 ca đã chọn, gồm 2 lượt sửa hội thoại. Crawler thật chưa có dữ liệu để kiểm chứng.
 
@@ -27,9 +27,9 @@ Mở `http://127.0.0.1:8000/` để thấy trang chào và liên kết vào Swag
 4. PATCH bằng `expected_revision` và đúng một nhóm text/answers/edits; response 409 nghĩa phải tải state mới.
 5. POST comparison với requirement id/revision; poll job rồi GET comparison/evidence.
 
-Xem [payload chạy được](../examples/README.md), [HTTP contract](api-contract.md) và [schemas](../contracts/README.md). Session demo có hạn 24 giờ; chưa có tài khoản/password. Lỗi NIM không commit revision mới. Idempotency keys có phạm vi session và body/path; hết hạn sau 24 giờ.
+Xem [payload chạy được](../../examples/README.md), [HTTP contract](api-contract.md) và [schemas](../../contracts/README.md). Session demo có hạn 24 giờ; chưa có tài khoản/password. Lỗi NIM không commit revision mới. Idempotency keys có phạm vi session và body/path; hết hạn sau 24 giờ.
 
-Trong Swagger: tạo session → **Authorize** bằng riêng token → tạo requirement → so sánh bằng ID/revision thật. Chọn example **So sánh URL mô phỏng** để thử persistence không cần NIM/crawler. Session, requirement và comparison/job được lưu ngay khi từng request hợp lệ; refresh SQLite viewer để thấy dữ liệu. Request 401/404 không tạo comparison/job. Hướng dẫn xử lý ở [examples](../examples/README.md#checking-database-writes).
+Trong Swagger: tạo session → **Authorize** bằng riêng token → tạo requirement → so sánh bằng ID/revision thật. Chọn example **So sánh URL mô phỏng** để thử persistence không cần NIM/crawler. Session, requirement và comparison/job được lưu ngay khi từng request hợp lệ; refresh SQLite viewer để thấy dữ liệu. Request 401/404 không tạo comparison/job. Hướng dẫn xử lý ở [examples](../../examples/README.md#checking-database-writes).
 
 Budget coverage thiếu → `tour_price` + provenance `system_default`, theo quyết định user. Giá trị explicit `trip_total` vẫn được giữ. Currency/basis không được suy đoán. Thiếu tuổi chỉ chặn phép đánh giá chi phí cần tuổi, không chặn đối chiếu tour tĩnh.
 
@@ -37,7 +37,7 @@ Budget coverage thiếu → `tour_price` + provenance `system_default`, theo quy
 
 Mặc định `DATA_PROVIDER=fixture`: ba tour giả tại `https://tour-demo.invalid/tour-a`, `tour-b`, `tour-c`; không fetch các URL này. Kết quả mang `origin=synthetic`. Ví dụ discover với 2 người lớn + bé 8 tuổi và trần giá tour 30 triệu có một tour đạt, một tour thiếu giá trẻ, một tour vượt trần.
 
-Kết nối crawler: cấu hình `DATA_PROVIDER=http`, `CRAWLER_URL`, `CRAWLER_REGISTRY_PATH`, tùy chọn `CRAWLER_API_KEY`. [Registry mẫu](../examples/source-registry.json) chưa duyệt nguồn nào. Crawler nhận POST CrawlRequest và trả CrawlResult; URL fetch/redirect/DNS checks thuộc crawler. Backend chỉ gọi endpoint server cấu hình, không fetch URL người dùng.
+Kết nối crawler: cấu hình `DATA_PROVIDER=http`, `CRAWLER_URL`, `CRAWLER_REGISTRY_PATH`, tùy chọn `CRAWLER_API_KEY`. [Registry mẫu](../../examples/source-registry.json) chưa duyệt nguồn nào. Crawler nhận POST CrawlRequest và trả CrawlResult; URL fetch/redirect/DNS checks thuộc crawler. Backend chỉ gọi endpoint server cấu hình, không fetch URL người dùng.
 
 Backend kiểm tra correlation, whitelist nguồn, snapshot/evidence bindings, types và thời điểm. Field tĩnh sai được cách ly với issue; envelope/provenance/giá không hợp lệ bị từ chối. Với nguồn thật, TTL cho `price`, `departure_date`, `return_date`, `availability` do registry cấu hình; thiếu TTL thì freshness unknown, không chứng minh điều kiện biến động. `pricing_complete` là sourced boolean chứng minh mọi phụ thu/giảm giá bắt buộc đã được phản ánh; thiếu thì không xác nhận tổng tiền.
 
@@ -53,7 +53,7 @@ URL comparison giữ mọi target và thứ tự. Có nhiều offers thì yêu c
 - Catalog alias hiện gồm một số điểm đến phổ biến; địa danh/chỉ tiêu ngoài catalog giữ unresolved/unsupported. Không bảo đảm hiểu mọi cách nói tiếng Việt. Số viết bằng chữ, yêu cầu vận động/uy tín chưa có metric cần user làm rõ hoặc sửa form.
 - JSON Schema/OpenAPI mô tả request/domain; còn invariants nghiệp vụ ở Python. Chưa có streaming progress theo từng nguồn hay tự tổng hợp điểm xếp hạng.
 
-Settings đầy đủ ở [settings.py](../src/api/settings.py), mẫu env không chứa key thật ở [backend.env.example](../examples/backend.env.example).
+Settings đầy đủ ở [settings.py](settings.py), mẫu env không chứa key thật ở [backend.env.example](../../examples/backend.env.example).
 
 ## Kiểm tra
 

@@ -1,6 +1,6 @@
 # Kiểm chứng phân tích thay đổi điều kiện — 08/10/2026
 
-Implementation trên nhánh `backend`, policy `what-if-v1`. [Thiết kế](../what-if-analysis.md), [test từng bước](../../examples/backend-what-if-v2.md). Không commit/push, không sửa frontend hoặc catalog Supabase trong lần triển khai này.
+Implementation trên nhánh `backend`, policy `what-if-v1`. [Thiết kế](../../src/api/what-if-analysis.md), [test từng bước](../../examples/backend-what-if-v2.md). Không commit/push, không sửa frontend hoặc catalog Supabase trong lần triển khai này.
 
 ## Kết quả offline
 
@@ -55,7 +55,7 @@ Lần chạy đầy đủ trước đó: `data/live-tests/what-if-20261008T10133
 
 ## Việc nhóm cần bổ sung dữ liệu
 
-1. Policy mới [catalog-validation-v1](../catalog-validation-policy.md) thay yêu cầu bulk field proof bằng nguồn opt-in + validation, giữ record provenance/link. Quote website bổ sung có chọn lọc; mở rộng mapping địa danh đúng phạm vi. Số liệu bên trên là baseline trước policy mới; xem [kết quả hiện hành](backend-catalog-validation-verification.md).
+1. Policy mới [catalog-validation-v1](../../src/data_access/supabase/catalog-validation-policy.md) thay yêu cầu bulk field proof bằng nguồn opt-in + validation, giữ record provenance/link. Quote website bổ sung có chọn lọc; mở rộng mapping địa danh đúng phạm vi. Số liệu bên trên là baseline trước policy mới; xem [kết quả hiện hành](backend-catalog-validation-verification.md).
 2. Ghi rõ price coverage/basis/qualifiers: giá cho người lớn, giá từ hoặc chính xác, bao gồm phần nào. Không chuyển giá `from` thành exact hoặc mặc định đã bao mọi phụ thu để đạt hard cap.
 3. Bổ sung return_date có bằng chứng/policy derivation được duyệt, tour_type và main_journey transport; không coi `mixed` tự động là đi ô tô từ nơi xuất phát.
 4. Uy tín/dịch vụ/đáng tiền cần nguồn đánh giá và metric policy được thống nhất; giữ unsupported khi chưa có. Thiên nhiên cần các nội dung/tags có evidence đủ kiểm chứng.

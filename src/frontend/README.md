@@ -1,7 +1,7 @@
 # Module frontend
 
 **Trạng thái:** PLANNING. Thư mục hiện chỉ chứa tài liệu; stack và cấu trúc source cuối cùng chốt ở P2.
-**Tài liệu:** [Planning](../../docs/frontend-plan.md), [flow](../../docs/frontend-flows.md), [checklist FE–BE](../../docs/frontend-backend-checklist.md), [tích hợp v1](../../docs/frontend-api-integration.md), [HTTP contract](../../docs/api-contract.md), [domain](../../docs/backend-contracts.md), [schemas](../../contracts/README.md).
+**Tài liệu:** [Planning](../../docs/frontend-plan.md), [flow](../../docs/frontend-flows.md), [checklist FE–BE](../../docs/frontend-backend-checklist.md), [tích hợp v1](../../docs/frontend-api-integration.md), [HTTP contract](../api/api-contract.md), [domain](../domain/backend-contracts.md), [schemas](../../contracts/README.md).
 
 **P3 design review:** User chốt **Giấy & Mực**, Newsreader + Be Vietnam Pro ngày 06/10; [review nhóm](../../docs/frontend-review-2026-10-06.md) cập nhật ba màn/chat/analysis/activity. [Lịch sử A/B](../../docs/frontend-design-review.md), [prototype HTML/CSS/JS](../../prototypes/frontend-design/README.md) ngoài `src/`; fixture chỉ review bố cục/tương tác, không DTO/client/mock runtime P4, không chứng minh G9–G13 hoặc chốt stack. P3.3–P3.7 còn mở; module vẫn chỉ có tài liệu.
 

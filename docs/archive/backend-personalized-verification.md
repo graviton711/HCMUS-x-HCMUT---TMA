@@ -1,6 +1,6 @@
 # Nghiệm thu personalized core — 08/10/2026
 
-Triển khai trên `backend` theo [policy](../personalized-requirement-policy.md), ngân sách form là trần bắt buộc. Không sửa frontend, catalog Supabase hoặc application DB đang dùng; smoke dùng SQLite trong memory. Credentials vẫn nằm trong `.env`, artifacts chỉ lưu public responses.
+Triển khai trên `backend` theo [policy](../../src/requirements/personalized-requirement-policy.md), ngân sách form là trần bắt buộc. Không sửa frontend, catalog Supabase hoặc application DB đang dùng; smoke dùng SQLite trong memory. Credentials vẫn nằm trong `.env`, artifacts chỉ lưu public responses.
 
 ## Offline
 
