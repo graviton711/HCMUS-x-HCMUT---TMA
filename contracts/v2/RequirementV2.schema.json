@@ -165,7 +165,7 @@
       "title": "Clarification",
       "type": "object"
     },
-    "Condition": {
+    "ConditionV2": {
       "additionalProperties": false,
       "properties": {
         "id": {
@@ -188,8 +188,11 @@
             "mapping": {
               "budget": "#/$defs/Budget",
               "date": "#/$defs/DateValue",
+              "entities": "#/$defs/EntitySetValue",
               "number": "#/$defs/NumberValue",
+              "qualitative": "#/$defs/QualitativeValue",
               "set": "#/$defs/SetValue",
+              "temporal": "#/$defs/TemporalValue",
               "unresolved": "#/$defs/UnresolvedValue"
             },
             "propertyName": "kind"
@@ -209,6 +212,15 @@
             },
             {
               "$ref": "#/$defs/UnresolvedValue"
+            },
+            {
+              "$ref": "#/$defs/EntitySetValue"
+            },
+            {
+              "$ref": "#/$defs/TemporalValue"
+            },
+            {
+              "$ref": "#/$defs/QualitativeValue"
             }
           ],
           "title": "Value"
@@ -230,6 +242,33 @@
           "minItems": 1,
           "title": "Sources",
           "type": "array"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "main_journey",
+                "itinerary"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scope"
+        },
+        "trace": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResolutionTrace"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -240,7 +279,7 @@
         "strength",
         "sources"
       ],
-      "title": "Condition",
+      "title": "ConditionV2",
       "type": "object"
     },
     "DateValue": {
@@ -273,6 +312,86 @@
         "value"
       ],
       "title": "DateValue",
+      "type": "object"
+    },
+    "EntityMember": {
+      "additionalProperties": false,
+      "properties": {
+        "raw": {
+          "maxLength": 800,
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "entity_type": {
+          "enum": [
+            "place",
+            "transport",
+            "service",
+            "supplier",
+            "tour_type"
+          ],
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "entity_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity Id"
+        },
+        "status": {
+          "enum": [
+            "resolved",
+            "catalog_missing"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "raw",
+        "entity_type",
+        "status"
+      ],
+      "title": "EntityMember",
+      "type": "object"
+    },
+    "EntitySetValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "entities",
+          "default": "entities",
+          "title": "Kind",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/EntityMember"
+          },
+          "maxItems": 30,
+          "minItems": 1,
+          "title": "Members",
+          "type": "array"
+        },
+        "catalog_version": {
+          "title": "Catalog Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "members",
+        "catalog_version"
+      ],
+      "title": "EntitySetValue",
       "type": "object"
     },
     "JsonValue": {},
@@ -435,6 +554,51 @@
       "title": "Preferences",
       "type": "object"
     },
+    "QualitativeValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "qualitative",
+          "default": "qualitative",
+          "title": "Kind",
+          "type": "string"
+        },
+        "concept": {
+          "enum": [
+            "supplier_reputation",
+            "service_quality",
+            "price_value",
+            "nature"
+          ],
+          "title": "Concept",
+          "type": "string"
+        },
+        "raw": {
+          "maxLength": 800,
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "metric_policy": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metric Policy"
+        }
+      },
+      "required": [
+        "concept",
+        "raw"
+      ],
+      "title": "QualitativeValue",
+      "type": "object"
+    },
     "ReadinessV2": {
       "additionalProperties": false,
       "properties": {
@@ -465,6 +629,26 @@
           "title": "Reasons",
           "type": "array"
         },
+        "scope_coverage": {
+          "default": "complete",
+          "enum": [
+            "complete",
+            "partial",
+            "unavailable"
+          ],
+          "title": "Scope Coverage",
+          "type": "string"
+        },
+        "unassessed_preferences": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Unassessed Preferences",
+          "type": "array"
+        },
         "blockers": {
           "items": {
             "type": "string"
@@ -474,6 +658,78 @@
         }
       },
       "title": "ReadinessV2",
+      "type": "object"
+    },
+    "ResolutionTrace": {
+      "additionalProperties": false,
+      "properties": {
+        "raw_values": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Raw Values",
+          "type": "array"
+        },
+        "rule": {
+          "title": "Rule",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule",
+        "version"
+      ],
+      "title": "ResolutionTrace",
+      "type": "object"
+    },
+    "SemanticIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "reason_code": {
+          "title": "Reason Code",
+          "type": "string"
+        },
+        "responsibility": {
+          "enum": [
+            "user",
+            "backend",
+            "data"
+          ],
+          "title": "Responsibility",
+          "type": "string"
+        },
+        "condition_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Condition Ids",
+          "type": "array"
+        },
+        "explanation": {
+          "title": "Explanation",
+          "type": "string"
+        },
+        "blocking": {
+          "default": false,
+          "title": "Blocking",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reason_code",
+        "responsibility",
+        "condition_ids",
+        "explanation"
+      ],
+      "title": "SemanticIssue",
       "type": "object"
     },
     "SetValue": {
@@ -625,6 +881,201 @@
       "title": "Target",
       "type": "object"
     },
+    "TemporalValue": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "temporal",
+          "default": "temporal",
+          "title": "Kind",
+          "type": "string"
+        },
+        "raw": {
+          "maxLength": 800,
+          "minLength": 1,
+          "title": "Raw",
+          "type": "string"
+        },
+        "calendar": {
+          "enum": [
+            "gregorian",
+            "vietnamese_lunar",
+            "unresolved"
+          ],
+          "title": "Calendar",
+          "type": "string"
+        },
+        "group_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Group Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "start",
+            "end",
+            "single"
+          ],
+          "title": "Role",
+          "type": "string"
+        },
+        "semantics": {
+          "enum": [
+            "availability",
+            "exact",
+            "departure_window",
+            "ambiguous",
+            "single"
+          ],
+          "title": "Semantics",
+          "type": "string"
+        },
+        "day": {
+          "anyOf": [
+            {
+              "maximum": 31,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Day"
+        },
+        "month": {
+          "anyOf": [
+            {
+              "maximum": 12,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Month"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "maximum": 2099,
+              "minimum": 2000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year"
+        },
+        "year_origin": {
+          "anyOf": [
+            {
+              "enum": [
+                "explicit",
+                "holiday_anchor"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year Origin"
+        },
+        "holiday": {
+          "anyOf": [
+            {
+              "const": "tet",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Holiday"
+        },
+        "holiday_year": {
+          "anyOf": [
+            {
+              "maximum": 2099,
+              "minimum": 2001,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Holiday Year"
+        },
+        "leap": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Leap"
+        },
+        "resolved_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved Date"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "converter_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Converter Version"
+        }
+      },
+      "required": [
+        "raw",
+        "calendar",
+        "group_id",
+        "role",
+        "semantics"
+      ],
+      "title": "TemporalValue",
+      "type": "object"
+    },
     "Tree": {
       "additionalProperties": false,
       "properties": {
@@ -703,8 +1154,7 @@
       "type": "string"
     },
     "policy_version": {
-      "const": "requirements-v1",
-      "default": "requirements-v1",
+      "default": "requirements-v2.2",
       "title": "Policy Version",
       "type": "string"
     },
@@ -755,7 +1205,7 @@
     },
     "conditions": {
       "items": {
-        "$ref": "#/$defs/Condition"
+        "$ref": "#/$defs/ConditionV2"
       },
       "maxItems": 50,
       "title": "Conditions",
@@ -776,6 +1226,14 @@
     },
     "readiness": {
       "$ref": "#/$defs/ReadinessV2"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/SemanticIssue"
+      },
+      "maxItems": 100,
+      "title": "Issues",
+      "type": "array"
     },
     "input_kind": {
       "enum": [

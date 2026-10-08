@@ -1,6 +1,10 @@
 # Local backend examples
 
+Real Supabase catalog: use API **v2** and [this walkthrough](backend-supabase-v2.md). The v1 fixture examples below require `DATA_PROVIDER=fixture`; `.invalid` URLs do not refer to Supabase records.
+
 Backend v2: [request walkthrough](backend-v2.md), [runtime/limitations](../docs/backend-v2-runtime.md), [generated schemas](../contracts/v2/). The v1 walkthrough below remains valid. `protocol-v2/` contains design fixtures, not server-generated responses.
+
+Structured hard filter → per-offer pool → semantic assessment → deterministic ranking: [new flow and test guide](backend-retrieval-semantic-v2.md), [verification results](../docs/backend-retrieval-assessment-results.md).
 
 All tours below are synthetic; `.invalid` URLs are fixture identifiers and are never fetched.
 

@@ -25,8 +25,8 @@ from api.v2.models import (
     RequirementV2,
 )
 from domain.common import AppError, now, uid
-from domain.requirements import FIELDS
-from requirements.normalize import PLACE_PARENTS
+from domain.semantic import FIELDS_V2
+from requirements.catalog import CATALOG_VERSION, PLACE_ENTRIES, PLACE_RELATIONS
 
 
 def envelope(request, data, status=200):
@@ -104,20 +104,34 @@ def router(service, admin, owner, limits):
             "city:kr:busan": "Busan",
             "region:vn:central": "Miền Trung",
         }
+        labels.update({eid: aliases[0] for eid, aliases in PLACE_ENTRIES.items()})
         return envelope(
             request,
             {
-                "catalog_version": "catalog-v2.1",
+                "catalog_version": CATALOG_VERSION,
                 "destinations": [
-                    {"id": identifier, "label": label, "parent_id": PLACE_PARENTS.get(identifier)}
+                    {
+                        "id": identifier,
+                        "label": label,
+                        "parent_id": next(iter(PLACE_RELATIONS.get(identifier, ())), None),
+                    }
                     for identifier, label in labels.items()
                 ],
                 "origins": [
-                    {"id": key, "label": labels[key]}
-                    for key in ("city:vn:hcmc", "city:vn:hanoi", "city:vn:danang")
+                    {"id": key, "label": labels[key]} for key in labels if key.startswith("city:vn:")
                 ],
                 "fields": [
-                    {"id": field, "operators": sorted(operators)} for field, operators in FIELDS.items()
+                    {
+                        "id": field,
+                        "operators": sorted(operators),
+                        "processing_methods": ["semantic_assessment"]
+                        if field in {"supplier_reputation", "service_quality", "price_value", "unsupported"}
+                        else ["structured", "semantic_assessment"]
+                        if field in {"nature", "included_services"}
+                        else ["structured"],
+                        "strength_choices": ["hard", "soft"],
+                    }
+                    for field, operators in FIELDS_V2.items()
                 ],
                 "required_by_input_kind": {
                     "structured": [
@@ -131,6 +145,34 @@ def router(service, admin, owner, limits):
                     "text": ["text"],
                 },
                 "defaults": {"budget_coverage": {"value": "tour_price", "origin": "system_default"}},
+                "qualitative_policy": {
+                    "default_strength": "soft",
+                    "explicit_mandatory_strength": "hard",
+                    "unsupported_metrics": ["supplier_reputation", "service_quality", "price_value"],
+                },
+                "assessment_policy": {
+                    "enabled": store.settings.semantic_assessment_enabled,
+                    "policy_version": "semantic-assessment-v1",
+                    "max_candidates": store.settings.semantic_max_candidates,
+                    "max_pairs": store.settings.semantic_max_pairs,
+                    "max_input_chars": store.settings.semantic_max_input_chars,
+                    "excerpt_chars": store.settings.semantic_excerpt_chars,
+                    "timeout_seconds": store.settings.semantic_timeout_seconds,
+                    "ranking_policy": "rank-v2.3-bounds",
+                    "unsupported_fields": ["supplier_reputation", "service_quality", "price_value"],
+                    "strength_independent_of_processing": True,
+                },
+                "transports": [
+                    {"id": "motor_vehicle", "label": "Ô tô (loại rộng)"},
+                    {"id": "coach", "label": "Xe khách"},
+                    {"id": "car", "label": "Xe con"},
+                    {"id": "flight", "label": "Máy bay"},
+                    {"id": "train", "label": "Tàu hỏa"},
+                ],
+                "tour_types": [
+                    {"id": "join_group", "label": "Ghép đoàn"},
+                    {"id": "private_group", "label": "Đoàn riêng"},
+                ],
                 "preference_dimensions": [
                     {
                         "id": d,
@@ -151,7 +193,9 @@ def router(service, admin, owner, limits):
                     "page_max": 100,
                     "body_bytes": 65536,
                 },
-                "upstream_contract": "crawler-v1-adapter",
+                "upstream_contract": "supabase-catalog-v2"
+                if store.settings.data_provider == "supabase"
+                else "crawler-v1-adapter",
             },
         )
 
@@ -412,7 +456,7 @@ def router(service, admin, owner, limits):
         allowed = allowed and source.access_status == "approved"
         link = (
             ev["url"].split("#", 1)[0] + "#:~:text=" + quote(ev["raw_quote"], safe="")
-            if allowed and ev["method"] != "synthetic_fixture"
+            if allowed and ev["method"] not in {"synthetic_fixture", "database_record"}
             else ev["url"]
             if allowed
             else None
@@ -427,15 +471,23 @@ def router(service, admin, owner, limits):
                     "section_title": None,
                     "element_id": None,
                     "css_selector": None,
-                    "text_quote": {"exact": ev["raw_quote"], "prefix": None, "suffix": None},
+                    "text_quote": {
+                        "exact": ev["raw_quote"] if ev["method"] != "database_record" else None,
+                        "prefix": None,
+                        "suffix": None,
+                    },
                     "upstream_locator": ev["locator"],
                 },
                 "deep_link": {
                     "url": link,
-                    "method": "text_fragment" if allowed and ev["method"] != "synthetic_fixture" else "page",
+                    "method": "text_fragment"
+                    if allowed and ev["method"] not in {"synthetic_fixture", "database_record"}
+                    else "page",
                     "status": "best_effort" if allowed else "unavailable",
                     "verified_at": None,
-                    "reason": "Mở trang nguồn; có thể cần tìm trích đoạn."
+                    "reason": "Giá trị lưu trong database; trang nguồn chưa có locator/quote được kiểm chứng."
+                    if allowed and ev["method"] == "database_record"
+                    else "Mở trang nguồn; có thể cần tìm trích đoạn."
                     if allowed
                     else "Nguồn chưa được duyệt hoặc đã dừng.",
                 },
@@ -444,6 +496,9 @@ def router(service, admin, owner, limits):
                     "origin": "synthetic" if ev["method"] == "synthetic_fixture" else "source",
                     "verification": "unverified",
                     "independently_verified": False,
+                    "provenance_kind": "database_record"
+                    if ev["method"] == "database_record"
+                    else "website_excerpt",
                 },
             },
         )

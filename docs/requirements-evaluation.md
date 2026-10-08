@@ -1,8 +1,26 @@
 # Bộ tình huống đánh giá requirements
 
-**Trạng thái:** Gold specification thủ công để review; chưa phải test suite hoặc kết quả accuracy. Khi có parser sẽ chuyển thành fixtures `.json` có expected DTO/patch/clarification targets.
+**Trạng thái:** 50 câu + 15 chuỗi dưới đây là gold specification thủ công, chưa chạy toàn bộ. Semantic v2 có fixtures/test tự động cho phạm vi mới; kết quả kiểm chứng riêng bên dưới, không phải accuracy tổng quát.
 
 Smoke set có thể chạy: `tests/fixtures/requirements-smoke.json` kiểm tra một tập con quan trọng, độc lập mỗi request. `uv run tour-backend evaluate-nim --output data/evaluation.local.json` gọi NIM thật, so normalized fields/readiness/patch preservation và ghi latency. Đây chưa phải full gold 50+15, không dùng kết quả smoke để tuyên bố độ chính xác tổng quát.
+
+Ca thực tế [tour ghép đoàn dịp Tết](requirements-case-tet.md) giữ baseline 07/10/2026 và expectations sau thay đổi. Semantic production v2/resolvers/coverage/targeted answers đã implement; [contract](requirements-semantics.md), [test API từng bước](../examples/backend-semantic-v2.md).
+
+## Kiểm chứng semantic v2 — 08/10/2026
+
+- Fixture live `tests/fixtures/requirements-semantic.json`: câu Tết gốc + update năm/availability/route strength; câu có availability rõ; diễn đạt khác với năm explicit; OR có nhánh catalog thiếu; hard reputation unsupported. Mỗi ca lặp hai lần, cùng model `nvidia/nemotron-3-super-120b-a12b`, reasoning `none` hiện có, prompt `vi-semantic-v2.2`.
+- Report `data/evaluation-v2-verified.local.json`: **10/10 ca chạy đạt**, gồm **12 lượt parse** vì hai ca Tết gốc có thêm update. Hai chuỗi update đều resolve đúng ngày/strength và giữ conditions còn lại. Field/value/operator/strength/readiness/provenance được so theo semantics, không theo IDs model.
+- Có **7/12 lượt parse dùng một bounded repair**. Latency mỗi ca khoảng 2,5–17,3 giây, trung vị khoảng 8 giây; ca có patch tính cả hai lượt. Token metrics của upstream lỗi chưa đầy đủ, không dùng report này làm tổng chi phí.
+- Các lượt development trước từng đạt 8/10: lỗi re-extract quote cũ/mất answers và hạ date bounds thành soft. Đã bổ sung answer-target guard/schema, feedback batch kèm invalid draft, normalization strength/date semantics. Không giảm kiểm tra quote hoặc tự tạo conditions để đạt smoke.
+- Bộ này nhỏ và đã dùng khi tinh chỉnh prompt; **không phải held-out benchmark**, không thay nghiệm thu 50+15 hoặc dữ liệu crawler thật. Provider chưa được coi là luôn enforce mọi JSON Schema keyword; backend vẫn validate và fail sau tối đa một repair.
+
+Offline **240 tests passed**, gồm 85 semantic checks và 155 ca baseline. Kiểm tra calendar boundary/leap/day round-trip, date bounds, OR/AND/negation/partial, scope, unsupported metrics, actual catalog gaps, targeted answers/CAS, legacy reads và API confirm/persistence/HTTP evidence-bound comparison/reuse. Các fixtures tour Việt Nam là synthetic, database tạm; không cần NIM/key/network cho pytest. Live runner không ghi DB hoặc sửa `.env`.
+
+```powershell
+uv run tour-backend evaluate-nim-v2 --repeat 2 --output data/evaluation-v2.local.json
+```
+
+Report chứa input test/diagnostics ở `data/` đã Git-ignore; không đưa key hoặc raw input người dùng thật vào commit. Package `vi-lunaire==2026.4.11` được pin; các anchors tham chiếu và giới hạn nằm trong `tests/fixtures/lunar-reference.json`. Daily round-trip là kiểm tra consistency, không chứng minh toàn bộ lịch 2000–2099 bằng một oracle độc lập.
 
 Reference cho date tương đối: 01/10/2026 10:00 tại Asia/Ho_Chi_Minh. Cases độc lập, không đặt nhiều case không liên quan trong cùng prompt NIM. Hard/soft theo policy đề xuất ở [backend-flows.md](backend-flows.md).
 

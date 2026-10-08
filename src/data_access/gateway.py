@@ -12,13 +12,28 @@ from domain.requirements import QuerySpec, Requirement
 
 
 class DataGateway:
-    def __init__(self, settings, registry: list[SourceCapability] | None = None, transport=None):
+    def __init__(
+        self,
+        settings,
+        registry: list[SourceCapability] | None = None,
+        transport=None,
+        result_model=CrawlResult,
+        catalog_repository=None,
+    ):
         self.settings = settings
         self.transport = transport
+        self.result_model = result_model
+        self.catalog_repository = catalog_repository
+        if settings.data_provider == "supabase" and self.catalog_repository is None:
+            from data_access.supabase.reader import SupabaseRepository
+
+            self.catalog_repository = SupabaseRepository(settings)
         if registry is not None:
             self.registry = registry
         elif settings.data_provider == "fixture":
             self.registry = fixture_registry()
+        elif settings.data_provider == "supabase":
+            self.registry = self.catalog_repository.registry()
         elif settings.crawler_registry_path:
             self.registry = TypeAdapter(list[SourceCapability]).validate_json(
                 settings.crawler_registry_path.read_text(encoding="utf-8")
@@ -36,7 +51,7 @@ class DataGateway:
     def validate_binding(self, result: CrawlResult, request: CrawlRequest):
         if result.request_id != request.request_id:
             raise AppError("CRAWLER_INVALID_OUTPUT", "Crawler trả sai request_id.", 502)
-        if self.settings.data_provider == "http" and result.origin != "source":
+        if self.settings.data_provider != "fixture" and result.origin != "source":
             raise AppError("CRAWLER_INVALID_OUTPUT", "HTTP crawler phải khai báo origin source.", 502)
         source_map = {s.source_id: s for s in self.registry}
         tours = {t.snapshot_id: t for t in result.tours}
@@ -76,6 +91,8 @@ class DataGateway:
                 raise AppError("CRAWLER_INVALID_OUTPUT", "Nguồn hoặc thời gian evidence không hợp lệ.", 502)
         for snapshot in [*result.tours, *result.offers]:
             facts = list(snapshot.fields.values())
+            facts += list(getattr(snapshot, "semantic_fields", {}).values())
+            facts += list(getattr(snapshot, "catalog_fields", {}).values())
             if hasattr(snapshot, "policies"):
                 facts += list(snapshot.policies.values())
                 if instant(snapshot.observed_at) > max_time:
@@ -119,7 +136,29 @@ class DataGateway:
                             )
         return payload
 
-    async def collect(self, r: Requirement, deadline_at: str) -> CrawlResult:
+    def close(self):
+        if self.catalog_repository is not None:
+            self.catalog_repository.close()
+
+    async def collect(
+        self,
+        r: Requirement,
+        deadline_at: str,
+        *,
+        catalog_conditions=None,
+        candidate_limit=20,
+        exclusions=(),
+        catalog_requirement=None,
+    ) -> CrawlResult:
+        if self.settings.data_provider == "supabase":
+            from domain.crawl_v2 import CrawlResultV2
+
+            if self.result_model is not CrawlResultV2:
+                raise AppError(
+                    "SUPABASE_V2_REQUIRED",
+                    "Provider Supabase dùng API v2; hãy tạo yêu cầu tại /v2/requirements.",
+                    422,
+                )
         rejected, accepted, source_ids = [], [], []
         if r.mode == "compare_urls":
             for target in r.targets:
@@ -131,6 +170,8 @@ class DataGateway:
                     if source.access_status != "approved"
                     else "SOURCE_UNSUPPORTED"
                     if r.mode not in source.modes
+                    or self.settings.data_provider == "http"
+                    and (source.limits.get("catalog_read_only") or source.source_id.startswith("catalog_"))
                     else None
                 )
                 if reason:
@@ -147,7 +188,14 @@ class DataGateway:
                     source_ids.append(source.source_id)
         else:
             source_ids = [
-                s.source_id for s in self.registry if s.access_status == "approved" and "discover" in s.modes
+                s.source_id
+                for s in self.registry
+                if s.access_status == "approved"
+                and "discover" in s.modes
+                and not (
+                    self.settings.data_provider == "http"
+                    and (s.limits.get("catalog_read_only") or s.source_id.startswith("catalog_"))
+                )
             ]
         request = CrawlRequest(
             request_id=uid("crawl"),
@@ -175,6 +223,15 @@ class DataGateway:
                         offer_snapshot_ids=[o.snapshot_id for o in result.offers],
                     )
                 ]
+        elif self.settings.data_provider == "supabase":
+            result = await self.catalog_repository.collect(
+                request,
+                conditions=catalog_conditions or r.conditions,
+                candidate_limit=candidate_limit,
+                exclusions=exclusions,
+                requirement=catalog_requirement,
+                registry=self.registry,
+            )
         else:
             if not self.settings.crawler_url:
                 raise AppError("CRAWLER_NOT_CONFIGURED", "Chưa cấu hình endpoint crawler.", 503)
@@ -208,7 +265,7 @@ class DataGateway:
                                 )
                             chunks.append(chunk)
                 payload = json.loads(b"".join(chunks))
-                result = CrawlResult.model_validate(self.isolate_invalid_fields(payload))
+                result = self.result_model.model_validate(self.isolate_invalid_fields(payload))
             except httpx.TimeoutException as exc:
                 raise AppError("SOURCE_TIMEOUT", "Crawler quá thời hạn.", 504, retryable=True) from exc
             except httpx.HTTPError as exc:

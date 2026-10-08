@@ -38,6 +38,12 @@ uv run tour-backend serve
 Trang chào backend: `http://127.0.0.1:8000/`; tài liệu tương tác: `http://127.0.0.1:8000/docs`. Sau khi sửa code, dừng server bằng Ctrl+C rồi chạy lại để nạp thay đổi.
 NIM đọc `NVIDIA_NIM_API` và `NVIDIA_NIM_MODEL` từ `.env` hiện có. Ngân sách chưa nói phạm vi mặc định là **giá tour**, có provenance `system_default`; currency/basis chưa rõ vẫn được hỏi lại.
 
+Đọc kho tour thật bằng `DATA_PROVIDER=supabase` và `SUPABASE_TOUR_DB_URL`. Dùng API **v2**; [khởi động và test Supabase từng bước](examples/backend-supabase-v2.md). `uv run tour-backend probe-supabase` kiểm tra kết nối/counts bằng transaction chỉ đọc. SQLite vẫn lưu phiên, nhu cầu và kết quả; Supabase lưu catalog do crawler cập nhật.
+
+Semantic extraction v2 (`requirements-v2.2`) giữ ghép đoàn, tuyến đường, các ưu tiên định tính và khoảng lịch âm; hỏi năm/ý nghĩa khoảng trước khi quy đổi. [Test ca Tết từng bước](examples/backend-semantic-v2.md), [contract frontend/crawler](docs/requirements-semantics.md), [kết quả kiểm chứng](docs/requirements-evaluation.md). Cần tạo request mới sau khi restart để thử parser mới; lịch sử không tự được trích xuất lại.
+
+Pipeline v2 lọc structured hard conditions trước khi cắt pool, kiểm tra toàn bộ yêu cầu trên từng offer; LLM đánh giá ưu tiên ngữ nghĩa bằng trích dẫn, backend tính ranking với coverage/khoảng điểm. Hard/soft độc lập kiểu dữ liệu. [Hướng dẫn test và đọc output](examples/backend-retrieval-semantic-v2.md), [kết quả và phần dữ liệu còn thiếu](docs/backend-retrieval-assessment-results.md).
+
 - [Hướng dẫn frontend, payload và cấu hình](examples/README.md)
 - [Runtime, lệnh kiểm tra và giới hạn](docs/backend-runtime.md)
 - [JSON Schema đã xuất cho team](contracts/README.md)
@@ -56,7 +62,7 @@ Frontend đang PLANNING; chưa production UI hoặc chốt stack. Ngày 06/10/20
 
 ## Kiểm tra backend
 
-Mặc định `DATA_PROVIDER=fixture`: ba tour giả lập tại `tour-demo.invalid`; mọi kết quả có `origin=synthetic`. Không có dữ liệu tour thật trong repo. Local runtime dùng SQLite và một worker; không chạy nhiều process trên cùng database.
+Mặc định của code là `DATA_PROVIDER=fixture`: ba tour giả lập tại `tour-demo.invalid`, `origin=synthetic`. Cấu hình `supabase` đọc catalog thật và trả `origin=source`, không fallback sang dữ liệu giả. Giá/field chưa có bằng chứng website vẫn hiển thị `unverified`; điều kiện thiếu dữ kiện trả `unknown`. Local runtime dùng SQLite và một worker; không chạy nhiều process trên cùng application database.
 
 ```powershell
 uv run pytest -q
@@ -70,4 +76,4 @@ Gọi NIM thật (tách khỏi tests offline): `uv run tour-backend probe-nim`; 
 
 [tourcrawl pipeline](src/tourcrawl/pipeline/README.md) chạy CLI độc lập, output CSV/JSON detail; profiles tại `configs/profiles/`. Browser flow cần `uv sync --extra browser` và Chromium của Playwright. Các script khảo sát/profile nằm tại `scripts/`, đọc/ghi artifacts được ignore; không có bộ dữ liệu tour thật đã nghiệm thu trong Git.
 
-API runtime dùng [HTTP/domain contract v1](docs/api-contract.md) và [CrawlRequest/CrawlResult](docs/crawler-contract.md). [Data contract cũ](docs/data-contract.md) giữ danh sách field/yêu cầu chưa đáp ứng, không phải API đang chạy. Adapter, registry/TTL, giá/offer/evidence và profile format còn D1–D5 trong [đối chiếu tích hợp](docs/frontend-crawler-integration.md).
+HTTP crawler giữ [contract v1](docs/crawler-contract.md); Supabase có [reader/adapter v2](src/data_access/supabase/README.md) và [kế hoạch, baseline chất lượng](docs/supabase-tour-integration-plan.md). Crawler cần bổ sung field evidence, price qualifiers và cadence; backend chưa tự đặt TTL hoặc gọi live crawler khi URL vắng trong kho. [Data contract cũ](docs/data-contract.md) giữ danh sách field/yêu cầu chưa đáp ứng.

@@ -3,7 +3,17 @@ from domain.requirements import Budget, Condition, Party, Requirement, SourceRef
 from requirements.service import conjunction, finalize, prune
 
 
-def form_requirement(form, *, requirement_id, mode, timezone, targets, requirement_model=Requirement):
+def form_requirement(
+    form,
+    *,
+    requirement_id,
+    mode,
+    timezone,
+    targets,
+    requirement_model=Requirement,
+    condition_model=Condition,
+    finalizer=finalize,
+):
     conditions = []
     for c in form.conditions:
         source = SourceReference(
@@ -24,7 +34,7 @@ def form_requirement(form, *, requirement_id, mode, timezone, targets, requireme
                     rule="budget_tour_price_v1",
                 )
             )
-        conditions.append(Condition(**raw, sources=sources))
+        conditions.append(condition_model(**raw, sources=sources))
     party = Party.model_validate(
         {
             **form.party.model_dump(),
@@ -37,7 +47,7 @@ def form_requirement(form, *, requirement_id, mode, timezone, targets, requireme
             ],
         }
     )
-    return finalize(
+    return finalizer(
         requirement_model(
             id=requirement_id,
             revision=1,
@@ -199,6 +209,13 @@ def answer_edits(previous: Requirement, answers):
             if type(value) is not int or not 1900 <= value <= 2100:
                 raise AppError("INVALID_ANSWER", "Năm phải là số nguyên trong 1900–2100.")
             condition = next(c for c in previous.conditions if c.id == question.field_path.split(".")[1])
+            from requirements.temporal import lunar_context
+
+            if lunar_context(condition.value.raw):
+                raise AppError(
+                    "LUNAR_DATE_REQUIRES_V2",
+                    "Mốc lịch âm cần xử lý calendar qua v2; không ghép thành ngày dương.",
+                )
             match = re.search(r"(\d{1,2})/(\d{1,2})", condition.value.raw)
             try:
                 value = DateValue(

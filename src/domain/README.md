@@ -1,8 +1,14 @@
 # Domain
 
+V2 bổ sung retrieval diagnostics/offer coverage; hai trục strength và processing độc lập. Xem [structured retrieval](../../docs/retrieval-semantic-ranking.md).
+
+Supabase import v2 bổ sung record provenance riêng, catalog preview fields và CatalogFieldProof; raw database values chưa có website field proof giữ unverified. V1 models/schema không đổi. Xem [contract adapter](../data_access/supabase/README.md).
+
+`semantic.py` mở rộng Condition/Value riêng cho v2 (entity members, temporal intents, qualitative preferences, issues/trace); `crawl_v2.py` thêm semantic facts với binding evidence. Models v1 giữ riêng; v2 đọc legacy values và snapshot. Xem [semantic contract](../../docs/requirements-semantics.md).
+
 V2 triển khai shared requirement invariants và 1–5 URL/hybrid riêng với input policy v1; snapshot bổ sung optional title/policies, giữ tương thích payload cũ. Xem [backend-v2-runtime](../../docs/backend-v2-runtime.md).
 
-**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
+**Trạng thái:** Đã có implementation v1/v2; phạm vi v1 ở [backend-runtime.md](../../docs/backend-runtime.md), v2 ở tài liệu trên.
 
 ## Trách nhiệm / input-output
 

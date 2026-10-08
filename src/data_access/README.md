@@ -26,3 +26,12 @@ Input: QuerySpec hoặc URL targets, source registry, deadline và snapshot sele
 - Repository lưu requirement revisions/jobs ở lớp điều phối cùng database; validated crawl envelope được Store lưu cùng comparison. Dev đề xuất SQLite qua SQLAlchemy, deployment nhiều host đề xuất PostgreSQL theo hosting; business logic không phụ thuộc engine.
 
 Acceptance: field sai không thành fact; lỗi một source không mất source khác; rollback không tạo evidence refs mồ côi; reused snapshots/crawler/fixture cho cùng schema; dữ liệu mô phỏng không mang nhãn thật.
+## Semantic v2 adapter
+
+Gateway v2 compile values mới sang crawler v1 bằng adapter có markers, không drop/narrow OR hoặc scoped intents. Snapshot v2 semantic facts có schema/evidence binding; nguồn hiện chưa trả field thì missing. [Contract](../../docs/requirements-semantics.md).
+
+## Kho tour Supabase — implementation
+
+Provider `supabase` dùng PostgreSQL reader chỉ đọc và [adapter v2](supabase/README.md) để lấy `providers/tours/offers`; không dùng REST publishable key để vượt RLS. API v1 từ chối acquisition với provider này; fixture/http vẫn có contract cũ. Pool chia sẻ giữa request, đóng khi shutdown; schema/permission/deadline errors được che thông tin kết nối.
+
+Header scan có giới hạn, ưu tiên địa danh canonical, full records/offers chỉ lấy cho pool đã chọn. URL hỏng được cách ly; không mất target hợp lệ khác. Database record provenance không chứng minh website facts; preview có raw prices/itinerary/offer metadata, evaluator giữ unknown nếu chưa đủ proof/freshness. [Kế hoạch và nghiệm thu](../../docs/supabase-tour-integration-plan.md), [test từng bước](../../examples/backend-supabase-v2.md).

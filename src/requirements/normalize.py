@@ -1,4 +1,5 @@
 import calendar
+import json
 import re
 import unicodedata
 from datetime import date, timedelta
@@ -82,7 +83,9 @@ PLACE_PARENTS = {
 def ground(message: Message, quote: str) -> SourceReference:
     positions = [m.start() for m in re.finditer(re.escape(quote), message.text)]
     if len(positions) != 1:
-        raise AppError("LLM_INVALID_OUTPUT", "Quote thiếu hoặc không xác định duy nhất trong câu gốc.", 502)
+        error = AppError("LLM_INVALID_OUTPUT", "Quote thiếu hoặc không xác định duy nhất trong câu gốc.", 502)
+        error.repair_hint = f"Quote {json.dumps(quote, ensure_ascii=False)} xuất hiện {len(positions)} lần. Sao chép đúng nguyên văn cả dấu/chữ hoa; nếu lặp thì mở rộng quote với ngữ cảnh để unique. Không đổi raw intent."
+        raise error
     return SourceReference(
         kind="text", message_id=message.id, quote=quote, start=positions[0], end=positions[0] + len(quote)
     )

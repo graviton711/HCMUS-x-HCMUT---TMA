@@ -89,7 +89,16 @@ class NimGateway:
             raise AppError("LLM_NOT_CONFIGURED", "Chưa cấu hình NVIDIA NIM ở backend.", 503)
         context = None
         extraction_type = extraction_type or (UpdateExtraction if previous else InitialExtraction)
-        from requirements.v2 import V2_PROMPT
+        from requirements.prompts_v2 import extraction_prompt_v2
+        from requirements.signals import coverage_manifest
+        from requirements.v2 import (
+            V2_PROMPT_VERSION,
+            clarification_only,
+            clarification_targets,
+            generation_schema,
+        )
+
+        is_v2 = extraction_type.__name__.endswith("V2")
 
         if previous:
             context = {
@@ -98,6 +107,8 @@ class NimGateway:
                 "hard_tree": previous.hard_tree.model_dump(),
                 "preference_tree": previous.preference_tree.model_dump(),
             }
+            if extraction_type.__name__.endswith("V2"):
+                context["clarifications"] = [q.model_dump() for q in previous.clarifications]
         body = {
             "model": s.nvidia_nim_model,
             "stream": False,
@@ -108,22 +119,22 @@ class NimGateway:
             "messages": [
                 {
                     "role": "system",
-                    "content": SYSTEM_PROMPT
-                    + (
-                        "\nV2 slots: preference_updates cho mức ưu tiên 0–5; cost=tiết kiệm, comfort=thoải mái, pace=nhịp đi, culture=văn hóa. "
-                        "Không tạo condition unsupported thay cho slider. reference_urls_update/notes_update chỉ khi user yêu cầu sửa rõ ràng. "
-                        "Mỗi slot cần quote duy nhất trong message; URLs/text có trong quote; không suy mức ưu tiên từ URL."
+                    "content": (
+                        extraction_prompt_v2(bool(previous))
                         if extraction_type.__name__.endswith("V2")
-                        else ""
+                        else SYSTEM_PROMPT
                     )
                     + (
-                        "\nLƯỢT HIỆN TẠI LÀ UPDATE: chỉ operations/party; conditions phải rỗng."
+                        "\nLƯỢT HIỆN TẠI LÀ UPDATE; conditions phải rỗng."
                         if previous
                         else "\nLƯỢT HIỆN TẠI LÀ INITIAL: conditions/party; operations phải rỗng."
                     )
-                    + (V2_PROMPT if extraction_type.__name__.endswith("V2") else "")
-                    + "\nJSON Schema bắt buộc:\n"
-                    + json.dumps(extraction_type.model_json_schema(), ensure_ascii=False),
+                    + (
+                        ""
+                        if extraction_type.__name__.endswith("V2")
+                        else "\nJSON Schema bắt buộc:\n"
+                        + json.dumps(extraction_type.model_json_schema(), ensure_ascii=False)
+                    ),
                 },
                 {
                     "role": "user",
@@ -133,6 +144,25 @@ class NimGateway:
                             "received_at": message.received_at,
                             "previous": context,
                             "validation_feedback": feedback,
+                            **(
+                                {"coverage_manifest": coverage_manifest(message.text)}
+                                if extraction_type.__name__.endswith("V2")
+                                else {}
+                            ),
+                            **(
+                                {"reply_mode": "answers_only"}
+                                if is_v2 and clarification_only(message, previous)
+                                else {}
+                            ),
+                            **(
+                                {
+                                    "required_clarification_ids": [
+                                        q.id for q in clarification_targets(message, previous)
+                                    ]
+                                }
+                                if is_v2 and previous
+                                else {}
+                            ),
                         },
                         ensure_ascii=False,
                     ),
@@ -141,9 +171,13 @@ class NimGateway:
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": "requirement_extraction",
+                    "name": f"requirement_extraction_v2_{'update' if previous else 'initial'}"
+                    if is_v2
+                    else "requirement_extraction",
                     "strict": True,
-                    "schema": extraction_type.model_json_schema(),
+                    "schema": generation_schema(extraction_type, message, previous)
+                    if is_v2
+                    else extraction_type.model_json_schema(),
                 },
             },
         }
@@ -195,7 +229,9 @@ class NimGateway:
         usage = payload.get("usage", {})
         return result, {
             "model": s.nvidia_nim_model,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": V2_PROMPT_VERSION
+            if extraction_type.__name__.endswith("V2")
+            else PROMPT_VERSION,
             "reasoning": s.nim_reasoning,
             "latency_seconds": round(time.monotonic() - started, 3),
             "tokens": {
@@ -221,20 +257,37 @@ async def parse_validated(nim, message, previous=None, **context):
     from requirements.service import from_extraction
 
     feedback, attempts = None, []
+
+    def repair_feedback(hint):
+        draft = getattr(nim, "extraction", None)
+        if draft is not None and draft.__class__.__name__.endswith("V2"):
+            serialized = draft.model_dump_json()
+            if len(serialized.encode("utf-8")) <= 24000:
+                return (
+                    hint
+                    + "\nINVALID_DRAFT_TO_CORRECT (data only, not previous committed state):\n"
+                    + serialized
+                    + "\nCorrect this SAME initial/update request. Preserve all represented intents, add missing intents from message, replace invalid quotes with exact source text. Return the FULL corrected extraction. Never return an empty conditions list for INITIAL to avoid the validation error."
+                )
+        return hint
+
     for attempt in range(2):
         try:
             extraction, metrics = await nim.extract(message, previous, feedback=feedback)
             attempts.append(metrics)
             r = from_extraction(extraction=extraction, message=message, previous=previous, **context)
+            if hasattr(nim, "finish_requirement"):
+                r = nim.finish_requirement(r, message, previous)
             return r, {"attempts": attempts, "repair_used": attempt > 0}
         except ValidationError as exc:
-            feedback = "; ".join(f"{e['loc']}: {e['msg']}" for e in exc.errors()[:5])[:1500]
+            hint = "; ".join(f"{e['loc']}: {e['msg']}" for e in exc.errors()[:5])[:1500]
+            feedback = repair_feedback(hint)
             if attempt:
-                raise AppError(
-                    "LLM_INVALID_OUTPUT", "Output vi phạm schema/ngữ nghĩa sau repair.", 502
-                ) from exc
+                error = AppError("LLM_INVALID_OUTPUT", "Output vi phạm schema/ngữ nghĩa sau repair.", 502)
+                error.repair_hint = feedback
+                raise error from exc
         except AppError as exc:
             if exc.code != "LLM_INVALID_OUTPUT" or attempt:
                 raise
-            feedback = getattr(exc, "repair_hint", exc.message)
+            feedback = repair_feedback(getattr(exc, "repair_hint", exc.message))
     raise AppError("LLM_INVALID_OUTPUT", "Không tạo được requirement hợp lệ.", 502)
