@@ -45,7 +45,7 @@ Không gán tỷ lệ accuracy từ ba ca này. Probe không kiểm tra normaliz
 4. Gold evaluation so sánh `none/low/high`, prompt và sampling trên cùng bộ tiếng Việt. Chọn cấu hình theo semantic accuracy, false-ready, latency và token usage; không chọn `none` chỉ vì probe nhanh.
 5. Khi implement gateway, phân biệt lỗi credential, rate limit, timeout, upstream/202 pending và malformed/truncated content. Retry/repair có giới hạn và nằm trong tổng deadline; không trả draft giả khi model lỗi.
 
-Các quyết định schema/backend khác vẫn là bản nháp ở [backend-plan.md](../../docs/archive/backend-plan.md) và [requirements README](../../src/requirements/README.md).
+Các quyết định schema/backend khác vẫn là bản nháp, xem [requirements README](../../src/requirements/README.md).
 
 ## Probe tiếp theo: sáu ca, ba mức reasoning
 

@@ -1,6 +1,6 @@
 # Contract semantic requirements v2
 
-Trạng thái: đã implement theo [kế hoạch](../../docs/archive/requirements-improvement-plan.md), kiểm chứng 08/10/2026. API envelope vẫn `2.0-draft`; `policy_version=requirements-v2.2` phân biệt cách hiểu mới. Payload v1 giữ models riêng; v2 đọc được conditions/value cũ. [Test từng bước](../../examples/backend-semantic-v2.md), [kết quả và giới hạn](../../docs/archive/requirements-evaluation.md).
+Trạng thái: đã implement, kiểm chứng 08/10/2026. API envelope vẫn `2.0-draft`; `policy_version=requirements-v2.2` phân biệt cách hiểu mới. Payload v1 giữ models riêng; v2 đọc được conditions/value cũ. [Test từng bước](../../examples/backend-semantic-v2.md), [kết quả và giới hạn](../../docs/archive/requirements-evaluation.md).
 
 ## Domain, workflow và interface
 
