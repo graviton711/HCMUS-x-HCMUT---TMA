@@ -4,7 +4,7 @@
 
 [Kiểm chứng what-if](../../docs/archive/backend-what-if-verification.md):401 offline tests pass; catalog thật234 tours/1000 bounded offers vẫn chưa đủ proof để xác minh eligibility cho hai ca mẫu.
 
-User yêu cầu implementation ngày 07/10/2026. Thực hiện trên `feature/minh-phu`, giữ `/v1`. Thiết kế gốc: [protocol](../../docs/frontend-protocol-v2.md), [pipeline](backend-pipeline-v2.md). Tài liệu này phân biệt khả năng runtime với mẫu UI.
+User yêu cầu implementation ngày 07/10/2026. Thực hiện trên `feature/minh-phu`, giữ `/v1`. Thiết kế gốc: protocol, [pipeline](backend-pipeline-v2.md). Tài liệu này phân biệt khả năng runtime với mẫu UI.
 
 ## Phạm vi và thứ tự
 

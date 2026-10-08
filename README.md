@@ -74,18 +74,6 @@ Sau comparison, v2 có phân tích nếu bỏ/nới điều kiện: đọc snaps
 - [Runtime, lệnh kiểm tra và giới hạn](src/api/backend-runtime.md)
 - [JSON Schema đã xuất cho team](contracts/README.md)
 
-## Planning frontend
-
-Frontend đang PLANNING; chưa production UI hoặc chốt stack. Ngày 06/10/2026 user chốt **Giấy & Mực**, Newsreader + Be Vietnam Pro; flow mới **Giới thiệu → form + xác nhận → Kết quả**, criteria rộng/sửa trực tiếp/chat có diff xác nhận, bảng kiểm chứng + Phân tích AI, log/loading mock và accent/motion. Token/màn chi tiết còn review; G1–G13/D1–D5 giữ phần backend cần chốt.
-
-- [Roadmap 7 phase và todo frontend](docs/frontend-plan.md)
-- [Quyết định review nhóm 06/10/2026](docs/frontend-review-2026-10-06.md), [prototype minh họa](prototypes/frontend-design/README.md)
-- [Flow và trạng thái UI](docs/frontend-flows.md)
-- [Hướng tích hợp API v1 theo code](docs/frontend-api-integration.md)
-- [Checklist contract và khoảng thiếu cần trao đổi với BE](docs/frontend-backend-checklist.md)
-- [Đối chiếu crawler/backend và công việc tích hợp dữ liệu](docs/frontend-crawler-integration.md)
-- [Chuẩn bị skill/thiết kế](docs/frontend-design-preparation.md), [module frontend](src/frontend/README.md)
-
 ## Kiểm tra backend
 
 Mặc định của code là `DATA_PROVIDER=fixture`: ba tour giả lập tại `tour-demo.invalid`, `origin=synthetic`. Cấu hình `supabase` đọc catalog thật và trả `origin=source`, không fallback sang dữ liệu giả. [Catalog validation](src/data_access/supabase/catalog-validation-policy.md) cho phép field qua kiểm tra thuộc domain opt-in được dùng với trạng thái `catalog_validated`; website proof là bổ sung. Giá thiếu qualifiers, field mơ hồ hoặc freshness chưa rõ vẫn `unknown`. Local runtime dùng SQLite và một worker; không chạy nhiều process trên cùng application database.

@@ -1,6 +1,6 @@
 # Trao đổi JSON — v2 mẫu cho prototype
 
-**Design fixtures, 07/10/2026.** Theo [protocol](../../docs/frontend-protocol-v2.md) và [pipeline/crawler/admin](../../src/api/backend-pipeline-v2.md). Backend v2 đã có runtime/schema riêng: [giới hạn thực tế](../../src/api/backend-v2-runtime.md), [request walkthrough](../backend-v2.md). Mọi tour, giá, nguồn, timestamp và ID ở đây là synthetic, không phải kết quả server. Không gửi các request này vào `/v1` hoặc dùng ID mẫu làm ID resource thật.
+**Design fixtures, 07/10/2026.** Theo protocol và [pipeline/crawler/admin](../../src/api/backend-pipeline-v2.md). Backend v2 đã có runtime/schema riêng: [giới hạn thực tế](../../src/api/backend-v2-runtime.md), [request walkthrough](../backend-v2.md). Mọi tour, giá, nguồn, timestamp và ID ở đây là synthetic, không phải kết quả server. Không gửi các request này vào `/v1` hoặc dùng ID mẫu làm ID resource thật.
 
 | File | Nội dung / dùng để nghiệm thu |
 |---|---|
