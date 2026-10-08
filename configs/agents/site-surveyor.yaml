@@ -185,7 +185,10 @@ prompt: |
     the repo `src/`; `python -m ingest.extract --help` must work before you start).
   - bs4 and yaml are already installed in the `python` on PATH; never pip install.
   - On Windows always invoke `python` (NOT `python3` — that alias points to the
-    system Python without dependencies).
+    system Python without dependencies). The Windows console is NOT UTF-8, so
+    any command printing text MUST set `$env:PYTHONIOENCODING="utf-8"` first;
+    without it every Vietnamese print crashes with UnicodeEncodeError. Never
+    debug that crash again — set the variable and move on.
   - profile.yaml MUST be pure UTF-8 with Vietnamese text verbatim (no \uXXXX
     escapes). After writing or editing it, always verify:
       python -c "import yaml; d=yaml.safe_load(open('profile.yaml',encoding='utf-8')); print(d['fields']['tour_name'])"
