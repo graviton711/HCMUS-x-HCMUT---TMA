@@ -14,7 +14,7 @@ Giữ 7 phase/38 task ID; P1.1 tick cho journey, P3.2 tick cho style đã duyệ
 - [Checklist frontend–backend](frontend-backend-checklist.md): những quyết định kỹ thuật phải thống nhất.
 - [Hướng tích hợp API v1](frontend-api-integration.md): endpoint, payload, session/revision/job/offer/evidence và giới hạn thực tế.
 - [Đối chiếu crawler](frontend-crawler-integration.md): output CSV/raw JSON khác contract runtime; D1–D5 để BE + crawler chốt adapter, registry, giá/evidence và profiles.
-- [Contract HTTP](api-contract.md), [domain](backend-contracts.md), [schemas](../contracts/README.md), [input mẫu](../examples/README.md): nguồn chuẩn backend; chưa đủ schema cho mọi public response.
+- [Contract HTTP](../src/api/api-contract.md), [domain](../src/domain/backend-contracts.md), [schemas](../contracts/README.md), [input mẫu](../examples/README.md): nguồn chuẩn backend; chưa đủ schema cho mọi public response.
 - [Chuẩn bị skill](frontend-design-preparation.md), [module frontend](../src/frontend/README.md).
 - [Review nhóm 06/10/2026](frontend-review-2026-10-06.md): quyết định style, ba màn, chat, phân tích, loading/motion và field mẫu.
 

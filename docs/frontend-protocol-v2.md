@@ -1,6 +1,6 @@
 # Frontend ↔ backend: giao thức v2 mẫu
 
-**Trạng thái:** đặc tả đã được user duyệt, backend implementation ngày 07/10/2026. [Runtime và khác biệt còn lại](backend-v2-runtime.md), [request thật](../examples/backend-v2.md), [schemas v2](../contracts/v2/). [Prototype](../prototypes/frontend-design/README.md) và [JSON design fixtures](../examples/protocol-v2/README.md) vẫn dùng mẫu review UI; không coi sample response là response server hoặc gửi vào `/v1`. Pipeline mục tiêu tại [backend-pipeline-v2](backend-pipeline-v2.md).
+**Trạng thái:** đặc tả đã được user duyệt, backend implementation ngày 07/10/2026. [Runtime và khác biệt còn lại](../src/api/backend-v2-runtime.md), [request thật](../examples/backend-v2.md), [schemas v2](../contracts/v2/). [Prototype](../prototypes/frontend-design/README.md) và [JSON design fixtures](../examples/protocol-v2/README.md) vẫn dùng mẫu review UI; không coi sample response là response server hoặc gửi vào `/v1`. Pipeline mục tiêu tại [backend-pipeline-v2](../src/api/backend-pipeline-v2.md).
 
 ## 1. Quy ước chung
 
@@ -38,7 +38,7 @@ Revision, proposal version và job generation là ba khóa khác nhau. GET curre
 
 ## 3. Requirement, draft và chat nhiều thay đổi
 
-Thêm `completeness` theo [personalized-core-v1](personalized-requirement-policy.md): năm field states/condition IDs/question IDs và responsibility. `readiness.can_confirm/can_search` là prerequisites; search còn đòi revision đã confirmed và không có proposal pending. `can_collect_data` không thay permission search. Form/text/hybrid áp dụng cùng quy tắc; URL-only miễn core. Required fields sau parse lấy từ catalog.required_before_confirm. Typed answers thiếu core và flow autofill tại [walkthrough](../examples/backend-personalized-v2.md).
+Thêm `completeness` theo [personalized-core-v1](../src/requirements/personalized-requirement-policy.md): năm field states/condition IDs/question IDs và responsibility. `readiness.can_confirm/can_search` là prerequisites; search còn đòi revision đã confirmed và không có proposal pending. `can_collect_data` không thay permission search. Form/text/hybrid áp dụng cùng quy tắc; URL-only miễn core. Required fields sau parse lấy từ catalog.required_before_confirm. Typed answers thiếu core và flow autofill tại [walkthrough](../examples/backend-personalized-v2.md).
 
 Requirement: `id,revision,input_kind,conditions,hard_tree,preference_tree,party,preference_levels,reference_urls,notes,readiness,provenance,created_at`. Condition có `id,field,operator,value,strength=hard|soft|unresolved,sources`; chưa rõ strength phải hỏi, không tự thành soft. Tái dùng typed Value/budget/AND-OR trong domain v1. Party `{adults,children:[{id,age}]}`; tuổi chưa biết null tạo blocker giá, không áp giá người lớn. URL-only không tự tạo budget/party/preferences. Catalog/normalized snapshot dùng canonical IDs, labels chỉ cho UI.
 
@@ -132,7 +132,7 @@ Nghiệm thu: JSON samples parse; binding refs/offer/revision/diff/math/status k
 
 `POST /v2/comparisons/{cid}/what-if` nhận `CreateWhatIf.expected_revision`; trả202 analysis_id/job_id. Poll job, đọc `GET /v2/what-if/{id}` với result `WhatIfAnalysis`. Baseline tính lại trên snapshot phân tích; render scope/truncation/unknown, hard additions và soft rank changes riêng. `%` chỉ dùng `restriction_ratio.percent` khi state computed, kèm meaning/numerator/denominator; không đổi tên thành importance hoặc contribution tổng điểm.
 
-`POST /v2/what-if/{id}/scenarios/{sid}/proposals` nhận `ApplyWhatIf.expected_revision`, trả proposal200. Review/clarifications/confirm/search qua flow sẵn có; không tự apply scenario. Core removal có thể cần bổ sung. [Policy và limits](what-if-analysis.md).
+`POST /v2/what-if/{id}/scenarios/{sid}/proposals` nhận `ApplyWhatIf.expected_revision`, trả proposal200. Review/clarifications/confirm/search qua flow sẵn có; không tự apply scenario. Core removal có thể cần bổ sung. [Policy và limits](../src/api/what-if-analysis.md).
 # Catalog validation bổ sung
 
-Theo [policy](catalog-validation-policy.md), verification v2 nhận thêm `catalog_validated`: dữ liệu crawler được backend kiểm tra, không là độc lập xác minh chất lượng tour. FE hiển thị nhãn tương ứng, vẫn đọc reason_code cho freshness/coverage/scope; evidence endpoint trả receipt/provenance database_record và link tour. Flow API giữ nguyên.
+Theo [policy](../src/data_access/supabase/catalog-validation-policy.md), verification v2 nhận thêm `catalog_validated`: dữ liệu crawler được backend kiểm tra, không là độc lập xác minh chất lượng tour. FE hiển thị nhãn tương ứng, vẫn đọc reason_code cho freshness/coverage/scope; evidence endpoint trả receipt/provenance database_record và link tour. Flow API giữ nguyên.

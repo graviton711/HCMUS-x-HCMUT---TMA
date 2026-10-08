@@ -3,7 +3,7 @@
 **Trạng thái:** Backend `0b7e59f` đối chiếu ngày 03/10/2026; cập nhật nhu cầu UI theo [review nhóm 06/10](frontend-review-2026-10-06.md). Giấy & Mực và ba màn Giới thiệu → form + xác nhận → Kết quả đã chốt hướng; bổ sung chat/criteria chỉnh trực tiếp, Phân tích AI và nhật ký tác vụ. Giữ C1–C11/G1–G10/D1–D5, thêm G11–G13 là gap cần chốt, chưa implement. “Đã có” xác nhận code hiện tại, không nghiệm thu UI/dữ liệu thật.
 **Owner:** FE + BE cùng review; BE xác nhận dữ liệu/khả năng xử lý, FE xác nhận đủ để thực hiện [flow](frontend-flows.md).
 
-Nguồn chuẩn: [HTTP contract v1](api-contract.md), [domain contract](backend-contracts.md), [schemas](../contracts/README.md). Hướng tích hợp theo code: [frontend-api-integration.md](frontend-api-integration.md). [Data contract cũ](data-contract.md) giữ field/yêu cầu tham khảo, API `/api/compare` không phải runtime. [Đối chiếu crawler](frontend-crawler-integration.md) ghi code đã merge và D1–D5 chưa nối; mọi gap dưới đây vẫn giữ.
+Nguồn chuẩn: [HTTP contract v1](../src/api/api-contract.md), [domain contract](../src/domain/backend-contracts.md), [schemas](../contracts/README.md). Hướng tích hợp theo code: [frontend-api-integration.md](frontend-api-integration.md). [Data contract cũ](data-contract.md) giữ field/yêu cầu tham khảo, API `/api/compare` không phải runtime. [Đối chiếu crawler](frontend-crawler-integration.md) ghi code đã merge và D1–D5 chưa nối; mọi gap dưới đây vẫn giữ.
 
 ## Contract hiện có
 

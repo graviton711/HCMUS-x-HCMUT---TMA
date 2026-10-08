@@ -16,7 +16,7 @@ P3.1 có bốn reference và asset provenance; P3.2 hoàn thành lựa chọn A 
 - Kết quả có cột criteria rộng, sửa trực tiếp/chat tạo diff trước xác nhận, bảng kiểm chứng + tab Phân tích AI/evidence và nhật ký xử lý. BE tự rank/tạo nhóm tối đa ba tour; nhóm khác qua chat. Bỏ stepper/nút Sửa yêu cầu/Lưu bản nháp/Tìm lại.
 - Không tự tạo lịch trình, đặt tour, thanh toán hoặc chọn thay người dùng.
 
-Nguồn yêu cầu: [proposal](idea.md), [kiến trúc](system-architecture.md), [wireframe](wireframes.md), [HTTP contract v1](api-contract.md), [domain contract](backend-contracts.md). `TMA.md` là đề bài cuộc thi; `idea.md` là proposal sản phẩm. [Hướng tích hợp](frontend-api-integration.md) ghi chi tiết đã đối chiếu code `0b7e59f`; [checklist](frontend-backend-checklist.md) giữ phần BE chưa đủ cho thiết kế.
+Nguồn yêu cầu: [proposal](idea.md), [kiến trúc](system-architecture.md), [wireframe](wireframes.md), [HTTP contract v1](../src/api/api-contract.md), [domain contract](../src/domain/backend-contracts.md). `TMA.md` là đề bài cuộc thi; `idea.md` là proposal sản phẩm. [Hướng tích hợp](frontend-api-integration.md) ghi chi tiết đã đối chiếu code `0b7e59f`; [checklist](frontend-backend-checklist.md) giữ phần BE chưa đủ cho thiết kế.
 
 ## Skill được chọn
 

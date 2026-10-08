@@ -4,7 +4,7 @@
 
 ## Trách nhiệm / input / output
 
-- Input: flow đã duyệt, [giao thức FE–BE v2 mẫu](../../docs/frontend-protocol-v2.md), [pipeline/backend/crawler](../../docs/backend-pipeline-v2.md) và [JSON exchanges](../../examples/protocol-v2/README.md).
+- Input: flow đã duyệt, [giao thức FE–BE v2 mẫu](../../docs/frontend-protocol-v2.md), [pipeline/backend/crawler](../../src/api/backend-pipeline-v2.md) và [JSON exchanges](../../examples/protocol-v2/README.md).
 - Output: `paper.html` gồm Giới thiệu → form/xác nhận → kết quả/chat/analysis; `admin.html` gồm Tổng quan/Nguồn/Liên hệ/Phiên; `source.html` mở đúng đoạn nguồn mẫu. `index.html`/`viewer.html` là lối vào review; `coastal.html` giữ hướng visual lịch sử.
 - Sửa nhiều field/slider/chat merge một nháp; xác nhận cả nhóm một lần; hủy khôi phục bản đã xác nhận gần nhất. Xác nhận chưa tự tìm, trừ khi user đã nhắn sửa+kèm tìm. Banner phân biệt pending/matched/stale; matched chỉ nói về bản yêu cầu, không chứng minh tour đạt mọi điều kiện.
 

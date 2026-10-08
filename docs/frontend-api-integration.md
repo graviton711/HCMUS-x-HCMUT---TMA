@@ -1,7 +1,7 @@
 # Frontend tích hợp backend v1
 
 **Trạng thái:** Ghi nhận từ backend `0b7e59f`, đã merge/tham chiếu trên `feature/minh-phu` ngày 03/10/2026; dùng để review P1/P2, chưa thay việc FE + BE chốt contract. Tourcrawl/scripts cũng đã merge nhưng chưa nối với gateway; API mặc định vẫn fixture, `origin=synthetic`. Chi tiết ở [đối chiếu crawler](frontend-crawler-integration.md).
-**Nguồn chuẩn:** [HTTP contract](api-contract.md), [domain contract](backend-contracts.md), [schema sinh từ models](../contracts/README.md). Tài liệu ghi API **hiện có**, chưa đủ [flow ba màn/chat/phân tích/activity](frontend-flows.md); khoảng thiếu [C1–C11 và G1–G13](frontend-backend-checklist.md). Nhu cầu UI cập nhật ngày 06/10/2026 không tự thay endpoint/payload v1.
+**Nguồn chuẩn:** [HTTP contract](../src/api/api-contract.md), [domain contract](../src/domain/backend-contracts.md), [schema sinh từ models](../contracts/README.md). Tài liệu ghi API **hiện có**, chưa đủ [flow ba màn/chat/phân tích/activity](frontend-flows.md); khoảng thiếu [C1–C11 và G1–G13](frontend-backend-checklist.md). Nhu cầu UI cập nhật ngày 06/10/2026 không tự thay endpoint/payload v1.
 **Đối chiếu:** [routes](../src/api/app.py), [DTO](../src/api/dto.py), [models nhu cầu](../src/domain/requirements.py), [Fact/evidence](../src/domain/crawl.py), [decision engine](../src/decision/engine.py), [store](../src/api/store.py), [settings](../src/api/settings.py).
 
 ## Endpoint và response thực tế
