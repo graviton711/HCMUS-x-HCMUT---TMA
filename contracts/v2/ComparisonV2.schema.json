@@ -168,6 +168,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -529,6 +530,41 @@
       "title": "Column",
       "type": "object"
     },
+    "CompletenessReport": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_version": {
+          "const": "personalized-core-v1",
+          "default": "personalized-core-v1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "profile": {
+          "default": "personalized",
+          "enum": [
+            "personalized",
+            "url_only"
+          ],
+          "title": "Profile",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/CoreFieldState"
+          },
+          "maxItems": 5,
+          "title": "Fields",
+          "type": "array"
+        },
+        "is_complete": {
+          "default": false,
+          "title": "Is Complete",
+          "type": "boolean"
+        }
+      },
+      "title": "CompletenessReport",
+      "type": "object"
+    },
     "ConditionV2": {
       "additionalProperties": false,
       "properties": {
@@ -644,6 +680,81 @@
         "sources"
       ],
       "title": "ConditionV2",
+      "type": "object"
+    },
+    "CoreFieldState": {
+      "additionalProperties": false,
+      "properties": {
+        "field_path": {
+          "enum": [
+            "destinations",
+            "departure_origin",
+            "departure_date",
+            "party.adults",
+            "estimated_cost"
+          ],
+          "title": "Field Path",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "missing",
+            "needs_clarification",
+            "resolved",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "responsibility": {
+          "anyOf": [
+            {
+              "enum": [
+                "user",
+                "backend"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Responsibility"
+        },
+        "condition_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Condition Ids",
+          "type": "array"
+        },
+        "clarification_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Clarification Ids",
+          "type": "array"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "field_path",
+        "status"
+      ],
+      "title": "CoreFieldState",
       "type": "object"
     },
     "DateValue": {
@@ -930,7 +1041,7 @@
       "title": "ExtraCharge",
       "type": "object"
     },
-    "Fact_ExtraCharge_": {
+    "FactV2_ExtraCharge_": {
       "additionalProperties": false,
       "properties": {
         "value": {
@@ -974,6 +1085,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -1056,10 +1168,10 @@
       "required": [
         "observed_at"
       ],
-      "title": "Fact[ExtraCharge]",
+      "title": "FactV2[ExtraCharge]",
       "type": "object"
     },
-    "Fact_JsonValue_": {
+    "FactV2_JsonValue_": {
       "additionalProperties": false,
       "properties": {
         "value": {
@@ -1103,6 +1215,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -1185,10 +1298,10 @@
       "required": [
         "observed_at"
       ],
-      "title": "Fact[JsonValue]",
+      "title": "FactV2[JsonValue]",
       "type": "object"
     },
-    "Fact_PriceQuote_": {
+    "FactV2_PriceQuote_": {
       "additionalProperties": false,
       "properties": {
         "value": {
@@ -1232,6 +1345,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -1314,10 +1428,10 @@
       "required": [
         "observed_at"
       ],
-      "title": "Fact[PriceQuote]",
+      "title": "FactV2[PriceQuote]",
       "type": "object"
     },
-    "Fact_bool_": {
+    "FactV2_bool_": {
       "additionalProperties": false,
       "properties": {
         "value": {
@@ -1362,6 +1476,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -1444,7 +1559,7 @@
       "required": [
         "observed_at"
       ],
-      "title": "Fact[bool]",
+      "title": "FactV2[bool]",
       "type": "object"
     },
     "Freshness": {
@@ -1580,7 +1695,7 @@
         },
         "fields": {
           "additionalProperties": {
-            "$ref": "#/$defs/Fact_JsonValue_"
+            "$ref": "#/$defs/FactV2_JsonValue_"
           },
           "maxProperties": 10,
           "title": "Fields",
@@ -1588,7 +1703,7 @@
         },
         "price_quotes": {
           "items": {
-            "$ref": "#/$defs/Fact_PriceQuote_"
+            "$ref": "#/$defs/FactV2_PriceQuote_"
           },
           "maxItems": 50,
           "title": "Price Quotes",
@@ -1596,7 +1711,7 @@
         },
         "extra_charges": {
           "items": {
-            "$ref": "#/$defs/Fact_ExtraCharge_"
+            "$ref": "#/$defs/FactV2_ExtraCharge_"
           },
           "maxItems": 50,
           "title": "Extra Charges",
@@ -1605,7 +1720,7 @@
         "pricing_complete": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Fact_bool_"
+              "$ref": "#/$defs/FactV2_bool_"
             },
             {
               "type": "null"
@@ -1615,7 +1730,7 @@
         },
         "catalog_fields": {
           "additionalProperties": {
-            "$ref": "#/$defs/Fact_JsonValue_"
+            "$ref": "#/$defs/FactV2_JsonValue_"
           },
           "maxProperties": 3,
           "title": "Catalog Fields",
@@ -1964,6 +2079,16 @@
           },
           "title": "Blockers",
           "type": "array"
+        },
+        "can_confirm": {
+          "default": false,
+          "title": "Can Confirm",
+          "type": "boolean"
+        },
+        "can_search": {
+          "default": false,
+          "title": "Can Search",
+          "type": "boolean"
         }
       },
       "title": "ReadinessV2",
@@ -2104,6 +2229,9 @@
         "created_at": {
           "title": "Created At",
           "type": "string"
+        },
+        "completeness": {
+          "$ref": "#/$defs/CompletenessReport"
         }
       },
       "required": [

@@ -1,5 +1,9 @@
 # Supabase tour catalog
 
+Policy hiện hành: [catalog-validation-v1](../../../docs/catalog-validation-policy.md). Nguồn opt-in qua `SUPABASE_TOUR_TRUSTED_DOMAINS` được dùng field đã kiểm tra dưới trạng thái `catalog_validated`, giữ provenance database_record; website proof là đường bổ sung. Giá thiếu qualifiers, mixed transport, field thiếu và freshness chưa cấu hình vẫn unknown. Không cần backfill proof mọi field. Các đoạn proof bên dưới mô tả đường website proof, không là prerequisite cho catalog opt-in.
+
+`audit.py` tạo báo cáo aggregate từ **pool retrieval có giới hạn** qua đúng reader/adapter/validator, không claim audit toàn kho nếu scan/pool/offers bị cắt. `uv run tour-backend audit-supabase --output data/catalog-audit.local.json` chỉ đọc catalog, không tạo application DB, không gọi NIM/crawler. Report công bố counts/coverage, catalog_validated/proof/value, thiếu qualifiers và các field adapter chưa hỗ trợ. TTL audit lấy config bootstrap tường minh, không đại diện toàn bộ registry persisted/admin của app; không tự đặt TTL hoặc nâng independent verification. [Policy](../../../docs/catalog-validation-policy.md).
+
 ## Trách nhiệm và interface
 
 Reader PostgreSQL read-only + adapter records providers/tours/offers → CrawlResultV2. Input là registry nguồn, normalized conditions, URL targets, deadline, candidate limit và excluded stable tour IDs; không gửi raw user text/NIM key đến database. Output là immutable snapshots, evidence, source coverage và issues. Store/publish thuộc API; evaluator không được coi imported unverified values là hard pass.
@@ -20,7 +24,7 @@ Retrieval/per-offer coverage theo [contract](../../../docs/retrieval-semantic-ra
 - DATABASE_URL vẫn là SQLite application store. SUPABASE_TOUR_DB_URL là SecretStr của reader; REST URL/publishable key được nhận nhưng không dùng để bypass RLS.
 - PostgreSQL pool/deadline có giới hạn; connection/statement lỗi được chuyển thành mã public, không serialize exception/DSN. Đóng pool khi app shutdown và CLI probe kết thúc.
 - Catalog sources chỉ dùng cho đọc DB. Crawler refresh chưa được nối; URL không có trong kho trả CATALOG_URL_NOT_FOUND.
-- Evidence database_record chứa record_ref rõ ràng, không dùng deep link text fragment. Field proof website hợp lệ mới trở thành supplier_published. Chưa biết cadence → freshness unknown.
+- Evidence database_record chứa record_ref rõ ràng, không dùng deep link text fragment. Receipt validation của nguồn opt-in cho phép catalog_validated; field proof website hợp lệ trở thành supplier_published. Chưa biết cadence → freshness unknown.
 
 ## Field proof để crawler bổ sung
 
@@ -49,3 +53,6 @@ Raw_value còn phải chứng minh value: scalar text khớp hoặc dùng alias 
 Price kind/basis/coverage/age/applicability không được đoán từ text. Hiện raw price_by_age được giữ trong unclassified_prices; typed adult quote chỉ dùng label adult + currency/type tour có sẵn và vẫn unverified nếu thiếu proof. Child/infant prices chưa có age brackets không dùng tính tổng. Return date/tour type/nature chưa có column/proof sẽ không tự tạo.
 
 Xem kế hoạch và baseline chất lượng ở docs/supabase-tour-integration-plan.md. Tests dùng fake repository/engine và rows tổng hợp; CLI probe/kiểm chứng API live dùng read-only DB + application DB tạm, không nằm trong test suite offline.
+# What-if acquisition
+
+Theo [policy](../../../docs/what-if-analysis.md), analysis đọc bounded tối đa500 tours trong một transaction; không loại hard fail hoặc cắt pool20, không dùng date anchor khi chọn offers. Scan/offer limits và proof validation vẫn áp dụng, báo coverage/truncation; không ghi catalog. Comparison bình thường giữ retrieval policy hiện tại.

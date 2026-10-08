@@ -224,6 +224,41 @@
       "title": "Clarification",
       "type": "object"
     },
+    "CompletenessReport": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_version": {
+          "const": "personalized-core-v1",
+          "default": "personalized-core-v1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "profile": {
+          "default": "personalized",
+          "enum": [
+            "personalized",
+            "url_only"
+          ],
+          "title": "Profile",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/CoreFieldState"
+          },
+          "maxItems": 5,
+          "title": "Fields",
+          "type": "array"
+        },
+        "is_complete": {
+          "default": false,
+          "title": "Is Complete",
+          "type": "boolean"
+        }
+      },
+      "title": "CompletenessReport",
+      "type": "object"
+    },
     "ConditionV2": {
       "additionalProperties": false,
       "properties": {
@@ -339,6 +374,81 @@
         "sources"
       ],
       "title": "ConditionV2",
+      "type": "object"
+    },
+    "CoreFieldState": {
+      "additionalProperties": false,
+      "properties": {
+        "field_path": {
+          "enum": [
+            "destinations",
+            "departure_origin",
+            "departure_date",
+            "party.adults",
+            "estimated_cost"
+          ],
+          "title": "Field Path",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "missing",
+            "needs_clarification",
+            "resolved",
+            "unsupported"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "responsibility": {
+          "anyOf": [
+            {
+              "enum": [
+                "user",
+                "backend"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Responsibility"
+        },
+        "condition_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Condition Ids",
+          "type": "array"
+        },
+        "clarification_ids": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9_.:-]+$",
+            "type": "string"
+          },
+          "title": "Clarification Ids",
+          "type": "array"
+        },
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "field_path",
+        "status"
+      ],
+      "title": "CoreFieldState",
       "type": "object"
     },
     "DateValue": {
@@ -714,6 +824,16 @@
           },
           "title": "Blockers",
           "type": "array"
+        },
+        "can_confirm": {
+          "default": false,
+          "title": "Can Confirm",
+          "type": "boolean"
+        },
+        "can_search": {
+          "default": false,
+          "title": "Can Search",
+          "type": "boolean"
         }
       },
       "title": "ReadinessV2",
@@ -854,6 +974,9 @@
         "created_at": {
           "title": "Created At",
           "type": "string"
+        },
+        "completeness": {
+          "$ref": "#/$defs/CompletenessReport"
         }
       },
       "required": [

@@ -18,6 +18,9 @@ def main():
     export.add_argument("--output", type=Path, default=Path("contracts"))
     commands.add_parser("probe-nim")
     commands.add_parser("probe-supabase")
+    audit = commands.add_parser("audit-supabase")
+    audit.add_argument("--output", type=Path, default=Path("data/catalog-audit.local.json"))
+    audit.add_argument("--candidate-limit", type=int, choices=range(1, 101), default=100)
     evaluate = commands.add_parser("evaluate-nim")
     evaluate.add_argument("--cases", type=Path, default=Path("tests/fixtures/requirements-smoke.json"))
     evaluate.add_argument("--output", type=Path, default=Path("data/evaluation.local.json"))
@@ -56,8 +59,9 @@ def main():
             RequirementV2,
         )
         from domain.crawl import CrawlRequest, CrawlResult, SourceCapability
-        from domain.crawl_v2 import CatalogFieldProof, CrawlResultV2
+        from domain.crawl_v2 import CatalogFieldProof, CatalogValidation, CrawlResultV2
         from domain.requirements import Requirement
+        from domain.what_if import ApplyWhatIf, CreateWhatIf, WhatIfAnalysis
         from requirements.extraction import Extraction
         from requirements.v2 import InitialExtractionV2, UpdateExtractionV2
         from semantic_assessment.models import AssessmentBatch, SemanticReport
@@ -101,21 +105,45 @@ def main():
             UpdateExtractionV2,
             CrawlResultV2,
             CatalogFieldProof,
+            CatalogValidation,
             AssessmentBatch,
             SemanticReport,
+            CreateWhatIf,
+            WhatIfAnalysis,
+            ApplyWhatIf,
         ):
             (v2_output / f"{model.__name__}.schema.json").write_text(
                 json.dumps(model.model_json_schema(), ensure_ascii=False, indent=2), encoding="utf-8"
             )
         print(f"Exported schemas to {args.output.resolve()}")
-    elif args.command == "probe-supabase":
+    elif args.command in {"probe-supabase", "audit-supabase"}:
         from api.settings import Settings
         from data_access.supabase.reader import SupabaseRepository
         from domain.common import AppError
 
-        repository = SupabaseRepository(Settings(data_provider="supabase"))
+        settings = Settings(data_provider="supabase")
+        repository = SupabaseRepository(settings)
         try:
-            print(json.dumps(repository.probe(), ensure_ascii=False))
+            if args.command == "probe-supabase":
+                print(json.dumps(repository.probe(), ensure_ascii=False))
+            else:
+                from data_access.supabase.audit import audit_catalog
+
+                report = asyncio.run(
+                    audit_catalog(repository, settings, candidate_limit=args.candidate_limit)
+                )
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+                print(
+                    json.dumps(
+                        {
+                            "report": str(args.output.resolve()),
+                            "sample": report["sample"],
+                            "retrieval": report["retrieval"],
+                        },
+                        ensure_ascii=False,
+                    )
+                )
         except AppError as exc:
             print(json.dumps(exc.payload(), ensure_ascii=False))
             raise SystemExit(1) from None

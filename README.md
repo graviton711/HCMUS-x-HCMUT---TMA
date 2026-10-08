@@ -44,6 +44,10 @@ Semantic extraction v2 (`requirements-v2.2`) giữ ghép đoàn, tuyến đườ
 
 Pipeline v2 lọc structured hard conditions trước khi cắt pool, kiểm tra toàn bộ yêu cầu trên từng offer; LLM đánh giá ưu tiên ngữ nghĩa bằng trích dẫn, backend tính ranking với coverage/khoảng điểm. Hard/soft độc lập kiểu dữ liệu. [Hướng dẫn test và đọc output](examples/backend-retrieval-semantic-v2.md), [kết quả và phần dữ liệu còn thiếu](docs/backend-retrieval-assessment-results.md).
 
+Form/text v2 dùng chung năm core fields trước confirm/search; draft được phép thiếu, ngân sách form là hard cap giá tour/người lớn. Xem [flow mới và typed answers](examples/backend-personalized-v2.md), [nghiệm thu](docs/backend-personalized-verification.md). `uv run tour-backend audit-supabase` đọc catalog và xuất báo cáo chất lượng có giới hạn; không cập nhật rows hoặc tạo dữ liệu tour.
+
+Sau comparison, v2 có phân tích nếu bỏ/nới điều kiện: đọc snapshot rộng, giữ hard/soft và AND/OR, đo lựa chọn/thứ hạng thay đổi, công khai bằng chứng và tỷ lệ có mẫu số. Kịch bản tạo proposal để review; chưa tự đổi nhu cầu. [Hướng dẫn test](examples/backend-what-if-v2.md), [policy](docs/what-if-analysis.md), [kết quả kiểm chứng](docs/backend-what-if-verification.md).
+
 - [Hướng dẫn frontend, payload và cấu hình](examples/README.md)
 - [Runtime, lệnh kiểm tra và giới hạn](docs/backend-runtime.md)
 - [JSON Schema đã xuất cho team](contracts/README.md)
@@ -62,7 +66,7 @@ Frontend đang PLANNING; chưa production UI hoặc chốt stack. Ngày 06/10/20
 
 ## Kiểm tra backend
 
-Mặc định của code là `DATA_PROVIDER=fixture`: ba tour giả lập tại `tour-demo.invalid`, `origin=synthetic`. Cấu hình `supabase` đọc catalog thật và trả `origin=source`, không fallback sang dữ liệu giả. Giá/field chưa có bằng chứng website vẫn hiển thị `unverified`; điều kiện thiếu dữ kiện trả `unknown`. Local runtime dùng SQLite và một worker; không chạy nhiều process trên cùng application database.
+Mặc định của code là `DATA_PROVIDER=fixture`: ba tour giả lập tại `tour-demo.invalid`, `origin=synthetic`. Cấu hình `supabase` đọc catalog thật và trả `origin=source`, không fallback sang dữ liệu giả. [Catalog validation](docs/catalog-validation-policy.md) cho phép field qua kiểm tra thuộc domain opt-in được dùng với trạng thái `catalog_validated`; website proof là bổ sung. Giá thiếu qualifiers, field mơ hồ hoặc freshness chưa rõ vẫn `unknown`. Local runtime dùng SQLite và một worker; không chạy nhiều process trên cùng application database.
 
 ```powershell
 uv run pytest -q
@@ -76,4 +80,4 @@ Gọi NIM thật (tách khỏi tests offline): `uv run tour-backend probe-nim`; 
 
 [tourcrawl pipeline](src/tourcrawl/pipeline/README.md) chạy CLI độc lập, output CSV/JSON detail; profiles tại `configs/profiles/`. Browser flow cần `uv sync --extra browser` và Chromium của Playwright. Các script khảo sát/profile nằm tại `scripts/`, đọc/ghi artifacts được ignore; không có bộ dữ liệu tour thật đã nghiệm thu trong Git.
 
-HTTP crawler giữ [contract v1](docs/crawler-contract.md); Supabase có [reader/adapter v2](src/data_access/supabase/README.md) và [kế hoạch, baseline chất lượng](docs/supabase-tour-integration-plan.md). Crawler cần bổ sung field evidence, price qualifiers và cadence; backend chưa tự đặt TTL hoặc gọi live crawler khi URL vắng trong kho. [Data contract cũ](docs/data-contract.md) giữ danh sách field/yêu cầu chưa đáp ứng.
+HTTP crawler giữ [contract v1](docs/crawler-contract.md); Supabase có [reader/adapter v2](src/data_access/supabase/README.md). Không cần bulk backfill proof: crawler cần làm rõ price qualifiers/cadence và các field mơ hồ; quote bổ sung có chọn lọc. Backend chưa tự đặt TTL hoặc gọi live crawler khi URL vắng trong kho. [Hướng dẫn cấu hình](examples/backend-catalog-validation.md), [nghiệm thu hiện hành](docs/backend-catalog-validation-verification.md); [baseline trước policy mới](docs/supabase-tour-integration-plan.md).

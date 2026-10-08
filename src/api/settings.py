@@ -1,8 +1,9 @@
+import re
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, StrictInt, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +23,8 @@ class Settings(BaseSettings):
     nim_max_tokens: int = Field(default=4096, ge=512, le=16384)
     nim_timeout_seconds: float = Field(default=90, ge=1, le=300)
     semantic_assessment_enabled: bool = True
+    what_if_explanation_enabled: bool = True
+    what_if_explanation_timeout_seconds: float = Field(default=15, ge=1, le=30)
     semantic_timeout_seconds: float = Field(default=45, ge=1, le=120)
     semantic_max_candidates: int = Field(default=12, ge=1, le=20)
     semantic_max_pairs: int = Field(default=24, ge=1, le=100)
@@ -37,6 +40,8 @@ class Settings(BaseSettings):
     supabase_tour_pool_size: int = Field(default=2, ge=1, le=5)
     supabase_tour_scan_limit: int = Field(default=1000, ge=1, le=5000)
     supabase_tour_max_offers: int = Field(default=1000, ge=1, le=1000)
+    supabase_tour_trusted_domains: list[str] = Field(default_factory=list, max_length=100)
+    supabase_tour_freshness_seconds: dict[str, StrictInt] = Field(default_factory=dict, max_length=4)
     crawler_url: str | None = None
     crawler_registry_path: Path | None = None
     crawler_api_key: SecretStr = SecretStr("")
@@ -62,6 +67,21 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def deployment(self):
+        if len(set(self.supabase_tour_trusted_domains)) != len(self.supabase_tour_trusted_domains) or any(
+            not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+", d)
+            for d in self.supabase_tour_trusted_domains
+        ):
+            raise ValueError("Trusted domains must be unique exact lowercase hostnames")
+        if set(self.supabase_tour_freshness_seconds) - {
+            "price",
+            "departure_date",
+            "return_date",
+            "availability",
+        } or any(
+            type(seconds) is not int or seconds <= 0
+            for seconds in self.supabase_tour_freshness_seconds.values()
+        ):
+            raise ValueError("Catalog freshness requires supported volatile fields and positive seconds")
         tokens = [
             t.get_secret_value()
             for t in (self.admin_token, self.admin_operator_token, self.admin_viewer_token)

@@ -26,6 +26,7 @@ from api.v2.models import (
 )
 from domain.common import AppError, now, uid
 from domain.semantic import FIELDS_V2
+from domain.what_if import ApplyWhatIf, CreateWhatIf, WhatIfAnalysis
 from requirements.catalog import CATALOG_VERSION, PLACE_ENTRIES, PLACE_RELATIONS
 
 
@@ -134,6 +135,11 @@ def router(service, admin, owner, limits):
                     for field, operators in FIELDS_V2.items()
                 ],
                 "required_by_input_kind": {
+                    "structured": ["form"],
+                    "urls": ["reference_urls"],
+                    "text": ["text"],
+                },
+                "required_before_confirm": {
                     "structured": [
                         "destinations",
                         "departure_origin",
@@ -141,8 +147,30 @@ def router(service, admin, owner, limits):
                         "party.adults",
                         "estimated_cost",
                     ],
+                    "text": [
+                        "destinations",
+                        "departure_origin",
+                        "departure_date",
+                        "party.adults",
+                        "estimated_cost",
+                    ],
                     "urls": ["reference_urls"],
-                    "text": ["text"],
+                },
+                "personalized_policy": {
+                    "version": "personalized-core-v1",
+                    "incomplete_form_creates_proposal": True,
+                    "budget": {
+                        "strength": "hard",
+                        "operator": "lte",
+                        "currency": "VND",
+                        "basis": "per_adult",
+                        "coverage": "tour_price",
+                    },
+                    "budget_defaults_apply_to": "labeled_form_only",
+                    "text_preserves_explicit_strength_and_asks_missing_cap": True,
+                    "readiness_requires_confirmed_revision_at_search_endpoint": True,
+                    "core_condition_answer": {"shape": "condition: FormConditionV2", "new_id_required": True},
+                    "core_party_answer": {"adults": 2},
                 },
                 "defaults": {"budget_coverage": {"value": "tour_price", "origin": "system_default"}},
                 "qualitative_policy": {
@@ -161,6 +189,20 @@ def router(service, admin, owner, limits):
                     "ranking_policy": "rank-v2.3-bounds",
                     "unsupported_fields": ["supplier_reputation", "service_quality", "price_value"],
                     "strength_independent_of_processing": True,
+                },
+                "what_if_policy": {
+                    "version": "what-if-v1",
+                    "requires_completed_comparison": True,
+                    "baseline": "recomputed_on_analysis_snapshot",
+                    "max_joint_groups": 2,
+                    "scenario_attempts_default": 32,
+                    "scenario_attempts_max": 64,
+                    "candidate_limit_default": 100,
+                    "candidate_limit_max": 500,
+                    "explanation_enabled": store.settings.what_if_explanation_enabled,
+                    "explanation_timeout_seconds": store.settings.what_if_explanation_timeout_seconds,
+                    "percentage_meaning": "proven_blocked / scenario_eligible_in_acquired_snapshot",
+                    "apply_creates_proposal": True,
                 },
                 "transports": [
                     {"id": "motor_vehicle", "label": "Ô tô (loại rộng)"},
@@ -196,6 +238,21 @@ def router(service, admin, owner, limits):
                 "upstream_contract": "supabase-catalog-v2"
                 if store.settings.data_provider == "supabase"
                 else "crawler-v1-adapter",
+                "catalog_validation": {
+                    "policy_version": "catalog-validation-v1",
+                    "configured_domains": store.settings.supabase_tour_trusted_domains
+                    if store.settings.data_provider == "supabase"
+                    else [],
+                    "verification_states": [
+                        "unverified",
+                        "catalog_validated",
+                        "supplier_published",
+                        "independently_verified",
+                    ],
+                    "independent_verification": False,
+                    "field_proof_required_for_trusted_catalog": False,
+                    "volatile_freshness_required": True,
+                },
             },
         )
 
@@ -227,7 +284,7 @@ def router(service, admin, owner, limits):
                         "value": {
                             "input": {
                                 "kind": "text",
-                                "text": "Đi Nhật từ Sài Gòn, 5 ngày. Giá tour tối đa 30 triệu đồng mỗi người lớn.",
+                                "text": "Đi Nhật từ Sài Gòn ngày 03/11/2026, 1 người lớn. Giá tour tối đa 30 triệu VND mỗi người lớn.",
                             }
                         },
                     },
@@ -394,6 +451,49 @@ def router(service, admin, owner, limits):
             result = ComparisonV2.model_validate(result).model_dump(mode="json")
         return envelope(request, {"id": cid, "status": record["status"], "result": result})
 
+    @routes.post("/comparisons/{cid}/what-if", response_model=Envelope[dict[str, JsonValue]])
+    async def create_what_if(
+        cid: str,
+        body: CreateWhatIf,
+        request: Request,
+        owner_id: str = Depends(owner),
+        idempotency_key: str | None = Header(None),
+    ):
+        return mutation(
+            request,
+            owner_id,
+            idempotency_key,
+            f"what_if:{cid}",
+            body,
+            lambda c: service.create_what_if(c, owner_id, cid, body),
+        )
+
+    @routes.get("/what-if/{aid}", response_model=Envelope[dict[str, JsonValue]])
+    async def what_if(aid: str, request: Request, owner_id: str = Depends(owner)):
+        record = store.resource(owner_id, aid, kind="what_if_v2")
+        result = json.loads(record["payload"]).get("result")
+        if result:
+            result = WhatIfAnalysis.model_validate(result).model_dump(mode="json")
+        return envelope(request, dict(id=aid, status=record["status"], result=result))
+
+    @routes.post("/what-if/{aid}/scenarios/{sid}/proposals", response_model=Envelope[Proposal])
+    async def apply_what_if(
+        aid: str,
+        sid: str,
+        body: ApplyWhatIf,
+        request: Request,
+        owner_id: str = Depends(owner),
+        idempotency_key: str | None = Header(None),
+    ):
+        return mutation(
+            request,
+            owner_id,
+            idempotency_key,
+            f"apply_what_if:{aid}:{sid}",
+            body,
+            lambda c: service.apply_what_if(c, owner_id, aid, sid, body),
+        )
+
     @routes.get("/jobs/{jid}", response_model=Envelope[dict[str, JsonValue]])
     async def job(jid: str, request: Request, owner_id: str = Depends(owner)):
         data = store.job(owner_id, jid)
@@ -494,7 +594,7 @@ def router(service, admin, owner, limits):
                 "retained_excerpt_url": None,
                 "quality": {
                     "origin": "synthetic" if ev["method"] == "synthetic_fixture" else "source",
-                    "verification": "unverified",
+                    "verification": "catalog_validated" if ev.get("catalog_validation") else "unverified",
                     "independently_verified": False,
                     "provenance_kind": "database_record"
                     if ev["method"] == "database_record"

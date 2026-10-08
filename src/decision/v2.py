@@ -91,36 +91,12 @@ def score_bounds(tree, contributions):
     return sum(p[0] * p[2] for p in parts) / weight, sum(p[1] * p[2] for p in parts) / weight, weight
 
 
-def build_comparison(
-    cid,
-    r,
-    crawl,
-    registry,
-    at,
-    *,
-    exclusions=(),
-    selections=(),
-    candidate_limit=20,
-    progress=None,
-    prepared=None,
-    semantic_report=None,
-):
-    def stage(name, status, summary, **kwargs):
-        if progress is not None:
-            progress(name, status, summary, **kwargs)
-
-    stage("evaluation", "started", "Đánh giá các điều kiện trên snapshot đã chuẩn hóa.")
-    suppliers = {s.supplier_id: s for s in crawl.suppliers}
+def rank_candidates(r, evaluated, *, exclusions=(), semantic_report=None):
+    """Shared deterministic ranking; mutates only the supplied evaluation records."""
     excluded = set(exclusions)
-    synthetic = crawl.origin == "synthetic"
-    evaluated, truncated = prepared or prepare_candidates(
-        r, crawl, registry, at, exclusions=exclusions, selections=selections, candidate_limit=candidate_limit
-    )
     semantic_items = {
         (a["candidate_id"], a["condition_id"]): a for a in (semantic_report or {}).get("items", [])
     }
-    stage("evaluation", "completed", "Đã đánh giá pass/fail/unknown.", counts={"candidates": len(evaluated)})
-    stage("ranking", "started", "Xếp hạng theo preference tree và policy.")
     for candidate in evaluated:
         contributions = {}
         for condition in r.conditions:
@@ -160,6 +136,37 @@ def build_comparison(
     eligible.sort(
         key=lambda c: (-(c["score_lower"] or 0), -(c["score_upper"] or 0), -(c["coverage"] or 0), c["id"])
     )
+    return eligible
+
+
+def build_comparison(
+    cid,
+    r,
+    crawl,
+    registry,
+    at,
+    *,
+    exclusions=(),
+    selections=(),
+    candidate_limit=20,
+    progress=None,
+    prepared=None,
+    semantic_report=None,
+):
+    def stage(name, status, summary, **kwargs):
+        if progress is not None:
+            progress(name, status, summary, **kwargs)
+
+    stage("evaluation", "started", "Đánh giá các điều kiện trên snapshot đã chuẩn hóa.")
+    suppliers = {s.supplier_id: s for s in crawl.suppliers}
+    excluded = set(exclusions)
+    synthetic = crawl.origin == "synthetic"
+    evaluated, truncated = prepared or prepare_candidates(
+        r, crawl, registry, at, exclusions=exclusions, selections=selections, candidate_limit=candidate_limit
+    )
+    stage("evaluation", "completed", "Đã đánh giá pass/fail/unknown.", counts={"candidates": len(evaluated)})
+    stage("ranking", "started", "Xếp hạng theo preference tree và policy.")
+    eligible = rank_candidates(r, evaluated, exclusions=exclusions, semantic_report=semantic_report)
     recommended = eligible[:3]
     stage(
         "ranking", "completed", "Đã chọn tối đa ba tour khác nhau.", counts={"recommended": len(recommended)}
@@ -540,6 +547,7 @@ def build_comparison(
             "ranking": RANK_POLICY,
             "decision": "decision-v2.3-offers",
             "semantic_assessment": "semantic-assessment-v1",
+            "catalog_validation": "catalog-validation-v1",
         },
         "columns": columns,
         "rows": rows,

@@ -224,6 +224,53 @@ def test_probe_schema_and_catalog_scope(rows, config):
     assert repo.registry()[0].limits == {"catalog_read_only": 1, "live_refresh": 0}
     assert not repo.registry()[0].freshness_seconds
     assert all(sql.startswith(("SELECT", "SHOW")) for sql, _ in engine.calls)
+
+
+def test_quality_audit_preserves_unknowns_and_reports_bounded_sample(rows, config):
+    from data_access.supabase.audit import audit_catalog
+
+    repo, engine = repo_for(config, rows)
+    report = asyncio.run(audit_catalog(repo, config))
+    assert report["sample"] == {"tours": 1, "offers": 1, "price_quotes": 1}
+    assert report["fields"]["tour.departure_origin"]["verification"] == {"unverified": 1}
+    assert report["fields"]["offer.return_date"]["states"] == {"missing": 1}
+    assert report["prices"]["coverage"] == {"unspecified": 1}
+    assert report["prices"]["pricing_complete"] == 0
+    assert report["freshness"]["configured_volatile_ttls"] == {}
+    assert all(sql.startswith(("SELECT", "SHOW")) for sql, _ in engine.calls)
+    assert "secret" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("valid", [True, False])
+def test_quality_audit_runs_production_proof_validation(rows, config, valid):
+    from data_access.supabase.audit import audit_catalog
+
+    rows[1]["evidence"]["fields"] = {"departure_city": field_proof(rows[1])}
+    if not valid:
+        rows[1]["evidence"]["fields"]["departure_city"]["raw_value"] = "Hà Nội"
+    repo, _ = repo_for(config, rows)
+    report = asyncio.run(audit_catalog(repo, config))
+    assert report["fields"]["tour.departure_origin"]["verification"] == {
+        "supplier_published" if valid else "unverified": 1
+    }
+    assert (report["issue_counts"].get("CATALOG_FIELD_PROOF_INVALID", 0) > 0) == (not valid)
+
+
+def test_audit_cli_writes_report_closes_reader_and_never_creates_application_db(
+    rows, config, tmp_path, monkeypatch
+):
+    import sys
+
+    from api.cli import main
+
+    repo, engine = repo_for(config, rows)
+    path = tmp_path / "quality.json"
+    monkeypatch.setattr("api.settings.Settings", lambda **kwargs: config)
+    monkeypatch.setattr("data_access.supabase.reader.SupabaseRepository", lambda settings: repo)
+    monkeypatch.setattr(sys, "argv", ["tour-backend", "audit-supabase", "--output", str(path)])
+    main()
+    assert json.loads(path.read_text(encoding="utf-8"))["sample"]["tours"] == 1
+    assert engine.closed and not (tmp_path / "app.db").exists()
     engine.schema = [
         r for r in engine.schema if not (r["table_name"] == "offers" and r["column_name"] == "price")
     ]

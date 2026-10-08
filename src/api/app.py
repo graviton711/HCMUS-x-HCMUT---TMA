@@ -45,7 +45,13 @@ class Limits:
 
 
 def create_app(
-    settings: Settings | None = None, *, nim=None, gateway=None, access_checker=None, semantic_gateway=None
+    settings: Settings | None = None,
+    *,
+    nim=None,
+    gateway=None,
+    access_checker=None,
+    semantic_gateway=None,
+    what_if_gateway=None,
 ) -> FastAPI:
     settings = settings or Settings()
     store = Store(settings)
@@ -55,7 +61,9 @@ def create_app(
     from api.v2.service import Service
 
     bootstrap(store, gateway)
-    worker.v2 = Service(store, worker.nim, gateway, semantic_gateway=semantic_gateway)
+    worker.v2 = Service(
+        store, worker.nim, gateway, semantic_gateway=semantic_gateway, what_if_gateway=what_if_gateway
+    )
     worker.v2.admin = Admin(store, worker.v2, access_checker)
     lock, limits = RuntimeLock(settings.database_url), Limits()
 
@@ -85,12 +93,15 @@ def create_app(
         lifespan=lifespan,
         description="""Backend v2 đã có tại nhóm **v2**: session → requirement/proposal → confirm → comparison/job/events.
 Xem `examples/backend-v2.md` để nối frontend. Dùng `/v2/catalog` lấy fields, controls và limits.
-Nhập text cần NIM; URL-only có proposal cần confirm; structured form tạo revision 1.
+Nhập text cần NIM; URL-only có proposal cần confirm. Form đầy đủ/rõ tạo revision 1;
+form thiếu/chưa rõ tạo draft + proposal. Form/text cần đủ năm core fields trước confirm/search.
+Đọc completeness và readiness.can_confirm/can_search; hướng dẫn `examples/backend-personalized-v2.md`.
 Frontend prototype hiện vẫn dùng dữ liệu mẫu. API v1 tiếp tục hoạt động:
 
 **Kho Supabase thật:** cấu hình `DATA_PROVIDER=supabase`, dùng nhóm **v2** và URL tour có trong catalog.
 Kiểm tra `/health` thấy data_provider=supabase; `probe-supabase` kiểm tra counts và quyền chỉ đọc.
-Giá công bố dạng from và dữ kiện chưa có field evidence vẫn hiển thị unverified/unknown;
+Nguồn opt-in qua SUPABASE_TOUR_TRUSTED_DOMAINS dùng dữ liệu đã kiểm tra với trạng thái catalog_validated.
+Giá thiếu coverage, ngày thiếu TTL và dữ kiện không được hỗ trợ vẫn unknown;
 comparison thành công không có nghĩa mọi điều kiện đã được chứng minh.
 Hướng dẫn từng bước: `examples/backend-supabase-v2.md`. Provider Supabase thu thập qua v2;
 các bước v1 dưới đây dùng fixture/http.

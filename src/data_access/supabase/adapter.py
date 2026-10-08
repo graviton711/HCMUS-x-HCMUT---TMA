@@ -8,6 +8,7 @@ from decimal import Decimal
 from functools import wraps
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from data_access.supabase.policy import CATALOG_FIELDS, TEXT_FIELDS, receipt, trusted_source
 from domain.common import instant, now
 from domain.crawl_v2 import CatalogFieldProof, CrawlResultV2
 from requirements.catalog import expand_entities, resolve_entities
@@ -149,7 +150,9 @@ def atomic_record(fn):
 
 
 class CatalogAdapter:
-    def __init__(self, request_id):
+    def __init__(self, request_id, *, registry=(), trusted_domains=()):
+        self.sources = {s.source_id: s for s in registry}
+        self.trusted_domains = set(trusted_domains)
         self.payload = {
             "request_id": request_id,
             "origin": "source",
@@ -161,6 +164,19 @@ class CatalogAdapter:
             "issues": [],
         }
         self.providers, self.tour_rows = {}, {}
+
+    def catalog_source(self, row, table, provider, url):
+        source = self.sources.get(source_id(provider))
+        if not trusted_source(source, provider, url, self.trusted_domains):
+            return None
+        tour_row = row if table == "tours" else self.tour_rows[row["tour_id"]][0]
+        if any(
+            urlsplit(candidate).hostname != urlsplit(url).hostname
+            for candidate in [tour_row.get("url"), tour_row.get("canonical_url")]
+            if candidate
+        ):
+            return None
+        return source
 
     def issue(self, code, source, explanation, **refs):
         if len(self.payload["issues"]) < 1900:
@@ -220,7 +236,8 @@ class CatalogAdapter:
                 snapshot_id=snapshot,
                 field_path=field,
             )
-        if proof_raw and allow_proof:
+        proof_requested = isinstance(proofs, dict) and field in proofs
+        if proof_requested and allow_proof:
             try:
                 proof = CatalogFieldProof.model_validate(proof_raw)
                 if (
@@ -252,6 +269,32 @@ class CatalogAdapter:
                     snapshot_id=snapshot,
                     field_path=field,
                 )
+        elif (
+            allow_proof
+            and isinstance(proofs, dict)
+            and (metadata is None or isinstance(metadata, dict))
+            and field in CATALOG_FIELDS
+            and state == "present"
+            and self.catalog_source(row, table, provider, url) is not None
+        ):
+            try:
+                if (
+                    isinstance(metadata, dict)
+                    and "observed_at" in metadata
+                    and instant(metadata["observed_at"]) != instant(timestamp)
+                ):
+                    raise ValueError("Catalog metadata timestamp mismatch")
+                ev["catalog_validation"] = receipt(self.sources[source_id(provider)])
+                verification = "catalog_validated"
+                completeness = "unknown" if field in TEXT_FIELDS else "complete"
+            except (ValueError, TypeError, AttributeError):
+                self.issue(
+                    "CATALOG_METADATA_INVALID",
+                    source_id(provider),
+                    "Metadata catalog không khớp thời điểm row; giữ dữ kiện chưa kiểm tra.",
+                    snapshot_id=snapshot,
+                    field_path=field,
+                )
         self.payload["evidence"].append(ev)
         return {
             "value": wire(value) if state == "present" else None,
@@ -269,9 +312,14 @@ class CatalogAdapter:
     @atomic_record
     def add_tour(self, row, provider):
         key = row["record_key"].strip()
-        snapshot = "catalog_ts_" + digest(row)[:40]
         url = row.get("canonical_url") or row["url"]
         lookup_url(url)
+        policy = (
+            receipt(self.sources[source_id(provider)])
+            if self.catalog_source(row, "tours", provider, url) is not None
+            else None
+        )
+        snapshot = "catalog_ts_" + digest([row, policy] if policy else row)[:40]
         if provider["id"] not in self.providers:
             self.providers[provider["id"]] = provider
             self.payload["suppliers"].append(

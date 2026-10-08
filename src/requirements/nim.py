@@ -158,7 +158,16 @@ class NimGateway:
                                 {
                                     "required_clarification_ids": [
                                         q.id for q in clarification_targets(message, previous)
-                                    ]
+                                    ],
+                                    "clarification_reply_targets": [
+                                        {
+                                            "clarification_id": q.id,
+                                            "reason_code": q.reason_code,
+                                            "field_path": q.field_path,
+                                            "output_location": "answers",
+                                        }
+                                        for q in clarification_targets(message, previous)
+                                    ],
                                 }
                                 if is_v2 and previous
                                 else {}

@@ -70,7 +70,7 @@ Nhu cầu có URL → `hybrid`: cùng một comparison dùng cả reference và 
 
 ## Structured form cho demo deterministic
 
-`POST /v2/requirements` với form đã được người dùng xác nhận tạo thẳng revision 1:
+`POST /v2/requirements` với form đủ core và đã rõ tạo thẳng revision 1. Form thiếu/chưa rõ trả draft/proposal201; đọc `proposal_id`, bổ sung rồi confirm theo [hướng dẫn core](backend-personalized-v2.md):
 
 ```json
 {
@@ -81,7 +81,7 @@ Nhu cầu có URL → `hybrid`: cùng một comparison dùng cả reference và 
         {"id":"destination","field":"destinations","operator":"contains","strength":"hard","value":{"kind":"set","items":["country:jp"]}},
         {"id":"origin","field":"departure_origin","operator":"in","strength":"hard","value":{"kind":"set","items":["city:vn:hcmc"]}},
         {"id":"date","field":"departure_date","operator":"eq","strength":"hard","value":{"kind":"date","value":"2026-11-10"}},
-        {"id":"budget","field":"estimated_cost","operator":"lte","strength":"soft","value":{"kind":"budget","amount":30000000,"currency":"VND","basis":"per_adult","coverage":"tour_price"}}
+        {"id":"budget","field":"estimated_cost","operator":"lte","strength":"hard","value":{"kind":"budget","amount":30000000,"currency":"VND","basis":"per_adult","coverage":"tour_price"}}
       ],
       "party": {"adults":2,"children":[]}
     }

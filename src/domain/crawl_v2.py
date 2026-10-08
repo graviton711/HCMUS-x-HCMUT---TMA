@@ -5,9 +5,34 @@ from typing import Literal
 from pydantic import Field, JsonValue, model_validator
 
 from domain.common import Identifier, Model, instant
-from domain.crawl import CrawlResult, Evidence, Fact, OfferSnapshot, TourSnapshot
+from domain.crawl import CrawlResult, Evidence, ExtraCharge, Fact, OfferSnapshot, PriceQuote, TourSnapshot
 
 NATURE_TAGS = {"beach", "forest", "mountain", "waterfall", "national_park", "river", "lake", "countryside"}
+CATALOG_POLICY = "catalog-validation-v1"
+CATALOG_CHECKS = {"schema", "record_binding", "source_url", "timestamp", "normalization"}
+
+
+class FactV2[T](Fact[T]):
+    verification: Literal[
+        "supplier_published", "independently_verified", "catalog_validated", "unverified"
+    ] = "unverified"
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_fact(cls, value):
+        return value.model_dump() if isinstance(value, Fact) and not isinstance(value, cls) else value
+
+
+class CatalogValidation(Model):
+    policy_version: Literal["catalog-validation-v1"] = CATALOG_POLICY
+    source_id: Identifier
+    checks: list[Literal["schema", "record_binding", "source_url", "timestamp", "normalization"]]
+
+    @model_validator(mode="after")
+    def complete_checks(self):
+        if set(self.checks) != CATALOG_CHECKS or len(self.checks) != len(CATALOG_CHECKS):
+            raise ValueError("Catalog validation requires every check exactly once")
+        return self
 
 
 class CatalogRecordRef(Model):
@@ -20,11 +45,18 @@ class CatalogRecordRef(Model):
 class EvidenceV2(Evidence):
     method: Literal["json_ld", "json", "api", "html", "synthetic_fixture", "database_record"]
     record_ref: CatalogRecordRef | None = None
+    catalog_validation: CatalogValidation | None = None
 
     @model_validator(mode="after")
     def record_binding(self):
         if (self.method == "database_record") != (self.record_ref is not None):
             raise ValueError("Database provenance requires an explicit record reference")
+        if self.catalog_validation is not None and (
+            self.method != "database_record"
+            or self.publisher != "supplier_" + self.catalog_validation.source_id.removeprefix("catalog_")
+            or not self.catalog_validation.source_id.startswith("catalog_")
+        ):
+            raise ValueError("Catalog receipt requires bound database provenance and supplier")
         return self
 
 
@@ -50,8 +82,10 @@ class CatalogFieldProof(Model):
 
 
 class TourSnapshotV2(TourSnapshot):
-    semantic_fields: dict[str, Fact[JsonValue]] = Field(default_factory=dict, max_length=3)
-    catalog_fields: dict[str, Fact[JsonValue]] = Field(default_factory=dict, max_length=2)
+    fields: dict[str, FactV2[JsonValue]] = Field(default_factory=dict, max_length=30)
+    policies: dict[str, FactV2[str]] = Field(default_factory=dict, max_length=20)
+    semantic_fields: dict[str, FactV2[JsonValue]] = Field(default_factory=dict, max_length=3)
+    catalog_fields: dict[str, FactV2[JsonValue]] = Field(default_factory=dict, max_length=2)
 
     @model_validator(mode="after")
     def semantic_values(self):
@@ -76,7 +110,11 @@ class TourSnapshotV2(TourSnapshot):
 
 
 class OfferSnapshotV2(OfferSnapshot):
-    catalog_fields: dict[str, Fact[JsonValue]] = Field(default_factory=dict, max_length=3)
+    fields: dict[str, FactV2[JsonValue]] = Field(default_factory=dict, max_length=10)
+    price_quotes: list[FactV2[PriceQuote]] = Field(default_factory=list, max_length=50)
+    extra_charges: list[FactV2[ExtraCharge]] = Field(default_factory=list, max_length=50)
+    pricing_complete: FactV2[bool] | None = None
+    catalog_fields: dict[str, FactV2[JsonValue]] = Field(default_factory=dict, max_length=3)
 
     @model_validator(mode="after")
     def catalog_values(self):
@@ -98,6 +136,7 @@ class CrawlResultV2(CrawlResult):
         if isinstance(data, dict):
             data = dict(data)
             for field, legacy, current in [
+                ("tours", TourSnapshot, TourSnapshotV2),
                 ("offers", OfferSnapshot, OfferSnapshotV2),
                 ("evidence", Evidence, EvidenceV2),
             ]:
@@ -130,6 +169,19 @@ class CrawlResultV2(CrawlResult):
                 if owner is None or eid != prefix + ref.record_key:
                     raise ValueError("Database provenance belongs to a different record")
         for snapshot in [*self.tours, *self.offers]:
+            expected_columns = {
+                id(fact): "departure_city" if name == "departure_origin" else name
+                for name, fact in snapshot.fields.items()
+            }
+            expected_columns.update({id(fact): name for name, fact in snapshot.catalog_fields.items()})
+            if isinstance(snapshot, TourSnapshotV2):
+                expected_columns.update({id(fact): name for name, fact in snapshot.semantic_fields.items()})
+                expected_columns.update(
+                    {
+                        id(fact): "cancellation_policy" if name == "cancellation" else name
+                        for name, fact in snapshot.policies.items()
+                    }
+                )
             facts = list(snapshot.catalog_fields.values())
             if isinstance(snapshot, TourSnapshotV2):
                 facts += list(snapshot.semantic_fields.values())
@@ -147,7 +199,21 @@ class CrawlResultV2(CrawlResult):
                 if snapshot.pricing_complete:
                     facts.append(snapshot.pricing_complete)
             for fact in facts:
-                if fact.verification != "unverified" and any(
+                if fact.verification == "catalog_validated":
+                    if (
+                        fact.data_state != "present"
+                        or id(fact) not in expected_columns
+                        or any(
+                            evidence[eid].catalog_validation is None
+                            or evidence[eid].observed_at != fact.observed_at
+                            or evidence[eid].record_ref is None
+                            or evidence[eid].record_ref.field != expected_columns[id(fact)]
+                            or evidence[eid].raw_quote != fact.raw_value
+                            for eid in fact.evidence_ids
+                        )
+                    ):
+                        raise ValueError("Catalog fact requires receipt and matching observation")
+                elif fact.verification != "unverified" and any(
                     evidence[eid].method == "database_record" for eid in fact.evidence_ids
                 ):
                     raise ValueError("Database record provenance cannot verify website facts")

@@ -672,6 +672,20 @@ def test_api_tet_proposal_targeted_answers_cas_confirm_and_persistence(settings)
             client.post(f"/v2/requirements/{accepted['requirement_id']}/proposals", json=body).status_code
             == 409
         )
+        # Semantic date/route answers do not fill party or an actual budget cap.
+        assert not updated["preview"]["completeness"]["is_complete"]
+        from test_v2 import form
+
+        core_edits = [
+            {"op": "replace_party", "party": {"adults": 1}},
+            {"op": "upsert_condition", "condition": form()["input"]["form"]["conditions"][3]},
+        ]
+        body.update(
+            expected_proposal_version=updated["version"], input={"kind": "structured", "edits": core_edits}
+        )
+        response = client.post(f"/v2/requirements/{accepted['requirement_id']}/proposals", json=body)
+        assert response.status_code == 200, response.text
+        updated = response.json()["data"]
         committed = client.post(
             f"/v2/proposals/{p['id']}/confirm",
             json={"expected_revision": 0, "expected_proposal_version": updated["version"]},
@@ -690,8 +704,9 @@ def test_api_tet_proposal_targeted_answers_cas_confirm_and_persistence(settings)
         comparison = client.get(f"/v2/comparisons/{accepted_comparison['comparison_id']}").json()["data"]
         assert comparison["status"] == "succeeded", comparison
         result = comparison["result"]
-        item = result["recommendations"]["items"][0]
-        assert item["score"] == 1 and item["coverage"] == pytest.approx(0.4)
+        # This HTTP fixture has no price proof: the newly required cap must remain unknown.
+        assert not result["recommendations"]["candidate_ids"]
+        assert result["empty_reason"] == "ONLY_UNVERIFIED"
         assert next(e for e in result["evaluations"] if e["field"] == "tour_type")["status"] == "pass"
         replay = client.post(
             "/v2/comparisons",
@@ -703,9 +718,7 @@ def test_api_tet_proposal_targeted_answers_cas_confirm_and_persistence(settings)
         ).json()["data"]
         finish(app)
         reused = client.get(f"/v2/comparisons/{replay['comparison_id']}").json()["data"]
-        assert reused["status"] == "succeeded" and reused["result"]["recommendations"]["items"][0][
-            "coverage"
-        ] == pytest.approx(0.4)
+        assert reused["status"] == "succeeded" and reused["result"]["empty_reason"] == "ONLY_UNVERIFIED"
 
 
 @pytest.mark.parametrize(
@@ -1077,7 +1090,7 @@ def test_reserved_lunar_departure_window_is_backend_issue():
     )
     assert r.readiness.status == "unsupported"
     assert "TEMPORAL_SEMANTICS_UNSUPPORTED" in r.readiness.reasons
-    assert not r.clarifications
+    assert not any(q.field_path.startswith("temporal_groups.") for q in r.clarifications)
     assert all(c.value.resolved_date is None for c in r.conditions if isinstance(c.value, TemporalValue))
 
 
@@ -1130,7 +1143,9 @@ def test_old_v2_values_and_policy_remain_readable():
     r = RequirementV2.model_validate(old)
     assert r.policy_version == "requirements-v1" and r.conditions[0].value.kind == "set"
     updated = finalize_v2(r)
-    assert updated.policy_version == "requirements-v2.2" and updated.readiness.status == "ready"
+    assert updated.policy_version == "requirements-v2.2"
+    assert updated.readiness.status == "needs_clarification" and not updated.readiness.can_confirm
+    assert updated.readiness.can_evaluate_hard_constraints
 
 
 def test_hard_unsupported_blocks_api_confirm_and_removal_rebuilds_issues(settings):
@@ -1180,6 +1195,7 @@ def test_hard_unsupported_blocks_api_confirm_and_removal_rebuilds_issues(setting
         updated = client.post(f"/v2/requirements/{accepted['requirement_id']}/proposals", json=body)
         assert updated.status_code == 200, updated.text
         p = updated.json()["data"]
-        assert not p["preview"]["issues"] and p["preview"]["readiness"]["status"] == "ready"
+        assert not p["preview"]["issues"]
+        assert p["preview"]["readiness"]["status"] == "needs_clarification"
         confirm["expected_proposal_version"] = p["version"]
-        assert client.post(f"/v2/proposals/{p['id']}/confirm", json=confirm).status_code == 200
+        assert client.post(f"/v2/proposals/{p['id']}/confirm", json=confirm).status_code == 409
