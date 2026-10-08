@@ -1,5 +1,7 @@
 # Domain
 
+`what_if.py` cung cấp DTO và invariants cho baseline/scenarios/groups/metrics có mẫu số, witness và ranking sensitivity. [Policy](../../docs/what-if-analysis.md); không gọi network hoặc sửa requirement.
+
 V2 bổ sung retrieval diagnostics/offer coverage; hai trục strength và processing độc lập. Xem [structured retrieval](../../docs/retrieval-semantic-ranking.md).
 
 Supabase import v2 bổ sung record provenance riêng, catalog preview fields và CatalogFieldProof; raw database values chưa có website field proof giữ unverified. V1 models/schema không đổi. Xem [contract adapter](../data_access/supabase/README.md).
@@ -30,3 +32,6 @@ Cung cấp typed DTO/value objects và invariants cho requirements, QuerySpec, s
 - Eligibility/evaluation, data state, verification và freshness là các trục độc lập. Empty hard tree không tạo tuyên bố đã phù hợp.
 
 Acceptance: reject condition/operator sai, references chéo offer, duplicate IDs, amount/range sai và unknown fields; giữ được payload partial hợp lệ mà không bịa defaults nghiệp vụ.
+# Catalog validation v2
+
+Theo [policy](../../docs/catalog-validation-policy.md), `FactV2` nhận thêm `catalog_validated`, evidence database_record có receipt bound source/record. Đây là kiểm tra dữ liệu crawler, không độc lập xác minh website. Snapshot/cell v2 giữ trạng thái này; models/schema v1 không đổi.

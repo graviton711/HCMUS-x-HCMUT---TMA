@@ -167,9 +167,12 @@ class SupabaseRepository:
                             "departure_date",
                         ],
                         limits={"catalog_read_only": 1, "live_refresh": 0},
-                        freshness_seconds={},
+                        freshness_seconds=dict(self.settings.supabase_tour_freshness_seconds),
                     )
                 )
+            for capability in capabilities:
+                if capability.approved_domains[0] in self.settings.supabase_tour_trusted_domains:
+                    capability.limits["catalog_validated"] = 1
             return capabilities
         except SQLAlchemyError as exc:
             raise database_error(exc) from None
@@ -199,13 +202,21 @@ class SupabaseRepository:
                 "transaction_read_only": read_only,
                 "counts": counts,
                 "sources": [{"id": s.source_id, "domains": s.approved_domains} for s in registry],
-                "freshness_policy": "unknown_until_configured",
+                "freshness_policy": "configured"
+                if self.settings.supabase_tour_freshness_seconds
+                else "unknown_until_configured",
+                "catalog_policy": "catalog-validation-v1",
+                "trusted_domains": self.settings.supabase_tour_trusted_domains,
             }
         except SQLAlchemyError as exc:
             raise database_error(exc) from None
 
-    def _collect(self, request, conditions, limit, exclusions, requirement=None, registry=()):
-        adapter = CatalogAdapter(request.request_id)
+    def _collect(self, request, conditions, limit, exclusions, requirement=None, registry=(), analysis=False):
+        adapter = CatalogAdapter(
+            request.request_id,
+            registry=registry,
+            trusted_domains=self.settings.supabase_tour_trusted_domains,
+        )
         criteria = requirement or SimpleNamespace(
             conditions=conditions,
             hard_tree=request.query.hard_tree,
@@ -336,7 +347,7 @@ class SupabaseRepository:
                         ):
                             raise ValueError("Catalog tour domain does not match provider")
                         retained[row["id"]] = adapter.add_tour(row, providers[row["provider_id"]])
-                        if request.mode == "discover":
+                        if request.mode == "discover" and not analysis:
                             tour = TourSnapshotV2.model_validate(retained[row["id"]])
                             source = sources.get(source_id(providers[row["provider_id"]]))
                             if (
@@ -371,13 +382,17 @@ class SupabaseRepository:
                             )
                         },
                     )
-                    anchor = next(
-                        (
-                            getattr(cn.value, "resolved_date", None) or getattr(cn.value, "value", None)
-                            for cn in conditions
-                            if cn.field == "departure_date"
-                        ),
-                        None,
+                    anchor = (
+                        None
+                        if analysis
+                        else next(
+                            (
+                                getattr(cn.value, "resolved_date", None) or getattr(cn.value, "value", None)
+                                for cn in conditions
+                                if cn.field == "departure_date"
+                            ),
+                            None,
+                        )
                     )
                     try:
                         anchor = date.fromisoformat(anchor) if isinstance(anchor, str) else None
@@ -448,11 +463,13 @@ class SupabaseRepository:
                 offer_rejected = 0
                 pool_truncated = False
                 if request.mode == "discover":
-                    surviving = [tid for tid in retained if assessments[tid]["hard_status"] != "fail"]
+                    surviving = [
+                        tid for tid in retained if analysis or assessments[tid]["hard_status"] != "fail"
+                    ]
                     offer_rejected = len(retained) - len(surviving)
                     surviving.sort(
                         key=lambda tid: (
-                            0 if assessments[tid]["hard_status"] in {None, "pass"} else 1,
+                            0 if analysis or assessments[tid]["hard_status"] in {None, "pass"} else 1,
                             -relevance(selected[tid], conditions),
                             tid,
                         )
@@ -479,7 +496,7 @@ class SupabaseRepository:
                 adapter.payload["issues"] = adapter.payload["issues"][:1990]
                 adapter.payload["offer_coverage"] = {k: v for k, v in coverage.items() if k in kept}
                 adapter.payload["retrieval"] = dict(
-                    policy_version="structured-retrieval-v1",
+                    policy_version="what-if-acquisition-v1" if analysis else "structured-retrieval-v1",
                     scanned_count=len(rows),
                     static_rejected=static_rejected,
                     offer_rejected=offer_rejected,
@@ -490,7 +507,7 @@ class SupabaseRepository:
                     pool_truncated=pool_truncated,
                     offer_truncated=offer_truncated,
                     candidate_limit=limit,
-                    filtering="evidence_bound_before_pool",
+                    filtering="unfiltered_analysis_universe" if analysis else "evidence_bound_before_pool",
                 )
             adapter.payload["source_results"].extend(failures)
             for sid, target, ids in bindings:
@@ -524,7 +541,15 @@ class SupabaseRepository:
             raise database_error(exc) from None
 
     async def collect(
-        self, request, *, conditions=(), candidate_limit=20, exclusions=(), requirement=None, registry=()
+        self,
+        request,
+        *,
+        conditions=(),
+        candidate_limit=20,
+        exclusions=(),
+        requirement=None,
+        registry=(),
+        analysis=False,
     ):
         remaining = (instant(request.deadline_at) - now()).total_seconds()
         if remaining <= 0:
@@ -535,10 +560,11 @@ class SupabaseRepository:
                     self._collect,
                     request,
                     conditions,
-                    min(candidate_limit, 100),
+                    min(candidate_limit, 500 if analysis else 100),
                     set(exclusions),
                     requirement,
                     registry,
+                    analysis,
                 ),
                 timeout=remaining,
             )

@@ -36,6 +36,10 @@ def usable(fact: Fact | None, field: str, source, at, synthetic=False) -> tuple[
         return False, f"FIELD_{fact.data_state.upper()}"
     if fact.verification == "unverified" and not synthetic:
         return False, "FIELD_UNVERIFIED"
+    if fact.verification == "catalog_validated" and (
+        source is None or source.access_status != "approved" or source.limits.get("catalog_validated") != 1
+    ):
+        return False, "CATALOG_TRUST_NOT_APPROVED"
     if field in VOLATILE and freshness(fact, field, source, at) != "fresh":
         return False, "FIELD_STALE_OR_FRESHNESS_UNKNOWN"
     return True, "OK"

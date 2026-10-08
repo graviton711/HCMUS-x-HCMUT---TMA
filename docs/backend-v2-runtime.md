@@ -1,10 +1,14 @@
 # Backend v2 — implementation
 
+08/10/2026 trên `backend`: bổ sung async what-if sau comparison, baseline/scenarios cùng snapshot acquisition rộng, hard/soft sensitivity, mức nới budget/date, joint blockers và proposal apply. [Policy](what-if-analysis.md), [test từng bước](../examples/backend-what-if-v2.md). Contract hiện có27 schemas v2; không tự đổi yêu cầu hoặc gọi đây là contribution% tổng điểm.
+
+[Kiểm chứng what-if](backend-what-if-verification.md):401 offline tests pass; catalog thật234 tours/1000 bounded offers vẫn chưa đủ proof để xác minh eligibility cho hai ca mẫu.
+
 User yêu cầu implementation ngày 07/10/2026. Thực hiện trên `feature/minh-phu`, giữ `/v1`. Thiết kế gốc: [protocol](frontend-protocol-v2.md), [pipeline](backend-pipeline-v2.md). Tài liệu này phân biệt khả năng runtime với mẫu UI.
 
 ## Phạm vi và thứ tự
 
-1. DTO/OpenAPI v2 và catalog; structured form commit revision 1, text tạo draft revision 0 và parse proposal.
+1. DTO/OpenAPI v2 và catalog; structured form đầy đủ và rõ commit revision 1, form thiếu/chưa rõ trả draft + proposal201. Text tạo draft revision 0 và parse proposal202. Năm core fields qua cùng validator; [contract](personalized-requirement-policy.md).
 2. Proposal durable, multi-field/direct/message edits, full preview, discard/cancel/expiry, version CAS, atomic confirm và idempotency. Không tự search khi confirm.
 3. Một orchestration cho nhu cầu/1–5 URL/hybrid; append-only job events, immutable comparisons, public prices/evidence, hard gating, tối đa 3 tour distinct, next-group exclusions.
 4. Migration SQLite additive, snapshot indexes và runtime registry. Contacts/admin role checks/audit; không gửi email.
@@ -40,13 +44,15 @@ Nghiệm thu Supabase 08/10/2026: **276 passed** (155 baseline + 89 semantic + 3
 
 Nghiệm thu structured retrieval/assessment 08/10/2026: **311 passed** (276 baseline + 35 checks mới), Ruff/diff whitespace đạt; 24 schemas v2, JSON schemas v1 không đổi. Có counterexamples cross-offer, truncated offers, partial perfect-score ranking, foreign-price metric availability, invalid citations, bounded repair/timeout/replay/input, cancel/source pause/freshness sau NIM wait. [Hai live inputs và giới hạn](backend-retrieval-assessment-results.md).
 
+Nghiệm thu personalized core 08/10/2026: **358 passed** (311 baseline + 47 checks bổ sung), Ruff/diff đạt; 24 schemas v2, JSON schemas v1 không đổi. Form/text/edit/read legacy dùng cùng business gate trước confirm/search/worker; hard cap áp dụng toàn bộ branches, URL-only miễn core. Live Nhật/Tết/follow-up đạt 15 assertions, semantic smoke5/5; comparisons thật ONLY_UNVERIFIED. [Báo cáo và gaps catalog](backend-personalized-verification.md), [test từng bước](../examples/backend-personalized-v2.md).
+
 ## Chạy và tích hợp
 
 `uv sync` → `uv run tour-backend serve`; sau sửa code cần dừng/chạy lại server. `/docs` có nhóm v2/admin, `/v2/catalog` công bố limits/controls. [Hướng dẫn request thật](../examples/backend-v2.md), [schemas](../contracts/README.md). Frontend origin 4173/5173 được cấu hình CORS cho localhost/127.0.0.1.
 
 `uv run pytest -q`, `uv run ruff check src tests`, `uv run tour-backend export-schemas`. Tests dùng DB tạm/FakeNim/mock HTTP. NIM v2 live smoke đã nhận đúng destination Nhật và cost=4 với quote gốc; không thay gold evaluation toàn bộ tiếng Việt.
 
-Semantic v2: [test ca Tết từng bước](../examples/backend-semantic-v2.md), [kết quả live](requirements-evaluation.md). Model hiện có đạt 10/10 ca chạy trong smoke nhỏ (5 ca × 2), gồm cả update; không phải độ chính xác tổng quát. Supabase bổ sung CatalogFieldProof và record provenance; export hiện có 24 schema v2, schemas v1 giữ nguyên. Prompt `vi-semantic-v2.4` phát hiện numeric budget/party bị bỏ sót, duplicate predicates và party-only condition thừa để bounded NIM repair.
+Semantic v2: [test ca Tết từng bước](../examples/backend-semantic-v2.md); [kết quả trước đây](requirements-evaluation.md) ghi 10/10 smoke runs với prompt cũ. Prompt hiện tại `vi-semantic-v2.8` có numeric/party/classification/duplicate/grounding/polarity guards, targeted generation và mixed reply. Lượt mới đạt5/5 semantic cases, Nhật/Tết/API được kiểm riêng; [kết quả và các lượt lỗi trước repair fixes](backend-personalized-verification.md). Không là accuracy tổng quát. Export hiện có24 schema v2, v1 giữ nguyên.
 
 Database mặc định `data/backend.db`: session/revision/proposal/job lưu ngay khi request hợp lệ; snapshots chỉ lưu khi comparison/refresh publish thành công. SQLite viewer cần refresh đúng file; không cần crawler để có session/job. Migration 1→2 tự thêm bảng, giữ dữ liệu cũ; schema khác bị từ chối.
 
@@ -57,9 +63,12 @@ Admin mặc định tắt: cấu hình `ADMIN_TOKEN`, `ADMIN_OPERATOR_TOKEN`, `A
 Đã implement backend v2: proposal/confirm, text/form/URL/hybrid, comparisons/rank/analysis/evidence, events/cancel, SQLite migration, registry/admin/contact. `/v1` tiếp tục hoạt động. Frontend prototype vẫn dùng dữ liệu mẫu; team frontend cần nối endpoints theo hướng dẫn.
 
 - Code mặc định `fixture`/synthetic; `DATA_PROVIDER=supabase` đọc PostgreSQL tour catalog thật qua API v2. Có read-only transactions/pool/timeouts, registry pause, bounded retrieval/exclusions, raw previews và evidence database_record. `probe-supabase` không tạo application DB. [Hướng dẫn](../examples/backend-supabase-v2.md), [contract crawler proof](../src/data_access/supabase/README.md). HTTP gateway vẫn gửi DTO v1, chưa có transport `/internal/v2/crawl`.
-- Kho thật hiện chỉ một provider, chưa có tour khởi hành Hải Phòng và field-level website proofs. Import giữ unverified; volatile freshness unknown đến khi cadence được chốt. Không dùng from-price/child prices chưa có age brackets để kết luận ngân sách/tổng tiền. CrawlResultV2.semantic_fields cần evidence/scope đúng, không suy từ slogan. Lunar departure_window còn reserved/unsupported; Gregorian interval đã biết dùng DateValue/between.
+- [Catalog validation hiện hành](catalog-validation-policy.md) dùng field đã kiểm tra của nguồn opt-in; không bắt buộc website proof mọi field. Kho thay đổi theo crawl, counts ở các báo cáo cũ là lịch sử; xem [nghiệm thu mới](backend-catalog-validation-verification.md). Volatile freshness unknown đến khi cadence/TTL được chốt. Không dùng from-price/child prices thiếu qualifiers để kết luận cap/tổng tiền; không suy semantic fields từ slogan. Lunar departure_window còn reserved/unsupported; Gregorian interval đã biết dùng DateValue/between.
 - Supabase mặc định scan tối đa 1.000 tour records, pool 20 tours, tối đa 1.000 offers phân phối giữa tours. Static evidence filter trước truy vấn offers theo SQL IDs, toàn bộ hard tree trước cắt pool; không ghép offers. Offer coverage và scan/pool/offer truncation công khai; chưa push toàn bộ date/price/AND-OR xuống SQL. HTTP v1 vẫn giới hạn pool sau acquisition, chưa giới hạn fetch upstream. Logs acquisition tổng hợp sau response, chưa có progress từng trang.
 - LLM chỉ đọc tối đa 12 candidates/24 semantic pairs trong eligible pool, tối đa 60.000 ký tự JSON input, 45 giây gồm một repair. Fixture tự skip LLM assessment; unsupported reputation/service/value chưa được chấm. Sau NIM kiểm lại freshness trên cùng pool và source/cancel trước publication. Failure giữ structured result và báo partial; [hướng dẫn](../examples/backend-retrieval-semantic-v2.md), [kiểm chứng](backend-retrieval-assessment-results.md).
 - Cost/comfort chỉ reweight các soft conditions liên quan; pace/culture chưa có metric. Không suy party/preferences từ URL. Text phải đủ slot rõ hoặc trả clarification; chưa nghiệm thu bộ gold 50 câu/15 chuỗi. Chat trả facts/metrics và template, chưa prose mở bằng LLM.
 - Evidence live link chỉ best_effort/page fallback; không có endpoint HTML excerpt/anchor đã verify. Resource hết retention trả 404 theo ownership, chưa có tombstone 410. Source metadata theo SourceCapability v1; source draft cần gửi capabilities đầy đủ khi tạo để được duyệt. Profile artifacts không bị ghi lại bởi UI.
 - Session/admin counts chỉ gồm activity v2 kể từ triển khai; activity cursor theo timestamp/ID, không transcript. Audit metadata append-only chưa có cleanup riêng. SQLite một process; PostgreSQL/multiworker là việc deployment tiếp theo.
+# Catalog validation nghiệm thu
+
+08/10/2026: **443 passed**, Ruff/diff whitespace đạt, 28 schemas v2 và schemas v1 không đổi. Nguồn opt-in dùng catalog_validated với receipt/record binding; website proof bổ sung, TTL/price qualifiers độc lập. [Policy](catalog-validation-policy.md), [nghiệm thu live và giới hạn](backend-catalog-validation-verification.md), [khởi động/test](../examples/backend-catalog-validation.md).

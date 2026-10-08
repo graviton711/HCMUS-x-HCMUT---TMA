@@ -20,6 +20,8 @@ from domain.requirements import (
 
 SEMANTIC_POLICY = "requirements-v2.2"
 QUALITATIVE_FIELDS = {"supplier_reputation", "service_quality", "price_value", "nature"}
+CORE_FIELDS = ("destinations", "departure_origin", "departure_date", "party.adults", "estimated_cost")
+COMPLETENESS_POLICY = "personalized-core-v1"
 ENTITY_FIELDS = {
     "destinations",
     "departure_origin",
@@ -194,6 +196,38 @@ class SemanticIssue(Model):
 class SemanticReadiness(Readiness):
     scope_coverage: Literal["complete", "partial", "unavailable"] = "complete"
     unassessed_preferences: list[Identifier] = Field(default_factory=list)
+
+
+class CoreFieldState(Model):
+    field_path: Literal[
+        "destinations", "departure_origin", "departure_date", "party.adults", "estimated_cost"
+    ]
+    status: Literal["missing", "needs_clarification", "resolved", "unsupported"]
+    responsibility: Literal["user", "backend"] | None = None
+    condition_ids: list[Identifier] = Field(default_factory=list)
+    clarification_ids: list[Identifier] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+
+
+class CompletenessReport(Model):
+    policy_version: Literal["personalized-core-v1"] = COMPLETENESS_POLICY
+    profile: Literal["personalized", "url_only"] = "personalized"
+    fields: list[CoreFieldState] = Field(default_factory=list, max_length=5)
+    is_complete: bool = False
+
+    @model_validator(mode="after")
+    def complete(self):
+        paths = [f.field_path for f in self.fields]
+        if len(paths) != len(set(paths)) or self.profile == "url_only" and paths:
+            raise ValueError("Invalid completeness field bindings")
+        object.__setattr__(
+            self,
+            "is_complete",
+            self.profile == "url_only"
+            or set(paths) == set(CORE_FIELDS)
+            and all(f.status == "resolved" for f in self.fields),
+        )
+        return self
 
 
 class SemanticRequirement(RequirementState):

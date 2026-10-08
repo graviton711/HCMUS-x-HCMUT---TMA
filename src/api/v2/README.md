@@ -1,5 +1,9 @@
 # API v2
 
+What-if là async resource riêng sau comparison, có owner/revision/idempotency/job/source guards; apply scenario chỉ tạo proposal qua typed edits/CAS, không auto-confirm/search. [Contract và limits](../../../docs/what-if-analysis.md).
+
+Create/parse/edit/discard/confirm/comparison dùng chung [personalized core policy](../../../docs/personalized-requirement-policy.md). Form chưa đủ trả draft/proposal, form đủ trả 201 confirmed. Readiness/completeness được tính lại trước mutation/search, không tin payload cũ. Catalog và lỗi 409 có thông tin để FE bổ sung field; URL-only miễn core.
+
 Comparison chuẩn bị candidates/per-offer trước semantic assessment; NIM lỗi chỉ làm assessment partial, publication/cancel/source gates vẫn giữ. DTO thêm offer eligibility và analysis.semantic_assessment. [Contract](../../../docs/retrieval-semantic-ranking.md).
 
 GET catalog công bố hai trục processing/strength, assessment policy và giới hạn candidate/pair/input/excerpt/timeout để frontend giải thích phạm vi đánh giá.
@@ -16,3 +20,6 @@ Chi tiết và acceptance: [backend-v2-runtime](../../../docs/backend-v2-runtime
 ## Semantic requirements
 
 Form/edit v2 nhận values mới và `answer_clarification`, giữ CAS/expiry/cancel. Worker normalize/finalize v2, lưu trace/issues cùng proposal/revision; confirm chặn issue blocking và user clarification, soft unsupported không block. [Contract](../../../docs/requirements-semantics.md).
+# Catalog validation
+
+[Policy](../../../docs/catalog-validation-policy.md): cell thêm verification `catalog_validated`; evidence endpoint trả receipt và link page database_record. Registry hiệu dụng giao với config trust hiện hành, không tự nâng quyền từ persisted capability. Freshness config tường minh overlay bootstrap/persisted registry; pause/revocation vẫn giữ hiệu lực. So sánh/what-if kiểm lại source policy trước publish sau await.

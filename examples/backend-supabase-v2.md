@@ -92,7 +92,7 @@ Trong Supabase Table Editor → `tours`, copy **toàn bộ giá trị cột url*
 
 URL-only không cần NIM: GET proposal → confirm theo version thật → comparison như trên. Có thể dùng 1–5 URL. Recommendations ở mode này là tour tương tự để xem, không kết luận phù hợp nhu cầu cá nhân chưa nhập.
 
-Hybrid: dùng input text của bước 3 và thêm `reference_urls` với các URL thật. Structured form cũng hoạt động và tạo revision 1 trực tiếp; payload ở [walkthrough v2](backend-v2.md). URL vắng trong catalog trả `CATALOG_URL_NOT_FOUND`; domain chưa có provider được phép trả source unsupported. Không có fallback mock/live crawl.
+Hybrid: dùng input text của bước 3 và thêm `reference_urls` với các URL thật. Structured form đủ core/rõ nghĩa tạo revision 1 trực tiếp; thiếu/chưa rõ trả draft/proposal201. Payload ở [walkthrough v2](backend-v2.md), [quy tắc core](backend-personalized-v2.md). URL vắng trong catalog trả `CATALOG_URL_NOT_FOUND`; domain chưa có provider được phép trả source unsupported. Không có fallback mock/live crawl.
 
 ## 6. Bằng chứng và các lỗi thường gặp
 
@@ -109,3 +109,6 @@ Lấy một evidence_id trong cell → `GET /v2/evidence/{eid}`. `method=databas
 Crawler: field proofs theo [CatalogFieldProof](../src/data_access/supabase/README.md), price kind/basis/coverage/age brackets, scope transport, cadence từng field. Hiện chỉ có một provider và mọi origin là TP.HCM; ca Hải Phòng chưa có dữ liệu phù hợp để chứng minh.
 
 Frontend: nối API v2, hiển thị from-price/raw provenance/unknown/partial/truncation, proposal confirm và job polling. Prototype hiện vẫn dùng dữ liệu mẫu; thay DATA_PROVIDER chỉ chuyển nguồn backend.
+# Policy dữ liệu hiện hành
+
+[catalog-validation-v1](../docs/catalog-validation-policy.md) cho phép field đã kiểm tra thuộc nguồn opt-in tham gia lọc, không cần proof từng field. [Cấu hình](backend-catalog-validation.md) và [nghiệm thu](../docs/backend-catalog-validation-verification.md). Các ví dụ/baseline `unverified` bên dưới áp dụng cho nguồn chưa opt-in hoặc field thiếu nghĩa dữ liệu, không là trạng thái mặc định của mọi field catalog.

@@ -126,6 +126,16 @@ def test_preference_weights_change_rank_with_public_contributions(client, app):
         r,
         [
             {"op": "upsert_condition", "condition": hotel},
+            {
+                "op": "upsert_condition",
+                "condition": {
+                    "id": "price_preference",
+                    "field": "estimated_cost",
+                    "operator": "prefer_low",
+                    "strength": "soft",
+                    "value": {"kind": "budget", "amount": 35000000, "currency": "VND", "basis": "per_adult"},
+                },
+            },
             {"op": "set_preference_level", "dimension": "comfort", "level": 5},
             {"op": "set_preference_level", "dimension": "cost", "level": 0},
         ],
@@ -162,6 +172,7 @@ def test_or_tree_discard_and_atomic_invalid_edits(client):
             },
             {"kind": "predicate", "condition_id": "origin"},
             {"kind": "predicate", "condition_id": "date"},
+            {"kind": "predicate", "condition_id": "budget"},
         ],
     }
     r = data(client.post("/v2/requirements", json=body), 201)
@@ -480,6 +491,7 @@ def test_discard_value_preserves_explicit_tree_and_membership_dependency(client)
                     "children": [
                         {"kind": "predicate", "condition_id": "destination"},
                         {"kind": "predicate", "condition_id": "origin"},
+                        {"kind": "predicate", "condition_id": "budget"},
                     ],
                 },
             },
@@ -775,7 +787,7 @@ def test_schema_export_has_v2_and_keeps_v1(tmp_path, monkeypatch):
         json.loads((tmp_path / "v2" / "RequirementV2.schema.json").read_text(encoding="utf-8"))
         == RequirementV2.model_json_schema()
     )
-    assert len(list((tmp_path / "v2").glob("*.schema.json"))) == 24
+    assert len(list((tmp_path / "v2").glob("*.schema.json"))) == 28
     assert (tmp_path / "v2" / "AssessmentBatch.schema.json").is_file()
     assert (tmp_path / "v2" / "SemanticReport.schema.json").is_file()
 

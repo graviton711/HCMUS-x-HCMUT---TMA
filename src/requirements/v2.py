@@ -8,13 +8,19 @@ from typing import Annotated, Literal
 from pydantic import BeforeValidator, Field, create_model, model_validator
 
 from domain.common import AppError, Identifier, Model
-from domain.semantic import FIELDS_V2, TemporalValue
+from domain.semantic import FIELDS_V2, QUALITATIVE_FIELDS, TemporalValue
 from requirements.extraction import InitialExtraction, Operation, RawCondition, UpdateExtraction
 from requirements.normalize import fold, ground
 from requirements.prompts_v2 import extraction_prompt_v2
-from requirements.signals import SIGNALS, coverage_manifest, has_positive, quote_candidates
+from requirements.signals import (
+    SIGNALS,
+    coverage_manifest,
+    has_positive,
+    qualitative_polarities,
+    quote_candidates,
+)
 
-V2_PROMPT_VERSION = "vi-semantic-v2.4"
+V2_PROMPT_VERSION = "vi-semantic-v2.8"
 V2_PROMPT = extraction_prompt_v2()
 
 
@@ -164,6 +170,8 @@ def generation_schema(extraction_type, message, previous=None):
     for definition in schema["$defs"].values():
         props = definition.get("properties", {})
         field = props.get("field", {}).get("const")
+        if field == "tour_type":
+            props["raw_values"]["minItems"] = 1
         pattern = SIGNALS.get(field)
         if field in {"departure_date", "return_date"}:
             pattern = r"\b(?:\d{1,2}/\d{1,2}|20\d{2}-\d{2}-\d{2}|(?:mung|mong)\s+\d+|thang\s+(?:nay|sau))\b"
@@ -175,16 +183,32 @@ def generation_schema(extraction_type, message, previous=None):
         positive = {row["field"] for row in coverage_manifest(message.text) if row["polarity"] == "positive"}
         if positive:
             schema["properties"]["conditions"]["minItems"] = len(positive)
-    elif previous.clarifications:
-        schema["$defs"]["RawAnswer"]["properties"]["clarification_id"] = {
-            "type": "string",
-            "enum": [q.id for q in previous.clarifications],
+    else:
+        condition_ids = [c.id for c in previous.conditions]
+        schema["$defs"]["OperationV2"]["properties"]["target_id"] = {
+            "anyOf": [
+                *([{"type": "string", "enum": condition_ids}] if condition_ids else []),
+                {"type": "null"},
+            ],
+            "description": "Existing condition ID for replace/remove/increment_budget; null for add. Never a clarification ID.",
         }
+        supported = {
+            "DATE_YEAR_REQUIRED",
+            "TEMPORAL_SEMANTICS_REQUIRED",
+            "CONDITION_STRENGTH_REQUIRED",
+            "LUNAR_LEAP_REQUIRED",
+        }
+        answer_ids = [q.id for q in previous.clarifications if q.reason_code in supported]
+        if answer_ids:
+            schema["$defs"]["RawAnswer"]["properties"]["clarification_id"] = {
+                "type": "string",
+                "enum": answer_ids,
+            }
+            schema["properties"]["answers"]["minItems"] = len(clarification_targets(message, previous))
+        else:
+            schema["properties"]["answers"]["maxItems"] = 0
         if clarification_only(message, previous):
             schema["properties"]["operations"]["maxItems"] = 0
-            schema["properties"]["answers"]["minItems"] = max(
-                1, len(clarification_targets(message, previous))
-            )
     return schema
 
 
@@ -404,11 +428,46 @@ class SlotExtractor:
 
 def coverage_guard(extraction, message, previous):
     """Check explicit positive signals; this is not a general NLP replacement."""
+    from requirements.semantic import tour_type_problem
+
     raw_conditions = list(extraction.conditions) + [
         op.condition for op in extraction.operations if op.condition
     ]
     text = fold(message.text)
     missing = []
+    classification_errors = [problem for c in raw_conditions if (problem := tour_type_problem(c))]
+    grounding_errors = []
+    for c in raw_conditions:
+        try:
+            source = ground(message, c.quote)
+            if c.field in QUALITATIVE_FIELDS:
+                expected = "negative" if c.operator == "excludes" else "positive"
+                if qualitative_polarities(c.field, message, source) != {expected}:
+                    grounding_errors.append(
+                        f"{c.id}: quote định tính sai concept/polarity. 'Không cần/không quan tâm' => bỏ preference, không excludes; 'không thích/tránh' mới excludes; giữ đúng quote/context CURRENT message."
+                    )
+        except AppError as exc:
+            grounding_errors.append(
+                f"{c.id}: {exc.message}; quote phải unique và nguyên văn CURRENT message."
+            )
+        if c.field not in {"shopping_stops", "flight_stops"}:
+            for slot in c.raw_values:
+                if not slot or fold(slot) not in fold(c.quote):
+                    grounding_errors.append(
+                        f"{c.id}: raw value {slot!r} không có trong quote {c.quote!r}. Chọn quote đúng chứa mốc/giá trị này trong CURRENT message."
+                    )
+    dimensions = {
+        "cost": r"(?:tiet kiem|chi phi)",
+        "comfort": "thoai mai",
+        "pace": "nhip di",
+        "culture": "van hoa",
+    }
+    for pref in getattr(extraction, "preference_updates", []):
+        pattern = r"\b" + dimensions[pref.dimension] + r"\s*(?:len\s*)?muc\s*" + str(pref.level) + r"\b"
+        if not re.search(pattern, fold(pref.quote)):
+            grounding_errors.append(
+                f"preference_updates.{pref.dimension}: mức {pref.level} không được nêu tường minh trong quote. Không suy slider từ 'ưu tiên/giá hợp lý'; bỏ update này nếu user chưa nói mức 0–5."
+            )
     for field, pattern in SIGNALS.items():
         if not has_positive(field, message.text):
             continue
@@ -423,7 +482,11 @@ def coverage_guard(extraction, message, previous):
                 continue
             missing.append(field)
     duplicate_ids = []
-    if previous is None:
+    if previous is None or any(
+        q.reason_code
+        in {"CORE_FIELD_REQUIRED", "BUDGET_CAP_REQUIRED", "CORE_FIELD_BRANCH_REQUIRED", "PARTY_REQUIRED"}
+        for q in previous.clarifications
+    ):
         seen = set()
         for condition in raw_conditions:
             key = (
@@ -467,7 +530,20 @@ def coverage_guard(extraction, message, previous):
                 pure_party = re.fullmatch(r"(?:(?:toi|minh|tui|di|co|gom)\s+)*\d+\s+nguoi lon[.,!]?", quote)
                 if condition.field == "unsupported" and pure_party and quote.strip(".,!") in party_quote:
                     duplicate_ids.append(condition.id)
-    if missing or duplicate_ids:
+    if previous:
+        for op in extraction.operations:
+            old = next((c for c in previous.conditions if c.id == op.target_id), None)
+            if (
+                op.op == "replace"
+                and old
+                and old.field == "estimated_cost"
+                and old.strength == "hard"
+                and op.condition
+                and op.condition.strength == "soft"
+                and not re.search(r"\b(?:uu tien|tam|khoang|thich|neu duoc|khong bat buoc)\b", fold(op.quote))
+            ):
+                missing.append("hard budget strength preserved on value-only update")
+    if missing or duplicate_ids or classification_errors or grounding_errors:
         error = AppError("LLM_INVALID_OUTPUT", "Extraction bỏ sót nhu cầu tường minh.", 502)
         error.repair_hint = (
             "Giữ conditions/operations có quote cho các ý đang thiếu: "
@@ -477,6 +553,8 @@ def coverage_guard(extraction, message, previous):
             + ("Loại predicates trùng ở IDs: " + ", ".join(duplicate_ids) + ". " if duplicate_ids else "")
             + "Giữ đúng một predicate cho mỗi nhu cầu, không nhân bản ngày đi thay cho budget/party. "
             + "Không tự thêm giá trị/metric/slider chưa được nói."
+            + ("\n" + "\n".join(classification_errors) if classification_errors else "")
+            + ("\n" + "\n".join(grounding_errors) if grounding_errors else "")
         )
         raise error
     if previous:

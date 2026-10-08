@@ -25,7 +25,7 @@ class Nim:
                     id="budget",
                     field="estimated_cost",
                     operator="lte",
-                    strength="soft",
+                    strength="hard",
                     raw_values=["32 triệu đồng mỗi người lớn"],
                     quote="32 triệu đồng mỗi người lớn",
                 ),
@@ -115,7 +115,7 @@ def form(urls=None, *, country="country:jp", date="2026-11-10"):
                         "id": "budget",
                         "field": "estimated_cost",
                         "operator": "lte",
-                        "strength": "soft",
+                        "strength": "hard",
                         "value": {
                             "kind": "budget",
                             "amount": 35000000,
@@ -302,7 +302,8 @@ def test_text_initial_proposal_and_chat_edits_are_not_committed(client, app):
     p = data(client.get(f"/v2/proposals/{accepted['proposal_id']}"))
     assert p["preview"]["conditions"] and p["version"] == 2
     assert data(client.get(f"/v2/requirements/{accepted['requirement_id']}"))["conditions"] == []
-    assert data(confirm(client, p))["revision"] == 1
+    assert confirm(client, p).status_code == 409
+    assert not p["preview"]["completeness"]["is_complete"]
     r = data(client.post("/v2/requirements", json=form()), 201)
     accepted = data(
         client.post(

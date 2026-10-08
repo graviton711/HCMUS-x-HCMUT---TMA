@@ -63,6 +63,67 @@ class GatewayV2:
         )
         self.registry = registry
 
+    async def collect_analysis(self, r, deadline_at, *, candidate_limit=100, exclusions=()):
+        """One unfiltered acquisition for baseline AND scenarios; never merge separate reads."""
+        mode = "compare_urls" if r.mode == "compare_urls" else "discover"
+        neutral = r.model_copy(
+            update={
+                "conditions": [],
+                "hard_tree": type(r.hard_tree)(kind="all"),
+                "preference_tree": type(r.preference_tree)(kind="all"),
+                "issues": [],
+            }
+        )
+        core = core_requirement(neutral, mode, r.targets if mode == "compare_urls" else [])
+        result = await self.gateway.collect(
+            core,
+            deadline_at,
+            catalog_conditions=r.conditions,
+            catalog_requirement=r,
+            candidate_limit=candidate_limit,
+            exclusions=exclusions,
+            catalog_analysis=True,
+        )
+        result = CrawlResultV2.model_validate(result.model_dump())
+        # HTTP/fixture may ignore candidate budgets. Bound the retained universe consistently.
+        if len(result.tours) > candidate_limit:
+            keep = {t.snapshot_id for t in result.tours[:candidate_limit]}
+            offers = [o for o in result.offers if o.tour_snapshot_id in keep]
+            snapshots = keep | {o.snapshot_id for o in offers}
+            result = result.model_copy(
+                update={
+                    "tours": result.tours[:candidate_limit],
+                    "offers": offers,
+                    "evidence": [e for e in result.evidence if e.snapshot_id in snapshots],
+                    "offer_coverage": {k: v for k, v in result.offer_coverage.items() if k in keep},
+                    "source_results": [
+                        s.model_copy(
+                            update={
+                                "tour_snapshot_ids": [t for t in s.tour_snapshot_ids if t in keep],
+                                "offer_snapshot_ids": [o for o in s.offer_snapshot_ids if o in snapshots],
+                                "truncated": True,
+                            }
+                        )
+                        for s in result.source_results
+                    ],
+                    "retrieval": {**result.retrieval, "pool_truncated": True},
+                }
+            )
+        result.retrieval = {
+            **result.retrieval,
+            "analysis_acquisition": True,
+            "requested_mode": mode,
+            "consistency": "repeatable_read"
+            if self.gateway.settings.data_provider == "supabase"
+            else "single_upstream_response",
+            "upstream_scope": "bounded_catalog"
+            if self.gateway.settings.data_provider == "supabase"
+            else "reference_urls"
+            if mode == "compare_urls"
+            else "bounded_upstream_response",
+        }
+        return CrawlResultV2.model_validate(result.model_dump())
+
     async def collect(self, r, deadline_at, *, candidate_limit=20, exclusions=()):
         tasks = []
         if r.targets:

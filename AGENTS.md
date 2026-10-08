@@ -102,4 +102,4 @@ Trước công việc frontend/UI/UX, đọc `docs/frontend-design-preparation.m
 
 ## 7. Branch Scope — Minh Phú
 
-Theo yêu cầu của Minh Phú, chỉ làm việc, sửa file, xử lý conflict và tạo commit trên `feature/minh-phu`. Kiểm tra branch trước mọi mutation. Các nhánh khác chỉ dùng để fetch/tham khảo; khi cần, merge về `feature/minh-phu` rồi phân tích và sửa tại đó. Không commit hoặc push vào `backend`, `main` hay các nhánh crawler. Không tự chuyển sang nhánh khác để chỉnh sửa.
+Theo phân công đã được Minh Phú xác nhận lại ngày 08/10/2026: công việc backend thực hiện trên `backend`; frontend thực hiện trên `feature/minh-phu`. Kiểm tra branch trước mọi mutation, không tự chuyển nhánh để sửa sai phạm vi. Không commit hoặc push vào `main` hay các nhánh crawler. Việc commit/push/PR theo yêu cầu cụ thể của user.

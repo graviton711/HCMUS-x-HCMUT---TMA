@@ -301,7 +301,7 @@ class Store:
                 from api.v2.state import emit
 
                 emit(c, job_id, row["phase"], "cancelled", "Tác vụ đã hủy.")
-            if row["kind"] in {"comparison", "v2_comparison"} or (
+            if row["kind"] in {"comparison", "v2_comparison", "v2_what_if"} or (
                 row["kind"] == "parse" and json.loads(row["payload"]).get("expected_revision") == 0
             ):
                 c.execute(
@@ -337,7 +337,7 @@ class Store:
 
             emit(c, row["id"], row["phase"], "failed", error.message, error_code=error.code)
         if count and (
-            row["kind"] in {"comparison", "v2_comparison"}
+            row["kind"] in {"comparison", "v2_comparison", "v2_what_if"}
             or (row["kind"] == "parse" and json.loads(row["payload"]).get("expected_revision") == 0)
         ):
             c.execute(update(resources).where(resources.c.id == row["resource_id"]).values(status="failed"))

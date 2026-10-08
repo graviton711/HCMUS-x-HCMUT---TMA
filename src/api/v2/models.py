@@ -6,7 +6,7 @@ from api.dto import Form, FormCondition
 from domain.common import Identifier, Model, now
 from domain.crawl_v2 import OfferSnapshotV2
 from domain.requirements import Party, Target, Tree
-from domain.semantic import SemanticReadiness, SemanticRequirement, ValueV2
+from domain.semantic import CompletenessReport, SemanticReadiness, SemanticRequirement, ValueV2
 
 VERSION = "2.0-draft"
 
@@ -81,13 +81,6 @@ class CreateRequirementV2(Model):
             ZoneInfo(self.timezone)
         except (ZoneInfoNotFoundError, ValueError) as exc:
             raise ValueError("Unknown timezone") from exc
-        if self.input.kind == "structured":
-            fields = {c.field for c in self.input.form.conditions}
-            if (
-                not {"destinations", "departure_origin", "departure_date", "estimated_cost"} <= fields
-                or self.input.form.party.adults is None
-            ):
-                raise ValueError("Personalized structured form needs destination/origin/date/adults/budget")
         if self.input.kind == "urls" and not self.reference_urls:
             raise ValueError("URL input needs at least one URL")
         canonical_urls(self.reference_urls)
@@ -96,6 +89,8 @@ class CreateRequirementV2(Model):
 
 class ReadinessV2(SemanticReadiness):
     blockers: list[str] = Field(default_factory=list)
+    can_confirm: bool = False
+    can_search: bool = False
 
     @model_validator(mode="after")
     def mirror_reasons(self):
@@ -113,6 +108,7 @@ class RequirementV2(SemanticRequirement):
     provenance: dict[str, JsonValue] = Field(default_factory=dict)
     created_at: str = Field(default_factory=lambda: now().isoformat())
     readiness: ReadinessV2 = Field(default_factory=ReadinessV2)
+    completeness: CompletenessReport = Field(default_factory=CompletenessReport)
 
     @model_validator(mode="after")
     def public_bindings(self):
@@ -347,7 +343,7 @@ class Cell(Model):
     value: JsonValue
     raw_value: list[str | None]
     data_state: Literal["present", "missing", "conflicting", "invalid", "unsupported"]
-    verification: Literal["supplier_published", "independently_verified", "unverified"]
+    verification: Literal["supplier_published", "independently_verified", "catalog_validated", "unverified"]
     completeness: Literal["complete", "partial", "unknown"]
     observed_at: str | None
     freshness: Freshness

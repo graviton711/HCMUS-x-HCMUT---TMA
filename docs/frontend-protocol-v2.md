@@ -16,7 +16,7 @@
 |---|---|
 | `POST /v2/sessions` | Tạo session → id/token/expires_at; không cần Bearer |
 | `GET /v2/catalog` | Canonical destinations/origins, field/operator/control/default/required_by_input_kind, preference dimensions, limits; default có origin |
-| `POST /v2/requirements` | `input.kind=structured|text|urls`, `reference_urls` → Requirement hoặc resource + parse job (202). Structured input đã được user xác nhận → revision1; raw text/URL parse tạo revision0 và proposal, chưa commit inferred criteria |
+| `POST /v2/requirements` | `input.kind=structured|text|urls`, `reference_urls` → Requirement hoặc resource + proposal. Structured đầy đủ và rõ → revision1 (201); thiếu/chưa rõ → draft revision0 + proposal (201). Raw text → parse job202; URL → proposal201 |
 | `GET /v2/requirements/{id}` | Current committed snapshot, readiness, active proposal ref, latest job/comparison refs |
 | `GET /v2/requirements/{id}/revisions/{revision}` | Snapshot bất biến đúng revision; hết retention trả410, không thay bằng current |
 | `POST /v2/requirements/{id}/proposals` | `expected_revision`, optional proposal_id/expected_proposal_version, input structured edits hoặc message + context → Proposal (200) hoặc parse job (202) |
@@ -38,6 +38,8 @@ Revision, proposal version và job generation là ba khóa khác nhau. GET curre
 
 ## 3. Requirement, draft và chat nhiều thay đổi
 
+Thêm `completeness` theo [personalized-core-v1](personalized-requirement-policy.md): năm field states/condition IDs/question IDs và responsibility. `readiness.can_confirm/can_search` là prerequisites; search còn đòi revision đã confirmed và không có proposal pending. `can_collect_data` không thay permission search. Form/text/hybrid áp dụng cùng quy tắc; URL-only miễn core. Required fields sau parse lấy từ catalog.required_before_confirm. Typed answers thiếu core và flow autofill tại [walkthrough](../examples/backend-personalized-v2.md).
+
 Requirement: `id,revision,input_kind,conditions,hard_tree,preference_tree,party,preference_levels,reference_urls,notes,readiness,provenance,created_at`. Condition có `id,field,operator,value,strength=hard|soft|unresolved,sources`; chưa rõ strength phải hỏi, không tự thành soft. Tái dùng typed Value/budget/AND-OR trong domain v1. Party `{adults,children:[{id,age}]}`; tuổi chưa biết null tạo blocker giá, không áp giá người lớn. URL-only không tự tạo budget/party/preferences. Catalog/normalized snapshot dùng canonical IDs, labels chỉ cho UI.
 
 Preference dimension `cost|comfort|pace|culture` có level0–5 và origin `user|system_default`; level là mức ưu tiên, không phải điểm tour. BE trả ranking_policy_version và explanation dùng actuals/evidence; mapping/normalization nằm trong policy có version, không FE tự nhân slider làm rank.
@@ -46,7 +48,7 @@ Preference dimension `cost|comfort|pace|culture` có level0–5 và origin `user
 |---|---|
 | Điểm đến / nơi đi | destinations contains canonical IDs / departure_origin in IDs, hard |
 | Ngày dự kiến | departure_date eq `{kind:"date",value:"YYYY-MM-DD"}`, hard. Nếu user chọn khoảng ngày rõ ràng mới dùng between/value/upper; không ngầm mở rộng ngày. JSON bundle chọn khoảng 10–17/11 tường minh, khác form prototype một ngày |
-| Ngân sách | estimated_cost lte Budget per_adult/VND/tour_price, soft; coverage_origin=explicit; nguồn giá thiếu phụ thu → unknown cost, vẫn hiện published quote |
+| Ngân sách | estimated_cost lte Budget per_adult/VND/tour_price, **hard cap**; coverage_origin=explicit; nguồn giá thiếu phụ thu → unknown cost, vẫn hiện published quote |
 | Thời lượng | duration_days near NumberValue, soft; để trống không tạo condition |
 | Người lớn/trẻ em/tuổi | party adults + stable child IDs/age; không đi qua conditions; thiếu tuổi có blocker giá |
 | Khách sạn | hotel_stars_min gte NumberValue3/4/5, soft; để trống không tạo condition |
@@ -54,7 +56,7 @@ Preference dimension `cost|comfort|pace|culture` có level0–5 và origin `user
 | Slider | preference_levels.dimension level0–5 + origin; policy BE giải thích ảnh hưởng xếp hạng, không hard constraint |
 | Lưu ý / URL | notes nguyên văn chưa tự hard/soft; reference_urls canonical dedup/access-gated. Chat suy condition từ notes phải tạo proposal và giải thích |
 
-Personalized structured form yêu cầu destination/origin/date/adults/budget theo catalog; URL-only giữ các field null nếu chưa user xác nhận. BE trả sources/provenance theo từng condition (form field_path hoặc text message/quote/span), giữ origin/default; crawler QuerySpec không nhận raw chat/provenance user nhạy cảm.
+Personalized form/text cần destination/origin/date/adults/hard upper budget trước confirm/search; nhận draft được phép thiếu. URL-only giữ các field null nếu chưa user xác nhận. BE trả sources/provenance theo từng condition (form field_path hoặc text message/quote/span), giữ origin/default; crawler QuerySpec không nhận raw chat/provenance user nhạy cảm.
 
 Proposal: `id,version,requirement_id,base_revision,status,expires_at,preview,changes,clarifications,requested_action`. Status `pending|needs_clarification|confirmed|cancelled|superseded|expired`. Change `{id,path,condition_id?,before,after,origin=user_edit|chat_inference,reason}`; before luôn từ committed base. `preview` là toàn bộ normalized snapshot, không chỉ delta.
 
@@ -126,3 +128,11 @@ Roles: viewer read metrics/redacted summaries; operator thêm xử lý contact/p
 Poll visible khởi điểm1s, backoff tối đa5s + jitter, GET immediate khi quay lại; ngừng job polling terminal, drain events theo has_more. Mất mạng không tự POST. Seq dedup/events có thể out-of-order network; chỉ apply result có đúng job/comparison/revision/generation. Pending validation/conflict không commit một phần. Cancel gate chặn terminal result muộn. Retention/expiry theo server config và trường expires_at.
 
 Nghiệm thu: JSON samples parse; binding refs/offer/revision/diff/math/status khớp; backend export schema cho DTO v2 và tests domain/ownership/atomicity/cancel; crawler adapter đáp ứng source/evidence/pricing. Mẫu và UI đẹp không đóng G1–G16/D1–D5 runtime.
+## What-if sau comparison
+
+`POST /v2/comparisons/{cid}/what-if` nhận `CreateWhatIf.expected_revision`; trả202 analysis_id/job_id. Poll job, đọc `GET /v2/what-if/{id}` với result `WhatIfAnalysis`. Baseline tính lại trên snapshot phân tích; render scope/truncation/unknown, hard additions và soft rank changes riêng. `%` chỉ dùng `restriction_ratio.percent` khi state computed, kèm meaning/numerator/denominator; không đổi tên thành importance hoặc contribution tổng điểm.
+
+`POST /v2/what-if/{id}/scenarios/{sid}/proposals` nhận `ApplyWhatIf.expected_revision`, trả proposal200. Review/clarifications/confirm/search qua flow sẵn có; không tự apply scenario. Core removal có thể cần bổ sung. [Policy và limits](what-if-analysis.md).
+# Catalog validation bổ sung
+
+Theo [policy](catalog-validation-policy.md), verification v2 nhận thêm `catalog_validated`: dữ liệu crawler được backend kiểm tra, không là độc lập xác minh chất lượng tour. FE hiển thị nhãn tương ứng, vẫn đọc reason_code cho freshness/coverage/scope; evidence endpoint trả receipt/provenance database_record và link tour. Flow API giữ nguyên.

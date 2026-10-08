@@ -44,8 +44,23 @@ def qualitative_strength(field, message, source):
     return next(iter(choices)) if len(choices) == 1 else "unresolved"
 
 
+def tour_type_problem(raw):
+    if raw.field != "tour_type":
+        return None
+    if not raw.raw_values or all(fold(v) in {"tour", "du lich"} for v in raw.raw_values):
+        return "'tour/du lịch' chung không phải yêu cầu loại tour. Bỏ object tour_type nếu user chưa nói loại; nếu có ghép đoàn/đoàn riêng/loại cụ thể, giữ raw_values nguyên văn trong quote. Không tạo tour_type với raw_values rỗng."
+    if all(m.status == "resolved" for m in resolve_entities("destinations", raw.raw_values).members):
+        return "Raw values của tour_type là địa danh đã có trong catalog, không phải loại tour. Dùng field destinations với raw names/quotes hiện tại; chỉ tạo tour_type khi user nói ghép đoàn/đoàn riêng/loại cụ thể. Không bỏ điểm đến để né lỗi."
+    return None
+
+
 def normalize_v2(raw, message, timezone):
     source = ground(message, raw.quote)
+    problem = tour_type_problem(raw)
+    if problem:
+        error = AppError("LLM_INVALID_OUTPUT", "Loại tour cần giá trị được người dùng nói rõ.", 502)
+        error.repair_hint = problem
+        raise error
     for slot in raw.raw_values:
         if not slot or fold(slot) not in fold(raw.quote):
             # Legacy explicit-zero derivations still use their existing validator.
@@ -400,11 +415,17 @@ def finalize_v2(r):
         scope_coverage=coverage,
         unassessed_preferences=unassessed,
     )
-    return type(r).model_validate(data)
+    from requirements.completeness import apply_completeness
+
+    return apply_completeness(type(r).model_validate(data))
 
 
 def answer_clarification(r, question, answer, source):
     """The caller binds the question to the current proposal/revision first."""
+    from requirements.completeness import CORE_REASONS, answer_core
+
+    if question.reason_code in CORE_REASONS:
+        return finalize_v2(answer_core(r, question, answer, source))
     data = r.model_dump()
     data["issues"] = []
     cs = {c.id: c for c in r.conditions}
