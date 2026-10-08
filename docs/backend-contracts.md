@@ -1,6 +1,6 @@
 # Backend contracts — bản nháp
 
-**Trạng thái:** Domain v1 đã implement; JSON Schema được xuất ở [contracts](../contracts/README.md). Crawler thật chưa tích hợp; người crawl cần đối chiếu schema với mẫu thật. Ví dụ payload ở [crawler-contract.md](crawler-contract.md), [api-contract.md](api-contract.md); quy tắc hai luồng ở [backend-flows.md](backend-flows.md).
+**Trạng thái:** Domain v1 đã implement; JSON Schema được xuất ở [contracts](../contracts/README.md). Crawler thật đã tích hợp qua Supabase reader ([adapter v2](supabase-tour-integration-plan.md), envelope `CrawlResultV2`); người crawl đối chiếu schema với mẫu thật. Ví dụ payload ở [crawler-contract.md](crawler-contract.md), [api-contract.md](api-contract.md); quy tắc hai luồng ở [backend-flows.md](backend-flows.md).
 
 ## 1. Yêu cầu người dùng
 

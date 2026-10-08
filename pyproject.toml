@@ -39,7 +39,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["ingest*", "shared*", "api*", "data_access*", "decision*", "domain*", "requirements*", "tourcrawl*", "semantic_assessment*"]
+include = ["ingest*", "shared*", "api*", "data_access*", "decision*", "domain*", "requirements*", "semantic_assessment*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

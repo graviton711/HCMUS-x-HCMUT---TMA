@@ -25,6 +25,7 @@ Trạng thái sau merge (08/10/2026): tầng ingest đã implement (`src/ingest`
 - [Contract API cho frontend — bản nháp](docs/api-contract.md)
 - [Bộ tình huống đánh giá tiếng Việt](docs/requirements-evaluation.md)
 - [Phân công/quy ước Git](docs/team-workflow.md), [registry nguồn](docs/provider-registry.md)
+- [Phạm vi MVP tour](docs/tour-mvp-scope.md), [đề bài TMA](docs/TMA.md)
 
 ## Chạy backend
 
@@ -101,8 +102,6 @@ Gọi NIM thật (tách khỏi tests offline): `uv run tour-backend probe-nim`; 
 
 ## Crawler và dữ liệu
 
-Hai pipeline đang cùng tồn tại sau merge, team cần chốt một crawler chuẩn: `src/ingest` (đã audit 3 profile, Supabase 1210 tour live) và `src/tourcrawl` (theo docs backend dưới).
-
-[tourcrawl pipeline](src/tourcrawl/pipeline/README.md) chạy CLI độc lập, output CSV/JSON detail; profiles tại `configs/profiles/`. Browser flow cần `uv sync --extra browser` và Chromium của Playwright. Các script khảo sát/profile nằm tại `scripts/`, đọc/ghi artifacts được ignore; không có bộ dữ liệu tour thật đã nghiệm thu trong Git.
+Crawler chuẩn duy nhất là `src/ingest` (3 profile audit, Supabase ~1200 tour live): survey agent vẽ map → discover (sitemap/search_pages) → batch → audit tay → publish. Chạy `uv run python -m ingest.run` (all sources) hoặc lẻ từng bước ở mục ingest phía trên; chi tiết ở `src/ingest/README.md`. Browser flow cần `uv sync --extra browser`.
 
 HTTP crawler giữ [contract v1](docs/crawler-contract.md); Supabase có [reader/adapter v2](src/data_access/supabase/README.md). Không cần bulk backfill proof: crawler cần làm rõ price qualifiers/cadence và các field mơ hồ; quote bổ sung có chọn lọc. Backend chưa tự đặt TTL hoặc gọi live crawler khi URL vắng trong kho. [Hướng dẫn cấu hình](examples/backend-catalog-validation.md), [nghiệm thu hiện hành](docs/backend-catalog-validation-verification.md); [baseline trước policy mới](docs/supabase-tour-integration-plan.md).
