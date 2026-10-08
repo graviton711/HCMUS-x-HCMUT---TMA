@@ -1,5 +1,15 @@
 # Requirements — hiểu và chuẩn hóa nhu cầu
 
+Party duplicate guard yêu cầu NIM repair khi một unsupported condition chỉ phát lại quote số người đã có trong party; không tự xóa câu có yêu cầu bổ sung. [Retrieval/assessment contract](../../docs/retrieval-semantic-ranking.md).
+
+INITIAL coverage validation giữ numeric budget/số người lớn tường minh và chặn predicate trùng dù khác ID; lỗi được gom vào một lượt NIM repair, không tự điền slots. Chi tiết và giới hạn grammar ở [semantic contract](../../docs/requirements-semantics.md).
+
+Semantic v2 implementation: `catalog.py` lookup theo type/hierarchy; `temporal.py` giữ lịch/interval và đổi lịch âm có kiểm chứng; `semantic.py` normalization, issue/readiness và targeted answers. Input raw slots/quote → value typed/trace → proposal; fields/outputs và policies ở [requirements-semantics](../../docs/requirements-semantics.md). V1 giữ parser riêng, có guard không ghép lunar quote thành ngày dương khi trả lời năm.
+
+`signals.py` dùng chung các tín hiệu định tính có hỗ trợ và polarity để kiểm tra grounded quote/omission; không thay parser hoặc hứa hiểu mọi diễn đạt. `evaluation_v2.py` chạy NIM thật qua cùng parser/resolver v2, so semantic assertions trong `tests/fixtures/requirements-semantic.json`; `uv run tour-backend evaluate-nim-v2 --repeat 2 --output data/evaluation-v2.local.json`. Ca độc lập, có kiểm tra update theo context; không tạo session hoặc ghi DB. Báo từng assertion, latency, repair và lỗi, không suy accuracy tổng quát từ smoke set.
+
+`prompts_v2.py` là system prompt riêng cho v2, không nối whitelist/policy unsupported v1 vào prompt v2. Giữ cùng chính sách budget/party/operations/control mức ưu tiên; thêm entities/temporal/qualitative/answers. Coverage kiểm tra cả omission của câu trả lời rõ ràng cho clarification hiện có. Route thiếu strength rõ được giữ unresolved theo policy; scope route luôn itinerary.
+
 V2: `v2.py` mở rộng extraction slots cho preference level, URLs và notes; cùng bounded repair/quote grounding. Outputs chỉ đi vào proposal, không tự commit. Intent classifier chọn refs trong comparison; câu trả lời dùng facts/metrics đã kiểm tra. Xem [backend-v2-runtime](../../docs/backend-v2-runtime.md).
 
 NIM extraction v2 bắt buộc trả cả ba slot keys (URLs/notes nullable); guard phát hiện model bỏ sót control mức 0–5 được nêu tường minh rồi bounded repair một lần. Guard chỉ kiểm tra completeness, không thay NIM bằng regex lấy conditions. Level mơ hồ không được tự suy. Live smoke Nhật + cost=4 thành công; bộ gold toàn diện còn cần chạy riêng.
@@ -57,4 +67,4 @@ Mỗi request NIM chỉ xử lý một requirement với context của chính n�
 
 `api` gọi parse/update service; `domain` cung cấp schema/catalog; `data_access` kiểm tra capability khi collection; `decision` nhận Requirement đã validate cùng snapshots để đánh giá. LLM provider nằm sau một gateway thay được bằng stub trong kiểm tra.
 
-Bộ gold specification gồm 50 câu + 15 chuỗi ở [requirements-evaluation.md](../../docs/requirements-evaluation.md); sau này fixtures `.json` lưu input/context, expected conditions, clarification targets và patch result. Đo semantic field accuracy, hard-soft, negation/groups, false-ready, invented fields, preservation sau patch và unsupported detection. Không dùng JSON hợp lệ hoặc exact wording của câu trả lời làm thước đo chính.
+Bộ gold specification gồm 50 câu + 15 chuỗi ở [requirements-evaluation.md](../../docs/requirements-evaluation.md), chưa chạy toàn bộ. Fixtures semantic v2 hiện có 5 ca và một chuỗi update, cùng tests deterministic riêng. Đo semantic field accuracy, hard-soft, negation/groups, false-ready, invented fields, preservation sau patch và unsupported detection. Không dùng JSON hợp lệ hoặc exact wording của câu trả lời làm thước đo chính.

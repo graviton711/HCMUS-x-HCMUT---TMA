@@ -206,13 +206,14 @@ def bootstrap(store, gateway):
                 "capability": capability.model_dump(mode="json"),
                 "state": "active" if capability.access_status == "approved" else "paused",
                 "access_status": capability.access_status,
-                "profile_ref": "bootstrap-config",
-                "policy_ref": "bootstrap-config",
+                "profile_ref": "catalog-records" if capability.limits.get("catalog_read_only") else "bootstrap-config",
+                "policy_ref": "catalog-read-only" if capability.limits.get("catalog_read_only") else "bootstrap-config",
                 "checked_at": capability.checked_at,
                 "access_valid_until": None,
                 "last_check_job_id": None,
                 "last_run_job_id": None,
-                "notes": "",
+                "notes": "Chỉ đọc kho đã cấu hình; không cấp quyền crawl website. TTL chưa cấu hình."
+                if capability.limits.get("catalog_read_only") else "",
             }
             c.execute(insert(state.source_registry).values(id=record["id"], version=1, payload=dump(record)))
 

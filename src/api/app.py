@@ -44,7 +44,9 @@ class Limits:
             )
 
 
-def create_app(settings: Settings | None = None, *, nim=None, gateway=None, access_checker=None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None, *, nim=None, gateway=None, access_checker=None, semantic_gateway=None
+) -> FastAPI:
     settings = settings or Settings()
     store = Store(settings)
     gateway = gateway or DataGateway(settings)
@@ -53,7 +55,7 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None, acce
     from api.v2.service import Service
 
     bootstrap(store, gateway)
-    worker.v2 = Service(store, worker.nim, gateway)
+    worker.v2 = Service(store, worker.nim, gateway, semantic_gateway=semantic_gateway)
     worker.v2.admin = Admin(store, worker.v2, access_checker)
     lock, limits = RuntimeLock(settings.database_url), Limits()
 
@@ -73,6 +75,8 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None, acce
                 with suppress(asyncio.CancelledError):
                     await task
             store.engine.dispose()
+            if hasattr(gateway, "close"):
+                gateway.close()
             lock.release()
 
     app = FastAPI(
@@ -83,6 +87,13 @@ def create_app(settings: Settings | None = None, *, nim=None, gateway=None, acce
 Xem `examples/backend-v2.md` để nối frontend. Dùng `/v2/catalog` lấy fields, controls và limits.
 Nhập text cần NIM; URL-only có proposal cần confirm; structured form tạo revision 1.
 Frontend prototype hiện vẫn dùng dữ liệu mẫu. API v1 tiếp tục hoạt động:
+
+**Kho Supabase thật:** cấu hình `DATA_PROVIDER=supabase`, dùng nhóm **v2** và URL tour có trong catalog.
+Kiểm tra `/health` thấy data_provider=supabase; `probe-supabase` kiểm tra counts và quyền chỉ đọc.
+Giá công bố dạng from và dữ kiện chưa có field evidence vẫn hiển thị unverified/unknown;
+comparison thành công không có nghĩa mọi điều kiện đã được chứng minh.
+Hướng dẫn từng bước: `examples/backend-supabase-v2.md`. Provider Supabase thu thập qua v2;
+các bước v1 dưới đây dùng fixture/http.
 
 Thử API v1 theo thứ tự:
 
@@ -237,6 +248,7 @@ Các URL `.invalid` là dữ liệu mô phỏng, chỉ dùng với `DATA_PROVIDE
             {
                 "status": "ok" if healthy else "degraded",
                 "data_origin": "synthetic" if settings.data_provider == "fixture" else "source",
+                "data_provider": settings.data_provider,
                 "worker_enabled": settings.worker_enabled,
                 "schema_version": "1.0",
                 "api_versions": ["v1", "v2"],

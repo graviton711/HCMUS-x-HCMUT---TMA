@@ -25,7 +25,7 @@ Swagger dùng OpenAPI HTTP bearer (`SessionBearer`): tạo session rồi dán ri
 - Parse text async do NIM latency biến động; form/answer đã có kiểu có thể validate và trả ngay.
 - OS lock giới hạn một process cho mỗi SQLite database. Restart chuyển running thành failed JOB_INTERRUPTED; queued còn deadline tiếp tục, không tự gọi lại upstream cũ. Job đã terminal không overwrite bằng late upstream response.
 - Không commit revision mới khi model technical error. Khi revision thay trong lúc parse patch chạy, trả conflict thay vì ghi đè.
-- Succeeded empty result khác failed upstream. Partial chỉ khi có lỗi acquisition nhưng vẫn có dữ liệu dùng được; field unknown không mặc định làm job lỗi.
+- Succeeded empty result khác failed upstream. Partial khi acquisition hoặc semantic assessment lỗi nhưng structured comparison vẫn dùng được; field unknown không mặc định làm job lỗi.
 - Giữ stable error codes/trace ids, log secret-free; raw text theo retention riêng. Auth/session, CORS, input/rate/concurrency limits phải phù hợp hosting public.
 
 Acceptance: text/form paths cùng domain semantics; owner không xem resource user khác; idempotency không tạo job lặp; revision races không mất update; timeout/restart luôn đến trạng thái terminal.

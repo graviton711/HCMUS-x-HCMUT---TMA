@@ -775,7 +775,9 @@ def test_schema_export_has_v2_and_keeps_v1(tmp_path, monkeypatch):
         json.loads((tmp_path / "v2" / "RequirementV2.schema.json").read_text(encoding="utf-8"))
         == RequirementV2.model_json_schema()
     )
-    assert len(list((tmp_path / "v2").glob("*.schema.json"))) == 20
+    assert len(list((tmp_path / "v2").glob("*.schema.json"))) == 24
+    assert (tmp_path / "v2" / "AssessmentBatch.schema.json").is_file()
+    assert (tmp_path / "v2" / "SemanticReport.schema.json").is_file()
 
 
 def test_paused_duplicate_domain_does_not_break_active_source_routing(settings):

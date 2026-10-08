@@ -4,13 +4,13 @@ from datetime import timedelta
 
 from sqlalchemy import func, insert, select, update
 
-from api.dto import Form
 from api.store import dump, jobs, resources
 from api.v2 import state
 from api.v2.models import (
     Change,
     ComparisonV2,
     CreateProposal,
+    FormV2,
     Interpretation,
     Preferences,
     Proposal,
@@ -18,13 +18,18 @@ from api.v2.models import (
     canonical_urls,
 )
 from data_access.v2 import GatewayV2, registry_from_records
+from decision.candidates import prepare_candidates, refresh_candidates
 from decision.v2 import build_comparison
 from domain.common import AppError, now, uid
-from domain.requirements import Condition, Message, Readiness, RequirementState, SourceReference, Target, Tree
+from domain.requirements import Message, Readiness, SourceReference, Target, Tree
+from domain.semantic import ConditionV2, SemanticRequirement
 from requirements.edits import form_requirement
 from requirements.nim import parse_validated
-from requirements.service import finalize, prune
+from requirements.semantic import answer_clarification, normalize_v2
+from requirements.semantic import finalize_v2 as finalize
+from requirements.service import prune
 from requirements.v2 import SlotExtractor
+from semantic_assessment.service import SemanticAssessor
 
 
 def mode_for(kind, urls):
@@ -129,10 +134,22 @@ def make_proposal(base, preview, settings, existing=None, origin="user_edit", re
 def typed_edits(previous, edits):
     data = previous.model_dump(mode="json")
     data["revision"] = max(1, previous.revision)
+    data["issues"] = []
+    answers = [e for e in edits if e.op == "answer_clarification"]
+    if answers and any(
+        e.op in {"upsert_condition", "replace_condition_value", "remove_condition", "replace_tree"}
+        for e in edits
+    ):
+        raise AppError(
+            "INVALID_EDIT",
+            "Trả lời clarification và sửa conditions/tree cần tách lượt để giữ target rõ ràng.",
+        )
     by_id = {c.id: c.model_dump(mode="json") for c in previous.conditions}
     hard, soft = previous.hard_tree, previous.preference_tree
     explicit_trees = {}
     for edit in edits:
+        if edit.op == "answer_clarification":
+            continue
         if edit.op in {"upsert_condition", "replace_condition_value", "remove_condition"}:
             cid = edit.condition.id if edit.condition else edit.condition_id
             old = by_id.get(cid)
@@ -155,7 +172,7 @@ def typed_edits(previous, edits):
                     submitted_value={k: v for k, v in raw.items() if k != "sources"},
                 ).model_dump(),
             ]
-            new = Condition.model_validate(raw)
+            new = ConditionV2.model_validate(raw)
             if old is None or old["strength"] != new.strength:
                 hard, soft = prune(hard, {cid}) or Tree(kind="all"), prune(soft, {cid}) or Tree(kind="all")
                 leaf = Tree(kind="predicate", condition_id=cid)
@@ -195,12 +212,30 @@ def typed_edits(previous, edits):
         conditions=list(by_id.values()), hard_tree=hard.model_dump(), preference_tree=soft.model_dump()
     )
     data.update(explicit_trees)
-    return finalize(RequirementV2.model_validate(data))
+    updated = finalize(RequirementV2.model_validate(data))
+    seen = set()
+    questions = {q.id: q for q in previous.clarifications}
+    for edit in answers:
+        if edit.clarification_id not in questions or edit.clarification_id in seen:
+            raise AppError(
+                "STALE_CLARIFICATION", "Clarification không thuộc proposal hiện tại hoặc bị trùng.", 409
+            )
+        seen.add(edit.clarification_id)
+        updated = answer_clarification(
+            updated,
+            questions[edit.clarification_id],
+            edit.answer,
+            SourceReference(
+                kind="form", field_path=f"clarifications.{edit.clarification_id}", submitted_value=edit.answer
+            ),
+        )
+    return updated
 
 
 class Service:
-    def __init__(self, store, nim, gateway):
+    def __init__(self, store, nim, gateway, *, semantic_gateway=None):
         self.store, self.nim, self.gateway = store, nim, gateway
+        self.assessor = SemanticAssessor(store.settings, semantic_gateway)
 
     def create_requirement(self, c, owner, body):
         rid, urls = uid("req"), canonical_urls(body.reference_urls)
@@ -216,12 +251,14 @@ class Service:
         if body.input.kind == "structured":
             form = body.input.form
             core = form_requirement(
-                Form.model_validate(form.model_dump(exclude={"preference_levels", "notes"})),
+                FormV2.model_validate(form.model_dump(exclude={"preference_levels", "notes"})),
                 requirement_id=rid,
                 mode=common["mode"],
                 timezone=body.timezone,
                 targets=targets,
-                requirement_model=RequirementState,
+                requirement_model=SemanticRequirement,
+                condition_model=ConditionV2,
+                finalizer=finalize,
             )
             r = RequirementV2.model_validate(
                 {
@@ -329,6 +366,13 @@ class Service:
         if p.preview.clarifications and any(q.blocking for q in p.preview.clarifications):
             raise AppError("REQUIREMENT_NOT_READY", "Cần làm rõ điều kiện trước khi xác nhận.", 409)
         r = finalize(RequirementV2.model_validate(p.preview.model_dump()))
+        if any(issue.blocking for issue in r.issues):
+            raise AppError(
+                "REQUIREMENT_NOT_READY",
+                "Backend chưa hỗ trợ đủ ràng buộc bắt buộc.",
+                409,
+                details={"reasons": r.readiness.reasons},
+            )
         self.store.add_revision(c, owner, r, p.base_revision)
         state.save_proposal(
             c,
@@ -368,6 +412,7 @@ class Service:
         if len(set(body.change_ids)) != len(body.change_ids) or set(body.change_ids) - change_map.keys():
             raise AppError("INVALID_EDIT", "Change IDs không hợp lệ.")
         data = p.preview.model_dump(mode="json")
+        data["issues"] = []
         conditions = {x.id: x.model_dump(mode="json") for x in p.preview.conditions}
         for cid in body.change_ids:
             change = change_map[cid]
@@ -427,13 +472,17 @@ class Service:
             mode=template.mode,
             timezone=template.timezone,
             targets=template.targets,
-            requirement_model=RequirementState,
+            requirement_model=SemanticRequirement,
+            normalizer=normalize_v2,
+            batch_validation=True,
+            finalizer=finalize,
+            condition_model=ConditionV2,
         )
         preview = RequirementV2.model_validate(
             {
                 **template.model_dump(),
                 **parsed.model_dump(
-                    include={"conditions", "party", "hard_tree", "preference_tree", "messages"}
+                    include={"conditions", "party", "hard_tree", "preference_tree", "messages", "issues"}
                 ),
             }
         )
@@ -536,10 +585,22 @@ class Service:
             records = [
                 json.loads(p) for p in connection.execute(select(state.source_registry.c.payload)).scalars()
             ]
-            return registry_from_records(records)
+            return self.provider_registry(registry_from_records(records))
         with self.store.engine.connect() as c:
             records = [json.loads(p) for p in c.execute(select(state.source_registry.c.payload)).scalars()]
-        return registry_from_records(records)
+        return self.provider_registry(registry_from_records(records))
+
+    def provider_registry(self, registry):
+        if self.store.settings.data_provider == "supabase":
+            configured = {s.source_id for s in self.gateway.registry}
+            return [
+                s for s in registry if s.source_id in configured and s.limits.get("catalog_read_only") == 1
+            ]
+        return [
+            s
+            for s in registry
+            if not s.limits.get("catalog_read_only") and not s.source_id.startswith("catalog_")
+        ]
 
     def stage(self, row, worker_id, stage, status, summary, **kwargs):
         with self.store.transaction() as c:
@@ -610,20 +671,33 @@ class Service:
         self.stage(
             row, worker_id, "reference_collection", "started", "Thu thập nguồn theo yêu cầu đã xác nhận."
         )
+        previous_assessment = None
         if payload["round_intent"] == "offer_change":
-            from domain.crawl import CrawlResult
+            from domain.crawl_v2 import CrawlResultV2
 
             old = json.loads(
                 self.store.resource(row["owner"], payload["previous_comparison_id"], kind="comparison_v2")[
                     "payload"
                 ]
             )
-            crawl = CrawlResult.model_validate(old["crawl"])
+            crawl = CrawlResultV2.model_validate(old["crawl"])
+            previous_assessment = old["result"]["analysis"].get("semantic_assessment")
+            if previous_assessment and "fingerprint" not in previous_assessment:
+                previous_assessment = None
             approved = {s.source_id for s in registry if s.access_status == "approved"}
             if any(s.source_id not in approved for s in crawl.source_results if s.tour_snapshot_ids):
                 raise AppError("SOURCE_BLOCKED", "Nguồn không còn được duyệt để dùng lại snapshot.", 409)
         else:
-            crawl = await GatewayV2(self.gateway, registry).collect(r, row["deadline_at"])
+            acquisition = GatewayV2(self.gateway, registry)
+            if self.store.settings.data_provider == "supabase":
+                crawl = await acquisition.collect(
+                    r,
+                    row["deadline_at"],
+                    candidate_limit=payload["candidate_limit"],
+                    exclusions=payload["excluded_tour_ids"],
+                )
+            else:
+                crawl = await acquisition.collect(r, row["deadline_at"])
         failures = [s for s in crawl.source_results if s.status in {"error", "timeout"}]
         self.stage(
             row,
@@ -647,13 +721,71 @@ class Service:
             "completed",
             "CrawlResult đã qua schema và source/evidence binding.",
         )
+        evaluated_at = now().isoformat()
+        self.stage(
+            row, worker_id, "hard_filter", "started", "Kiểm tra toàn bộ điều kiện bắt buộc trên từng offer."
+        )
+        prepared = prepare_candidates(
+            r,
+            crawl,
+            registry,
+            evaluated_at,
+            exclusions=payload["excluded_tour_ids"],
+            selections=payload["offer_selections"],
+            candidate_limit=payload["candidate_limit"],
+        )
+        self.stage(
+            row,
+            worker_id,
+            "hard_filter",
+            "completed",
+            "Đã tạo pool và giữ rõ phần chưa đủ bằng chứng.",
+            counts={
+                "candidates": len(prepared[0]),
+                "hard_pass": sum(c["hard_status"] == "pass" for c in prepared[0]),
+            },
+        )
+        self.stage(
+            row,
+            worker_id,
+            "semantic_assessment",
+            "started",
+            "Đánh giá ưu tiên ngữ nghĩa từ nội dung snapshot.",
+        )
+        assessment = await self.assessor.run(
+            r, prepared[0], crawl, row["deadline_at"], previous=previous_assessment
+        )
+        self.stage(
+            row,
+            worker_id,
+            "semantic_assessment",
+            "partial"
+            if assessment.state == "partial"
+            else "skipped"
+            if assessment.state == "skipped"
+            else "completed",
+            "Đã kiểm tra trạng thái assessment và dẫn chứng.",
+            counts={"requested": assessment.requested_pairs, "assessed": assessment.assessed_pairs},
+            error_code=assessment.reason_code,
+        )
+        # Recheck volatile facts after the upstream wait; semantic citations remain tied to the same snapshots.
+        evaluated_at = now().isoformat()
+        prepared = refresh_candidates(
+            r,
+            prepared,
+            evaluated_at,
+            synthetic=crawl.origin == "synthetic",
+            selections=payload["offer_selections"],
+        )
         result = ComparisonV2.model_validate(
             build_comparison(
                 row["resource_id"],
                 r,
                 crawl,
                 registry,
-                now().isoformat(),
+                evaluated_at,
+                prepared=prepared,
+                semantic_report=assessment.model_dump(mode="json"),
                 exclusions=payload["excluded_tour_ids"],
                 selections=payload["offer_selections"],
                 candidate_limit=payload["candidate_limit"],
@@ -670,7 +802,7 @@ class Service:
             if any(s.source_id not in active for s in crawl.source_results if s.tour_snapshot_ids):
                 raise AppError("SOURCE_BLOCKED", "Nguồn bị chặn trong lúc xử lý.", 409)
             state.persist_snapshots(c, row["owner"], row["resource_id"], crawl)
-            status = "partial" if failures else "succeeded"
+            status = "partial" if failures or assessment.state == "partial" else "succeeded"
             c.execute(
                 update(resources)
                 .where(resources.c.id == row["resource_id"])

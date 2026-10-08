@@ -1,0 +1,88 @@
+{
+  "$defs": {
+    "Citation": {
+      "additionalProperties": false,
+      "properties": {
+        "excerpt_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Excerpt Id",
+          "type": "string"
+        },
+        "quote": {
+          "maxLength": 1200,
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "excerpt_id",
+        "quote"
+      ],
+      "title": "Citation",
+      "type": "object"
+    },
+    "RawAssessment": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "condition_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Condition Id",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "matched",
+            "not_matched",
+            "unknown"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "citations": {
+          "items": {
+            "$ref": "#/$defs/Citation"
+          },
+          "maxItems": 4,
+          "title": "Citations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "condition_id",
+        "status",
+        "citations"
+      ],
+      "title": "RawAssessment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/RawAssessment"
+      },
+      "maxItems": 100,
+      "title": "Items",
+      "type": "array"
+    }
+  },
+  "required": [
+    "items"
+  ],
+  "title": "AssessmentBatch",
+  "type": "object"
+}

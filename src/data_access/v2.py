@@ -5,10 +5,14 @@ import asyncio
 from data_access.gateway import DataGateway
 from domain.common import AppError, instant, now, uid
 from domain.crawl import CrawlResult, SourceCapability, SourceResult
+from domain.crawl_v2 import CrawlResultV2
 from domain.requirements import Readiness, RequirementState
+from requirements.semantic import legacy_requirement
 
 
 def core_requirement(r, mode, targets):
+    if hasattr(r, "issues"):
+        return legacy_requirement(r, query=True, mode=mode, targets=targets)
     data = {k: v for k, v in r.model_dump().items() if k in RequirementState.model_fields}
     data.update(schema_version="1.0", revision=max(1, r.revision), mode=mode, targets=targets)
     data["readiness"] = {k: v for k, v in data["readiness"].items() if k in Readiness.model_fields}
@@ -18,12 +22,17 @@ def core_requirement(r, mode, targets):
 def merge_results(results):
     combined = {field: {} for field in ("suppliers", "tours", "offers", "evidence")}
     source_results, issues, origin = [], [], None
+    coverage, retrieval = {}, []
     for result in results:
         if origin is not None and origin != result.origin:
             raise AppError("CRAWLER_INVALID_OUTPUT", "Không gộp nguồn thật và mô phỏng.", 502)
         origin = result.origin
         source_results.extend(result.source_results)
         issues.extend(result.issues)
+        for key, complete in getattr(result, "offer_coverage", {}).items():
+            coverage[key] = coverage.get(key, True) and complete
+        if getattr(result, "retrieval", {}):
+            retrieval.append(result.retrieval)
         for field, mapping in combined.items():
             key = "supplier_id" if field == "suppliers" else "id" if field == "evidence" else "snapshot_id"
             for item in getattr(result, field):
@@ -31,22 +40,30 @@ def merge_results(results):
                 if identifier in mapping and mapping[identifier] != item:
                     raise AppError("CRAWLER_INVALID_OUTPUT", "Snapshot ID trùng với nội dung khác.", 502)
                 mapping[identifier] = item
-    return CrawlResult(
+    return CrawlResultV2(
         request_id=uid("crawl"),
         origin=origin or "source",
         source_results=source_results,
         issues=issues,
-        **{k: list(v.values()) for k, v in combined.items()},
+        offer_coverage=coverage,
+        retrieval={"runs": retrieval} if retrieval else {},
+        **{k: [item.model_dump() for item in v.values()] for k, v in combined.items()},
     )
 
 
 class GatewayV2:
     def __init__(self, gateway, registry):
         # Do not mutate the v1 gateway or share mutable registry state across awaits.
-        self.gateway = DataGateway(gateway.settings, registry=registry, transport=gateway.transport)
+        self.gateway = DataGateway(
+            gateway.settings,
+            registry=registry,
+            transport=gateway.transport,
+            result_model=CrawlResultV2,
+            catalog_repository=getattr(gateway, "catalog_repository", None),
+        )
         self.registry = registry
 
-    async def collect(self, r, deadline_at):
+    async def collect(self, r, deadline_at, *, candidate_limit=20, exclusions=()):
         tasks = []
         if r.targets:
             tasks.append(core_requirement(r, "compare_urls", r.targets))
@@ -59,6 +76,15 @@ class GatewayV2:
 
         async def acquire(requirement):
             try:
+                if self.gateway.settings.data_provider == "supabase":
+                    return await self.gateway.collect(
+                        requirement,
+                        deadline_at,
+                        catalog_conditions=r.conditions,
+                        candidate_limit=candidate_limit,
+                        exclusions=exclusions,
+                        catalog_requirement=r,
+                    )
                 return await self.gateway.collect(requirement, deadline_at)
             except AppError as exc:
                 statuses = []

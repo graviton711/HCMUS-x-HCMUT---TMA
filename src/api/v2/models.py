@@ -4,8 +4,9 @@ from pydantic import Field, JsonValue, model_validator
 
 from api.dto import Form, FormCondition
 from domain.common import Identifier, Model, now
-from domain.crawl import OfferSnapshot
-from domain.requirements import Party, Readiness, RequirementState, Target, Tree, Value
+from domain.crawl_v2 import OfferSnapshotV2
+from domain.requirements import Party, Target, Tree
+from domain.semantic import SemanticReadiness, SemanticRequirement, ValueV2
 
 VERSION = "2.0-draft"
 
@@ -26,7 +27,16 @@ class Preferences(Model):
     )
 
 
-class StructuredForm(Form):
+class FormConditionV2(FormCondition):
+    value: ValueV2
+    scope: Literal["main_journey", "itinerary"] | None = None
+
+
+class FormV2(Form):
+    conditions: list[FormConditionV2] = Field(default_factory=list, max_length=50)
+
+
+class StructuredForm(FormV2):
     preference_levels: Preferences = Field(default_factory=Preferences)
     notes: str = Field(default="", max_length=8000)
 
@@ -84,7 +94,7 @@ class CreateRequirementV2(Model):
         return self
 
 
-class ReadinessV2(Readiness):
+class ReadinessV2(SemanticReadiness):
     blockers: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -93,7 +103,7 @@ class ReadinessV2(Readiness):
         return self
 
 
-class RequirementV2(RequirementState):
+class RequirementV2(SemanticRequirement):
     schema_version: Literal["2.0-draft"] = VERSION
     revision: int = Field(ge=0)
     input_kind: Literal["structured", "text", "urls"]
@@ -123,10 +133,13 @@ class TypedEdit(Model):
         "replace_reference_urls",
         "set_notes",
         "replace_tree",
+        "answer_clarification",
     ]
     condition_id: Identifier | None = None
-    condition: FormCondition | None = None
-    value: Value | None = None
+    condition: FormConditionV2 | None = None
+    value: ValueV2 | None = None
+    clarification_id: Identifier | None = None
+    answer: JsonValue = None
     party: Party | None = None
     dimension: Literal["cost", "comfort", "pace", "culture"] | None = None
     level: int | None = Field(default=None, ge=0, le=5)
@@ -146,6 +159,7 @@ class TypedEdit(Model):
             "replace_reference_urls": {"reference_urls"},
             "set_notes": {"notes"},
             "replace_tree": {"tree", "tree_kind"},
+            "answer_clarification": {"clarification_id", "answer"},
         }[self.op]
         actual = {k for k, v in self.model_dump().items() if k != "op" and v is not None}
         if actual != required:
@@ -286,7 +300,10 @@ class Column(Model):
     target_ids: list[Identifier]
     source_ids: list[Identifier]
     offer_reason: str | None
-    offer_options: list[OfferSnapshot]
+    offer_options: list[OfferSnapshotV2]
+    eligible_offer_snapshot_ids: list[Identifier] = Field(default_factory=list)
+    offer_assessments: list[dict[str, JsonValue]] = Field(default_factory=list)
+    offers_complete: bool = False
 
     @model_validator(mode="after")
     def offers(self):
@@ -298,6 +315,11 @@ class Column(Model):
             o.snapshot_id for o in self.offer_options
         }:
             raise ValueError("Selected offer must be an option")
+        options = {o.snapshot_id for o in self.offer_options}
+        if set(self.eligible_offer_snapshot_ids) - options or any(
+            a.get("offer_snapshot_id") not in options for a in self.offer_assessments
+        ):
+            raise ValueError("Offer assessment binding mismatch")
         return self
 
 
@@ -346,6 +368,7 @@ class Evaluation(Model):
     reason_code: str
     evidence_ids: list[Identifier]
     data_quality: dict[str, JsonValue]
+    offer_snapshot_id: Identifier | None = None
 
 
 class ComparisonV2(Model):
@@ -380,6 +403,38 @@ class ComparisonV2(Model):
         if len(pairs) != len(self.cells) or pairs != {(r, c) for r in rows for c in cols}:
             raise ValueError("Every row/column needs exactly one cell")
         evals = {e.id for e in self.evaluations}
+        if len(evals) != len(self.evaluations):
+            raise ValueError("Duplicate evaluation identities")
+        offers = {o.snapshot_id: c.id for c in self.columns for o in c.offer_options}
+        if any(
+            e.candidate_id not in cols
+            or e.offer_snapshot_id
+            and offers.get(e.offer_snapshot_id) != e.candidate_id
+            for e in self.evaluations
+        ):
+            raise ValueError("Offer evaluation binding mismatch")
+        if any(
+            set(a.get("evaluation_ids", [])) - evals for col in self.columns for a in col.offer_assessments
+        ):
+            raise ValueError("Dangling offer assessment evaluation")
+        report = self.analysis.get("semantic_assessment")
+        if report and "fingerprint" in report:
+            from semantic_assessment.models import SemanticReport
+
+            parsed = SemanticReport.model_validate(report)
+            by_id = {col.id: col for col in self.columns}
+            pool = {p["candidate_id"]: p["tour_snapshot_id"] for p in self.analysis.get("candidate_pool", [])}
+            soft = {c.id for c in self.requirement_snapshot.conditions if c.strength == "soft"}
+            for item in parsed.items:
+                col = by_id.get(item.candidate_id)
+                # Non-visible eligible candidates can be assessed; visible binding is enforced when present.
+                if (
+                    item.condition_id not in soft
+                    or pool.get(item.candidate_id) != item.tour_snapshot_id
+                    or col
+                    and item.tour_snapshot_id != col.tour_snapshot_id
+                ):
+                    raise ValueError("Semantic assessment binding mismatch")
         if any(set(c.evaluation_ids) - evals for c in self.cells):
             raise ValueError("Dangling evaluation")
         recommended = self.recommendations["candidate_ids"]

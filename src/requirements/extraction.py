@@ -115,7 +115,8 @@ class Extraction(Model):
                     stack.extend(node.children)
             if len(found) != len(set(found)) or set(found) != expected:
                 raise ValueError(
-                    "Tree references must match conditions exactly. Include BOTH hard and soft items in conditions; use null trees for simple AND."
+                    "Tree references must match conditions exactly. Include BOTH hard and soft items in conditions; use null trees for simple AND. "
+                    f"{'Soft' if soft else 'Hard'} expected IDs={sorted(expected)}, actual IDs={found}."
                 )
         return self
 

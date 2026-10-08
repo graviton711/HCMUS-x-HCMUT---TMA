@@ -17,9 +17,14 @@ def main():
     export = commands.add_parser("export-schemas")
     export.add_argument("--output", type=Path, default=Path("contracts"))
     commands.add_parser("probe-nim")
+    commands.add_parser("probe-supabase")
     evaluate = commands.add_parser("evaluate-nim")
     evaluate.add_argument("--cases", type=Path, default=Path("tests/fixtures/requirements-smoke.json"))
     evaluate.add_argument("--output", type=Path, default=Path("data/evaluation.local.json"))
+    semantic = commands.add_parser("evaluate-nim-v2")
+    semantic.add_argument("--cases", type=Path, default=Path("tests/fixtures/requirements-semantic.json"))
+    semantic.add_argument("--output", type=Path, default=Path("data/evaluation-v2.local.json"))
+    semantic.add_argument("--repeat", type=int, choices=range(1, 6), default=1)
     commands.add_parser("purge")
     args = parser.parse_args()
     if args.command == "serve":
@@ -51,9 +56,11 @@ def main():
             RequirementV2,
         )
         from domain.crawl import CrawlRequest, CrawlResult, SourceCapability
+        from domain.crawl_v2 import CatalogFieldProof, CrawlResultV2
         from domain.requirements import Requirement
         from requirements.extraction import Extraction
         from requirements.v2 import InitialExtractionV2, UpdateExtractionV2
+        from semantic_assessment.models import AssessmentBatch, SemanticReport
 
         args.output.mkdir(parents=True, exist_ok=True)
         for model in (
@@ -92,11 +99,28 @@ def main():
             SourceRefresh,
             InitialExtractionV2,
             UpdateExtractionV2,
+            CrawlResultV2,
+            CatalogFieldProof,
+            AssessmentBatch,
+            SemanticReport,
         ):
             (v2_output / f"{model.__name__}.schema.json").write_text(
                 json.dumps(model.model_json_schema(), ensure_ascii=False, indent=2), encoding="utf-8"
             )
         print(f"Exported schemas to {args.output.resolve()}")
+    elif args.command == "probe-supabase":
+        from api.settings import Settings
+        from data_access.supabase.reader import SupabaseRepository
+        from domain.common import AppError
+
+        repository = SupabaseRepository(Settings(data_provider="supabase"))
+        try:
+            print(json.dumps(repository.probe(), ensure_ascii=False))
+        except AppError as exc:
+            print(json.dumps(exc.payload(), ensure_ascii=False))
+            raise SystemExit(1) from None
+        finally:
+            repository.close()
     elif args.command == "purge":
         from api.runtime_lock import RuntimeLock
         from api.settings import Settings
@@ -120,6 +144,16 @@ def main():
         report = asyncio.run(evaluate_smoke(Settings(), args.cases, args.output))
         print(
             f"{report['passed']}/{report['total']} curated smoke cases passed; report: {args.output.resolve()}"
+        )
+        if report["passed"] != report["total"]:
+            raise SystemExit(1)
+    elif args.command == "evaluate-nim-v2":
+        from api.settings import Settings
+        from requirements.evaluation_v2 import evaluate_semantic
+
+        report = asyncio.run(evaluate_semantic(Settings(), args.cases, args.output, args.repeat))
+        print(
+            f"{report['passed']}/{report['total']} semantic smoke runs passed; report: {args.output.resolve()}"
         )
         if report["passed"] != report["total"]:
             raise SystemExit(1)

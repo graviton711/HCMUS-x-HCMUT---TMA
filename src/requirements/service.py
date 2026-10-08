@@ -2,6 +2,8 @@ import hashlib
 import re
 from decimal import Decimal
 
+from pydantic import ValidationError
+
 from domain.common import AppError
 from domain.requirements import (
     Budget,
@@ -199,11 +201,34 @@ def from_extraction(
     targets: list,
     previous: Requirement | None = None,
     requirement_model=Requirement,
+    normalizer=normalize,
+    finalizer=finalize,
+    condition_model=Condition,
+    batch_validation=False,
 ) -> Requirement:
+    def normalized(rows):
+        values, errors = [], []
+        for raw in rows:
+            try:
+                values.append(normalizer(raw, message, timezone))
+            except AppError as exc:
+                if not batch_validation or exc.code != "LLM_INVALID_OUTPUT":
+                    raise
+                errors.append(f"{raw.id}: {getattr(exc, 'repair_hint', exc.message)}")
+            except ValidationError as exc:
+                if not batch_validation:
+                    raise
+                errors.append(f"{raw.id}: " + "; ".join(e["msg"] for e in exc.errors()[:3]))
+        if errors:
+            error = AppError("LLM_INVALID_OUTPUT", "Một số conditions không có nghĩa/nguồn hợp lệ.", 502)
+            error.repair_hint = "\n".join(errors)[:6000]
+            raise error
+        return values
+
     if previous is None:
         if extraction.operations:
             raise AppError("LLM_INVALID_OUTPUT", "Initial extraction không được sửa revision cũ.", 502)
-        conditions = [normalize(c, message, timezone) for c in extraction.conditions]
+        conditions = normalized(extraction.conditions)
         hard_tree = extraction.hard_tree or conjunction(conditions, False)
         soft_tree = extraction.preference_tree or conjunction(conditions, True)
         party = normalize_party(extraction.party, Party(), message)
@@ -215,6 +240,7 @@ def from_extraction(
             )
         conditions = list(previous.conditions)
         hard_tree, soft_tree = previous.hard_tree, previous.preference_tree
+        replacements = iter(normalized(op.condition for op in extraction.operations if op.condition))
         changed = set()
         for op in extraction.operations:
             ref = ground(message, op.quote)
@@ -242,11 +268,11 @@ def from_extraction(
                     if values[key] is not None:
                         amount = Decimal(values[key]) + delta
                         values[key] = int(amount) if old.value.currency == "VND" else format(amount, "f")
-                replacement = Condition.model_validate(
+                replacement = condition_model.model_validate(
                     {**old.model_dump(), "value": Budget(**values), "sources": [*old.sources, ref]}
                 )
             elif op.op in {"add", "replace"}:
-                replacement = normalize(op.condition, message, timezone)
+                replacement = next(replacements)
                 if op.op == "replace":
                     replacement = replacement.model_copy(update={"id": old.id})
                 elif any(c.id == replacement.id for c in conditions):
@@ -268,7 +294,7 @@ def from_extraction(
                         hard_tree = Tree(kind="all", children=[hard_tree, leaf])
         party = normalize_party(extraction.party, previous.party, message)
         messages, revision = [*previous.messages, message], previous.revision + 1
-    return finalize(
+    return finalizer(
         requirement_model(
             id=requirement_id,
             revision=revision,

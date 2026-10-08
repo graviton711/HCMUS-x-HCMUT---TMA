@@ -8,7 +8,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore", validate_assignment=True
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        validate_assignment=True,
+        hide_input_in_errors=True,
     )
 
     nvidia_nim_api: SecretStr = SecretStr("")
@@ -17,8 +21,22 @@ class Settings(BaseSettings):
     nim_reasoning_budget: int = Field(default=1024, ge=128, le=8192)
     nim_max_tokens: int = Field(default=4096, ge=512, le=16384)
     nim_timeout_seconds: float = Field(default=90, ge=1, le=300)
+    semantic_assessment_enabled: bool = True
+    semantic_timeout_seconds: float = Field(default=45, ge=1, le=120)
+    semantic_max_candidates: int = Field(default=12, ge=1, le=20)
+    semantic_max_pairs: int = Field(default=24, ge=1, le=100)
+    semantic_excerpt_chars: int = Field(default=6000, ge=500, le=10000)
+    semantic_max_input_chars: int = Field(default=60000, ge=1000, le=120000)
     database_url: str = "sqlite:///data/backend.db"
-    data_provider: Literal["fixture", "http"] = "fixture"
+    data_provider: Literal["fixture", "http", "supabase"] = "fixture"
+    supabase_tour_db_url: SecretStr = SecretStr("")
+    supabase_tour_url: str | None = None
+    supabase_tour_publishable_key: SecretStr = SecretStr("")
+    supabase_tour_connect_timeout_seconds: int = Field(default=8, ge=1, le=30)
+    supabase_tour_query_timeout_seconds: int = Field(default=15, ge=1, le=60)
+    supabase_tour_pool_size: int = Field(default=2, ge=1, le=5)
+    supabase_tour_scan_limit: int = Field(default=1000, ge=1, le=5000)
+    supabase_tour_max_offers: int = Field(default=1000, ge=1, le=1000)
     crawler_url: str | None = None
     crawler_registry_path: Path | None = None
     crawler_api_key: SecretStr = SecretStr("")
@@ -55,6 +73,15 @@ class Settings(BaseSettings):
             raise ValueError("v1 runtime supports local SQLite only")
         if "*" in self.cors_origins:
             raise ValueError("Explicit CORS origins required")
+        if self.data_provider == "supabase":
+            try:
+                u = urlsplit(self.supabase_tour_db_url.get_secret_value())
+                valid = u.scheme in {"postgres", "postgresql", "postgresql+psycopg"} and u.hostname and u.path
+                _ = u.port
+            except ValueError:
+                valid = False
+            if not valid:
+                raise ValueError("Supabase provider requires a valid PostgreSQL tour database URL")
         if self.crawler_url:
             u = urlsplit(self.crawler_url)
             if u.scheme not in {"https", "http"} or not u.hostname or u.username or u.password:

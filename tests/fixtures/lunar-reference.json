@@ -1,0 +1,12 @@
+{
+  "scope": "Selected date anchors only; HKO uses UTC+8, not a full Vietnamese-calendar oracle. Runtime converter uses Vietnamese UTC+7.",
+  "cases": [
+    {"lunar": [2025, 1, 1, false], "solar": "2025-01-29", "source": "https://www.hko.gov.hk/en/gts/time/calendar/pdf/files/2025e.pdf"},
+    {"lunar": [2024, 12, 27, false], "solar": "2025-01-26", "source": "https://www.hko.gov.hk/en/gts/time/calendar/pdf/files/2025e.pdf"},
+    {"lunar": [2026, 1, 1, false], "solar": "2026-02-17", "source": "https://www.hko.gov.hk/en/gts/time/calendar/pdf/files/2026e.pdf"},
+    {"lunar": [2025, 12, 27, false], "solar": "2026-02-14", "source": "https://www.hko.gov.hk/en/gts/time/calendar/pdf/files/2026e.pdf"},
+    {"lunar": [2027, 1, 1, false], "solar": "2027-02-06", "source": "https://www.hko.gov.hk/en/gts/time/calendar/pdf/files/2027e.pdf"},
+    {"lunar": [2026, 12, 27, false], "solar": "2027-02-03", "source": "https://www.hko.gov.hk/en/gts/time/calendar/pdf/files/2027e.pdf"},
+    {"lunar": [2023, 2, 1, true], "solar": "2023-03-22", "source": "https://www.hko.gov.hk/en/gts/time/calendar/pdf/files/2023e.pdf"}
+  ]
+}

@@ -1,17 +1,18 @@
 """Deterministic, evidence-bound public matrix and preference policy."""
 
-import hashlib
-import json
 from datetime import timedelta
 from decimal import Decimal
 from itertools import combinations
 
-from decision.engine import evaluate, fold_tree, freshness, usable
-from domain.common import AppError, instant
+from decision.candidates import prepare_candidates
+from decision.candidates import tour_identity as tour_identity
+from decision.engine import freshness, usable
+from decision.semantic import semantic_fact
+from domain.common import instant
 from domain.crawl import money_wire
-from domain.requirements import DateValue, NumberValue
+from domain.requirements import NumberValue
 
-RANK_POLICY = "rank-v2.1"
+RANK_POLICY = "rank-v2.3-bounds"
 DIMENSIONS = {"estimated_cost": "cost", "hotel_stars_min": "comfort", "included_services": "comfort"}
 LABELS = {
     "duration_days": "Thời lượng",
@@ -27,14 +28,21 @@ LABELS = {
     "transport": "Phương tiện",
     "included_services": "Dịch vụ bao gồm",
     "supplier": "Nhà cung cấp",
+    "tour_type": "Loại tour",
+    "route": "Hành trình",
+    "supplier_reputation": "Uy tín nhà cung cấp",
+    "service_quality": "Chất lượng dịch vụ",
+    "price_value": "Giá hợp lý",
+    "nature": "Gần thiên nhiên",
+    "published_price": "Giá tour công bố",
+    "itinerary": "Lịch trình công bố",
+    "availability_status": "Trạng thái đặt chỗ công bố",
+    "unclassified_prices": "Giá theo nhóm tuổi — chưa rõ điều kiện",
+    "single_supplement": "Phụ thu phòng đơn — chưa rõ điều kiện",
 }
 
 
-def tour_identity(tour):
-    return "tour_" + hashlib.sha256(json.dumps([tour.supplier_id, tour.tour_id]).encode()).hexdigest()[:32]
-
-
-def preference_utility(condition, evaluation, domain):
+def preference_utility(condition, evaluation, domain=()):
     if evaluation["status"] in {"pass", "fail"}:
         return 1.0 if evaluation["status"] == "pass" else 0.0
     if evaluation["reason_code"] != "PREFERENCE_VALUE":
@@ -45,10 +53,12 @@ def preference_utility(condition, evaluation, domain):
     target = condition.value.amount if isinstance(condition.value, NumberValue) else None
     if condition.operator == "near" and target is not None:
         return 1 / (1 + abs(actual - target) / max(target, 1))
-    lo, hi = min(domain), max(domain)
-    if hi == lo:
-        return 1.0
-    return (hi - actual) / (hi - lo) if condition.operator == "prefer_low" else (actual - lo) / (hi - lo)
+    if condition.field == "hotel_stars_min":
+        value = min(max((actual - 1) / 4, 0), 1)
+        return 1 - value if condition.operator == "prefer_low" else value
+    scale = max(float(target or 1), 1)
+    ratio = max(float(actual), 0) / scale
+    return 1 / (1 + ratio) if condition.operator == "prefer_low" else ratio / (1 + ratio)
 
 
 def score_tree(tree, contributions):
@@ -62,113 +72,53 @@ def score_tree(tree, contributions):
     if tree.kind == "any":
         return max(parts, key=lambda p: (p[0], p[2] / p[1]))
     weight = sum(p[1] for p in parts)
-    return sum(p[0] * p[1] for p in parts) / weight, weight, sum(p[2] for p in parts)
+    covered = sum(p[2] for p in parts)
+    return sum(p[0] * p[2] for p in parts) / covered if covered else 0.0, weight, covered
+
+
+def score_bounds(tree, contributions):
+    if tree.kind == "predicate":
+        part = contributions[tree.condition_id]
+        value = part["utility"]
+        return (0.0 if value is None else value), (1.0 if value is None else value), part["weight"]
+    parts = [score_bounds(child, contributions) for child in tree.children]
+    parts = [p for p in parts if p[2] > 0]
+    if not parts:
+        return 0.0, 0.0, 0.0
+    if tree.kind == "any":
+        return max(p[0] for p in parts), max(p[1] for p in parts), max(p[2] for p in parts)
+    weight = sum(p[2] for p in parts)
+    return sum(p[0] * p[2] for p in parts) / weight, sum(p[1] * p[2] for p in parts) / weight, weight
 
 
 def build_comparison(
-    cid, r, crawl, registry, at, *, exclusions=(), selections=(), candidate_limit=20, progress=None
+    cid,
+    r,
+    crawl,
+    registry,
+    at,
+    *,
+    exclusions=(),
+    selections=(),
+    candidate_limit=20,
+    progress=None,
+    prepared=None,
+    semantic_report=None,
 ):
     def stage(name, status, summary, **kwargs):
         if progress is not None:
             progress(name, status, summary, **kwargs)
 
     stage("evaluation", "started", "Đánh giá các điều kiện trên snapshot đã chuẩn hóa.")
-    sources = {s.source_id: s for s in registry}
     suppliers = {s.supplier_id: s for s in crawl.suppliers}
-    tours = {t.snapshot_id: t for t in crawl.tours}
-    offers = {o.snapshot_id: o for o in crawl.offers}
-    by_entity = {}
-    for sr in crawl.source_results:
-        for tid in sr.tour_snapshot_ids:
-            t = tours[tid]
-            key = tour_identity(t)
-            item = by_entity.setdefault(
-                key,
-                {
-                    "tour": t,
-                    "source_ids": set(),
-                    "target_ids": set(),
-                    "discovered": False,
-                    "offers": {},
-                    "source": sources.get(sr.source_id),
-                },
-            )
-            item["source_ids"].add(sr.source_id)
-            if sr.target_id:
-                item["target_ids"].add(sr.target_id)
-                # Use reference snapshot for overlapping reference/discovery entities.
-                item["tour"] = t
-            else:
-                item["discovered"] = True
-            for oid in sr.offer_snapshot_ids:
-                if offers[oid].tour_snapshot_id == tid:
-                    item["offers"][oid] = offers[oid]
-    selection = {s["tour_id"]: s["offer_snapshot_id"] for s in selections}
-    if set(selection) - by_entity.keys():
-        raise AppError("OFFER_SELECTION_INVALID", "Tour không thuộc kết quả đã thu thập.", 409)
-    evaluated, synthetic = [], crawl.origin == "synthetic"
     excluded = set(exclusions)
-    discovery_entities = sorted(k for k, v in by_entity.items() if v["discovered"] and k not in excluded)
-    retained = set(discovery_entities[:candidate_limit]) | {
-        k for k, v in by_entity.items() if v["target_ids"]
+    synthetic = crawl.origin == "synthetic"
+    evaluated, truncated = prepared or prepare_candidates(
+        r, crawl, registry, at, exclusions=exclusions, selections=selections, candidate_limit=candidate_limit
+    )
+    semantic_items = {
+        (a["candidate_id"], a["condition_id"]): a for a in (semantic_report or {}).get("items", [])
     }
-    truncated = len(discovery_entities) > candidate_limit or any(s.truncated for s in crawl.source_results)
-    for key in sorted(retained):
-        item = by_entity[key]
-        tour, source = item["tour"], item["source"]
-        options = [o for o in item["offers"].values() if o.tour_snapshot_id == tour.snapshot_id]
-        selected = None
-        if key in selection:
-            selected = next((o for o in options if o.snapshot_id == selection[key]), None)
-            if selected is None or any(
-                freshness(f, field, source, at) != "fresh" for field, f in selected.fields.items()
-            ):
-                raise AppError("OFFER_SELECTION_INVALID", "Offer sai binding hoặc đã cũ.", 409)
-        elif len(options) == 1:
-            selected = options[0]
-        elif options:
-            date_conditions = [
-                c for c in r.conditions if c.strength == "hard" and isinstance(c.value, DateValue)
-            ]
-            matching = [
-                o
-                for o in options
-                if date_conditions
-                and all(
-                    evaluate(c, tour, o, r.party, source, at, synthetic)["status"] == "pass"
-                    for c in date_conditions
-                )
-            ]
-            if len(matching) == 1:
-                selected = matching[0]
-        reason = None if selected else "MULTIPLE_OFFERS_UNSELECTED" if options else "OFFER_MISSING"
-        evaluations = [
-            dict(
-                evaluate(c, tour, selected, r.party, source, at, synthetic, reason),
-                id="eval_" + hashlib.sha256(json.dumps([key, c.id]).encode()).hexdigest()[:32],
-                candidate_id=key,
-                expected=c.value.model_dump(mode="json"),
-            )
-            for c in r.conditions
-        ]
-        hard = any(c.strength != "soft" for c in r.conditions)
-        status = (
-            fold_tree(r.hard_tree, {e["condition_id"]: e["status"] for e in evaluations}) if hard else None
-        )
-        if status == "pass" and not r.readiness.can_evaluate_hard_constraints:
-            status = "unknown"
-        evaluated.append(
-            {
-                "id": key,
-                "item": item,
-                "tour": tour,
-                "selected": selected,
-                "options": options,
-                "evaluations": evaluations,
-                "hard_status": status,
-                "offer_reason": reason,
-            }
-        )
     stage("evaluation", "completed", "Đã đánh giá pass/fail/unknown.", counts={"candidates": len(evaluated)})
     stage("ranking", "started", "Xếp hạng theo preference tree và policy.")
     for candidate in evaluated:
@@ -177,27 +127,29 @@ def build_comparison(
             if condition.strength != "soft":
                 continue
             evaluation = next(e for e in candidate["evaluations"] if e["condition_id"] == condition.id)
-            domain = [
-                e["actual"]
-                for other in evaluated
-                for e in other["evaluations"]
-                if e["condition_id"] == condition.id
-                and e["reason_code"] == "PREFERENCE_VALUE"
-                and type(e["actual"]) is int
-            ]
+            assessment = semantic_items.get((candidate["id"], condition.id))
+            utility = preference_utility(condition, evaluation)
+            if utility is None and assessment and assessment["usable_for_ranking"]:
+                utility = 1.0 if assessment["status"] == "matched" else 0.0
             dimension = DIMENSIONS.get(condition.field)
             weight = getattr(r.preference_levels, dimension).level if r.preference_levels and dimension else 3
             contributions[condition.id] = {
                 "condition_id": condition.id,
                 "dimension": dimension,
-                "utility": preference_utility(condition, evaluation, domain or [0]),
+                "utility": utility,
+                "assessment": assessment,
                 "weight": weight,
                 "evaluation_id": evaluation["id"],
-                "evidence_ids": evaluation["evidence_ids"],
+                "evidence_ids": sorted(
+                    set(evaluation["evidence_ids"] + (assessment["evidence_ids"] if assessment else []))
+                ),
             }
         score, weight, covered = score_tree(r.preference_tree, contributions)
+        lower, upper, _ = score_bounds(r.preference_tree, contributions)
         candidate.update(
-            score=score if weight else None,
+            score=score if covered else None,
+            score_lower=lower if weight else None,
+            score_upper=upper if weight else None,
             coverage=covered / weight if weight else None,
             contributions=list(contributions.values()),
         )
@@ -205,7 +157,9 @@ def build_comparison(
     # URL-only can expose a similar/reference group, but never personalized eligibility.
     if not any(c.strength != "soft" for c in r.conditions):
         eligible = [c for c in evaluated if c["id"] not in excluded]
-    eligible.sort(key=lambda c: (-(c["score"] or 0), -(c["coverage"] or 0), c["id"]))
+    eligible.sort(
+        key=lambda c: (-(c["score_lower"] or 0), -(c["score_upper"] or 0), -(c["coverage"] or 0), c["id"])
+    )
     recommended = eligible[:3]
     stage(
         "ranking", "completed", "Đã chọn tối đa ba tour khác nhau.", counts={"recommended": len(recommended)}
@@ -239,6 +193,16 @@ def build_comparison(
                 "source_ids": sorted(item["source_ids"]),
                 "offer_reason": c["offer_reason"],
                 "offer_options": [o.model_dump(mode="json") for o in c["options"]],
+                "eligible_offer_snapshot_ids": c["eligible_offer_snapshot_ids"],
+                "offers_complete": c["offers_complete"],
+                "offer_assessments": [
+                    {
+                        "offer_snapshot_id": a["offer_snapshot_id"],
+                        "hard_status": a["hard_status"],
+                        "evaluation_ids": [e["id"] for e in a["evaluations"]],
+                    }
+                    for a in c["offer_assessments"]
+                ],
             }
         )
     # Keep inaccessible URL targets visible rather than dropping a column.
@@ -265,7 +229,10 @@ def build_comparison(
             )
     field_names = sorted(
         {f for c in visible for f in c["tour"].fields}
+        | {f for c in visible for f in getattr(c["tour"], "catalog_fields", {})}
+        | {f for c in visible for f in getattr(c["tour"], "semantic_fields", {})}
         | {f for c in visible if c["selected"] for f in c["selected"].fields}
+        | {f for c in visible if c["selected"] for f in getattr(c["selected"], "catalog_fields", {})}
         | {c.field for c in r.conditions if c.field not in {"estimated_cost", "unsupported"}}
     )
     policy_names = sorted({"cancellation", *[f for c in visible for f in c["tour"].policies]})
@@ -274,11 +241,23 @@ def build_comparison(
             "id": f,
             "field": f,
             "label": LABELS.get(f, f),
-            "scope": "offer" if f in {"departure_date", "return_date", "availability"} else "tour",
+            "scope": "offer"
+            if f
+            in {
+                "departure_date",
+                "return_date",
+                "availability",
+                "availability_status",
+                "unclassified_prices",
+                "single_supplement",
+            }
+            else "tour",
             "order": i,
             "condition_ids": [c.id for c in r.conditions if c.field == f],
             "value_type": "date"
             if f in {"departure_date", "return_date"}
+            else "price_list"
+            if f == "published_price"
             else "number"
             if f
             in {
@@ -335,16 +314,30 @@ def build_comparison(
                         t.policies.get(row["field"].split(".", 1)[1])
                         if row["field"].startswith("policies.")
                         else (
-                            (o.fields.get(row["field"]) if o else None)
+                            (
+                                o.fields.get(row["field"])
+                                or getattr(o, "catalog_fields", {}).get(row["field"])
+                                if o
+                                else None
+                            )
                             if row["scope"] == "offer"
-                            else t.fields.get(row["field"])
+                            else semantic_fact(t, row["field"])
+                            or getattr(t, "catalog_fields", {}).get(row["field"])
                         )
                     )
                     values = [f] if f else []
             serialized = [f.model_dump(mode="json") for f in values]
             volatile_field = (
                 "price"
-                if row["field"] in {"price_quotes", "extra_charges", "pricing_complete"}
+                if row["field"]
+                in {
+                    "price_quotes",
+                    "extra_charges",
+                    "pricing_complete",
+                    "published_price",
+                    "unclassified_prices",
+                    "single_supplement",
+                }
                 else row["field"]
             )
             states = [freshness(f, volatile_field, c["item"]["source"], at) for f in values] if c else []
@@ -354,7 +347,7 @@ def build_comparison(
                     "row_id": row["id"],
                     "column_id": column["id"],
                     "value": [f["value"] for f in serialized]
-                    if row["field"] in {"price_quotes", "extra_charges"}
+                    if row["field"] in {"price_quotes", "extra_charges", "published_price"}
                     else serialized[0]["value"]
                     if serialized
                     else None,
@@ -397,7 +390,7 @@ def build_comparison(
                             for f in values
                             if f.data_state != "present"
                         ),
-                        None,
+                        next((f.reason for f in values if f.reason), None),
                     )
                     if values
                     else column.get("offer_reason") or "FIELD_MISSING",
@@ -425,6 +418,7 @@ def build_comparison(
                 and not f.value.applicability
                 and f.value.age_min is None
                 and f.value.basis == "per_adult"
+                and f.value.coverage != "unspecified"
                 and usable(f, "price", c["item"]["source"], at, synthetic)[0]
             ]
             if len(exact) == 1:
@@ -498,6 +492,43 @@ def build_comparison(
                 }
             )
     stage("analysis", "completed", "Đã tính các metrics so sánh được.", counts={"metrics": len(metrics)})
+    availability = []
+    for name, operation in [("published_price_difference", "subtract"), ("adult_subtotal", "multiply")]:
+        computed = any(m["operation"] == operation and m["comparable"] for m in metrics)
+        reason = (
+            None
+            if computed
+            else "PARTY_ADULTS_MISSING"
+            if operation == "multiply" and r.party.adults is None
+            else "SELECTED_OFFER_REQUIRED"
+            if not any(c["selected"] for c in visible)
+            else "USABLE_EXACT_PRICE_REQUIRED"
+            if not quotes
+            else "TWO_COMPARABLE_OFFERS_REQUIRED"
+            if operation == "subtract" and len(quotes) < 2
+            else "PRICE_CURRENCY_BASIS_COVERAGE_MISMATCH"
+        )
+        availability.append(
+            dict(
+                metric=name,
+                state="computed" if computed else "blocked",
+                reason_code=reason,
+                prerequisites=[
+                    "selected_offer",
+                    "verified_fresh_exact_price",
+                    "known_currency_basis_coverage",
+                ]
+                + (["party.adults"] if operation == "multiply" else ["two_comparable_offers"]),
+            )
+        )
+    retrieval = getattr(crawl, "retrieval", {})
+    runs = retrieval.get("runs", [])
+    runs = [entry for entry in runs if isinstance(entry, dict)] if isinstance(runs, list) else []
+    filtered_out = any(
+        isinstance(entry.get(key), int) and entry[key] > 0
+        for entry in [retrieval, *runs]
+        for key in ("static_rejected", "offer_rejected")
+    )
     return {
         "id": cid,
         "requirement_id": r.id,
@@ -505,11 +536,19 @@ def build_comparison(
         "requirement_snapshot": r.model_dump(mode="json"),
         "origin": crawl.origin,
         "evaluated_at": at,
-        "policy_versions": {"ranking": RANK_POLICY, "decision": "decision-v1"},
+        "policy_versions": {
+            "ranking": RANK_POLICY,
+            "decision": "decision-v2.3-offers",
+            "semantic_assessment": "semantic-assessment-v1",
+        },
         "columns": columns,
         "rows": rows,
         "cells": cells,
-        "evaluations": [e for c in visible for e in c["evaluations"]],
+        "evaluations": [
+            e
+            for c in visible
+            for e in [*c["evaluations"], *[e for a in c["offer_assessments"] for e in a["evaluations"]]]
+        ],
         "recommendations": {
             "kind": "personalized" if any(c.strength != "soft" for c in r.conditions) else "similar",
             "candidate_ids": recommendation_ids,
@@ -519,6 +558,21 @@ def build_comparison(
                     "rank": i + 1,
                     "score": c["score"],
                     "coverage": c["coverage"],
+                    "score_interval": {"lower": c["score_lower"], "upper": c["score_upper"]},
+                    "ranking_basis": "conservative_lower_bound",
+                    "rank_status": "no_preferences"
+                    if c["coverage"] is None
+                    else "insufficient_preferences"
+                    if c["score"] is None
+                    else "tied"
+                    if sum(
+                        (other["score_lower"], other["score_upper"], other["coverage"])
+                        == (c["score_lower"], c["score_upper"], c["coverage"])
+                        for other in eligible
+                    )
+                    > 1
+                    else "ordered",
+                    "eligible_offer_snapshot_ids": c["eligible_offer_snapshot_ids"],
                     "contributions": c["contributions"],
                     "evaluation_ids": [e["id"] for e in c["evaluations"]],
                     "reason": "Đạt điều kiện bắt buộc."
@@ -537,6 +591,18 @@ def build_comparison(
         },
         "analysis": {
             "metrics": metrics,
+            "semantic_assessment": semantic_report
+            or {"state": "skipped", "reason_code": "ASSESSMENT_NOT_REQUESTED", "items": []},
+            "retrieval": retrieval,
+            "candidate_pool": [
+                {
+                    "candidate_id": c["id"],
+                    "tour_snapshot_id": c["tour"].snapshot_id,
+                    "hard_status": c["hard_status"],
+                }
+                for c in evaluated
+            ],
+            "metric_availability": availability,
             "claims": [
                 {
                     "id": "claim:" + m["id"],
@@ -556,7 +622,7 @@ def build_comparison(
         else "ONLY_UNVERIFIED"
         if any(c["hard_status"] == "unknown" for c in evaluated)
         else "ALL_INELIGIBLE"
-        if evaluated
+        if evaluated or (crawl.tours or filtered_out) and not excluded
         else "NO_SUPPORTED_TARGETS"
         if not any(s.status in {"ok", "partial"} for s in crawl.source_results)
         else "NO_CANDIDATES",

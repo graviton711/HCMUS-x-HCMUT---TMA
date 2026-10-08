@@ -1,8 +1,14 @@
 # Decision
 
+V2 structured retrieval/per-offer và semantic assessment theo [policy triển khai](../../docs/retrieval-semantic-ranking.md). Candidate evaluator là pure; NIM nằm trong module `semantic_assessment`. Không ghép predicates qua nhiều offers; ranking công bố khoảng điểm và coverage.
+
+`prepare_candidates` chọn pool trước assessment; `refresh_candidates` đánh giá lại cùng pool sau upstream wait, giữ IDs và truncation. Không thêm tour khác vì eligibility thay đổi theo thời gian.
+
+Catalog v2 preview giữ published_price/itinerary và trạng thái/giá chưa phân loại của offer. Dữ liệu unverified vẫn hiển thị và giữ reason, không tham gia hard pass hoặc price metrics; nhiều offers chưa chọn không tự lấy offer rẻ nhất. [Contract import](../data_access/supabase/README.md).
+
 V2 (`v2.py`) bổ sung matrix DTO, giá không phụ thuộc Budget, rank policy có contributions/coverage, next-group exclusions và metrics có operands/evidence. V1 giữ nhóm eligibility hiện có. Pace/culture chưa có metric được công bố unsupported. Xem [backend-v2-runtime](../../docs/backend-v2-runtime.md).
 
-**Trạng thái:** Đã có implementation v1; phạm vi kiểm tra và giới hạn ở [backend-runtime.md](../../docs/backend-runtime.md).
+**Trạng thái:** Đã có implementation v1 và v2; phần v1 ở [backend-runtime.md](../../docs/backend-runtime.md), v2 ở tài liệu trên.
 
 ## Trách nhiệm / input-output
 
@@ -24,6 +30,10 @@ Input: requirement revision/QuerySpec, tour/offer snapshots, source issues, offe
 - Source thiếu lịch/giá/chỗ không chứng minh fail/pass; unsupported mandatory user requirement cũng không bị drop.
 - Với sets/itinerary chưa complete: đã thấy item có thể chứng minh contains; chưa thấy item không đủ chứng minh excludes hoặc contains fail. Các đại lượng “tất cả/minimum/maximum” cũng cần coverage đúng scope, không dùng một hotel/leg đại diện toàn tour.
 - Tour-only và multiple offers chưa chọn vẫn có static comparison; không ghép volatile cells thành offer giả.
-- Không xếp hạng tổng mặc định. User sort có tiêu chí công khai, unknown/incomparable giữ nhãn; Pareto/trọng số là phần sau khi đã có metric đáng tin.
+- V1 giữ eligibility/trade-offs, không xếp hạng tổng mặc định. V2 dùng `rank-v2.3-bounds`: score trên phần biết đi kèm coverage và khoảng điểm trên toàn bộ trọng số; sort lower/upper/coverage theo policy bảo thủ. Thiếu dữ liệu không làm tăng điểm tổng, khoảng điểm không là xác suất. Numeric utility dùng anchor cố định, không phụ thuộc pool. Sliders chỉ reweight metric đã hỗ trợ.
+- Metric availability chỉ là computed khi có phép tính comparable; nêu lý do khi thiếu party, offer, exact price hoặc cùng currency/basis/coverage. Retrieval đã loại hết tour phải giữ lý do ALL_INELIGIBLE trong phạm vi đã quét, kèm truncation để tránh hiểu là toàn thị trường không có tour.
 
 Acceptance: bảng truth table ALL/ANY đúng; budget bounds không tạo false pass/fail; OR không bị biến AND; mandatory fail giữ visible ở URL flow; mỗi claim truy ra evaluation và evidence đúng snapshot.
+## Semantic v2 evaluation
+
+`semantic.py` đánh giá entity alternatives/temporal/scoped transport/tour type/route/nature và delegate fields cũ. Unsupported qualitative metric trả unknown với reason; ranking công khai coverage và giữ null utility khi thiếu. [Contract](../../docs/requirements-semantics.md).

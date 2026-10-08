@@ -16,6 +16,8 @@ Stack production/storage engine vẫn chốt P2/backend deployment; đặc tả 
 
 ## 2. Các giai đoạn và input/output
 
+Phần retrieval/evaluation/ranking mở rộng theo [structured retrieval và semantic assessment](retrieval-semantic-ranking.md), được user duyệt triển khai 08/10/2026. LLM assessment nằm giữa prepared pool và pure ranking; không thay hard eligibility.
+
 | Stage | Input | Output / điều kiện |
 |---|---|---|
 | interpretation | Structured draft hoặc text/context | Canonical conditions/trees/party/preferences, diff/clarification/provenance. Text chỉ proposal; confirm riêng. Không suy ngân sách từ URL |
