@@ -40,3 +40,32 @@ quality:
   min_fill_rate: 0.85
   fill_fields: [tour_name, departure_city, destinations, duration_days,
     price, currency, itinerary, inclusions, exclusions]
+backend:
+  api:
+    host: "127.0.0.1"
+    port: 8000
+    candidate_default: 20
+    candidate_min: 1
+    candidate_max: 100
+  data:
+    scan_limit: 1000
+    providers_limit: 100
+    connect_timeout_s: 8
+  nim:
+    model: "nvidia/nemotron-3-super-120b-a12b"
+    timeout_s: 45.0
+  input:
+    money_units: {"tỷ": 1000000000, "tỉ": 1000000000, "ty": 1000000000, "ti": 1000000000,
+      "triệu": 1000000, "tr": 1000000, "trieu": 1000000,
+      "nghìn": 1000, "k": 1000, "nghin": 1000}
+    window_before: 16
+    window_budget: 40
+    quote_chars: 200
+  decide:
+    soft_fields: [itinerary, inclusions, exclusions, child_policy, cancellation_policy]
+    excerpt_chars: 6000
+    quote_chars: 300
+    risk_words: ["không hoàn", "thu phí 100%", "sold_out", "unknown"]
+    analysis_chars: 160
+    analysis_items: 6
+    top_n: 3

@@ -7,23 +7,17 @@ import json
 import httpx
 
 from backend.errors import AppError
-
-SYSTEM = (
-    "Trích yêu cầu tour tiếng Việt thành JSON {hard: [{field, operator, value}],"
-    " soft: [{text}], travelers: int}."
-    " Hard fields: destination, departure_city, date_from, date_to, budget_max,"
-    " duration_days, transport, accommodation."
-    " budget_max là số nguyên VND. date ISO YYYY-MM-DD."
-    " Chỉ dùng thông tin trong câu, không đoán. Thiếu thì bỏ qua."
-)
+from backend.settings import ExtractPromptCfg
 
 
 class NimClient:
     def __init__(self, api_key: str, model: str, timeout: float = 45.0,
+                 prompt: ExtractPromptCfg | None = None,
                  transport: httpx.BaseTransport | None = None):
         self._key = api_key
         self._model = model
         self._timeout = timeout
+        self._prompt = prompt or ExtractPromptCfg()
         self._transport = transport
 
     def configured(self) -> bool:
@@ -47,10 +41,10 @@ class NimClient:
         body = {
             "model": self._model,
             "stream": False,
-            "temperature": 0,
-            "max_tokens": 1024,
+            "temperature": self._prompt.temperature,
+            "max_tokens": self._prompt.max_tokens,
             "messages": [
-                {"role": "system", "content": SYSTEM},
+                {"role": "system", "content": self._prompt.system},
                 {"role": "user", "content": text},
             ],
             "response_format": {"type": "json_object"},

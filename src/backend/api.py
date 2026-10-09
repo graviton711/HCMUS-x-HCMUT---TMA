@@ -18,11 +18,13 @@ from backend.settings import Settings
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    settings = settings or Settings()
+    settings = settings or Settings.load()
+    tuning = settings.tuning
     store = SessionStore(settings.database_url)
     catalog = for_settings(settings)
     nim = NimClient(settings.nvidia_nim_api.get_secret_value(),
-                    settings.nvidia_nim_model, settings.nim_timeout_seconds)
+                    settings.nvidia_nim_model, settings.nim_timeout_seconds,
+                    prompt=tuning.extract)
 
     app = FastAPI(title="Tour Decision Backend", version="3.0")
 
@@ -38,11 +40,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok", "version": "3.0"}
 
+    def parse_user(text: str, form: dict[str, Any] | None):
+        places = catalog.list_destinations()
+        return build_requirement(text, form, nim, cfg=tuning.input, known_places=places)
+
     @app.post("/requirements")
     async def create_requirement(body: dict[str, Any]) -> dict[str, Any]:
-        req = build_requirement(str(body.get("text", "")),
-                                body.get("form") if isinstance(body.get("form"), dict) else None,
-                                nim)
+        req = parse_user(str(body.get("text", "")),
+                         body.get("form") if isinstance(body.get("form"), dict) else None)
         store.save_requirement(req)
         return {"requirement": req.model_dump()}
 
@@ -55,18 +60,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if body.get("requirement_id"):
             req = store.get_requirement(str(body["requirement_id"]))
         else:
-            req = build_requirement(str(body.get("text", "")),
-                                    body.get("form") if isinstance(body.get("form"), dict) else None,
-                                    nim)
+            req = parse_user(str(body.get("text", "")),
+                             body.get("form") if isinstance(body.get("form"), dict) else None)
             store.save_requirement(req)
+        lo, hi = tuning.api.candidate_min, tuning.api.candidate_max
         limit = body.get("candidate_limit", settings.candidate_limit)
-        limit = limit if isinstance(limit, int) and 1 <= limit <= 100 else settings.candidate_limit
+        limit = limit if isinstance(limit, int) and lo <= limit <= hi else settings.candidate_limit
         tours = rows_to_snapshots(catalog.list_tours(limit))
 
         def assess(ts, soft):
-            return assess_soft_llm(ts, soft, nim.api_key, nim.model, nim.timeout) if nim.configured() else {}
+            if not nim.configured():
+                return {}
+            return assess_soft_llm(ts, soft, nim.api_key, nim.model, nim.timeout,
+                                   prompt=tuning.assess,
+                                   excerpt_chars=tuning.decide.excerpt_chars,
+                                   quote_chars=tuning.decide.quote_chars,
+                                   soft_fields=tuning.decide.soft_fields)
 
-        comp = compare(req, tours, assess if req.soft() and nim.configured() else None)
+        comp = compare(req, tours, assess if req.soft() and nim.configured() else None,
+                       cfg=tuning.decide)
         store.save_comparison(comp)
         return {"comparison": comp.model_dump()}
 

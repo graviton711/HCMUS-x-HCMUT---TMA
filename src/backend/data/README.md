@@ -10,7 +10,7 @@ Vào: records requirement/comparison cần lưu; truy vấn catalog (giới hạ
 
 ## Workflow
 
-`sessions.py`: `create_requirement` → `get_requirement`; `create_comparison` → `get_comparison` (SQLite, WAL). `catalog.py`: `FixtureCatalog.list_tours()` hoặc `SupabaseCatalog.list_tours()` → rows thô. `for_settings()` chọn provider theo `DATA_PROVIDER`.
+`sessions.py`: `create_requirement` → `get_requirement`; `create_comparison` → `get_comparison` (SQLite, WAL). `catalog.py`: `FixtureCatalog.list_tours()` hoặc `SupabaseCatalog.list_tours()` → rows thô. `for_settings()` chọn provider theo `DATA_PROVIDER`; scan/providers limits và timeout đọc từ `configs/settings.yaml` (`backend.data`), env thắng YAML.
 
 ## Interface với module khác
 

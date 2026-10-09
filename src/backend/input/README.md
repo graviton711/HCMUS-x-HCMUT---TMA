@@ -10,7 +10,7 @@ Vào: `{text?, form?}` với form (điểm đến, nơi khởi hành, ngày đi/
 
 ## Workflow
 
-Form map thẳng thành điều kiện cứng → text gửi NIM `extract` (JSON schema) → merge (form thắng khi conflict) → normalize (currency về VND, ngày về ISO) → check readiness (cần điểm đến + thời gian hoặc ngân sách mới search được, thiếu thì vào `missing`).
+Form map thẳng thành điều kiện cứng → text gửi NIM `extract` (prompt ở `configs/prompts/extract.yaml`, model/timeout ở `configs/settings.yaml` → `backend.nim`) → merge (form thắng khi conflict) → normalize (currency về VND, ngày về ISO) → check readiness (cần điểm đến + thời gian hoặc ngân sách mới search được, thiếu thì vào `missing`). Không có key thì keyword offline, tên địa danh lấy từ catalog đang search (không list cứng).
 
 ## Interface với module khác
 

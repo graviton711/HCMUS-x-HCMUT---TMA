@@ -132,15 +132,45 @@ class FixtureCatalog:
     def list_tours(self, limit: int = 20) -> list[TourRow]:
         return _fixture_rows()[:limit]
 
+    def list_destinations(self) -> list[str]:
+        seen: list[str] = []
+        for row in _fixture_rows():
+            for dest in row.tour.get("destinations", []):
+                if isinstance(dest, str) and dest not in seen:
+                    seen.append(dest)
+        return seen
+
 
 class SupabaseCatalog:
     """Read-only live catalog. Raises, never falls back."""
 
-    def __init__(self, db_url: str, scan_limit: int = 1000):
+    def __init__(self, db_url: str, scan_limit: int = 1000,
+                 providers_limit: int = 100, connect_timeout_s: int = 8):
         if not db_url:
             raise AppError("CATALOG_NOT_CONFIGURED", "Chưa cấu hình SUPABASE_TOUR_DB_URL.", 503)
         self._db_url = db_url
         self._scan_limit = scan_limit
+        self._providers_limit = providers_limit
+        self._timeout = connect_timeout_s
+
+    def list_destinations(self) -> list[str]:
+        try:
+            import psycopg
+        except ImportError as exc:
+            raise AppError("CATALOG_DRIVER_MISSING", "Thiếu psycopg.", 500) from exc
+        try:
+            with psycopg.connect(self._db_url, connect_timeout=self._timeout, autocommit=True) as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT DISTINCT jsonb_array_elements_text(destinations)"
+                        " FROM tours LIMIT %s",
+                        (self._scan_limit,),
+                    )
+                    return sorted({r[0] for r in cur.fetchall() if r[0]})
+        except AppError:
+            raise
+        except Exception as exc:
+            raise AppError("CATALOG_UNAVAILABLE", "Không đọc được catalog.", 502, retryable=True) from exc
 
     def list_tours(self, limit: int = 20) -> list[TourRow]:
         try:
@@ -149,10 +179,11 @@ class SupabaseCatalog:
             raise AppError("CATALOG_DRIVER_MISSING", "Thiếu psycopg.", 500) from exc
         bound = min(limit, self._scan_limit)
         try:
-            with psycopg.connect(self._db_url, connect_timeout=8, autocommit=True) as conn:
+            with psycopg.connect(self._db_url, connect_timeout=self._timeout, autocommit=True) as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "SELECT id, source_key, display_name FROM providers LIMIT 100"
+                        "SELECT id, source_key, display_name FROM providers LIMIT %s",
+                        (self._providers_limit,),
                     )
                     providers = {r[0]: {"source_key": r[1], "display_name": r[2]} for r in cur.fetchall()}
                     cur.execute(
@@ -205,5 +236,7 @@ class SupabaseCatalog:
 
 def for_settings(settings) -> FixtureCatalog | SupabaseCatalog:
     if settings.data_provider == "supabase":
-        return SupabaseCatalog(settings.supabase_tour_db_url, settings.supabase_scan_limit)
+        return SupabaseCatalog(settings.supabase_tour_db_url, settings.supabase_scan_limit,
+                               settings.tuning.data.providers_limit,
+                               settings.tuning.data.connect_timeout_s)
     return FixtureCatalog()

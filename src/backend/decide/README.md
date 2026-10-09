@@ -10,7 +10,7 @@ Vào: `Requirement` + list `TourSnapshot` + hook LLM. Ra: `Comparison` gồm ran
 
 ## Workflow
 
-`hard_filter`: mọi điều kiện cứng phải pass trên từng offer (ngân sách chỉ so giá exact cùng currency; giá "from" → `unknown`) → `assess_soft`: một call LLM cho cả pool, chấm itinerary/inclusions/exclusions/child/cancellation kèm quote → `rank`: pass cứng trước, rồi điểm mềm, rồi giá → `analyze`: khui surcharges, điều kiện, rủi ro availability/verification và quyền lợi matched từ text snapshot.
+`hard_filter`: mọi điều kiện cứng phải pass trên từng offer (ngân sách chỉ so giá exact cùng currency; giá "from" → `unknown`) → `assess_soft`: một call LLM cho cả pool (prompt ở `configs/prompts/assess.yaml`, excerpt/quote theo `backend.decide` trong `configs/settings.yaml`), chấm itinerary/inclusions/exclusions/child/cancellation kèm quote → `rank`: pass cứng trước, rồi điểm mềm, rồi giá → `analyze`: khui surcharges, điều kiện, rủi ro availability/verification và quyền lợi matched từ text snapshot (top_n, độ dài, risk_words cũng từ `backend.decide`).
 
 ## Interface với module khác
 

@@ -20,9 +20,7 @@ from backend.models import (
     TourSnapshot,
     uid,
 )
-
-_SOFT_TEXT_FIELDS = ("itinerary", "inclusions", "exclusions", "child_policy",
-                     "cancellation_policy")
+from backend.settings import AssessPromptCfg, DecideCfg
 
 
 def _contains(haystack: str, needle: str) -> bool:
@@ -91,23 +89,26 @@ def passing_offers(req: Requirement, tours: list[TourSnapshot],
 
 def assess_soft_llm(tours: list[TourSnapshot], soft: list[Condition],
                     api_key: str, model: str, timeout: float,
+                    prompt: AssessPromptCfg | None = None,
+                    excerpt_chars: int = 6000, quote_chars: int = 300,
+                    soft_fields: list[str] | None = None,
                     transport: httpx.BaseTransport | None = None) -> dict[tuple[str, str], tuple[float, str]]:
     """One bounded LLM call over survivors. Returns {(tour_id, cond_id): (score, quote)}."""
     if not soft or not api_key:
         return {}
+    prompt = prompt or AssessPromptCfg()
+    fields = soft_fields if soft_fields is not None else DecideCfg().soft_fields
     docs = []
     for tour in tours:
-        blob = "\n".join(f"{f}: {getattr(tour, f, '')}" for f in _SOFT_TEXT_FIELDS)[:6000]
+        blob = "\n".join(f"{f}: {getattr(tour, f, '')}" for f in fields)[:excerpt_chars]
         docs.append({"tour_id": tour.id, "text": blob})
     body = {
         "model": model,
         "stream": False,
-        "temperature": 0,
-        "max_tokens": 2048,
+        "temperature": prompt.temperature,
+        "max_tokens": prompt.max_tokens,
         "messages": [
-            {"role": "system",
-             "content": "Chấm từng tour theo từng tiêu chí mềm. Trả JSON {scores: [{tour_id, condition_id, score 0..1, quote}]}."
-                        " quote là trích nguyên văn ngắn từ văn bản tour. Không suy đoán ngoài văn bản."},
+            {"role": "system", "content": prompt.system},
             {"role": "user",
              "content": json.dumps({"criteria": [{"id": c.id, "text": str(c.value)} for c in soft],
                                     "tours": docs}, ensure_ascii=False)},
@@ -132,7 +133,7 @@ def assess_soft_llm(tours: list[TourSnapshot], soft: list[Condition],
     for s in scores:
         try:
             out[(str(s["tour_id"]), str(s["condition_id"]))] = (
-                max(0.0, min(1.0, float(s["score"]))), str(s.get("quote", ""))[:300])
+                max(0.0, min(1.0, float(s["score"]))), str(s.get("quote", ""))[:quote_chars])
         except (KeyError, TypeError, ValueError):
             continue
     return out
@@ -154,29 +155,28 @@ def rank(req: Requirement, surviving: list[tuple[TourSnapshot, str]],
     return [RankedCandidate(tour_id=t, offer_id=o, score=s) for s, _, t, o in scored]
 
 
-_RISK_WORDS = ("không hoàn", "thu phí 100%", "sold_out", "unknown")
-
-
-def analyze(tours: list[TourSnapshot], ranked: list[RankedCandidate]) -> Analysis:
+def analyze(tours: list[TourSnapshot], ranked: list[RankedCandidate],
+            cfg: DecideCfg | None = None) -> Analysis:
+    cfg = cfg or DecideCfg()
     by_id = {t.id: t for t in tours}
     costs, conds, risks, benefits = [], [], [], []
-    for cand in ranked[:3]:
+    for cand in ranked[:cfg.top_n]:
         tour = by_id[cand.tour_id]
         for label, text in (("Phụ thu", tour.surcharges), ("Loại trừ", tour.exclusions),
                             ("Hủy", tour.cancellation_policy), ("Trẻ em", tour.child_policy)):
             if text.strip():
-                conds.append(f"{tour.name} — {label}: {text[:160]}")
+                conds.append(f"{tour.name} — {label}: {text[:cfg.analysis_chars]}")
         if tour.surcharges.strip():
-            costs.append(f"{tour.name}: {tour.surcharges[:160]}")
+            costs.append(f"{tour.name}: {tour.surcharges[:cfg.analysis_chars]}")
         if tour.exclusions.strip():
-            risks.append(f"{tour.name} chưa gồm: {tour.exclusions[:160]}")
+            risks.append(f"{tour.name} chưa gồm: {tour.exclusions[:cfg.analysis_chars]}")
         avail = "/".join(o.availability for o in tour.offers)
-        if any(w in (tour.cancellation_policy + avail).lower() for w in _RISK_WORDS):
+        if any(w in (tour.cancellation_policy + avail).lower() for w in cfg.risk_words):
             risks.append(f"{tour.name}: chính sách hủy/khan hiếm cần đọc kỹ.")
         if tour.inclusions.strip():
-            benefits.append(f"{tour.name}: {tour.inclusions[:160]}")
+            benefits.append(f"{tour.name}: {tour.inclusions[:cfg.analysis_chars]}")
     def dedup(items: list[str]) -> list[str]:
-        return list(dict.fromkeys(items))[:6]
+        return list(dict.fromkeys(items))[:cfg.analysis_items]
 
     return Analysis(hidden_costs=dedup(costs),
                     conditions=dedup(conds), risks=dedup(risks), benefits=dedup(benefits))
@@ -186,7 +186,8 @@ AssessFn = Callable[[list[TourSnapshot], list[Condition]], dict[tuple[str, str],
 
 
 def compare(req: Requirement, tours: list[TourSnapshot],
-            assess: AssessFn | None = None) -> Comparison:
+            assess: AssessFn | None = None, cfg: DecideCfg | None = None) -> Comparison:
+    cfg = cfg or DecideCfg()
     evals = hard_filter(req, tours)
     surviving = passing_offers(req, tours, evals)
     soft_scores = assess(tours, req.soft()) if assess and req.soft() else {}
@@ -199,5 +200,5 @@ def compare(req: Requirement, tours: list[TourSnapshot],
     ranked = rank(req, surviving, soft_scores)
     return Comparison(id=uid("cmp"), requirement=req, ranked=ranked,
                       evaluations=evaluations,
-                      analysis=analyze(tours, ranked),
+                      analysis=analyze(tours, ranked, cfg),
                       candidates_considered=len(tours))

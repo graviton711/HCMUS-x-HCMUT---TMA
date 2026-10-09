@@ -88,6 +88,63 @@
         "fill_fields": {"type": "array", "items": {"type": "string"}}
       },
       "additionalProperties": true
+    },
+    "backend": {
+      "type": "object",
+      "properties": {
+        "api": {
+          "type": "object",
+          "properties": {
+            "host": {"type": "string"},
+            "port": {"type": "integer"},
+            "candidate_default": {"type": "integer"},
+            "candidate_min": {"type": "integer"},
+            "candidate_max": {"type": "integer"}
+          },
+          "additionalProperties": true
+        },
+        "data": {
+          "type": "object",
+          "properties": {
+            "scan_limit": {"type": "integer"},
+            "providers_limit": {"type": "integer"},
+            "connect_timeout_s": {"type": "integer"}
+          },
+          "additionalProperties": true
+        },
+        "nim": {
+          "type": "object",
+          "properties": {
+            "model": {"type": "string"},
+            "timeout_s": {"type": "number"}
+          },
+          "additionalProperties": true
+        },
+        "input": {
+          "type": "object",
+          "properties": {
+            "money_units": {"type": "object"},
+            "window_before": {"type": "integer"},
+            "window_budget": {"type": "integer"},
+            "quote_chars": {"type": "integer"}
+          },
+          "additionalProperties": true
+        },
+        "decide": {
+          "type": "object",
+          "properties": {
+            "soft_fields": {"type": "array", "items": {"type": "string"}},
+            "excerpt_chars": {"type": "integer"},
+            "quote_chars": {"type": "integer"},
+            "risk_words": {"type": "array", "items": {"type": "string"}},
+            "analysis_chars": {"type": "integer"},
+            "analysis_items": {"type": "integer"},
+            "top_n": {"type": "integer"}
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true
