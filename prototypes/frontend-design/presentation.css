@@ -1,0 +1,68 @@
+/* Display controls share the approved type and spacing system. */
+.header-actions{display:flex;align-items:center;gap:12px;min-width:0}
+.display-control{position:relative;flex:none;z-index:var(--z-header,10)}
+.display-trigger{display:flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:600 12px/1.2 "Be Vietnam Pro",sans-serif;cursor:pointer}
+.display-trigger:hover,.display-trigger[aria-expanded=true]{background:var(--tint);border-color:var(--focus)}
+.display-icon{display:block;flex:none;width:17px;height:17px}
+.display-theme-icon{display:block}
+.display-panel{position:absolute;right:0;top:calc(100% + 9px);width:264px;max-width:calc(100vw - 32px);padding:20px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;box-shadow:0 4px 18px rgba(25,32,27,.05)}
+.display-panel[hidden]{display:none}
+.display-panel h2{margin:0 0 18px;font:600 17px/1.4 "Be Vietnam Pro",sans-serif;letter-spacing:-.01em}
+.display-panel [role=group]+[role=group]{margin-top:18px}
+.display-panel p{margin:0 0 8px;color:var(--muted);font-size:13px;line-height:1.4}
+.display-choices{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.display-choices button{display:flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:8px 4px;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:var(--ink);font:500 13px/1.3 "Be Vietnam Pro",sans-serif;cursor:pointer}
+.display-choices button[aria-pressed=true]{background:var(--tint);border-color:var(--accent);color:var(--accent);font-weight:600}
+.display-choices button:hover{border-color:var(--focus)}
+.display-control button:focus-visible{outline:2px solid var(--focus);outline-offset:3px}
+.source-page .admin-preview .container{flex-wrap:wrap}
+.source-page .admin-preview .display-control{margin-left:auto}
+.source-page .admin-preview .display-panel{font-size:14px}
+.viewer-controls{flex-wrap:wrap}
+.viewer-toolbar,.review-header,.admin-header{position:relative;z-index:var(--z-header,10)}
+
+/* Roles used by legacy component declarations have exact light fallbacks. */
+html[data-theme=dark]{
+  --paper:#1b1f1c;--surface:#242a25;--ink:#efefe5;--muted:#b4b9ad;--line:#454f44;
+  --accent:#aacaab;--tint:#2c3c30;--good:#b7d1af;--good-bg:#293b2c;--warn:#e4c28f;--warn-bg:#3a3325;--focus:#b5d4b5;--brand-text:#1b291e;
+  --tone-surface:#242a25;--tone-paper:#1b1f1c;--tone-wash:#2b312b;--tone-green:#2b3b2f;--tone-clay:#3d2e26;--tone-yellow:#3c3527;--tone-blue:#26383c;--tone-red:#3c2c28;
+  --tone-solid-green:#adc8a5;--tone-solid-ink:#ced3c5;--tone-solid-clay:#dba58a;
+  --tone-text:#efefe5;--tone-muted:#b4b9ad;--tone-green-text:#bdd4b5;--tone-clay-text:#e5b29a;--tone-yellow-text:#e4c28f;--tone-blue-text:#adcdd2;--tone-red-text:#e9b0a3;--tone-inverse:#1b291e;
+  --tone-border:#455044;--tone-green-border:#627e62;--tone-clay-border:#866350;--tone-yellow-border:#8e7954;--tone-red-border:#956b5e;--tone-shadow:rgba(6,12,8,.1);
+}
+html[data-theme=dark] body[data-experience=journey]{--accent:#aacaab;--tint:#2c3c30;--clay:#e5b29a;--clay-bg:#3d2e26;--workspace-line:#455044;--sidebar-paper:#212620}
+html[data-theme=dark] .review-page{--paper:#1b1f1c}
+html[data-theme=dark] .landing-screen{--landing-rust:#e5b29a;--landing-green:#bdd4b5;--landing-wash:#2b3b2f;--landing-clay:#3d2e26}
+html[data-theme=dark] .site-header{background:var(--paper)}
+html[data-theme=dark] .brand-mark{background:#adc8a5;color:#1b291e}
+html[data-theme=dark] .btn-primary,html[data-theme=dark] .new-session-button{background:#adc8a5;color:#1b291e;border-color:#adc8a5}
+html[data-theme=dark] .btn-primary:hover,html[data-theme=dark] .new-session-button:hover{background:#c0d5b9;border-color:#c0d5b9;color:#18251c}
+html[data-theme=dark] .photo-caption,html[data-theme=dark] .preview-corner,html[data-theme=dark] .landing-photo-label{background:#242a25;color:var(--ink)}
+html[data-theme=dark] .detail-dialog::backdrop,html[data-theme=dark] dialog::backdrop{background:rgba(9,13,10,.65)}
+html[data-theme=dark] input,html[data-theme=dark] select,html[data-theme=dark] textarea{color-scheme:dark}
+html[data-theme=dark] input::placeholder,html[data-theme=dark] textarea::placeholder{color:#a2ab9e;opacity:1}
+html[data-theme=dark] .compare-scroll,html[data-theme=dark] .device-stage{scrollbar-color:#667361 #242a25}
+html[data-theme=dark] .skeleton{background:#333b32}
+@media(max-width:760px){
+  .header-inner>.header-actions{grid-column:2;grid-row:1;justify-content:flex-end;gap:6px}
+  .header-actions .account-control{grid-column:auto;grid-row:auto}
+  body[data-experience=journey] .header-inner{grid-template-columns:minmax(0,1fr) auto}
+  .header-inner .brand{min-width:0;gap:8px}
+  .header-inner .brand-mark{flex:none}
+  .header-inner .brand-caption{max-width:125px}
+  .display-trigger{min-height:40px;padding:7px;gap:5px}
+  .display-trigger>.display-icon{display:none}
+  .display-panel{padding:18px}
+  .review-header{gap:12px;flex-wrap:wrap}
+  .review-header .header-actions{margin-left:auto}
+  .review-status{display:none}
+  .admin-header .header-actions{gap:8px}
+  .admin-header .admin-role{display:none}
+  .viewer-toolbar{align-items:flex-start;flex-wrap:wrap;gap:10px}
+  .viewer-controls{justify-content:flex-start;gap:10px}
+}
+@media(max-width:360px){
+  body[data-experience=journey] .header-inner .brand-caption{display:none}
+  .header-inner>.header-actions{gap:5px}
+  .account-trigger.visitor{padding-inline:9px}
+}

@@ -1,18 +1,18 @@
-/* Review controls: larger type, preference sliders and complete navigation. */
+/* Review controls:larger type, preference sliders and complete navigation. */
 body[data-experience=journey]{font-size:15px;line-height:1.75}
-body[data-experience=journey] .site-header{position:sticky;top:0;z-index:10;background:#f7f6f3;border-bottom:1px solid #cdd6c7;box-shadow:0 3px 15px #344b3408}
+body[data-experience=journey] .site-header{position:sticky;top:0;z-index:10;background:var(--tone-paper,#f7f6f3);border-bottom:1px solid var(--tone-border,#cdd6c7);box-shadow:0 3px 15px var(--tone-shadow,#344b3408)}
 body[data-experience=journey] .header-inner{min-height:104px;gap:30px}
 body[data-experience=journey] .brand-mark{width:42px;height:42px;border-radius:9px}
 body[data-experience=journey] .brand-name{font-size:26px;font-weight:600}
 body[data-experience=journey] .brand-caption{font-size:12px}
 .nav-short{display:none}
 body[data-experience=journey] .app-nav{gap:8px;align-self:stretch;align-items:center}
-body[data-experience=journey] .app-nav a{position:relative;min-height:52px;padding:12px 18px;gap:9px;border:0;border-radius:6px;font-size:15px;color:#52624f;transition:background .2s,color .2s}
+body[data-experience=journey] .app-nav a{position:relative;min-height:52px;padding:12px 18px;gap:9px;border:0;border-radius:6px;font-size:15px;color:var(--tone-muted,#52624f);transition:background .2s,color .2s}
 body[data-experience=journey] .app-nav a>.icon,body[data-experience=journey] .app-nav a>[data-icon] .icon{width:19px;height:19px;transition:transform .2s}
-body[data-experience=journey] .app-nav a:hover{background:#e9eee3;color:var(--accent)}
+body[data-experience=journey] .app-nav a:hover{background:var(--tone-green,#e9eee3);color:var(--accent)}
 body[data-experience=journey] .app-nav a:hover .icon{transform:translateY(-2px)}
 body[data-experience=journey] .app-nav a::after{content:"";height:2px;background:var(--clay);position:absolute;bottom:5px;left:18px;right:18px;transform:scaleX(0);transform-origin:left;transition:transform .24s ease}
-body[data-experience=journey] .app-nav a[aria-current]{background:#efe7df;color:#91492f}
+body[data-experience=journey] .app-nav a[aria-current]{background:var(--tone-clay,#efe7df);color:var(--tone-clay-text,#91492f)}
 body[data-experience=journey] .app-nav a[aria-current]::after{transform:scaleX(1)}
 body[data-experience=journey] :is(.preview-bar,.page-footer){font-size:12px}
 body[data-experience=journey] .preview-label strong{font-size:11px}
@@ -20,9 +20,9 @@ body[data-experience=journey] .preview-inner{min-height:37px}
 body[data-experience=journey] .btn{font-size:14px;min-height:48px;padding:12px 18px}
 body[data-experience=journey] .text-action{font-size:13px;min-height:35px}
 body[data-experience=journey] .eyebrow{font-size:11px;letter-spacing:.11em}
-body[data-experience=journey] h1{font-weight:400;color:#304c39}
+body[data-experience=journey] h1{font-weight:400;color:var(--tone-green-text,#304c39)}
 body[data-experience=journey] h1:focus{outline:none}
-body[data-experience=journey] h1::after{content:"";display:block;width:90px;height:2px;background:#b98662;margin-top:21px;transform-origin:left}
+body[data-experience=journey] h1::after{content:"";display:block;width:90px;height:2px;background:var(--tone-solid-clay,#b98662);margin-top:21px;transform-origin:left}
 .heading-enter{animation:heading-arrive .48s cubic-bezier(.2,.7,.3,1) both}
 .heading-enter::after{animation:ink-line .65s cubic-bezier(.2,.7,.3,1) both}
 body[data-experience=journey] .landing-hero h1::after{margin-top:25px}
@@ -62,7 +62,7 @@ body[data-experience=journey] .chat-composer{padding:12px;gap:10px}
 body[data-experience=journey] .chat-composer textarea{font-size:14px;min-height:64px}
 body[data-experience=journey] .chat-composer .icon-button{width:40px;height:42px}
 body[data-experience=journey] .chat-footnote{font-size:12px}
-body[data-experience=journey] .pending-change{padding:18px;margin-block:17px;border:1px solid #c79874;scroll-margin-block:150px 24px;animation:confirm-arrive .3s ease both}
+body[data-experience=journey] .pending-change{padding:18px;margin-block:17px;border:1px solid var(--tone-clay-border,#c79874);scroll-margin-block:150px 24px;animation:confirm-arrive .3s ease both}
 body[data-experience=journey] .pending-change h4{font-size:17px;margin-bottom:14px}
 body[data-experience=journey] .pending-change p,body[data-experience=journey] .change-diff span{font-size:12px;line-height:1.8}
 body[data-experience=journey] .change-diff strong{font-size:16px;font-weight:500;line-height:1.6}
@@ -99,36 +99,36 @@ body[data-experience=journey] .analysis-row h3{font-size:16px}
 body[data-experience=journey] .analysis-kicker,body[data-experience=journey] .analysis-metric span,body[data-experience=journey] .analysis-metric small{font-size:12px}
 body[data-experience=journey] .analysis-metric p,body[data-experience=journey] .calculation-details p,body[data-experience=journey] .calculation-details code{font-size:14px}
 body[data-experience=journey] .calculation-details summary{font-size:15px}
-.analysis-preferences{border-left:2px solid #9bac8c;background:#eef2e7;padding:18px 20px;margin-top:24px;border-radius:0 6px 6px 0}
+.analysis-preferences{border-left:2px solid var(--tone-border,#9bac8c);background:var(--tone-green,#eef2e7);padding:18px 20px;margin-top:24px;border-radius:0 6px 6px 0}
 .analysis-preferences h3{font-size:16px;font-weight:500;margin-bottom:9px}
 .analysis-preferences p{font-size:14px;line-height:1.9}
 .analysis-preferences small{font-size:12px;color:var(--muted);display:block;margin-top:10px}
 .preference-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px 30px}
 .preference-hint{font-size:13px;line-height:1.9;color:var(--muted);margin-bottom:23px;max-width:600px}
-.preferences-block{margin-top:22px;padding-top:23px;border-top:1px solid #c9d4be}
+.preferences-block{margin-top:22px;padding-top:23px;border-top:1px solid var(--tone-border,#c9d4be)}
 .preferences-block h3{font-size:17px;font-weight:500}
 .preferences-block>p{font-size:12px;color:var(--muted);margin:4px 0 21px}
 .preference-slider{min-width:0;margin-bottom:22px}
 .preference-title{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;font-size:13px;line-height:1.65}
 .preference-title label{font-weight:500}
-.preference-title output{font-size:11px;color:#4c6947;white-space:nowrap;background:#e0e9d7;border-radius:4px;padding:2px 6px}
-.preference-slider:nth-of-type(2) .preference-title output{color:#80553b;background:#efe1d3}
-.preference-slider:nth-of-type(3) .preference-title output{color:#486967;background:#e0eae5}
-.preference-slider:nth-of-type(4) .preference-title output{color:#746035;background:#efe8d4}
+.preference-title output{font-size:11px;color:var(--tone-green-text,#4c6947);white-space:nowrap;background:var(--tone-green,#e0e9d7);border-radius:4px;padding:2px 6px}
+.preference-slider:nth-of-type(2) .preference-title output{color:var(--tone-clay-text,#80553b);background:var(--tone-clay,#efe1d3)}
+.preference-slider:nth-of-type(3) .preference-title output{color:var(--tone-blue-text,#486967);background:var(--tone-wash,#e0eae5)}
+.preference-slider:nth-of-type(4) .preference-title output{color:var(--tone-clay-text,#746035);background:var(--tone-yellow,#efe8d4)}
 .preference-control{position:relative;margin-top:7px;height:31px;display:flex;align-items:center}
-.range-track{position:absolute;left:0;right:0;height:6px;background:#d5dece;border-radius:3px;overflow:hidden;pointer-events:none}
-.range-track>span{display:block;width:100%;height:100%;background:#66865a;transform:scaleX(var(--range-progress,.6));transform-origin:left}
-.preference-slider:nth-of-type(2) .range-track>span{background:#ad8464}
-.preference-slider:nth-of-type(3) .range-track>span{background:#789c92}
-.preference-slider:nth-of-type(4) .range-track>span{background:#b29e6c}
-.preference-control input[type=range]{width:100%;min-width:0;appearance:none;-webkit-appearance:none;background:transparent;cursor:pointer;position:relative;margin:0;height:30px;accent-color:#406a48}
+.range-track{position:absolute;left:0;right:0;height:6px;background:var(--tone-green,#d5dece);border-radius:3px;overflow:hidden;pointer-events:none}
+.range-track>span{display:block;width:100%;height:100%;background:var(--tone-solid-green,#66865a);transform:scaleX(var(--range-progress,.6));transform-origin:left}
+.preference-slider:nth-of-type(2) .range-track>span{background:var(--tone-solid-clay,#ad8464)}
+.preference-slider:nth-of-type(3) .range-track>span{background:var(--tone-solid-green,#789c92)}
+.preference-slider:nth-of-type(4) .range-track>span{background:var(--tone-solid-clay,#b29e6c)}
+.preference-control input[type=range]{width:100%;min-width:0;appearance:none;-webkit-appearance:none;background:transparent;cursor:pointer;position:relative;margin:0;height:30px;accent-color:var(--tone-solid-green,#406a48)}
 .preference-control input[type=range]::-webkit-slider-runnable-track{height:6px;background:transparent}
-.preference-control input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid #5c7d50;margin-top:-7px;box-shadow:0 1px 4px #30452d12}
+.preference-control input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:var(--tone-surface,#fff);border:3px solid var(--tone-border,#5c7d50);margin-top:-7px;box-shadow:0 1px 4px var(--tone-shadow,#30452d12)}
 .preference-control input[type=range]::-moz-range-track{height:6px;background:transparent}
-.preference-control input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:#fff;border:3px solid #5c7d50}
-.preference-control input[type=range]:focus-visible{outline:2px solid #4f7a59;outline-offset:3px;border-radius:5px}
-.preference-endpoints{display:flex;justify-content:space-between;font-size:11px;color:#687563;line-height:1.5}
-.preference-pending{padding:9px;background:#f4e7da;border-radius:6px;margin-inline:-9px}
+.preference-control input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--tone-surface,#fff);border:3px solid var(--tone-border,#5c7d50)}
+.preference-control input[type=range]:focus-visible{outline:2px solid var(--tone-border,#4f7a59);outline-offset:3px;border-radius:5px}
+.preference-endpoints{display:flex;justify-content:space-between;font-size:11px;color:var(--tone-muted,#687563);line-height:1.5}
+.preference-pending{padding:9px;background:var(--tone-clay,#f4e7da);border-radius:6px;margin-inline:-9px}
 body[data-experience=journey] .journey-field{font-size:14px}
 body[data-experience=journey] .journey-field input,body[data-experience=journey] .journey-field select{font-size:15px;min-height:50px;padding:12px 14px}
 body[data-experience=journey] .journey-field small,body[data-experience=journey] .form-hint,body[data-experience=journey] .fixture-boundary{font-size:12px;line-height:1.8}
@@ -152,26 +152,26 @@ body[data-experience=journey] .landing-screen .landing-tour-price small{font-siz
 .service-heading h1 em{font-weight:400;color:var(--clay)}
 .service-heading p{font-size:16px;line-height:1.9;color:var(--muted);margin-top:22px;max-width:620px}
 .service-layout,.support-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(280px,.8fr);gap:7%;align-items:start}
-.feedback-form{background:#fff;border:1px solid #d6dccf;padding:30px;border-radius:8px}
-.feedback-form textarea{display:block;width:100%;margin-block:12px 22px;resize:vertical;background:#fafbf7;border:1px solid #c9d1c1;padding:16px;font-size:15px;line-height:1.8;border-radius:5px;min-height:190px}
+.feedback-form{background:var(--tone-surface,#fff);border:1px solid var(--tone-border,#d6dccf);padding:30px;border-radius:8px}
+.feedback-form textarea{display:block;width:100%;margin-block:12px 22px;resize:vertical;background:var(--tone-surface,#fafbf7);border:1px solid var(--tone-border,#c9d1c1);padding:16px;font-size:15px;line-height:1.8;border-radius:5px;min-height:190px}
 .feedback-form .form-hint{margin-top:12px}
-#contact-response{background:#e6eee0;color:#41613a;padding:14px;margin-top:20px;font-size:14px;border-radius:5px}
-.service-note{padding:30px;background:#ebeede;border:1px solid #d1dac4;border-radius:8px}
-.service-note>[data-icon] .icon{width:30px;height:30px;color:#658157;margin-bottom:18px}
+#contact-response{background:var(--tone-green,#e6eee0);color:var(--tone-green-text,#41613a);padding:14px;margin-top:20px;font-size:14px;border-radius:5px}
+.service-note{padding:30px;background:var(--tone-yellow,#ebeede);border:1px solid var(--tone-border,#d1dac4);border-radius:8px}
+.service-note>[data-icon] .icon{width:30px;height:30px;color:var(--tone-green-text,#658157);margin-bottom:18px}
 .service-note h2{font:400 30px/1.2 var(--heading);margin-bottom:18px}
-.service-note p{font-size:14px;line-height:1.9;color:#607054;margin-bottom:18px}
+.service-note p{font-size:14px;line-height:1.9;color:var(--tone-green-text,#607054);margin-bottom:18px}
 .service-note .btn,.service-note .text-action{margin-top:10px}
 .support-articles article{display:grid;grid-template-columns:45px 1fr;gap:20px;padding:25px 0;border-bottom:1px solid var(--line)}
 .support-articles article:first-child{padding-top:0}
-.support-articles article>span{font:400 27px var(--heading);color:#a57555}
+.support-articles article>span{font:400 27px var(--heading);color:var(--tone-clay-text,#a57555)}
 .support-articles h2{font-size:18px;font-weight:500;margin-bottom:12px}
 .support-articles p{font-size:15px;line-height:1.9;color:var(--muted)}
 @keyframes heading-arrive{from{opacity:0;transform:translateY(13px)}to{opacity:1;transform:translateY(0)}}
 @keyframes ink-line{from{transform:scaleX(0);opacity:.3}to{transform:scaleX(1);opacity:1}}
 @keyframes confirm-arrive{from{transform:translateY(7px);opacity:.5}to{transform:translateY(0);opacity:1}}
 @media(max-width:1250px){body[data-experience=journey] .app-nav a{padding-inline:12px;font-size:14px}body[data-experience=journey] .results-layout{grid-template-columns:370px minmax(0,1fr);gap:25px}body[data-experience=journey] .tour-body{padding:17px}body[data-experience=journey] .price{font-size:24px}body[data-experience=journey] .tour-card h3{font-size:24px}body[data-experience=journey] .rank-label{font-size:11px}}
-@media(max-width:1100px){.nav-full{display:none}.nav-short{display:inline}body[data-experience=journey] .header-inner{gap:15px}body[data-experience=journey] .results-layout{grid-template-columns:1fr}body[data-experience=journey] .results-screen .context-panel{display:grid;grid-template-columns:1fr 1fr;gap:0 28px}.context-head,.context-help,#criteria-fields,#criteria-warning{grid-column:1}body[data-experience=journey] .result-chat{grid-column:2;grid-row:1/5;margin:-25px -25px -25px 0;border-left:1px solid #d4dbcd;border-top:0;border-radius:0 8px 8px 0}body[data-experience=journey] .tour-card h3{font-size:28px}body[data-experience=journey] .price{font-size:28px}.service-layout,.support-layout{gap:32px}.service-heading h1{font-size:48px}}
-@media(max-width:760px){body[data-experience=journey] .header-inner{flex-wrap:wrap;padding-block:16px 12px;min-height:0}body[data-experience=journey] .brand-caption{display:block}body[data-experience=journey] .app-nav{width:100%;justify-content:space-between;gap:3px}body[data-experience=journey] .app-nav a{min-height:45px;padding:10px 12px;font-size:14px}body[data-experience=journey] .app-nav a::after{left:12px;right:12px}body[data-experience=journey] .results-screen .context-panel{display:block}body[data-experience=journey] .result-chat{margin:25px -25px -25px;border-top:1px solid #d4dbcd;border-left:0;border-radius:0 0 8px 8px}body[data-experience=journey] .page-intro{display:block}.search-actions{align-items:flex-start;max-width:none;margin-top:24px;gap:12px;flex-direction:row;align-items:center}.search-status{text-align:left}.service-layout,.support-layout{grid-template-columns:1fr}.service-note{max-width:none}.service-screen{padding-block:35px 55px}.service-heading{margin-bottom:28px}.service-heading h1{font-size:43px}.preference-title{font-size:14px}.preference-title output{font-size:12px}.preference-grid{gap:22px}.preference-endpoints{font-size:12px}}
+@media(max-width:1100px){.nav-full{display:none}.nav-short{display:inline}body[data-experience=journey] .header-inner{gap:15px}body[data-experience=journey] .results-layout{grid-template-columns:1fr}body[data-experience=journey] .results-screen .context-panel{display:grid;grid-template-columns:1fr 1fr;gap:0 28px}.context-head,.context-help,#criteria-fields,#criteria-warning{grid-column:1}body[data-experience=journey] .result-chat{grid-column:2;grid-row:1/5;margin:-25px -25px -25px 0;border-left:1px solid var(--tone-border,#d4dbcd);border-top:0;border-radius:0 8px 8px 0}body[data-experience=journey] .tour-card h3{font-size:28px}body[data-experience=journey] .price{font-size:28px}.service-layout,.support-layout{gap:32px}.service-heading h1{font-size:48px}}
+@media(max-width:760px){body[data-experience=journey] .header-inner{flex-wrap:wrap;padding-block:16px 12px;min-height:0}body[data-experience=journey] .brand-caption{display:block}body[data-experience=journey] .app-nav{width:100%;justify-content:space-between;gap:3px}body[data-experience=journey] .app-nav a{min-height:45px;padding:10px 12px;font-size:14px}body[data-experience=journey] .app-nav a::after{left:12px;right:12px}body[data-experience=journey] .results-screen .context-panel{display:block}body[data-experience=journey] .result-chat{margin:25px -25px -25px;border-top:1px solid var(--tone-border,#d4dbcd);border-left:0;border-radius:0 0 8px 8px}body[data-experience=journey] .page-intro{display:block}.search-actions{align-items:flex-start;max-width:none;margin-top:24px;gap:12px;flex-direction:row;align-items:center}.search-status{text-align:left}.service-layout,.support-layout{grid-template-columns:1fr}.service-note{max-width:none}.service-screen{padding-block:35px 55px}.service-heading{margin-bottom:28px}.service-heading h1{font-size:43px}.preference-title{font-size:14px}.preference-title output{font-size:12px}.preference-grid{gap:22px}.preference-endpoints{font-size:12px}}
 @media(max-width:680px){body[data-experience=journey] .header-inner{flex-direction:row;padding-block:15px 9px}body[data-experience=journey] .brand-name{font-size:24px}body[data-experience=journey] .brand-mark{width:36px;height:36px}body[data-experience=journey] .brand-caption{font-size:11px}body[data-experience=journey] .app-nav a{font-size:14px;padding-inline:9px;gap:6px}body[data-experience=journey] .app-nav a .icon{display:none}body[data-experience=journey] .app-nav a::after{left:9px;right:9px}body[data-experience=journey] .results-screen .page-intro h1{font-size:39px}body[data-experience=journey] .form-editor h1{font-size:39px}body[data-experience=journey] .results-screen .context-panel{padding:22px}body[data-experience=journey] .result-chat{margin:24px -22px -22px;padding:20px}body[data-experience=journey] .criteria-row{grid-template-columns:105px 1fr}body[data-experience=journey] .criteria-extras .criteria-row:nth-last-child(-n+2){grid-template-columns:96px 1fr}body[data-experience=journey] .tour-card h3{font-size:26px;min-height:59px}body[data-experience=journey] .price{font-size:29px}body[data-experience=journey] .tour-photo{width:92px;height:107px;right:18px;top:18px}body[data-experience=journey] .tour-provider{margin-bottom:18px;padding-right:98px}body[data-experience=journey] .price-unit{min-height:0}body[data-experience=journey] .rank-label{font-size:12px;padding-right:100px}body[data-experience=journey] .tour-reasons{font-size:14px}body[data-experience=journey] .analysis-tabs button{font-size:14px;padding:16px 12px}body[data-experience=journey] .compare-table th:first-child{width:125px}body[data-experience=journey] .compare-table th,body[data-experience=journey] .compare-table td{padding:15px}body[data-experience=journey] .evidence-details>div{grid-template-columns:125px 1fr;font-size:13px}.preference-grid{grid-template-columns:1fr}.service-heading h1{font-size:38px}.feedback-form,.service-note{padding:22px}.support-articles article{grid-template-columns:28px 1fr;gap:14px}.search-actions .btn{font-size:14px;min-width:135px}.search-status{font-size:12px}body[data-experience=journey] .landing-screen .landing-story-scene{min-height:220px}body[data-experience=journey] .landing-screen .landing-tour-price small{font-size:12px}body[data-experience=journey] .landing-screen .landing-walkthrough-title>h3{min-width:0;font-size:14px}body[data-experience=journey] .processing-head h2{font-size:25px}body[data-experience=journey] .processing-head .text-action{font-size:12px}body[data-experience=journey] .toast{font-size:13px}}
 @media(max-width:350px){body[data-experience=journey] .app-nav a{font-size:13px;padding-inline:7px}body[data-experience=journey] .criteria-row{grid-template-columns:90px 1fr}body[data-experience=journey] .criteria-value{font-size:13px}body[data-experience=journey] .context-title{font-size:16px}body[data-experience=journey] .context-head{gap:8px}body[data-experience=journey] .context-head>span{font-size:10px}body[data-experience=journey] .results-screen .page-intro h1{font-size:34px}body[data-experience=journey] .analysis-tabs button{font-size:13px;padding-inline:10px}body[data-experience=journey] .tour-photo{width:74px;height:95px}body[data-experience=journey] .tour-card h3{font-size:24px;padding-right:77px}.search-actions{gap:10px}.search-actions .btn{min-width:126px;font-size:13px}.service-heading h1{font-size:34px}.preference-title{font-size:13px}.preference-title output{font-size:11px}body[data-experience=journey] .criteria-extras{column-gap:12px}}
 @media(prefers-reduced-motion:reduce){.heading-enter,.heading-enter::after,.pending-change{animation:none!important}body[data-experience=journey] .app-nav a::after,body[data-experience=journey] .app-nav a .icon{transition:none}body[data-experience=journey] .app-nav a:hover .icon{transform:none}}

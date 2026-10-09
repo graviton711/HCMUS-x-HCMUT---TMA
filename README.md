@@ -13,12 +13,12 @@ flowchart LR
     R --> U
 ```
 
-Idea, kiến trúc và wireframe đã chốt. Backend có `/v1` và `/v2`: hiểu nhu cầu qua NVIDIA NIM, proposal đa field chờ xác nhận, form/URL/hybrid, so sánh/ranking/evidence, durable jobs/events và admin/contact. Xem [runtime v2](docs/backend-v2-runtime.md) và [hướng dẫn nối frontend](examples/backend-v2.md). Package `tourcrawl` chạy độc lập; chưa có adapter nối output crawler vào backend. API mặc định dùng dữ liệu mô phỏng; frontend prototype đang review, chưa gọi API thật.
+Backend có `/v1` và `/v2`: hiểu nhu cầu qua NVIDIA NIM, proposal đa field chờ xác nhận, form/URL/hybrid, so sánh/ranking/evidence, durable jobs/events và admin/contact. Xem [runtime v2](docs/backend-v2-runtime.md) và [hướng dẫn nối frontend](examples/backend-v2.md). Package `tourcrawl` chạy độc lập; chưa có adapter nối output crawler vào backend. Frontend React gọi API v2; API mặc định dùng dữ liệu mô phỏng và cần cấu hình provider thật để tìm tour.
 
 - [Proposal và phân tích bài toán](docs/idea.md)
 - [Kiến trúc hệ thống](docs/system-architecture.md)
 - [Wireframe](docs/wireframes.md)
-- [Kế hoạch backend để thảo luận](docs/backend-plan.md)
+- [Kế hoạch backend](docs/backend-plan.md)
 - [Contract dữ liệu backend — bản nháp](docs/backend-contracts.md)
 - [Module hiểu yêu cầu — bản nháp](src/requirements/README.md)
 - [Contract crawler và mẫu JSON — bản nháp](docs/crawler-contract.md)
@@ -52,17 +52,16 @@ Sau comparison, v2 có phân tích nếu bỏ/nới điều kiện: đọc snaps
 - [Runtime, lệnh kiểm tra và giới hạn](docs/backend-runtime.md)
 - [JSON Schema đã xuất cho team](contracts/README.md)
 
-## Planning frontend
+## Frontend
 
-Frontend đang PLANNING; chưa production UI hoặc chốt stack. Ngày 06/10/2026 user chốt **Giấy & Mực**, Newsreader + Be Vietnam Pro; flow mới **Giới thiệu → form + xác nhận → Kết quả**, criteria rộng/sửa trực tiếp/chat có diff xác nhận, bảng kiểm chứng + Phân tích AI, log/loading mock và accent/motion. Token/màn chi tiết còn review; G1–G13/D1–D5 giữ phần backend cần chốt.
+Frontend React + TypeScript + Vite nằm tại [src/frontend](src/frontend/README.md). Chạy `pnpm install --frozen-lockfile` và `pnpm dev` trong thư mục đó; backend local ở port 8000. Có form/chat/proposal, history cục bộ, comparison/evidence/activity, Việt/Anh và sáng/tối. Backend cần provider dữ liệu thật để tìm kiếm; auth user/full history còn thiếu, xem [giới hạn tích hợp](src/frontend/BACKEND-GAPS.md) và [contract auth adapter](src/frontend/app/AUTH-ADAPTER.md).
 
-- [Roadmap 7 phase và todo frontend](docs/frontend-plan.md)
-- [Quyết định review nhóm 06/10/2026](docs/frontend-review-2026-10-06.md), [prototype minh họa](prototypes/frontend-design/README.md)
+- [Prototype frontend](prototypes/frontend-design/README.md)
 - [Flow và trạng thái UI](docs/frontend-flows.md)
-- [Hướng tích hợp API v1 theo code](docs/frontend-api-integration.md)
-- [Checklist contract và khoảng thiếu cần trao đổi với BE](docs/frontend-backend-checklist.md)
+- [API client v2](src/frontend/api/README.md), [hướng tích hợp API v1](docs/frontend-api-integration.md)
+- [Giao thức frontend v2](docs/frontend-protocol-v2.md)
 - [Đối chiếu crawler/backend và công việc tích hợp dữ liệu](docs/frontend-crawler-integration.md)
-- [Chuẩn bị skill/thiết kế](docs/frontend-design-preparation.md), [module frontend](src/frontend/README.md)
+- [module frontend](src/frontend/README.md)
 
 ## Kiểm tra backend
 

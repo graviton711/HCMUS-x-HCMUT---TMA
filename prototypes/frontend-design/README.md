@@ -1,36 +1,40 @@
 # Prototype frontend — Giấy & Mực
 
-**Trạng thái:** PLANNING. User đã duyệt prototype hiện tại và ví dụ giao thức ngày 07/10/2026. Chỉ HTML/CSS/JS thử nghiệm và dữ liệu synthetic; chưa frontend production, backend v2 hoặc crawler thật. GitHub Pages chưa bật và không thuộc lượt bàn giao này.
+HTML/CSS/JS tham khảo giao diện, dùng dữ liệu synthetic. Prototype không kết nối auth, API v2 hoặc crawler thật; frontend React độc lập tại [src/frontend](../../src/frontend/README.md).
 
-## Trách nhiệm / input / output
+## Trách nhiệm và input/output
 
-- Input: flow đã duyệt, [giao thức FE–BE v2 mẫu](../../docs/frontend-protocol-v2.md), [pipeline/backend/crawler](../../docs/backend-pipeline-v2.md) và [JSON exchanges](../../examples/protocol-v2/README.md).
-- Output: `paper.html` gồm Giới thiệu → form/xác nhận → kết quả/chat/analysis; `admin.html` gồm Tổng quan/Nguồn/Liên hệ/Phiên; `source.html` mở đúng đoạn nguồn mẫu. `index.html`/`viewer.html` là lối vào review; `coastal.html` giữ hướng visual lịch sử.
-- Sửa nhiều field/slider/chat merge một nháp; xác nhận cả nhóm một lần; hủy khôi phục bản đã xác nhận gần nhất. Xác nhận chưa tự tìm, trừ khi user đã nhắn sửa+kèm tìm. Banner phân biệt pending/matched/stale; matched chỉ nói về bản yêu cầu, không chứng minh tour đạt mọi điều kiện.
+- Input: fixtures tour/offer/source, [protocol v2 mẫu](../../docs/frontend-protocol-v2.md) và thao tác UI.
+- `index.html`: dẫn đến prototype workspace và admin.
+- `paper.html`: giới thiệu, auth/account demo, sidebar phiên, form/kết quả/chat. `viewer.html` đổi viewport của cùng prototype.
+- `admin.html`: Tổng quan/Nguồn/Liên hệ/Phiên. `source.html`: section nguồn mẫu theo tour/offer/field.
+- Output: trạng thái/DOM/local demo history; không tạo tài khoản, ticket hoặc job server thật.
 
-## Mở và thử mẫu
+## Chạy
 
-Mở `paper.html`, hoặc `paper.html?demo=results` để vào thẳng bảng. Mở `admin.html` cho quản trị. Desktop/mobile trong `viewer.html`; cũng có thể mở bằng Chrome/Edge trực tiếp từ file.
-
-Ưu tiên HTTP cùng origin. Từ repo root:
+Từ repo root:
 
 ```powershell
 python -m http.server 4173 --bind 127.0.0.1 --directory prototypes/frontend-design
 ```
 
-1. Sửa nhiều mục hoặc nhắn “đổi ngân sách thành 32 triệu và thời lượng thành 6 ngày”; sửa tiếp/bỏ từng diff/xác nhận/hủy cả nhóm.
-2. Tìm kiếm bằng nút/chat; thử loading/chậm/lỗi/hủy tại mục tình huống, giữ bảng cũ và cảnh báo theo bản yêu cầu.
-3. Mở evidence/đổi offer rồi bấm “Mở đúng đoạn nguồn mẫu”; giá trị thiếu không có deep link giả.
-4. Tạo liên hệ ở `paper.html#contact` rồi mở admin cùng tab để xem ticket, ghi chú nội bộ và cập nhật trạng thái. Thử thêm/sửa/pause/check/refresh nguồn mẫu, lọc và xem phiên.
+Mở `http://127.0.0.1:4173/`. `paper.html#auth` mở đăng nhập; `paper.html?auth=register#auth` mở đăng ký. Tài khoản mẫu và Google chooser chỉ mô phỏng identity; đăng nhập demo không kiểm tra mật khẩu thật.
 
-## Interface và quyết định kỹ thuật
+## Workflow
 
-- Vanilla HTML/CSS/JS, không framework/build/API/LLM/ranking/crawl thật. Newsreader + Be Vietnam Pro, ảnh và license/provenance trong [assets/SOURCES.md](assets/SOURCES.md).
-- `tour-data.js` chia sẻ fixture giữa bảng và trang nguồn; tour/offer/field quyết định URL anchor local. Miền `.example` không được fetch; ảnh chỉ minh họa điểm đến.
-- `demo-store.js` dùng SessionStorage để chia sẻ contact/source state/counters giữa các trang trong một tab. Không lưu token, yêu cầu tour hoặc nội dung chat; contact user nhập chỉ ở tab. Ngày/số liệu admin là mẫu 07/10/2026, không live. Reset chỉ khôi phục dữ liệu demo.
-- Điều hướng sang file khác dừng job mô phỏng đang chạy; backend thật có lifecycle riêng theo protocol. Form và bảng vẫn dùng fixture Nhật Bản/TP.HCM tháng 11, không chứng minh truy xuất hoặc xếp hạng đúng nhu cầu mới.
-- Dùng đường dẫn asset tương đối để chạy local hoặc dưới project path. Giữ ảnh/font/license trong `assets/`; toàn bộ `review/` chỉ local, được ignore và không phải phụ thuộc runtime. Ảnh/báo cáo cũ vẫn có trong lịch sử Git; trang vào dùng ảnh điểm đến hiện có để tránh link hỏng sau khi dọn.
+1. Vào tài khoản mẫu hoặc auth demo, chọn phiên hoặc tạo lượt tìm mới.
+2. Nhập form/URLs/notes/chat; direct edit/slider/chat dùng chung proposal, review diff rồi confirm; Tìm kiếm là thao tác riêng.
+3. Xem cards/bảng/phân tích/evidence/offer theo fixtures; giữ snapshot cũ và draft khi đổi phiên/lượt.
+4. Sidebar hỗ trợ tìm, ghim, đổi tên/xóa và drawer mobile. Account demo có profile/link/export/delete local theo identity mẫu.
+5. VIE/ENG và sáng/tối dùng chung trên các trang, giữ qua reload/đổi trang và độc lập account/history.
 
-## Kiểm chứng đã có
+## Interfaces và lưu trữ
 
-88/88 browser checks đạt ở 1440/1280/768/390/320px; bulk edit/atomic confirm/cancel, chat/nav, evidence/offer, admin/contact, focused control khi diff dài và reduced-motion; console sạch. Chrome offline dùng asset local; đã thử file local giữ contact → admin cùng tab. Không chạy lại bộ QA trong lượt commit; chưa nghiệm thu API/auth/crawler/hosting thật.
+- Vanilla JS/CSS; Newsreader + Be Vietnam Pro và local assets/license tại [assets/SOURCES.md](assets/SOURCES.md).
+- `workspace.js`/`workspace.css`: auth/account/sidebar/run history. localStorage versioned lưu profile/phiên theo ID; sessionStorage chỉ giữ ID login demo. Không lưu mật khẩu, token hoặc OAuth secret; email `.example` không có quyền truy cập thư.
+- `presentation.js`/`locales-en.js`/`presentation.css`: preferences, UI copy và dark roles; giữ nguyên user text, quotes và draft/job state.
+- `journey.js`: capture/restore/blank/pause và change/run lifecycle. Tách committed criteria, draft/proposal, snapshots và request/câu hỏi đang dở; restore text/DOM/evidence refs, không HTML từ storage.
+- `tour-data.js`: fixture dùng chung với source; `demo-store.js`: counters/source/contact trong tab admin, độc lập workspace history.
+- Rời prototype tạm dừng timer demo. Runtime React tiếp tục đọc job/message backend; không dùng timer/fixture prototype.
+
+Kiểm tra asset/font, responsive, bàn phím và form/chat/evidence bằng dữ liệu demo. Báo cáo/ảnh kiểm chứng chỉ giữ local tại `review/` (ignored), không là dependency của prototype hoặc frontend React.

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f6f3" />
+    <meta
+      name="description"
+      content="Đi cùng — so sánh tour theo nhu cầu và kiểm tra nguồn trước khi quyết định."
+    />
+    <link rel="icon" type="image/svg+xml" href="/assets/mark.svg" />
+    <title>Đi cùng · So sánh tour có nguồn</title>
+    <script>
+      try {
+        const p = JSON.parse(localStorage.getItem('di-cung-display-v1') || '{}');
+        document.documentElement.dataset.theme = p.theme === 'dark' ? 'dark' : 'light';
+        document.documentElement.lang = p.locale === 'en' ? 'en' : 'vi';
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+    <noscript>Bật JavaScript để tìm và so sánh tour.</noscript>
+  </body>
+</html>

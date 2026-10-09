@@ -68,3 +68,30 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Local instructions, frontend planning and review notes (keep shared technical docs)
+/AGENTS.override.md
+/.agents/skills/LICENSE.taste-skill
+/.agents/skills/minimalist-skill/
+/.agents/skills/redesign-skill/
+/.agents/skills/taste-skill/
+/docs/frontend-plan.md
+/docs/frontend-backend-checklist.md
+/docs/frontend-design-preparation.md
+/docs/frontend-design-review.md
+/docs/frontend-review-*.md
+/docs/frontend-presentation-*.md
+/docs/frontend-module-planning-history.md
+/docs/frontend-implementation.md
+/src/frontend/QA.md
+/src/frontend/tests/BROWSER-QA.md
+
+# Private frontend conversations and handoff snapshots
+/docs/frontend-private-notes/
+/docs/frontend-conversation*.md
+/docs/frontend-session-notes*.md
+/docs/frontend-planning-*.md
+/docs/frontend-qa*.md
+/src/frontend/**/QA*.md
+/src/frontend/**/BROWSER-QA*.md
+/.pnpm-store/

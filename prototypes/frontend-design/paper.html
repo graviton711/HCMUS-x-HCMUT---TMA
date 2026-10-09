@@ -1,17 +1,29 @@
 <!doctype html>
 <html lang="vi"><head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta charset="UTF-8"><script src="locales-en.js"></script><script src="presentation.js"></script><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Giấy & Mực: prototype ba màn giới thiệu, điền nhu cầu và so sánh tour có chat. Dữ liệu minh họa.">
 <meta name="theme-color" content="#303d32"><title>Giấy & Mực · Đi cùng</title>
-<link rel="icon" type="image/svg+xml" href="assets/mark.svg"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="journey.css"><link rel="stylesheet" href="landing.css"><link rel="stylesheet" href="controls.css"><link rel="stylesheet" href="batch.css">
-<script src="demo-store.js" defer></script><script src="tour-data.js" defer></script><script src="landing.js" defer></script><script src="prototype.js" defer></script><script src="journey.js" defer></script>
-</head><body class="paper" data-design="paper" data-experience="journey">
+<link rel="icon" type="image/svg+xml" href="assets/mark.svg"><link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="journey.css"><link rel="stylesheet" href="landing.css"><link rel="stylesheet" href="controls.css"><link rel="stylesheet" href="batch.css"><link rel="stylesheet" href="workspace.css">
+<script src="demo-store.js" defer></script><script src="tour-data.js" defer></script><script src="landing.js" defer></script><script src="prototype.js" defer></script><script src="journey.js" defer></script><script src="workspace.js" defer></script>
+<link rel="stylesheet" href="presentation.css"></head><body class="paper" data-design="paper" data-experience="journey">
 <a class="skip-link" href="#main">Đến nội dung chính</a>
 <div class="preview-bar"><div class="container preview-inner"><span class="preview-label"><strong>GIẤY & MỰC</strong><span>Dữ liệu & phản hồi mô phỏng</span></span><a href="index.html">Không gian review ↗</a></div></div>
 <header class="site-header"><div class="container header-inner">
 <a class="brand" href="#home" data-nav="home"><span class="brand-mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M8 23 15 7l9 18-9-5-7 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M15 7v13" stroke="currentColor" stroke-width="1.8"/></svg></span><span><span class="brand-name">đi cùng</span><span class="brand-caption">Một chuyến đi. Nhiều góc nhìn.</span></span></a>
 <nav class="app-nav" aria-label="Điều hướng chính"><a href="#home" data-nav="home" aria-current="page"><span data-icon="leaf"></span>Giới thiệu</a><a href="#form" data-nav="tours"><span data-icon="search"></span>Tìm tour</a><a href="#contact" data-nav="contact" aria-label="Liên hệ chúng tôi"><span data-icon="mail"></span><span class="nav-full">Liên hệ chúng tôi</span><span class="nav-short" aria-hidden="true">Liên hệ</span></a><a href="#support" data-nav="support" aria-label="Hỗ trợ người dùng"><span data-icon="info"></span><span class="nav-full">Hỗ trợ người dùng</span><span class="nav-short" aria-hidden="true">Hỗ trợ</span></a></nav>
-</div></header><main id="main">
+<div id="account-control" class="account-control"></div>
+</div></header>
+<div class="application-shell">
+<aside id="session-sidebar" class="session-sidebar" aria-label="Các phiên tìm tour" hidden></aside>
+<main id="main">
+<div id="workspace-toolbar" class="workspace-toolbar" hidden>
+<button class="icon-button" id="toggle-history" type="button" aria-label="Mở lịch sử phiên" aria-expanded="true"><span data-icon="sidebar"></span></button>
+<div class="workspace-session-title"><span id="current-session-title">Chuyến đi mới</span><small id="session-save-state" role="status">Lưu trên trình duyệt này</small></div>
+<button class="workspace-round-button" id="toggle-rounds" type="button" aria-expanded="false" aria-controls="round-history"><span data-icon="history"></span><span id="round-count">Lượt tìm</span></button>
+</div>
+<section id="round-history" class="round-history" aria-label="Các lượt tìm của phiên" hidden></section>
+<section id="screen-auth" class="screen container auth-screen" hidden aria-labelledby="auth-heading"><div id="auth-root"></div></section>
+<section id="screen-account" class="screen container account-screen" hidden aria-labelledby="account-heading"><div id="account-root"></div></section>
 <section id="screen-home" class="screen landing-screen"><div id="landing-root" class="container"></div></section>
 <section id="screen-form" class="screen container form-screen" hidden aria-labelledby="form-heading">
 <button class="text-action back-link" data-nav="home" type="button"><span data-icon="left"></span> Về giới thiệu</button>
@@ -65,8 +77,10 @@
 <section id="screen-support" class="screen container service-screen" hidden aria-labelledby="support-heading">
 <div class="service-heading"><span class="eyebrow">HỖ TRỢ NGƯỜI DÙNG</span><h1 id="support-heading" tabindex="-1">Đọc rõ hơn.<br><em>Chọn tự tin hơn.</em></h1><p>Từ việc sửa nhu cầu đến kiểm tra nguồn: những thao tác bạn cần khi cân nhắc một chuyến đi.</p></div>
 <div class="support-layout"><div class="support-articles"><article><span>01</span><div><h2>Sửa nhu cầu rồi xác nhận</h2><p>Chọn Sửa nhiều mục, sửa từng giá trị hoặc kéo thanh sở thích. Mọi thay đổi được gom chung để xác nhận một lần. Hủy tất cả khôi phục bản đã xác nhận gần nhất.</p></div></article><article><span>02</span><div><h2>Tìm kiếm khi bạn sẵn sàng</h2><p>Sau khi xác nhận, bấm Tìm kiếm hoặc nhắn “tìm kiếm đi”. Kết quả cũ còn xem được trong lúc xử lý và được ghi rõ nếu chưa theo nhu cầu mới.</p></div></article><article><span>03</span><div><h2>Đối chiếu dữ kiện và phân tích</h2><p>Tab Dữ kiện so sánh đặt các tour cạnh nhau. Tab Phân tích AI giải thích chênh lệch giá, đánh đổi và điều còn thiếu; các ví dụ hiện đều mô phỏng.</p></div></article><article><span>04</span><div><h2>Kiểm tra nguồn trước khi quyết định</h2><p>Mở từng ô giá, lịch hoặc chính sách để xem dữ kiện và giới hạn. Giá công bố chưa phải tổng cuối; lịch khởi hành chưa chứng minh còn chỗ.</p></div></article></div><aside class="service-note"><span data-icon="route"></span><h2>Tiếp tục chuyến đi của bạn.</h2><p>Lượt tìm tour và phần trao đổi đều nằm trong mục Tìm tour.</p><button class="btn btn-primary" type="button" data-nav="tours">Về Tìm tour <span data-icon="arrow"></span></button><button class="text-action" type="button" data-nav="contact">Góp ý với nhóm <span data-icon="mail"></span></button></aside></div>
-</section></main>
+</section></main></div>
 <footer class="page-footer"><div class="container footer-inner"><span>Đi cùng · Prototype Giấy & Mực · <a href="admin.html">Quản trị mẫu ↗</a></span><span>Tour, giá và phản hồi minh họa · <a href="index.html#references">Nguồn ảnh & font ↗</a></span></div></footer>
 <dialog id="detail-dialog" aria-labelledby="dialog-title"><div class="dialog-shell"><header class="dialog-head"><div><span class="eyebrow" id="dialog-eyebrow">DỮ KIỆN & NGUỒN</span><h2 id="dialog-title"></h2></div><button class="icon-button" type="button" id="close-dialog" aria-label="Đóng panel"><span data-icon="close"></span></button></header><div class="dialog-body" id="dialog-body"></div><footer class="dialog-foot">Dữ liệu minh họa cho review UI · Chưa phải tour thật</footer></div></dialog>
 <div class="toast" id="toast" role="status" hidden></div><noscript><p class="container notice">Bật JavaScript để xem ba màn và tương tác prototype.</p></noscript>
+<dialog id="session-drawer" class="session-drawer" aria-label="Lịch sử phiên tìm tour"><div id="mobile-session-sidebar" class="drawer-content"></div></dialog>
+<dialog id="workspace-dialog" class="workspace-dialog" aria-labelledby="workspace-dialog-heading"><div class="workspace-dialog-shell"><header><h2 id="workspace-dialog-heading"></h2><button class="icon-button" type="button" data-close-workspace aria-label="Đóng hộp thoại"><span data-icon="close"></span></button></header><div id="workspace-dialog-content"></div></div></dialog>
 </body></html>
