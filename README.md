@@ -2,6 +2,8 @@
 
 Hệ thống hỗ trợ người Việt so sánh tour và nhà cung cấp dựa trên dữ liệu có nguồn gốc, độ mới và trade-off rõ ràng. Người dùng tự quyết định; sản phẩm không tự lập lịch trình hay đặt tour.
 
+Để mở website, xem [hướng dẫn frontend từng bước](src/frontend/README.md): cài Node.js LTS/npm và pnpm, chạy hai terminal frontend/backend rồi mở port **5173**. Port **8000** là API. [Preview Vercel nối backend riêng](docs/frontend-vercel-preview.md) là hướng chia sẻ website qua link; chưa có link deploy được xác nhận.
+
 ```mermaid
 flowchart LR
     U[Người dùng nhập nhu cầu hoặc URL tour] --> Q[Chuẩn hóa yêu cầu]
@@ -54,7 +56,25 @@ Sau comparison, v2 có phân tích nếu bỏ/nới điều kiện: đọc snaps
 
 ## Frontend
 
-Frontend React + TypeScript + Vite nằm tại [src/frontend](src/frontend/README.md). Chạy `pnpm install --frozen-lockfile` và `pnpm dev` trong thư mục đó; backend local ở port 8000. Có form/chat/proposal, history cục bộ, comparison/evidence/activity, Việt/Anh và sáng/tối. Backend cần provider dữ liệu thật để tìm kiếm; auth user/full history còn thiếu, xem [giới hạn tích hợp](src/frontend/BACKEND-GAPS.md) và [contract auth adapter](src/frontend/app/AUTH-ADAPTER.md).
+Website React + TypeScript + Vite ở port **5173**, API backend ở port **8000**. Xem [hướng dẫn chạy từng bước, hai terminal và xử lý lỗi](src/frontend/README.md). Chạy từ repo root:
+
+```powershell
+# Terminal 1: giữ backend chạy
+uv sync
+uv run tour-backend serve
+```
+
+```powershell
+# Terminal 2: giữ frontend chạy
+pnpm.cmd --dir src/frontend install --frozen-lockfile
+pnpm.cmd --dir src/frontend dev
+```
+
+Mở **http://127.0.0.1:5173** → Tìm tour → Tiếp tục với phiên ẩn danh. Cần Node.js/pnpm và Python/uv; chạy mặc định không cần nhập API token vào frontend. Backend mặc định dùng dữ liệu mô phỏng, frontend chặn tìm kiếm nguồn này: để tìm tour thật, cấu hình provider theo [hướng dẫn Supabase](examples/backend-supabase-v2.md); NIM cho chat/phân tích cấu hình ở backend.
+
+Có chọn nhiều tháng/năm, khoảng ngân sách, thời lượng, form/chat/proposal, history cục bộ, comparison/evidence/activity, Việt/Anh và sáng/tối. Auth user/full history còn thiếu, xem [giới hạn tích hợp](src/frontend/BACKEND-GAPS.md) và [contract auth adapter](src/frontend/app/AUTH-ADAPTER.md).
+
+Preview chung dự kiến dùng **frontend Vercel nối backend riêng** để người xem chỉ mở link. [Cấu hình và phụ thuộc Vercel](docs/frontend-vercel-preview.md) mô tả phần cần chuẩn bị; repo chưa có link deploy được xác nhận.
 
 - [Prototype frontend](prototypes/frontend-design/README.md)
 - [Flow và trạng thái UI](docs/frontend-flows.md)

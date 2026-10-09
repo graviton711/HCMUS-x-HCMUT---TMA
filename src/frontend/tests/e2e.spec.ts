@@ -51,9 +51,31 @@ async function fillTrip(page: Page) {
   await page
     .getByRole('combobox', { name: 'Khởi hành từ', exact: true })
     .selectOption('city:vn:hcmc');
-  await page.getByLabel('Ngày khởi hành', { exact: true }).fill('2026-11-10');
+  await chooseMonth(page, '2026-11');
+  await chooseMonth(page, '2027-01');
   await page.getByLabel('Người lớn', { exact: true }).fill('2');
-  await page.getByRole('spinbutton', { name: /^Ngân sách \/ người lớn/ }).fill('35000000');
+  await page
+    .getByRole('spinbutton', { name: 'Giá tối thiểu (VND/người lớn)', exact: true })
+    .fill('10000000');
+  await page
+    .getByRole('spinbutton', { name: 'Giá tối đa (VND/người lớn)', exact: true })
+    .fill('35000000');
+  await page.locator('.optional-fields summary').click();
+  await page.getByRole('spinbutton', { name: 'Thời lượng khoảng (ngày)', exact: true }).fill('5');
+}
+async function chooseMonth(page: Page, month: string) {
+  const target = Number(month.slice(0, 4));
+  const picker = page.locator('.month-picker');
+  let year = Number(await picker.locator('.month-year output').textContent());
+  while (year !== target) {
+    await picker
+      .getByRole('button', { name: year < target ? 'Năm tiếp theo' : 'Năm trước', exact: true })
+      .click();
+    year = Number(await picker.locator('.month-year output').textContent());
+  }
+  await picker
+    .getByRole('button', { name: `tháng ${Number(month.slice(5))} năm ${target}`, exact: true })
+    .click();
 }
 async function backendRequirement(page: Page): Promise<Requirement> {
   const saved = await page.evaluate(() => {
@@ -179,6 +201,111 @@ test('auth is explicit about missing service and anonymous drafts survive switch
   await capture(page, 'sidebar-draft-desktop');
 });
 
+test('sidebar rail, resizing, price sliders and footer anchors work on desktop and mobile', async ({
+  page,
+}) => {
+  await begin(page);
+  const sidebar = page.locator('.session-sidebar');
+  await expect(
+    page.getByRole('button', { name: 'Thu gọn lịch sử phiên', exact: true }),
+  ).toHaveCount(1);
+  await expect(page.locator('.history-toggle')).toBeHidden();
+  const separator = page.getByRole('separator', { name: 'Độ rộng lịch sử phiên' });
+  await separator.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(separator).toHaveAttribute('aria-valuenow', '316');
+  const box = await separator.boundingBox();
+  if (!box) throw new Error('Missing resize handle');
+  await page.mouse.move(box.x + 3, box.y + 150);
+  await page.mouse.down();
+  await page.mouse.move(420, box.y + 150, { steps: 8 });
+  await page.mouse.up();
+  await expect(separator).toHaveAttribute('aria-valuenow', '420');
+  await capture(page, 'sidebar-resized-420', false);
+
+  const track = page.locator('.budget-track');
+  await track.scrollIntoViewIfNeeded();
+  const trackBox = await track.boundingBox();
+  if (!trackBox) throw new Error('Missing price slider track');
+  await page.mouse.move(trackBox.x + trackBox.width / 2, trackBox.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(trackBox.x + 9 + (trackBox.width - 18) * 0.7, trackBox.y + 20, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  expect(
+    Number(
+      await page
+        .getByRole('spinbutton', { name: 'Giá tối đa (VND/người lớn)', exact: true })
+        .inputValue(),
+    ),
+  ).toBeGreaterThan(65_000_000);
+  await page
+    .getByRole('spinbutton', { name: 'Giá tối đa (VND/người lớn)', exact: true })
+    .fill('50000000');
+
+  const minimum = page.getByRole('slider', { name: 'Kéo giá tối thiểu', exact: true });
+  const maximum = page.getByRole('slider', { name: 'Kéo giá tối đa', exact: true });
+  await minimum.focus();
+  await page.keyboard.press('End');
+  await expect(
+    page.getByRole('spinbutton', { name: 'Giá tối thiểu (VND/người lớn)', exact: true }),
+  ).toHaveValue('50000000');
+  await maximum.focus();
+  await page.keyboard.press('Home');
+  await expect(
+    page.getByRole('spinbutton', { name: 'Giá tối đa (VND/người lớn)', exact: true }),
+  ).toHaveValue('50000000');
+  await minimum.focus();
+  await page.keyboard.press('Home');
+  await page.keyboard.press('ArrowRight');
+  await expect(
+    page.getByRole('spinbutton', { name: 'Giá tối thiểu (VND/người lớn)', exact: true }),
+  ).toHaveValue('500000');
+  await page
+    .getByRole('spinbutton', { name: 'Giá tối đa (VND/người lớn)', exact: true })
+    .fill('123456789');
+  await expect(maximum).toHaveValue('123456789');
+  await minimum.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(
+    page.getByRole('spinbutton', { name: 'Giá tối đa (VND/người lớn)', exact: true }),
+  ).toHaveValue('123456789');
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+
+  await page.getByRole('button', { name: 'Thu gọn lịch sử phiên', exact: true }).click();
+  expect((await sidebar.boundingBox())?.width).toBe(64);
+  await capture(page, 'sidebar-collapsed-rail', false);
+  await page.reload();
+  const rail = page.getByRole('button', { name: 'Mở lịch sử phiên', exact: true });
+  await expect(rail).toBeVisible();
+  await rail.click({ position: { x: 32, y: 350 } });
+  await expect(separator).toHaveAttribute('aria-valuenow', '420');
+  await page.getByRole('button', { name: 'Thu gọn lịch sử phiên', exact: true }).click();
+  await rail.focus();
+  await page.keyboard.press('Enter');
+  await expect(separator).toBeVisible();
+  await noOverflow(page);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(sidebar).toBeHidden();
+  await page.getByRole('button', { name: 'Ẩn / hiện lịch sử phiên', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Lịch sử phiên', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Lịch sử phiên', exact: true })).toBeHidden();
+  await page.reload();
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await expect(separator).toHaveAttribute('aria-valuenow', '420');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page
+    .locator('.page-footer')
+    .getByRole('link', { name: 'Dữ liệu & quyền riêng tư', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/support#privacy$/);
+  await expect(page.locator('#privacy')).toBeVisible();
+  await noOverflow(page);
+});
+
 test('actual backend structured review/edit/confirm works and synthetic provider cannot publish a search', async ({
   page,
 }) => {
@@ -205,8 +332,32 @@ test('actual backend structured review/edit/confirm works and synthetic provider
   expect(committed.revision).toBe(1);
   expect(committed.party.adults).toBe(2);
   expect(committed.notes).toBe('E2E: structured requirement integration');
+  expect(committed.conditions.find((c) => c.field === 'duration_days')).toMatchObject({
+    operator: 'near',
+    strength: 'soft',
+    value: { amount: 5 },
+  });
+  expect(
+    committed.conditions.filter((c) => c.field === 'departure_date').map((c) => c.value),
+  ).toMatchObject([
+    { value: '2026-11-01', upper: '2026-11-30' },
+    { value: '2027-01-01', upper: '2027-01-31' },
+  ]);
+  expect(committed.hard_tree.children).toContainEqual({
+    kind: 'any',
+    condition_id: null,
+    children: [
+      { kind: 'predicate', condition_id: 'condition_departure_month_2026_11', children: [] },
+      { kind: 'predicate', condition_id: 'condition_departure_month_2027_01', children: [] },
+    ],
+  });
   await page.getByRole('button', { name: 'Sửa nhiều mục', exact: true }).click();
-  await page.getByRole('spinbutton', { name: /^Ngân sách \/ người lớn/ }).fill('32000000');
+  await page
+    .getByRole('spinbutton', { name: 'Giá tối đa (VND/người lớn)', exact: true })
+    .fill('32000000');
+  await chooseMonth(page, '2027-03');
+  await chooseMonth(page, '2026-11');
+  await page.getByRole('spinbutton', { name: 'Thời lượng khoảng (ngày)', exact: true }).fill('7');
   await page.getByRole('button', { name: 'Xem thay đổi', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Kiểm tra thay đổi', exact: true })).toBeVisible();
   expect((await backendRequirement(page)).revision).toBe(1);
@@ -215,9 +366,21 @@ test('actual backend structured review/edit/confirm works and synthetic provider
   await expect(page.getByText('Nhu cầu đã được xác nhận', { exact: true })).toBeVisible();
   const updated = await backendRequirement(page);
   expect(updated.revision).toBe(2);
-  expect(updated.conditions.find((c) => c.field === 'estimated_cost')?.value).toMatchObject({
-    amount: 32000000,
+  expect(updated.conditions.find((c) => c.field === 'duration_days')).toMatchObject({
+    operator: 'near',
+    strength: 'soft',
+    value: { amount: 7 },
   });
+  expect(updated.conditions.find((c) => c.field === 'estimated_cost')?.value).toMatchObject({
+    amount: 10000000,
+    upper: 32000000,
+  });
+  expect(
+    updated.conditions.filter((c) => c.field === 'departure_date').map((c) => c.value),
+  ).toMatchObject([
+    { value: '2027-01-01', upper: '2027-01-31' },
+    { value: '2027-03-01', upper: '2027-03-31' },
+  ]);
   await page.getByRole('button', { name: 'Tìm kiếm', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Nguồn tour chưa được kết nối');
   expect(comparisonPosts).toEqual([]);

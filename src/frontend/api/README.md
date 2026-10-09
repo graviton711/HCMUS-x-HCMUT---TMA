@@ -4,9 +4,11 @@ DTO lấy từ `src/api/v2/models.py`, `routes.py`, `service.py` và domain BE; 
 
 `form.ts` serialize structured/text/URLs và tạo typed edits dựa requirement thật. ID của condition/child có sẵn được giữ; cập nhật condition không làm phẳng cây AND/OR hoặc xóa field không có control. Empty optional field chỉ xóa condition tương ứng. Giá/ranking/phân tích do BE cung cấp; FE chỉ định dạng.
 
-Shopping: “không có” = `shopping_stops eq 0 hard`; “ưu tiên ít” = `prefer_low 0 soft`, không tự đặt ngưỡng một điểm. Form không thể biểu diễn nhiều predicates của cùng field: sửa trực tiếp trường này bị chặn, dùng chat/proposal để giữ cây. Các giá trị mặc định slider có origin từ catalog; không tự điền số người/ngân sách từ URL.
+Shopping: “không có” = `shopping_stops eq 0 hard`; “ưu tiên ít” = `prefer_low 0 soft`, không tự đặt ngưỡng một điểm. Ngoài nhóm tháng khởi hành độc lập, nhiều predicates của cùng field sửa qua chat/proposal để giữ cây. Các giá trị mặc định slider có origin từ catalog; không tự điền số người/ngân sách từ URL.
 
-Control ngân sách structured hiện có phạm vi VND/người lớn/giá tour và một mức tiền. Budget ngoại tệ, cả nhóm, tổng chuyến hoặc range đã parse được giữ nguyên khi sửa trường khác; sửa trực tiếp budget đó bị chặn và hướng về chat để không đổi currency/basis/coverage/range ngầm.
+Ngân sách structured là khoảng VND/người lớn/giá tour: `estimated_cost between`, `value.amount` là đáy và `value.upper` là trần. Giá trần `lte` cũ round-trip nguyên trạng tới khi người dùng đổi control. Ngoại tệ, cả nhóm, tổng chuyến và nhiều nhánh sửa qua chat; không đổi currency/basis/coverage ngầm.
+
+`departureMonths` chứa `YYYY-MM`; mỗi tháng serialize thành `departure_date between` từ đầu tới cuối tháng (gồm năm nhuận). Các lá tháng nằm trong nhóm `any` độc lập, kết hợp `all` với ràng buộc khác. Edit thay đúng lá/nhóm ngày và gửi `replace_tree`, giữ IDs và nhóm AND/OR không liên quan; không đổi hai tháng rời nhau thành một khoảng liên tục. Lịch chính xác/khoảng khác vẫn giữ nếu không sửa tháng; các nhóm ngày trộn field hoặc strength không thể biểu diễn bằng picker được khóa và sửa qua chat.
 
 Kiểm chứng: Vitest cho JSON/envelope/binding, mutation retry và form/edit preservation. Runtime chỉ gọi API thật; fixture chỉ tồn tại trong test.
 

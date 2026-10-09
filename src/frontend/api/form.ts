@@ -11,6 +11,14 @@ import type {
   Strength,
   TypedEdit,
 } from './types';
+import {
+  directMonthReason,
+  editMonths,
+  monthConditions,
+  monthsFromRequirement,
+  treesWithMonths,
+  validMonth,
+} from './travelFilters';
 
 export interface FormValues {
   mode: 'structured' | 'text' | 'urls';
@@ -18,10 +26,12 @@ export interface FormValues {
   destinations: string[];
   departureOrigin: string;
   departureDate: string;
+  departureMonths: string[];
   returnDate: string;
   adults: number;
   childAges: (number | null)[];
   budget: string;
+  budgetMin: string;
   budgetBasis: 'per_adult' | 'per_person' | 'group_total';
   durationDays: string;
   hotelStars: string;
@@ -40,10 +50,12 @@ export const emptyForm: FormValues = {
   destinations: [],
   departureOrigin: '',
   departureDate: '',
+  departureMonths: [],
   returnDate: '',
   adults: 0,
   childAges: [],
   budget: '',
+  budgetMin: '',
   budgetBasis: 'per_adult',
   durationDays: '',
   hotelStars: '',
@@ -87,12 +99,15 @@ export function formFromRequirement(requirement: Requirement): FormValues {
   result.destinations = [...items(field('destinations'))];
   result.departureOrigin = items(field('departure_origin'))[0] ?? '';
   result.departureDate = date(field('departure_date'));
+  result.departureMonths = monthsFromRequirement(requirement);
+  if (result.departureMonths.length) result.departureDate = '';
   result.returnDate = date(field('return_date'));
   result.adults = requirement.party.adults ?? 0;
   result.childAges = requirement.party.children.map((c) => c.age);
   const budget = field('estimated_cost')?.value;
   if (budget?.kind === 'budget') {
-    result.budget = String(budget.amount);
+    result.budget = String(budget.upper ?? budget.amount);
+    result.budgetMin = budget.upper != null ? String(budget.amount) : '';
     result.budgetBasis = budget.basis ?? 'per_adult';
   }
   result.durationDays = numeric(field('duration_days'));
@@ -157,7 +172,8 @@ function validateStructured(values: FormValues, requireCore: boolean, catalog?: 
   if (requireCore) {
     if (!values.destinations.length) errors.destinations = 'Chọn điểm đến.';
     if (!values.departureOrigin) errors.departureOrigin = 'Chọn nơi khởi hành.';
-    if (!values.departureDate) errors.departureDate = 'Chọn ngày khởi hành.';
+    if (!values.departureDate && !values.departureMonths.length)
+      errors.departureMonths = 'Chọn ít nhất một tháng khởi hành.';
     if (!Number.isInteger(values.adults) || values.adults < 1 || values.adults > 100)
       errors.adults = 'Số người lớn từ 1 đến 100.';
     if (!values.budget) errors.budget = 'Nhập ngân sách.';
@@ -173,6 +189,20 @@ function validateStructured(values: FormValues, requireCore: boolean, catalog?: 
       Number(values.budget) > 10 ** 15)
   )
     errors.budget = 'Ngân sách VND phải là số nguyên không âm.';
+  if (
+    values.budgetMin &&
+    (!/^\d+$/u.test(values.budgetMin) ||
+      !Number.isSafeInteger(Number(values.budgetMin)) ||
+      Number(values.budgetMin) > 10 ** 15 ||
+      !values.budget ||
+      Number(values.budgetMin) > Number(values.budget))
+  )
+    errors.budgetMin = 'Khoảng ngân sách phải là số nguyên không âm, đáy không vượt trần.';
+  if (
+    values.departureMonths.length > 12 ||
+    values.departureMonths.some((month) => !validMonth(month))
+  )
+    errors.departureMonths = 'Chọn tối đa 12 tháng, có tháng và năm hợp lệ.';
   for (const key of ['departureDate', 'returnDate'] as const)
     if (
       values[key] &&
@@ -252,25 +282,35 @@ function conditions(values: FormValues): FormCondition[] {
     });
   if (values.departureOrigin)
     add('departure_origin', 'in', { kind: 'set', items: [values.departureOrigin] });
-  if (values.departureDate)
+  if (values.departureMonths.length)
+    result.push(
+      ...monthConditions(values.departureMonths, values.strengths.departure_date ?? 'hard'),
+    );
+  else if (values.departureDate)
     add('departure_date', 'eq', { kind: 'date', value: values.departureDate });
   if (values.returnDate) add('return_date', 'lte', { kind: 'date', value: values.returnDate });
   if (values.budget)
     add(
       'estimated_cost',
-      'lte',
+      values.budgetMin === '' ? 'lte' : 'between',
       {
         kind: 'budget',
-        amount: Number(values.budget),
+        amount: Number(values.budgetMin === '' ? values.budget : values.budgetMin),
+        ...(values.budgetMin === '' ? {} : { upper: Number(values.budget) }),
         currency: 'VND',
         basis: values.budgetBasis,
         coverage: 'tour_price',
         coverage_origin: 'system_default',
       },
-      'soft',
+      values.budgetMin === '' ? 'soft' : 'hard',
     );
   if (values.durationDays)
-    add('duration_days', 'near', { kind: 'number', amount: Number(values.durationDays) }, 'soft');
+    add(
+      'duration_days',
+      values.strengths.duration_days === 'hard' ? 'eq' : 'near',
+      { kind: 'number', amount: Number(values.durationDays) },
+      'soft',
+    );
   if (values.hotelStars)
     add('hotel_stars_min', 'gte', { kind: 'number', amount: Number(values.hotelStars) }, 'soft');
   if (values.shopping !== 'any')
@@ -321,11 +361,13 @@ export function buildCreateRequirement(
     return { input: { kind: 'text', text }, reference_urls, timezone: 'Asia/Ho_Chi_Minh' };
   }
   validateStructured(values, true, catalog);
+  const formConditions = conditions(values);
   return {
     input: {
       kind: 'structured',
       form: {
-        conditions: conditions(values),
+        conditions: formConditions,
+        ...(values.departureMonths.length ? treesWithMonths(formConditions) : {}),
         party: party(values),
         preference_levels: preferences(values, catalog),
         notes: values.notes.trim(),
@@ -339,9 +381,8 @@ export function buildCreateRequirement(
 const controls: { field: string; keys: (keyof FormValues)[] }[] = [
   { field: 'destinations', keys: ['destinations'] },
   { field: 'departure_origin', keys: ['departureOrigin'] },
-  { field: 'departure_date', keys: ['departureDate'] },
   { field: 'return_date', keys: ['returnDate'] },
-  { field: 'estimated_cost', keys: ['budget', 'budgetBasis'] },
+  { field: 'estimated_cost', keys: ['budget', 'budgetMin', 'budgetBasis'] },
   { field: 'duration_days', keys: ['durationDays'] },
   { field: 'hotel_stars_min', keys: ['hotelStars'] },
   { field: 'shopping_stops', keys: ['shopping'] },
@@ -362,7 +403,7 @@ export function directBudgetReason(requirement: Requirement): string | null {
     value.currency !== 'VND' ||
     value.basis !== 'per_adult' ||
     value.coverage !== 'tour_price' ||
-    value.upper != null
+    !['lte', 'between'].includes(budgets[0].operator)
   ) {
     return 'Ngân sách này có đơn vị, phạm vi hoặc khoảng tiền khác. Sửa qua hội thoại để giữ đúng ý nghĩa.';
   }
@@ -379,7 +420,12 @@ export function buildEdits(
   // Existing semantic IDs absent from the current catalog must remain editable elsewhere.
   const before = formFromRequirement(requirement);
   validateStructured(
-    { ...values, budget: values.budget === before.budget ? '' : values.budget },
+    {
+      ...values,
+      ...(values.budget === before.budget && values.budgetMin === before.budgetMin
+        ? { budget: '', budgetMin: '' }
+        : {}),
+    },
     false,
   );
   const desired = conditions(values);
@@ -413,7 +459,19 @@ export function buildEdits(
       control.field === 'shopping_stops'
         ? next.strength
         : (values.strengths[control.field] ?? old.strength);
-    const operator = control.field === 'shopping_stops' ? next.operator : old.operator;
+    const operator =
+      ['shopping_stops', 'estimated_cost'].includes(control.field) ||
+      (control.field === 'duration_days' &&
+        ['eq', 'near'].includes(old.operator) &&
+        values.strengths.duration_days !== before.strengths.duration_days)
+        ? next.operator
+        : old.operator;
+    if (
+      control.field === 'estimated_cost' &&
+      next.value.kind === 'budget' &&
+      old.value.kind === 'budget'
+    )
+      next.value.coverage_origin = old.value.coverage_origin;
     const updated = {
       ...next,
       id: old.id,
@@ -424,6 +482,19 @@ export function buildEdits(
     if (old.operator === operator && old.strength === strength)
       edits.push({ op: 'replace_condition_value', condition_id: old.id, value: next.value });
     else edits.push({ op: 'upsert_condition', condition: updated });
+  }
+  if (
+    !same(values.departureMonths, before.departureMonths) ||
+    values.departureDate !== before.departureDate
+  ) {
+    const reason = directMonthReason(requirement);
+    if (reason) throw new FormValidationError({ departureMonths: reason });
+    if (values.departureMonths.length || !values.departureDate)
+      edits.push(...editMonths(values.departureMonths, requirement, edits));
+    else
+      throw new FormValidationError({
+        departureMonths: 'Chọn tháng để sửa lịch, hoặc sửa ngày chính xác qua hội thoại.',
+      });
   }
   if (!same(values.childAges, before.childAges) || values.adults !== before.adults)
     edits.push({ op: 'replace_party', party: party(values, requirement.party) });

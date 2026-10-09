@@ -18,6 +18,23 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('browser history privacy', () => {
+  it('migrates old drafts without losing saved dates, price caps or sessions', () => {
+    const original = newSession();
+    const draft = { ...original.draft, departureDate: '2026-11-10', budget: '35000000' };
+    const { departureMonths: _months, budgetMin: _min, ...legacy } = draft;
+    void _months;
+    void _min;
+    localStorage.setItem('di-cung:history:v1', JSON.stringify([{ ...original, draft: legacy }]));
+    expect(loadSessions()[0]).toMatchObject({
+      id: original.id,
+      draft: {
+        departureMonths: [],
+        departureDate: '2026-11-10',
+        budget: '35000000',
+        budgetMin: '',
+      },
+    });
+  });
   it('keeps anonymous and each account history separate without fallback to another owner', () => {
     const anonymous = { ...newSession(), title: 'Chuyến đi chưa đăng nhập' };
     const first = { ...newSession(), title: 'Lịch sử tài khoản thứ nhất' };

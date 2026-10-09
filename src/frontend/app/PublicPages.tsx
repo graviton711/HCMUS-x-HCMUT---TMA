@@ -265,6 +265,30 @@ export function SupportPage({ onStart }: { onStart: () => void }) {
         'Open each price, date or policy cell to see its facts and limitations. A published price may not be the final total, and a departure date does not confirm availability.',
       ),
     ],
+    [
+      t('Dữ liệu & quyền riêng tư', 'Data & privacy'),
+      t(
+        'Trình duyệt lưu tên phiên, bản nháp và nội dung trao đổi đã nhận. Nhu cầu, tin nhắn và nội dung liên hệ được gửi đến backend để xử lý; một số yêu cầu dùng dịch vụ AI. Xóa lịch sử trong Tài khoản chỉ xóa bản lưu trên trình duyệt, không xóa dữ liệu ở dịch vụ.',
+        'This browser stores session names, drafts and received conversations. Requirements, messages and contact requests are sent to the backend; some requests use an AI service. Deleting history in Account removes this browser’s copy, not service records.',
+      ),
+      'privacy',
+    ],
+    [
+      t('Quyền truy cập phiên', 'Session access'),
+      t(
+        'Phiên ẩn danh dùng token có thời hạn, lưu trong phiên trình duyệt và không kèm khi xuất lịch sử. Khi quyền hết hạn, các lượt cũ có thể không mở lại được. Lịch sử hiện chưa đồng bộ giữa các thiết bị.',
+        'Anonymous sessions use expiring access tokens held in browser session storage and excluded from history exports. Old searches may be inaccessible after access expires. History is not yet synchronized across devices.',
+      ),
+      'security',
+    ],
+    [
+      t('Phạm vi sử dụng', 'Scope of use'),
+      t(
+        'Đi cùng hỗ trợ đối chiếu tour và nguồn thông tin; bạn tự quyết định. Sản phẩm chưa đặt tour, thanh toán hoặc xác nhận chỗ. Dữ kiện thiếu hoặc chưa xác minh được ghi rõ; cần kiểm tra lại với nhà cung cấp trước khi đặt.',
+        'Đi cùng helps compare tours and sources; you make the decision. The product does not book tours, process payments or confirm availability. Missing or unverified facts are marked; check with the supplier before booking.',
+      ),
+      'scope',
+    ],
   ];
   return (
     <section className="page service-page" aria-labelledby="support-heading">
@@ -284,8 +308,8 @@ export function SupportPage({ onStart }: { onStart: () => void }) {
       </div>
       <div className="service-layout">
         <div className="support-articles">
-          {articles.map(([title, text], index) => (
-            <article key={index}>
+          {articles.map(([title, text, id], index) => (
+            <article key={index} id={id}>
               <span>{String(index + 1).padStart(2, '0')}</span>
               <div>
                 <h2>{title}</h2>

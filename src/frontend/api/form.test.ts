@@ -9,7 +9,8 @@ import {
 } from './form';
 import type { FormValues } from './form';
 import * as contracts from './contracts';
-import type { ComparisonResult, Condition, Requirement } from './types';
+import type { ComparisonResult, Condition, Requirement, Tree } from './types';
+import { directMonthReason } from './travelFilters';
 
 const predicate = (id: string, field: string, amount: number): Condition => ({
   id,
@@ -71,6 +72,179 @@ const structuredValues = (): FormValues => ({
 });
 
 describe('Form serialization', () => {
+  it('uses an exact predicate when an approximate duration becomes required', () => {
+    const r = requirement();
+    const values = formFromRequirement(r);
+    values.strengths.duration_days = 'hard';
+    expect(buildEdits(values, r)).toMatchObject([
+      {
+        op: 'upsert_condition',
+        condition: {
+          id: 'duration_existing',
+          operator: 'eq',
+          strength: 'hard',
+          value: { amount: 5 },
+        },
+      },
+    ]);
+  });
+  it('keeps nonadjacent months as OR windows, handles leap years and sends both price bounds', () => {
+    const request = buildCreateRequirement({
+      ...structuredValues(),
+      departureDate: '',
+      departureMonths: ['2028-02', '2027-11'],
+      budgetMin: '12000000',
+      budget: '35000000',
+      durationDays: '5',
+    });
+    if (request.input.kind !== 'structured') throw new Error('Expected a structured form');
+    const form = request.input.form;
+    expect(form.conditions.filter((c) => c.field === 'departure_date').map((c) => c.value)).toEqual(
+      [
+        { kind: 'date', value: '2027-11-01', upper: '2027-11-30' },
+        { kind: 'date', value: '2028-02-01', upper: '2028-02-29' },
+      ],
+    );
+    expect(form.hard_tree?.children?.at(-1)).toEqual({
+      kind: 'any',
+      children: [
+        { kind: 'predicate', condition_id: 'condition_departure_month_2027_11' },
+        { kind: 'predicate', condition_id: 'condition_departure_month_2028_02' },
+      ],
+    });
+    expect(form.conditions.find((c) => c.field === 'estimated_cost')).toMatchObject({
+      operator: 'between',
+      strength: 'hard',
+      value: { amount: 12000000, upper: 35000000 },
+    });
+    expect(form.conditions.find((c) => c.field === 'duration_days')).toMatchObject({
+      operator: 'near',
+      strength: 'soft',
+      value: { amount: 5 },
+    });
+  });
+
+  it('rejects reversed price bounds and invalid or excessive months', () => {
+    expect(() => buildCreateRequirement({ ...structuredValues(), budgetMin: '40000000' })).toThrow(
+      FormValidationError,
+    );
+    expect(() =>
+      buildCreateRequirement({ ...structuredValues(), departureMonths: ['2026-13'] }),
+    ).toThrow(FormValidationError);
+    expect(() =>
+      buildCreateRequirement({
+        ...structuredValues(),
+        departureMonths: Array.from({ length: 13 }, () => '2027-01'),
+      }),
+    ).toThrow(FormValidationError);
+  });
+
+  it('preserves an existing month ID when adding a month before it and retains unrelated OR branches', () => {
+    const r = requirement();
+    r.conditions.push({
+      id: 'month_existing',
+      field: 'departure_date',
+      operator: 'between',
+      strength: 'hard',
+      value: { kind: 'date', value: '2027-02-01', upper: '2027-02-28' },
+      sources: [],
+    });
+    const unrelated: Tree = {
+      kind: 'any',
+      children: [
+        { kind: 'predicate', condition_id: 'unrelated_a' },
+        { kind: 'predicate', condition_id: 'unrelated_b' },
+      ],
+    };
+    r.hard_tree = {
+      kind: 'all',
+      children: [unrelated, { kind: 'predicate', condition_id: 'month_existing' }],
+    };
+    const values = formFromRequirement(r);
+    expect(values.departureMonths).toEqual(['2027-02']);
+    values.departureMonths = ['2027-01', '2027-02'];
+    const edits = buildEdits(values, r);
+    const replacement = edits.find((e) => e.op === 'replace_tree');
+    if (replacement?.op !== 'replace_tree') throw new Error('Missing tree edit');
+    expect(replacement.tree.children).toContainEqual(unrelated);
+    expect(replacement.tree.children?.at(-1)).toEqual({
+      kind: 'any',
+      children: [
+        { kind: 'predicate', condition_id: 'condition_departure_month_2027_01' },
+        { kind: 'predicate', condition_id: 'month_existing' },
+      ],
+    });
+    expect(edits.filter((e) => e.op === 'upsert_condition').map((e) => e.condition.id)).toEqual([
+      'condition_departure_month_2027_01',
+    ]);
+    expect(r.hard_tree.children?.[0]).toEqual(unrelated);
+  });
+
+  it('blocks calendar branches mixed with other conditions without changing unrelated edits', () => {
+    const r = requirement();
+    r.conditions.push(
+      ...['01', '03'].map((month) => ({
+        id: `month_${month}`,
+        field: 'departure_date',
+        operator: 'between',
+        strength: 'hard' as const,
+        value: { kind: 'date' as const, value: `2027-${month}-01`, upper: `2027-${month}-31` },
+        sources: [],
+      })),
+    );
+    r.hard_tree = {
+      kind: 'any',
+      children: [
+        { kind: 'predicate', condition_id: 'month_01' },
+        { kind: 'predicate', condition_id: 'month_03' },
+        { kind: 'predicate', condition_id: 'other' },
+      ],
+    };
+    expect(directMonthReason(r)).not.toBeNull();
+    const values = formFromRequirement(r);
+    values.notes = 'Keep all date branches';
+    expect(buildEdits(values, r)).toEqual([{ op: 'set_notes', notes: values.notes }]);
+    values.departureMonths = ['2027-02'];
+    expect(() => buildEdits(values, r)).toThrow(FormValidationError);
+  });
+
+  it('round-trips an existing VND range and deliberately converts a price cap to a range', () => {
+    const r = requirement();
+    r.conditions.push({
+      id: 'budget_existing',
+      field: 'estimated_cost',
+      operator: 'lte',
+      strength: 'hard',
+      value: {
+        kind: 'budget',
+        amount: 35000000,
+        currency: 'VND',
+        basis: 'per_adult',
+        coverage: 'tour_price',
+        coverage_origin: 'explicit',
+      },
+      sources: [],
+    });
+    const values = formFromRequirement(r);
+    expect(buildEdits(values, r)).toEqual([]);
+    values.budgetMin = '12000000';
+    const edits = buildEdits(values, r);
+    expect(edits).toMatchObject([
+      {
+        op: 'upsert_condition',
+        condition: {
+          id: 'budget_existing',
+          operator: 'between',
+          strength: 'hard',
+          value: { amount: 12000000, upper: 35000000, coverage_origin: 'explicit' },
+        },
+      },
+    ]);
+    const condition = edits[0];
+    if (condition.op !== 'upsert_condition') throw new Error('Expected a range condition');
+    r.conditions[r.conditions.length - 1] = { ...condition.condition, sources: [] };
+    expect(buildEdits(formFromRequirement(r), r)).toEqual([]);
+  });
   it('requires explicit structured inputs and does not infer them from URLs', () => {
     expect(() => buildCreateRequirement(emptyForm)).toThrow(FormValidationError);
     const urlOnly = {
