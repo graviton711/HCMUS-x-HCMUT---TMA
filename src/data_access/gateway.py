@@ -49,6 +49,8 @@ class DataGateway:
         return matches[0] if len(matches) == 1 else None
 
     def validate_binding(self, result: CrawlResult, request: CrawlRequest):
+        from domain.crawl_v2 import CATALOG_POLICY
+
         if result.request_id != request.request_id:
             raise AppError("CRAWLER_INVALID_OUTPUT", "Crawler trả sai request_id.", 502)
         if self.settings.data_provider != "fixture" and result.origin != "source":
@@ -79,6 +81,18 @@ class DataGateway:
             raise AppError("CRAWLER_INVALID_OUTPUT", "Snapshot không được source result khai báo.", 502)
         max_time = now() + timedelta(minutes=5)
         for evidence in result.evidence:
+            receipt = getattr(evidence, "catalog_validation", None)
+            if receipt is not None and (
+                self.settings.data_provider != "supabase"
+                or receipt.policy_version != CATALOG_POLICY
+                or receipt.source_id not in request.source_ids
+                or receipt.source_id not in source_map
+                or source_map[receipt.source_id].limits.get("catalog_validated") != 1
+                or source_map[receipt.source_id].access_status != "approved"
+                or (urlsplit(evidence.url).hostname or "").lower()
+                not in self.settings.supabase_tour_trusted_domains
+            ):
+                raise AppError("CRAWLER_INVALID_OUTPUT", "Catalog receipt ngoài nguồn/policy được phép.", 502)
             tid = (
                 offers[evidence.snapshot_id].tour_snapshot_id
                 if evidence.snapshot_id in offers
@@ -105,12 +119,15 @@ class DataGateway:
                 raise AppError("CRAWLER_INVALID_OUTPUT", "Field có thời gian quan sát ở tương lai.", 502)
 
     def isolate_invalid_fields(self, payload: dict) -> dict:
+        from domain.crawl_v2 import CrawlResultV2, FactV2
+
+        fact_model = FactV2 if self.result_model is CrawlResultV2 else Fact
         # A corrupt field is not allowed to invalidate unrelated, usable fields.
         for kind in ("tours", "offers"):
             for snapshot in payload.get(kind, []):
                 for name, raw in list(snapshot.get("fields", {}).items()):
                     try:
-                        fact = Fact.model_validate(raw)
+                        fact = fact_model.model_validate(raw)
                         validate_fields({name: fact}, offer=kind == "offers")
                     except (ValueError, TypeError, ValidationError):
                         del snapshot["fields"][name]
@@ -149,6 +166,7 @@ class DataGateway:
         candidate_limit=20,
         exclusions=(),
         catalog_requirement=None,
+        catalog_analysis=False,
     ) -> CrawlResult:
         if self.settings.data_provider == "supabase":
             from domain.crawl_v2 import CrawlResultV2
@@ -231,6 +249,7 @@ class DataGateway:
                 exclusions=exclusions,
                 requirement=catalog_requirement,
                 registry=self.registry,
+                analysis=catalog_analysis,
             )
         else:
             if not self.settings.crawler_url:

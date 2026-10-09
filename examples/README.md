@@ -6,6 +6,8 @@ Backend v2: [request walkthrough](backend-v2.md), [runtime/limitations](../docs/
 
 Structured hard filter → per-offer pool → semantic assessment → deterministic ranking: [new flow and test guide](backend-retrieval-semantic-v2.md), [verification results](../docs/backend-retrieval-assessment-results.md).
 
+Five core inputs across form/text/edits: [personalized walkthrough](backend-personalized-v2.md). `uv run python examples/check-personalized-v2.py` explicitly calls real NIM and the configured Supabase reader, uses isolated in-memory application SQLite, and saves public responses under ignored `data/live-tests/`. It tests the original Japan/Tet inputs, then supplies **synthetic** adult/budget/year/window/route answers for Tet. It does not use a running server, change catalog rows, or save session tokens. Prerequisites: existing root `.env`, `DATA_PROVIDER=supabase`, valid NIM/catalog credentials. Technical failures return a nonzero exit code; recommendations still depend on catalog proof/freshness.
+
 All tours below are synthetic; `.invalid` URLs are fixture identifiers and are never fetched.
 
 1. Start `uv run tour-backend serve` in the repo root.
@@ -25,3 +27,9 @@ Refresh or reopen the SQLite viewer after requests. Check **Server response** in
 After a backend code update, stop the old server with Ctrl+C, restart it, and reload `/docs` to see the new Authorize button and examples.
 
 Optional environment settings are illustrated by `backend.env.example`; keep credentials in the existing root `.env`. The example is not loaded automatically.
+## What-if
+
+[Hướng dẫn test sau comparison](backend-what-if-v2.md); `check-what-if-v2.py` kiểm API với application SQLite in-memory và Supabase read-only, lưu public artifacts riêng; không ghi catalog hoặc `.env`. Gửi structured equivalents cho ca Nhật và ca Tết đã bổ sung **synthetic** số người/trần giá/năm/nghĩa khoảng; không gọi lại extraction. Script có một NIM insight-selection probe riêng trên metrics synthetic, dùng `--skip-nim` để bỏ probe đó. Không gộp probe synthetic vào kết quả tour thật.
+# Catalog validation
+
+`backend-catalog-validation.md` giải thích cấu hình trust/TTL và kiểm chứng Supabase read-only theo [policy](../docs/catalog-validation-policy.md); không cần bulk proof backfill.

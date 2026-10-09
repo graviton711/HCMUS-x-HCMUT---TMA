@@ -18,13 +18,26 @@ def hard_status(r, evaluations):
     return fold_tree(r.hard_tree, {e["condition_id"]: e["status"] for e in evaluations})
 
 
-def assess_options(r, tour, options, source, at, synthetic=False, *, selected_id=None, complete=True):
+def assess_options(
+    r, tour, options, source, at, synthetic=False, *, selected_id=None, complete=True, evaluation_cache=None
+):
     key = tour_identity(tour)
 
     def evaluations(offer, reason=None, *, per_offer=False):
+        def cached(condition):
+            # Cache lifetime is one immutable universe/time. Object identities include condition/party changes.
+            cache_key = (id(condition), id(tour), id(offer), id(r.party), id(source), at, synthetic, reason)
+            if evaluation_cache is None:
+                return evaluate(condition, tour, offer, r.party, source, at, synthetic, reason)
+            if cache_key not in evaluation_cache:
+                evaluation_cache[cache_key] = evaluate(
+                    condition, tour, offer, r.party, source, at, synthetic, reason
+                )
+            return evaluation_cache[cache_key]
+
         return [
             dict(
-                evaluate(c, tour, offer, r.party, source, at, synthetic, reason),
+                cached(c),
                 id="eval_"
                 + hashlib.sha256(
                     json.dumps([key, offer.snapshot_id if per_offer else "candidate", c.id]).encode()
@@ -101,7 +114,8 @@ def assess_options(r, tour, options, source, at, synthetic=False, *, selected_id
     )
 
 
-def prepare_candidates(r, crawl, registry, at, *, exclusions=(), selections=(), candidate_limit=20):
+def evaluate_candidates(r, crawl, registry, at, *, exclusions=(), selections=(), evaluation_cache=None):
+    """Evaluate the whole acquired universe; no eligibility filtering or display limit."""
     sources = {s.source_id: s for s in registry}
     tours = {t.snapshot_id: t for t in crawl.tours}
     offers = {o.snapshot_id: o for o in crawl.offers}
@@ -151,8 +165,14 @@ def prepare_candidates(r, crawl, registry, at, *, exclusions=(), selections=(), 
             crawl.origin == "synthetic",
             selected_id=selection.get(key),
             complete=complete,
+            evaluation_cache=evaluation_cache,
         )
         evaluated.append(dict(id=key, item=item, tour=tour, options=options, **assessed))
+    return evaluated
+
+
+def prepare_candidates(r, crawl, registry, at, *, exclusions=(), selections=(), candidate_limit=20):
+    evaluated = evaluate_candidates(r, crawl, registry, at, exclusions=exclusions, selections=selections)
     discovery = [
         c
         for c in evaluated

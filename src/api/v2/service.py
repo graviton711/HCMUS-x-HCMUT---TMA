@@ -20,9 +20,12 @@ from api.v2.models import (
 from data_access.v2 import GatewayV2, registry_from_records
 from decision.candidates import prepare_candidates, refresh_candidates
 from decision.v2 import build_comparison
-from domain.common import AppError, now, uid
+from decision.what_if import build_analysis, plan_analysis
+from domain.common import AppError, instant, now, uid
 from domain.requirements import Message, Readiness, SourceReference, Target, Tree
 from domain.semantic import ConditionV2, SemanticRequirement
+from domain.what_if import CreateWhatIf, WhatIfAnalysis
+from requirements.completeness import apply_completeness
 from requirements.edits import form_requirement
 from requirements.nim import parse_validated
 from requirements.semantic import answer_clarification, normalize_v2
@@ -30,10 +33,26 @@ from requirements.semantic import finalize_v2 as finalize
 from requirements.service import prune
 from requirements.v2 import SlotExtractor
 from semantic_assessment.service import SemanticAssessor
+from semantic_assessment.what_if import WhatIfExplainer
 
 
 def mode_for(kind, urls):
     return "compare_urls" if kind == "urls" else "hybrid" if urls else "discover"
+
+
+def require_ready(r, action):
+    if not getattr(r.readiness, f"can_{action}") or action == "search" and r.revision == 0:
+        raise AppError(
+            "REQUIREMENT_NOT_READY",
+            "Cần bổ sung/làm rõ nhu cầu trước khi xác nhận hoặc tìm tour.",
+            409,
+            details={
+                "completeness": r.completeness.model_dump(mode="json"),
+                "readiness": r.readiness.model_dump(mode="json"),
+                "clarifications": [q.model_dump(mode="json") for q in r.clarifications],
+                "issues": [i.model_dump(mode="json") for i in r.issues],
+            },
+        )
 
 
 def membership_tree(base, wanted, field, soft):
@@ -221,9 +240,14 @@ def typed_edits(previous, edits):
                 "STALE_CLARIFICATION", "Clarification không thuộc proposal hiện tại hoặc bị trùng.", 409
             )
         seen.add(edit.clarification_id)
+        question = questions[edit.clarification_id]
+        if question.field_path == "party.adults" and any(e.op == "replace_party" for e in edits):
+            raise AppError("INVALID_EDIT", "Trả lời số người và replace_party cần tách lượt.")
+        if not any(q.id == question.id for q in updated.clarifications):
+            raise AppError("STALE_CLARIFICATION", "Target đã được thay đổi trong lượt này.", 409)
         updated = answer_clarification(
             updated,
-            questions[edit.clarification_id],
+            question,
             edit.answer,
             SourceReference(
                 kind="form", field_path=f"clarifications.{edit.clarification_id}", submitted_value=edit.answer
@@ -233,9 +257,10 @@ def typed_edits(previous, edits):
 
 
 class Service:
-    def __init__(self, store, nim, gateway, *, semantic_gateway=None):
+    def __init__(self, store, nim, gateway, *, semantic_gateway=None, what_if_gateway=None):
         self.store, self.nim, self.gateway = store, nim, gateway
         self.assessor = SemanticAssessor(store.settings, semantic_gateway)
+        self.explainer = WhatIfExplainer(store.settings, what_if_gateway)
 
     def create_requirement(self, c, owner, body):
         rid, urls = uid("req"), canonical_urls(body.reference_urls)
@@ -260,21 +285,39 @@ class Service:
                 condition_model=ConditionV2,
                 finalizer=finalize,
             )
-            r = RequirementV2.model_validate(
-                {
-                    **core.model_dump(),
-                    **common,
-                    "schema_version": "2.0-draft",
-                    "readiness": core.readiness.model_dump(),
-                    "preference_levels": form.preference_levels.model_dump(),
-                    "notes": form.notes,
-                    "provenance": {"source": "user_confirmed_form"},
-                }
+            r = finalize(
+                RequirementV2.model_validate(
+                    {
+                        **core.model_dump(),
+                        **common,
+                        "schema_version": "2.0-draft",
+                        "readiness": core.readiness.model_dump(),
+                        "preference_levels": form.preference_levels.model_dump(),
+                        "notes": form.notes,
+                        "provenance": {"source": "user_submitted_form"},
+                    }
+                )
             )
+            if not r.readiness.can_confirm:
+                base = apply_completeness(RequirementV2(**common, revision=0))
+                self.store.add_resource(
+                    c, owner, rid, "requirement_v2", base.model_dump(mode="json"), status="draft"
+                )
+                p = make_proposal(base, r, self.store.settings)
+                state.save_proposal(c, owner, p)
+                return 201, {
+                    "requirement_id": rid,
+                    "revision": 0,
+                    "proposal_id": p.id,
+                    "proposal_version": p.version,
+                    "status": p.status,
+                }
             self.store.add_resource(c, owner, rid, "requirement_v2", r.model_dump(mode="json"))
             self.store.add_revision(c, owner, r, 0)
             return 201, r.model_dump(mode="json")
-        r = RequirementV2(**common, revision=0, readiness=Readiness(can_collect_data=bool(urls)).model_dump())
+        r = apply_completeness(
+            RequirementV2(**common, revision=0, readiness=Readiness(can_collect_data=bool(urls)).model_dump())
+        )
         self.store.add_resource(c, owner, rid, "requirement_v2", r.model_dump(mode="json"), status="draft")
         preview = r.model_copy(update={"revision": 1})
         p = make_proposal(r, preview, self.store.settings)
@@ -363,16 +406,8 @@ class Service:
     def confirm(self, c, owner, pid, body):
         p = state.proposal(c, owner, pid)
         state.guard_proposal(self.store, c, owner, p, body.expected_revision, body.expected_proposal_version)
-        if p.preview.clarifications and any(q.blocking for q in p.preview.clarifications):
-            raise AppError("REQUIREMENT_NOT_READY", "Cần làm rõ điều kiện trước khi xác nhận.", 409)
         r = finalize(RequirementV2.model_validate(p.preview.model_dump()))
-        if any(issue.blocking for issue in r.issues):
-            raise AppError(
-                "REQUIREMENT_NOT_READY",
-                "Backend chưa hỗ trợ đủ ràng buộc bắt buộc.",
-                409,
-                details={"reasons": r.readiness.reasons},
-            )
+        require_ready(r, "confirm")
         self.store.add_revision(c, owner, r, p.base_revision)
         state.save_proposal(
             c,
@@ -592,10 +627,36 @@ class Service:
 
     def provider_registry(self, registry):
         if self.store.settings.data_provider == "supabase":
-            configured = {s.source_id for s in self.gateway.registry}
-            return [
-                s for s in registry if s.source_id in configured and s.limits.get("catalog_read_only") == 1
-            ]
+            configured = {s.source_id: s for s in self.gateway.registry}
+            result = []
+            for s in registry:
+                current = configured.get(s.source_id)
+                if (
+                    current is None
+                    or s.limits.get("catalog_read_only") != 1
+                    or s.supplier_id != current.supplier_id
+                ):
+                    continue
+                domains = [d for d in s.approved_domains if d in current.approved_domains]
+                if not domains:
+                    continue
+                limits = {**s.limits}
+                limits.pop("catalog_validated", None)
+                if any(d in self.store.settings.supabase_tour_trusted_domains for d in domains):
+                    limits["catalog_validated"] = 1
+                result.append(
+                    s.model_copy(
+                        update={
+                            "approved_domains": domains,
+                            "limits": limits,
+                            "freshness_seconds": {
+                                **s.freshness_seconds,
+                                **self.store.settings.supabase_tour_freshness_seconds,
+                            },
+                        }
+                    )
+                )
+            return result
         return [
             s
             for s in registry
@@ -613,8 +674,7 @@ class Service:
         r = state.revision(self.store, c, owner, body.requirement_id)
         if r.revision != body.revision:
             raise AppError("REVISION_CONFLICT", "Chỉ tìm theo revision hiện tại đã xác nhận.", 409)
-        if not r.readiness.can_collect_data:
-            raise AppError("REQUIREMENT_NOT_READY", "Cần làm rõ phạm vi tìm kiếm.", 409)
+        require_ready(r, "search")
         pending = (
             c.execute(
                 select(state.proposals.c.id).where(
@@ -667,6 +727,7 @@ class Service:
     async def comparison_job(self, row, worker_id, payload):
         with self.store.engine.connect() as c:
             r = state.revision(self.store, c, row["owner"], payload["requirement_id"], payload["revision"])
+        require_ready(r, "search")
         registry = self.registry()
         self.stage(
             row, worker_id, "reference_collection", "started", "Thu thập nguồn theo yêu cầu đã xác nhận."
@@ -798,11 +859,224 @@ class Service:
             if not state.running(c, row, worker_id):
                 return
             # Pause/block is checked again at publication, after the upstream await.
-            active = {s.source_id for s in self.registry(c) if s.access_status == "approved"}
+            current_registry = self.registry(c)
+            active = {s.source_id for s in current_registry if s.access_status == "approved"}
             if any(s.source_id not in active for s in crawl.source_results if s.tour_snapshot_ids):
                 raise AppError("SOURCE_BLOCKED", "Nguồn bị chặn trong lúc xử lý.", 409)
+            used = {s.source_id for s in crawl.source_results if s.tour_snapshot_ids}
+            before = {s.source_id: s for s in registry if s.source_id in used}
+            after = {s.source_id: s for s in current_registry if s.source_id in used}
+            if before != after:
+                raise AppError(
+                    "SOURCE_POLICY_CHANGED", "Policy nguồn đã đổi trong lúc xử lý; chạy lại so sánh.", 409
+                )
             state.persist_snapshots(c, row["owner"], row["resource_id"], crawl)
             status = "partial" if failures or assessment.state == "partial" else "succeeded"
+            c.execute(
+                update(resources)
+                .where(resources.c.id == row["resource_id"])
+                .values(
+                    status=status,
+                    payload=dump(
+                        {"result": result.model_dump(mode="json"), "crawl": crawl.model_dump(mode="json")}
+                    ),
+                )
+            )
+            state.finish(c, row, worker_id, status)
+
+    def analysis_revision(self, c, owner, rid, revision):
+        current = state.revision(self.store, c, owner, rid)
+        if current.revision != revision:
+            raise AppError("REVISION_CONFLICT", "Phân tích cần revision đã xác nhận hiện tại.", 409)
+        require_ready(current, "search")
+        pending = (
+            c.execute(
+                select(state.proposals.c.id).where(
+                    state.proposals.c.owner == owner,
+                    state.proposals.c.requirement_id == rid,
+                    state.proposals.c.status.in_(["pending", "needs_clarification"]),
+                )
+            )
+            .scalars()
+            .all()
+        )
+        if any(state.proposal(c, owner, pid).status != "expired" for pid in pending):
+            raise AppError("PROPOSAL_NOT_CONFIRMED", "Review hoặc hủy proposal trước khi phân tích.", 409)
+        return current
+
+    def create_what_if(self, c, owner, cid, body):
+        previous = self.store.resource(owner, cid, c, "comparison_v2")
+        data = json.loads(previous["payload"]).get("result")
+        if previous["status"] not in {"succeeded", "partial"} or not data:
+            raise AppError("COMPARISON_NOT_READY", "Comparison chưa có kết quả để phân tích.", 409)
+        if data["revision"] != body.expected_revision:
+            raise AppError("REVISION_CONFLICT", "Revision không khớp comparison.", 409)
+        r = self.analysis_revision(c, owner, data["requirement_id"], body.expected_revision)
+        if len(set(body.condition_ids)) != len(body.condition_ids) or set(body.condition_ids) - {
+            x.id for x in r.conditions
+        }:
+            raise AppError("INVALID_INPUT", "Condition IDs trùng hoặc không thuộc requirement.")
+        payload = dict(
+            comparison_id=cid,
+            requirement_id=r.id,
+            revision=r.revision,
+            options=body.model_dump(mode="json"),
+            exclusions=data["recommendations"]["excluded_tour_ids"],
+        )
+        aid = uid("analysis")
+        self.store.add_resource(c, owner, aid, "what_if_v2", payload, revision=r.revision)
+        jid = self.store.add_job(c, owner, aid, "v2_what_if", payload)
+        return 202, dict(
+            analysis_id=aid,
+            job_id=jid,
+            comparison_id=cid,
+            requirement_id=r.id,
+            revision=r.revision,
+            status="queued",
+        )
+
+    def apply_what_if(self, c, owner, aid, sid, body):
+        record = self.store.resource(owner, aid, c, "what_if_v2")
+        raw = json.loads(record["payload"]).get("result")
+        if record["status"] not in {"succeeded", "partial"} or not raw:
+            raise AppError("ANALYSIS_NOT_READY", "Phân tích chưa hoàn tất.", 409)
+        result = WhatIfAnalysis.model_validate(raw)
+        if result.revision != body.expected_revision:
+            raise AppError("REVISION_CONFLICT", "Revision không khớp phân tích.", 409)
+        self.analysis_revision(c, owner, result.requirement_id, body.expected_revision)
+        active = {s.source_id for s in self.registry(c) if s.access_status == "approved"}
+        if any(
+            s["source_id"] not in active for s in result.scope["source_coverage"] if s["tour_snapshot_ids"]
+        ):
+            raise AppError("SOURCE_BLOCKED", "Nguồn không còn được duyệt; cần phân tích lại.", 409)
+        scenario = next((s for s in result.scenarios if s.id == sid), None)
+        if scenario is None:
+            raise AppError("NOT_FOUND", "Scenario không thuộc phân tích.", 404)
+        return self.propose(
+            c,
+            owner,
+            result.requirement_id,
+            CreateProposal(
+                expected_revision=body.expected_revision,
+                input={"kind": "structured", "edits": scenario.edits},
+            ),
+        )
+
+    async def what_if_job(self, row, worker_id, payload):
+        import asyncio
+
+        with self.store.engine.connect() as c:
+            r = self.analysis_revision(c, row["owner"], payload["requirement_id"], payload["revision"])
+        registry = self.registry()
+        options = CreateWhatIf.model_validate(payload["options"])
+        self.stage(
+            row,
+            worker_id,
+            "analysis_collection",
+            "started",
+            "Đọc universe rộng để tính baseline và kịch bản cùng snapshot.",
+        )
+        crawl = await GatewayV2(self.gateway, registry).collect_analysis(
+            r,
+            row["deadline_at"],
+            candidate_limit=options.candidate_limit,
+            exclusions=payload["exclusions"],
+        )
+        failures = [s for s in crawl.source_results if s.status in {"error", "timeout"}]
+        if failures and not crawl.tours:
+            raise AppError("SOURCES_UNAVAILABLE", "Không đọc được snapshot phân tích.", 502, retryable=True)
+        self.stage(
+            row,
+            worker_id,
+            "analysis_collection",
+            "completed",
+            "Đã đọc snapshot bounded, chưa nới yêu cầu thật.",
+            counts={"tours": len(crawl.tours), "offers": len(crawl.offers)},
+        )
+
+        def check():
+            if now() >= instant(row["deadline_at"]):
+                raise AppError("JOB_DEADLINE_EXCEEDED", "Phân tích vượt thời hạn.", 504, retryable=True)
+
+        async def prepare(at):
+            return await asyncio.to_thread(
+                plan_analysis, r, crawl, registry, at, options, exclusions=payload["exclusions"], check=check
+            )
+
+        self.stage(row, worker_id, "what_if", "started", "Đánh giá hard/soft và các mức nới có bằng chứng.")
+        at = now().isoformat()
+        plan = await prepare(at)
+        assessment = await self.assessor.run(r, plan[3], crawl, row["deadline_at"])
+        at = now().isoformat()
+        plan = await prepare(at)
+        result = build_analysis(
+            row["resource_id"],
+            payload["comparison_id"],
+            r,
+            crawl,
+            at,
+            plan,
+            semantic_report=assessment.model_dump(mode="json"),
+            exclusions=payload["exclusions"],
+        )
+        explanation = await self.explainer.run(result, row["deadline_at"])
+        # All scenario metrics share the final time after BOTH upstream waits.
+        at = now().isoformat()
+        plan = await prepare(at)
+        result = build_analysis(
+            row["resource_id"],
+            payload["comparison_id"],
+            r,
+            crawl,
+            at,
+            plan,
+            semantic_report=assessment.model_dump(mode="json"),
+            exclusions=payload["exclusions"],
+        )
+        by_id = {s.id: s for s in result.scenarios}
+        chosen = explanation["insight_ids"]
+        if explanation["state"] == "completed" and any(
+            sid not in by_id or by_id[sid].state != "measured" for sid in chosen
+        ):
+            fallback = [s for s in result.scenarios if s.state == "measured"][:3] or result.scenarios[:1]
+            explanation = dict(
+                state="fallback",
+                insight_ids=[s.id for s in fallback],
+                model=None,
+                reason_code="DATA_CHANGED_DURING_EXPLANATION",
+            )
+            chosen = explanation["insight_ids"]
+        explanation["insight_ids"] = [sid for sid in chosen if sid in by_id]
+        explanation["text"] = [by_id[sid].insight for sid in explanation["insight_ids"]]
+        result = result.model_copy(update={"explanation": explanation})
+        result.scope["source_capabilities"] = [s.model_dump(mode="json") for s in registry]
+        self.stage(
+            row,
+            worker_id,
+            "what_if",
+            "completed",
+            "Đã tính kịch bản; requirement gốc giữ nguyên.",
+            counts={"scenarios": len(result.scenarios), "candidates": len(result.candidates)},
+        )
+        with self.store.transaction() as c:
+            if not state.running(c, row, worker_id):
+                return
+            self.analysis_revision(c, row["owner"], r.id, r.revision)
+            current_registry = self.registry(c)
+            active = {s.source_id for s in current_registry if s.access_status == "approved"}
+            if any(s.source_id not in active for s in crawl.source_results if s.tour_snapshot_ids):
+                raise AppError("SOURCE_BLOCKED", "Nguồn bị chặn trong lúc phân tích.", 409)
+            used = {s.source_id for s in crawl.source_results if s.tour_snapshot_ids}
+            before = {s.source_id: s for s in registry if s.source_id in used}
+            after = {s.source_id: s for s in current_registry if s.source_id in used}
+            if before != after:
+                raise AppError("SOURCE_POLICY_CHANGED", "Policy nguồn đã đổi; cần phân tích lại.", 409)
+            state.persist_snapshots(c, row["owner"], row["resource_id"], crawl)
+            status = (
+                "partial"
+                if failures or assessment.state == "partial" or explanation["state"] == "fallback"
+                else "succeeded"
+            )
             c.execute(
                 update(resources)
                 .where(resources.c.id == row["resource_id"])
@@ -969,6 +1243,7 @@ class Service:
         handler = {
             "v2_parse": self.parse_job,
             "v2_comparison": self.comparison_job,
+            "v2_what_if": self.what_if_job,
             "v2_message": self.message_job,
             "v2_source_check": self.admin.check_job,
             "v2_source_refresh": self.admin.refresh_job,

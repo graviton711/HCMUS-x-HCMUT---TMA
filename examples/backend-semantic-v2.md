@@ -69,7 +69,7 @@ Bạn đã chốt đây là khoảng có thể đi. **2027 dưới đây chỉ l
 
 Có thể thử cùng nội dung bằng `input: {"kind":"message","text":"Tết 2027. Đây là khoảng thời gian tôi có thể đi. Đi dọc miền Trung chỉ là ưu tiên."}` với version mới nhất; chờ parse job rồi GET proposal. Bản typed không cần gọi NIM.
 
-6. Kiểm tra hai mốc cập nhật cùng nhau: departure_date `gte 2027-02-03`, return_date `lte 2027-02-09`; năm âm đầu 2026, năm âm cuối 2027. Các nhu cầu khác vẫn còn. `readiness.status=ready` khi không còn câu hỏi/issue blocking.
+6. Kiểm tra hai mốc cập nhật cùng nhau: departure_date `gte 2027-02-03`, return_date `lte 2027-02-09`; năm âm đầu 2026, năm âm cuối 2027. Các nhu cầu khác vẫn còn. Theo policy core mới, còn phải bổ sung adults và numeric hard budget qua proposal (không suy từ “giá hợp lý”); xem [typed answers](backend-personalized-v2.md). `readiness.can_confirm=true` chỉ khi core đủ và không còn blocker semantic.
 7. POST `/v2/proposals/{proposal_id}/confirm` với `expected_revision:0` và `expected_proposal_version` mới nhất. GET requirement phải có revision 1 và values/trace đã lưu. Confirm không tự tạo comparison.
 
 ## Test và tích hợp

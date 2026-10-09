@@ -95,19 +95,24 @@ def emit(c, job_id, stage, status, summary, **kwargs):
 
 
 def revision(store, c, owner, rid, rev=None):
+    from requirements.completeness import apply_completeness
+    from requirements.semantic import finalize_v2
+
     resource = store.resource(owner, rid, c, "requirement_v2")
     number = resource["revision"] if rev is None else rev
     if number == 0:
-        return RequirementV2.model_validate_json(resource["payload"])
+        return apply_completeness(RequirementV2.model_validate_json(resource["payload"]))
     payload = c.execute(
         select(revisions.c.payload).where(revisions.c.resource_id == rid, revisions.c.revision == number)
     ).scalar()
     if payload is None:
         raise AppError("NOT_FOUND", "Không tìm thấy revision.", 404)
-    return RequirementV2.model_validate_json(payload)
+    return finalize_v2(RequirementV2.model_validate_json(payload))
 
 
 def proposal(c, owner, pid):
+    from requirements.semantic import finalize_v2
+
     row = (
         c.execute(select(proposals).where(proposals.c.id == pid, proposals.c.owner == owner))
         .mappings()
@@ -116,6 +121,12 @@ def proposal(c, owner, pid):
     if row is None:
         raise AppError("NOT_FOUND", "Không tìm thấy proposal.", 404)
     p = Proposal.model_validate_json(row["payload"])
+    preview = finalize_v2(p.preview)
+    p = p.model_copy(
+        update={"preview": preview, "clarifications": [q.model_dump() for q in preview.clarifications]}
+    )
+    if p.status in {"pending", "needs_clarification"}:
+        p = p.model_copy(update={"status": "needs_clarification" if preview.clarifications else "pending"})
     if p.status in {"pending", "needs_clarification"} and p.expires_at <= now().isoformat():
         p = p.model_copy(update={"status": "expired"})
     return p

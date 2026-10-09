@@ -1,5 +1,9 @@
 # Decision
 
+Phân tích what-if theo [policy](../../docs/what-if-analysis.md): evaluate universe trước pool, hard/soft group ablation, mức nới có bằng chứng và cặp blockers; cùng snapshot/time/party. `what_if.py` tính metrics/witnesses, `v2.py` dùng chung rank; không gọi model hoặc tự sửa requirement. DTO ở `domain/what_if.py`.
+
+What-if công khai condition diagnostics (counts/reason codes trên candidate summaries) để tìm thiếu dữ liệu, giữ phân biệt với eligibility toàn cây và contribution/causal metrics.
+
 V2 structured retrieval/per-offer và semantic assessment theo [policy triển khai](../../docs/retrieval-semantic-ranking.md). Candidate evaluator là pure; NIM nằm trong module `semantic_assessment`. Không ghép predicates qua nhiều offers; ranking công bố khoảng điểm và coverage.
 
 `prepare_candidates` chọn pool trước assessment; `refresh_candidates` đánh giá lại cùng pool sau upstream wait, giữ IDs và truncation. Không thêm tour khác vì eligibility thay đổi theo thời gian.
@@ -37,3 +41,6 @@ Acceptance: bảng truth table ALL/ANY đúng; budget bounds không tạo false 
 ## Semantic v2 evaluation
 
 `semantic.py` đánh giá entity alternatives/temporal/scoped transport/tour type/route/nature và delegate fields cũ. Unsupported qualitative metric trả unknown với reason; ranking công khai coverage và giữ null utility khi thiếu. [Contract](../../docs/requirements-semantics.md).
+# Catalog validation
+
+[Policy](../../docs/catalog-validation-policy.md): evaluator nhận `catalog_validated` chỉ khi source hiện hành approved và capability cho phép. Freshness/scope/completeness/price qualifiers vẫn độc lập; áp dụng cùng logic cho retrieval, comparison và what-if. Website proof vẫn được dùng; không coi receipt là independent verification.

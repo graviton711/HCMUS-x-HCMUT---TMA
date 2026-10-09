@@ -72,6 +72,44 @@
       "title": "CatalogRecordRef",
       "type": "object"
     },
+    "CatalogValidation": {
+      "additionalProperties": false,
+      "properties": {
+        "policy_version": {
+          "const": "catalog-validation-v1",
+          "default": "catalog-validation-v1",
+          "title": "Policy Version",
+          "type": "string"
+        },
+        "source_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "checks": {
+          "items": {
+            "enum": [
+              "schema",
+              "record_binding",
+              "source_url",
+              "timestamp",
+              "normalization"
+            ],
+            "type": "string"
+          },
+          "title": "Checks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "source_id",
+        "checks"
+      ],
+      "title": "CatalogValidation",
+      "type": "object"
+    },
     "EvidenceV2": {
       "additionalProperties": false,
       "properties": {
@@ -130,6 +168,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/CatalogRecordRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "catalog_validation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CatalogValidation"
             },
             {
               "type": "null"
@@ -217,7 +266,7 @@
       "title": "ExtraCharge",
       "type": "object"
     },
-    "Fact_ExtraCharge_": {
+    "FactV2_ExtraCharge_": {
       "additionalProperties": false,
       "properties": {
         "value": {
@@ -261,6 +310,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -343,10 +393,10 @@
       "required": [
         "observed_at"
       ],
-      "title": "Fact[ExtraCharge]",
+      "title": "FactV2[ExtraCharge]",
       "type": "object"
     },
-    "Fact_JsonValue_": {
+    "FactV2_JsonValue_": {
       "additionalProperties": false,
       "properties": {
         "value": {
@@ -390,6 +440,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -472,10 +523,10 @@
       "required": [
         "observed_at"
       ],
-      "title": "Fact[JsonValue]",
+      "title": "FactV2[JsonValue]",
       "type": "object"
     },
-    "Fact_PriceQuote_": {
+    "FactV2_PriceQuote_": {
       "additionalProperties": false,
       "properties": {
         "value": {
@@ -519,6 +570,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -601,10 +653,10 @@
       "required": [
         "observed_at"
       ],
-      "title": "Fact[PriceQuote]",
+      "title": "FactV2[PriceQuote]",
       "type": "object"
     },
-    "Fact_bool_": {
+    "FactV2_bool_": {
       "additionalProperties": false,
       "properties": {
         "value": {
@@ -649,6 +701,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -731,10 +784,10 @@
       "required": [
         "observed_at"
       ],
-      "title": "Fact[bool]",
+      "title": "FactV2[bool]",
       "type": "object"
     },
-    "Fact_str_": {
+    "FactV2_str_": {
       "additionalProperties": false,
       "properties": {
         "value": {
@@ -779,6 +832,7 @@
           "enum": [
             "supplier_published",
             "independently_verified",
+            "catalog_validated",
             "unverified"
           ],
           "title": "Verification",
@@ -861,7 +915,7 @@
       "required": [
         "observed_at"
       ],
-      "title": "Fact[str]",
+      "title": "FactV2[str]",
       "type": "object"
     },
     "Issue": {
@@ -965,7 +1019,7 @@
         },
         "fields": {
           "additionalProperties": {
-            "$ref": "#/$defs/Fact_JsonValue_"
+            "$ref": "#/$defs/FactV2_JsonValue_"
           },
           "maxProperties": 10,
           "title": "Fields",
@@ -973,7 +1027,7 @@
         },
         "price_quotes": {
           "items": {
-            "$ref": "#/$defs/Fact_PriceQuote_"
+            "$ref": "#/$defs/FactV2_PriceQuote_"
           },
           "maxItems": 50,
           "title": "Price Quotes",
@@ -981,7 +1035,7 @@
         },
         "extra_charges": {
           "items": {
-            "$ref": "#/$defs/Fact_ExtraCharge_"
+            "$ref": "#/$defs/FactV2_ExtraCharge_"
           },
           "maxItems": 50,
           "title": "Extra Charges",
@@ -990,7 +1044,7 @@
         "pricing_complete": {
           "anyOf": [
             {
-              "$ref": "#/$defs/Fact_bool_"
+              "$ref": "#/$defs/FactV2_bool_"
             },
             {
               "type": "null"
@@ -1000,7 +1054,7 @@
         },
         "catalog_fields": {
           "additionalProperties": {
-            "$ref": "#/$defs/Fact_JsonValue_"
+            "$ref": "#/$defs/FactV2_JsonValue_"
           },
           "maxProperties": 3,
           "title": "Catalog Fields",
@@ -1286,7 +1340,7 @@
         },
         "policies": {
           "additionalProperties": {
-            "$ref": "#/$defs/Fact_str_"
+            "$ref": "#/$defs/FactV2_str_"
           },
           "maxProperties": 20,
           "title": "Policies",
@@ -1294,7 +1348,7 @@
         },
         "fields": {
           "additionalProperties": {
-            "$ref": "#/$defs/Fact_JsonValue_"
+            "$ref": "#/$defs/FactV2_JsonValue_"
           },
           "maxProperties": 30,
           "title": "Fields",
@@ -1302,7 +1356,7 @@
         },
         "semantic_fields": {
           "additionalProperties": {
-            "$ref": "#/$defs/Fact_JsonValue_"
+            "$ref": "#/$defs/FactV2_JsonValue_"
           },
           "maxProperties": 3,
           "title": "Semantic Fields",
@@ -1310,7 +1364,7 @@
         },
         "catalog_fields": {
           "additionalProperties": {
-            "$ref": "#/$defs/Fact_JsonValue_"
+            "$ref": "#/$defs/FactV2_JsonValue_"
           },
           "maxProperties": 2,
           "title": "Catalog Fields",

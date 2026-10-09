@@ -1,5 +1,9 @@
 # Requirements — hiểu và chuẩn hóa nhu cầu
 
+Completeness v2 thuộc `completeness.py`, sau semantic normalization: năm thông tin cá nhân hóa, targeted questions và prerequisites confirm/search dùng chung. Giữ required/strength/data-proof độc lập; URL-only miễn, hybrid vẫn cần core. [Policy và answer contract](../../docs/personalized-requirement-policy.md).
+
+Generation schema giới hạn answer IDs theo reason được hỗ trợ, yêu cầu đủ answers tường minh cả mixed message và giới hạn operation targets vào condition IDs. Loại tour trống từ từ “tour” chung bị từ chối và bounded repair; không tự loại condition hoặc tự tạo loại tour.
+
 Party duplicate guard yêu cầu NIM repair khi một unsupported condition chỉ phát lại quote số người đã có trong party; không tự xóa câu có yêu cầu bổ sung. [Retrieval/assessment contract](../../docs/retrieval-semantic-ranking.md).
 
 INITIAL coverage validation giữ numeric budget/số người lớn tường minh và chặn predicate trùng dù khác ID; lỗi được gom vào một lượt NIM repair, không tự điền slots. Chi tiết và giới hạn grammar ở [semantic contract](../../docs/requirements-semantics.md).
