@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import signal
+import sys
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from types import FrameType
 
 INTERRUPTED_EXIT_CODE = 130
@@ -35,3 +36,11 @@ def run_cli(action: Callable[[], int]) -> int:
             return action()
     except (FastExit, KeyboardInterrupt):
         return INTERRUPTED_EXIT_CODE
+
+
+def ensure_utf8_stdout() -> None:
+    """Best-effort UTF-8 stdout for Windows consoles. Never raises."""
+    with suppress(Exception):
+        reconfigure = getattr(sys.stdout, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8", errors="replace")

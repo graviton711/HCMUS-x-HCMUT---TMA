@@ -7,9 +7,10 @@ from backend.errors import AppError
 from backend.input.pipeline import build_requirement
 
 
-def test_requirement_round_trip(settings):
+def test_requirement_round_trip(settings, input_cfg):
     store = SessionStore(settings.database_url)
-    req = build_requirement("Đà Lạt 3 ngày, tối đa 8 triệu")
+    req = build_requirement("Đà Lạt 3 ngày, tối đa 8 triệu", cfg=input_cfg,
+                            known_places=["Đà Lạt"])
     store.save_requirement(req)
     loaded = store.get_requirement(req.id)
     assert loaded.id == req.id

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime
 from pathlib import Path
 
 from backend.errors import AppError
 from backend.models import Comparison, Requirement
+from shared import now_vn_iso
 
 
 def _connect(database_url: str) -> sqlite3.Connection:
@@ -41,7 +41,7 @@ class SessionStore:
         return Comparison.model_validate_json(self._load("comparison", cid))
 
     def _save(self, kind: str, rid: str, payload: str) -> None:
-        now = datetime.now(UTC).isoformat()
+        now = now_vn_iso()
         self._conn.execute(
             "INSERT OR REPLACE INTO records (id, kind, payload, created_at)"
             " VALUES (?, ?, ?, ?)",

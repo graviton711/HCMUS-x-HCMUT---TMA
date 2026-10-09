@@ -6,6 +6,7 @@ import re
 import unicodedata
 from typing import Any
 
+from backend.errors import AppError
 from backend.input.nim import NimClient
 from backend.models import Condition, Requirement, uid
 from backend.settings import InputCfg
@@ -25,10 +26,6 @@ _FORM_MAP = {
     "accommodation": "accommodation",
 }
 
-_MONEY = re.compile(r"(\d[\d.,]*)\s*(triệu|tr|tỷ|tỉ|nghìn|k|đ|vnd|trieu|ty|ti|nghin)?", re.IGNORECASE)
-_BUDGET_WORDS = ("toi da", "duoi", "khong qua", "ngan sach")
-
-
 def _strip_vi(text: str) -> str:
     """De-accent Vietnamese so undiacritized input still matches."""
     text = text.replace("đ", "d").replace("Đ", "D")
@@ -36,8 +33,13 @@ def _strip_vi(text: str) -> str:
                    if unicodedata.category(c) != "Mn").lower()
 
 
+def _money_pattern(units: dict[str, int]) -> re.Pattern[str]:
+    alts = sorted({_strip_vi(k) for k in units}, key=len, reverse=True)
+    return re.compile(r"(\d[\d.,]*)\s*(" + "|".join(alts) + r")?", re.IGNORECASE)
+
+
 def _money_to_vnd(raw: str, units: dict[str, int]) -> int | None:
-    match = _MONEY.search(raw)
+    match = _money_pattern(units).search(raw)
     if not match:
         return None
     num_raw, unit = match.group(1), _strip_vi(match.group(2) or "")
@@ -54,7 +56,8 @@ def keyword_extract(text: str, cfg: InputCfg | None = None,
 
     Place names come from the catalog being searched, not from configs.
     """
-    cfg = cfg or InputCfg()
+    if cfg is None:
+        raise AppError("CONFIG_MISSING", "Thiếu InputCfg.", 500)
     low = _strip_vi(text)
     hard: list[dict[str, Any]] = []
     for place in known_places or []:
@@ -62,10 +65,15 @@ def keyword_extract(text: str, cfg: InputCfg | None = None,
         if key not in low:
             continue
         before = low.split(key)[0][-cfg.window_before:]
-        field = "departure_city" if ("tu" in before.split() or "xuat phat" in before) else "destination"
+        words = before.split()
+        markers = [_strip_vi(m) for m in cfg.departure_markers]
+        # Single-syllable markers match whole words only ("tu" must not hit "tuoi"/"tour");
+        # multi-word markers match substrings.
+        hit = any((m in words) if " " not in m else (m in before) for m in markers)
+        field = "departure_city" if hit else "destination"
         hard.append({"field": field, "operator": "contains", "value": place})
     budget_at = -1
-    for w in _BUDGET_WORDS:
+    for w in [_strip_vi(b) for b in cfg.budget_words]:
         at = low.find(w)
         if at != -1 and (budget_at == -1 or at < budget_at):
             budget_at = at
@@ -101,7 +109,8 @@ def build_requirement(text: str = "", form: dict[str, Any] | None = None,
                       nim: NimClient | None = None, cfg: InputCfg | None = None,
                       known_places: list[str] | None = None) -> Requirement:
     form = form or {}
-    cfg = cfg or InputCfg()
+    if cfg is None:
+        raise AppError("CONFIG_MISSING", "Thiếu InputCfg.", 500)
     conditions: list[Condition] = []
     seen = set()
 
@@ -141,7 +150,7 @@ def build_requirement(text: str = "", form: dict[str, Any] | None = None,
             travelers = parsed["travelers"]
 
     conditions.extend(soft)
-    missing = [f for f in ("destination", "date_from", "budget_max")
-               if f not in {c.field for c in conditions if c.strength == "hard"}]
+    have = {c.field for c in conditions if c.strength == "hard"}
+    missing = [f for f in cfg.required_slots if f not in have]
     return Requirement(id=uid("req"), conditions=conditions, missing=missing,
                        raw_text=text, travelers=travelers)

@@ -9,14 +9,13 @@ only if all gates hold. Exit 0 pass, 1 fail, 2 usage/config error.
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from shared import get_logger
+from shared import ensure_utf8_stdout, get_logger
 from shared.runtime import run_cli
 
 from .extract import load_profile, load_settings
@@ -111,8 +110,7 @@ def _urls_from_csv(path: Path) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if isinstance(sys.stdout, io.TextIOWrapper):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    ensure_utf8_stdout()
     parser = argparse.ArgumentParser(prog="ingest-audit",
                                      description="Score a profile on holdout tour URLs.")
     parser.add_argument("--profile", "-p", default=None,

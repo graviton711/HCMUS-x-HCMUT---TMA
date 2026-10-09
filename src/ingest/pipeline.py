@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
-import io
 import json
 import os
 import queue
@@ -22,7 +21,7 @@ from collections.abc import Callable, Generator, Sequence
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from shared import get_logger, now_vn_iso
+from shared import ensure_utf8_stdout, get_logger, now_vn_iso
 
 from . import extract, quality
 from .extract import load_profile, load_settings
@@ -986,8 +985,7 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
 
 
 def main(argv: list[str] | None = None) -> int:
-    if isinstance(sys.stdout, io.TextIOWrapper):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    ensure_utf8_stdout()
     args = _parse_args(argv)
     _load_dotenv()
     os.environ.setdefault("LOG_LEVEL", "INFO")

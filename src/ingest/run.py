@@ -15,11 +15,10 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import io
 import sys
 from collections.abc import Sequence
 
-from shared.runtime import run_cli
+from shared.runtime import ensure_utf8_stdout, run_cli
 
 from . import pipeline as pipeline_mod
 from . import survey as survey_mod
@@ -37,8 +36,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    if isinstance(sys.stdout, io.TextIOWrapper):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    ensure_utf8_stdout()
     args = _parse_args(argv)
     if args.source:
         sources = [args.source]

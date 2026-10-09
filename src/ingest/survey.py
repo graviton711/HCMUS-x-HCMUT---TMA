@@ -17,7 +17,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import io
 import os
 import re
 import shutil
@@ -29,6 +28,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
+
+from shared import ensure_utf8_stdout
 
 MODEL = "opencode/muse-spark-1.3-contributor-free"
 VARIANT = "xhigh"
@@ -201,8 +202,7 @@ def promote_profile(out_dir: Path, source: str,
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    if isinstance(sys.stdout, io.TextIOWrapper):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    ensure_utf8_stdout()
     args = _parse_args(argv)
     try:
         sources = [args.source] if args.source else list_sources()

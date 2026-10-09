@@ -41,6 +41,8 @@ quality:
   fill_fields: [tour_name, departure_city, destinations, duration_days,
     price, currency, itinerary, inclusions, exclusions]
 backend:
+  data_provider: fixture
+  database_url: sqlite:///data/backend.db
   api:
     host: "127.0.0.1"
     port: 8000
@@ -58,6 +60,9 @@ backend:
     money_units: {"tỷ": 1000000000, "tỉ": 1000000000, "ty": 1000000000, "ti": 1000000000,
       "triệu": 1000000, "tr": 1000000, "trieu": 1000000,
       "nghìn": 1000, "k": 1000, "nghin": 1000}
+    budget_words: ["tối đa", "dưới", "không quá", "ngân sách"]
+    departure_markers: ["từ", "xuất phát"]
+    required_slots: [destination, date_from, budget_max]
     window_before: 16
     window_budget: 40
     quote_chars: 200

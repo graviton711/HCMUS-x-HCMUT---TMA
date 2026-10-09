@@ -6,9 +6,8 @@ import json
 from collections.abc import Callable
 from datetime import date
 
-import httpx
-
 from backend.errors import AppError
+from backend.input.nim import NimClient
 from backend.models import (
     Analysis,
     Comparison,
@@ -20,7 +19,7 @@ from backend.models import (
     TourSnapshot,
     uid,
 )
-from backend.settings import AssessPromptCfg, DecideCfg
+from backend.settings import DecideCfg, PromptCfg
 
 
 def _contains(haystack: str, needle: str) -> bool:
@@ -88,47 +87,24 @@ def passing_offers(req: Requirement, tours: list[TourSnapshot],
 
 
 def assess_soft_llm(tours: list[TourSnapshot], soft: list[Condition],
-                    api_key: str, model: str, timeout: float,
-                    prompt: AssessPromptCfg | None = None,
-                    excerpt_chars: int = 6000, quote_chars: int = 300,
-                    soft_fields: list[str] | None = None,
-                    transport: httpx.BaseTransport | None = None) -> dict[tuple[str, str], tuple[float, str]]:
+                    nim: NimClient | None,
+                    prompt: PromptCfg | None,
+                    excerpt_chars: int, quote_chars: int,
+                    soft_fields: list[str]) -> dict[tuple[str, str], tuple[float, str]]:
     """One bounded LLM call over survivors. Returns {(tour_id, cond_id): (score, quote)}."""
-    if not soft or not api_key:
+    if not soft or nim is None or not nim.configured():
         return {}
-    prompt = prompt or AssessPromptCfg()
-    fields = soft_fields if soft_fields is not None else DecideCfg().soft_fields
+    if prompt is None or not prompt.system.strip():
+        raise AppError("PROMPT_NOT_CONFIGURED", "Thiếu prompt assess.", 500)
     docs = []
     for tour in tours:
-        blob = "\n".join(f"{f}: {getattr(tour, f, '')}" for f in fields)[:excerpt_chars]
+        blob = "\n".join(f"{f}: {getattr(tour, f, '')}" for f in soft_fields)[:excerpt_chars]
         docs.append({"tour_id": tour.id, "text": blob})
-    body = {
-        "model": model,
-        "stream": False,
-        "temperature": prompt.temperature,
-        "max_tokens": prompt.max_tokens,
-        "messages": [
-            {"role": "system", "content": prompt.system},
-            {"role": "user",
-             "content": json.dumps({"criteria": [{"id": c.id, "text": str(c.value)} for c in soft],
-                                    "tours": docs}, ensure_ascii=False)},
-        ],
-        "response_format": {"type": "json_object"},
-    }
-    try:
-        with httpx.Client(timeout=timeout, transport=transport) as client:
-            response = client.post(
-                "https://integrate.api.nvidia.com/v1/chat/completions", json=body,
-                headers={"Authorization": f"Bearer {api_key}"})
-        if response.status_code != 200:
-            raise AppError("LLM_UPSTREAM_ERROR", "NIM không đánh giá được tiêu chí mềm.",
-                           502, retryable=True)
-        items = response.json()["choices"][0]["message"]["content"]
-        scores = json.loads(items).get("scores", [])
-    except AppError:
-        raise
-    except Exception as exc:
-        raise AppError("LLM_INVALID_OUTPUT", "NIM trả sai định dạng.", 502) from exc
+    user = json.dumps({"criteria": [{"id": c.id, "text": str(c.value)} for c in soft],
+                       "tours": docs}, ensure_ascii=False)
+    scores = nim.complete_json(system=prompt.system, user=user,
+                               max_tokens=prompt.max_tokens,
+                               temperature=prompt.temperature).get("scores", [])
     out: dict[tuple[str, str], tuple[float, str]] = {}
     for s in scores:
         try:
@@ -156,8 +132,7 @@ def rank(req: Requirement, surviving: list[tuple[TourSnapshot, str]],
 
 
 def analyze(tours: list[TourSnapshot], ranked: list[RankedCandidate],
-            cfg: DecideCfg | None = None) -> Analysis:
-    cfg = cfg or DecideCfg()
+            cfg: DecideCfg) -> Analysis:
     by_id = {t.id: t for t in tours}
     costs, conds, risks, benefits = [], [], [], []
     for cand in ranked[:cfg.top_n]:
@@ -186,8 +161,7 @@ AssessFn = Callable[[list[TourSnapshot], list[Condition]], dict[tuple[str, str],
 
 
 def compare(req: Requirement, tours: list[TourSnapshot],
-            assess: AssessFn | None = None, cfg: DecideCfg | None = None) -> Comparison:
-    cfg = cfg or DecideCfg()
+            assess: AssessFn | None, cfg: DecideCfg) -> Comparison:
     evals = hard_filter(req, tours)
     surviving = passing_offers(req, tours, evals)
     soft_scores = assess(tours, req.soft()) if assess and req.soft() else {}

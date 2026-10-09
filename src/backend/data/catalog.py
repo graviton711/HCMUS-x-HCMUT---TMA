@@ -1,140 +1,63 @@
-"""Catalog readers. Fixture is explicit dev data; Supabase is read-only live."""
+﻿"""Catalog readers. Fixture is explicit dev data; Supabase is read-only live."""
 
 from __future__ import annotations
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from pathlib import Path
 
 from backend.errors import AppError
 from backend.models import TourRow
+from shared import get_logger, now_vn_iso
 
-_VN = ZoneInfo("Asia/Ho_Chi_Minh")
-
-
-def _now_vn() -> str:
-    return datetime.now(_VN).isoformat()
+log = get_logger("catalog")
 
 
-def _fixture_rows() -> list[TourRow]:
-    now = _now_vn()
-    return [
-        TourRow(
-            provider={"source_key": "dulichviet", "display_name": "Du Lịch Việt"},
-            tour={
-                "record_key": "dlv-dalat-3n",
-                "url": "https://dulichviet.com.vn/tour-da-lat-3-ngay",
-                "tour_name": "Đà Lạt 3 ngày 2 đêm",
-                "departure_city": "Sài Gòn",
-                "destinations": ["Đà Lạt"],
-                "transport": "bus",
-                "accommodation": "3_star",
-                "duration_days": 3,
-                "itinerary": "Ngày 1: Sài Gòn - Đà Lạt, tham quan Dinh Bảo Đại. Ngày 2: Langbiang, Thung lũng Tình yêu. Ngày 3: Chợ Đà Lạt, về Sài Gòn.",
-                "inclusions": "Xe đưa đón, khách sạn 3 sao, ăn sáng, vé tham quan, hướng dẫn viên.",
-                "exclusions": "Chi phí cá nhân, tiền tip.",
-                "cancellation_policy": "Hủy trước 7 ngày hoàn 100%, trước 3 ngày hoàn 50%.",
-                "surcharges": "Phụ thu phòng đơn 500.000đ/đêm.",
-                "child_policy": "Trẻ em dưới 5 tuổi miễn phí, từ 5-10 tuổi tính 50% giá tour.",
-                "verification_status": "provider_claimed",
-                "observed_at": now,
-            },
-            offers=[
-                {
-                    "record_key": "dlv-dalat-3n-20261225",
-                    "departure_date": "2026-12-25",
-                    "price": 7500000,
-                    "currency": "VND",
-                    "price_type": "fixed",
-                    "availability": "available",
-                    "observed_at": now,
-                },
-                {
-                    "record_key": "dlv-dalat-3n-20270109",
-                    "departure_date": "2027-01-09",
-                    "price": 6900000,
-                    "currency": "VND",
-                    "price_type": "fixed",
-                    "availability": "available",
-                    "observed_at": now,
-                },
-            ],
-        ),
-        TourRow(
-            provider={"source_key": "vietravel", "display_name": "Vietravel"},
-            tour={
-                "record_key": "vtr-phuquoc-4n",
-                "url": "https://vietravel.com/tour-phu-quoc-4-ngay",
-                "tour_name": "Phú Quốc 4 ngày 3 đêm",
-                "departure_city": "Sài Gòn",
-                "destinations": ["Phú Quốc"],
-                "transport": "flight",
-                "accommodation": "4_star",
-                "duration_days": 4,
-                "itinerary": "Ngày 1: Bay Sài Gòn - Phú Quốc, tắm biển Bãi Sao. Ngày 2: VinWonders, Safari. Ngày 3: Tour 4 đảo, lặn ngắm san hô. Ngày 4: Chợ Dương Đông, bay về.",
-                "inclusions": "Vé máy bay khứ hồi, resort 4 sao, ăn 7 bữa, vé VinWonders, tàu 4 đảo.",
-                "exclusions": "Vé lặn bình dưỡng khí, chi phí cá nhân.",
-                "cancellation_policy": "Hủy trước 14 ngày hoàn 100%, sau đó thu phí 50-100% tùy thời điểm.",
-                "surcharges": "Phụ thu lễ Tết 2.000.000đ/khách. Giá trẻ em tính riêng.",
-                "child_policy": "Trẻ em dưới 2 tuổi miễn phí vé máy bay (thu phí dịch vụ), 2-11 tuổi tính 75%.",
-                "verification_status": "provider_claimed",
-                "observed_at": now,
-            },
-            offers=[
-                {
-                    "record_key": "vtr-phuquoc-4n-20261226",
-                    "departure_date": "2026-12-26",
-                    "price": 12900000,
-                    "currency": "VND",
-                    "price_type": "fixed",
-                    "availability": "available",
-                    "observed_at": now,
-                },
-            ],
-        ),
-        TourRow(
-            provider={"source_key": "saigontourist", "display_name": "Saigontourist"},
-            tour={
-                "record_key": "sgt-halong-3n",
-                "url": "https://saigontourist.net/tour-ha-long-3-ngay",
-                "tour_name": "Hạ Long 3 ngày 2 đêm",
-                "departure_city": "Hà Nội",
-                "destinations": ["Hạ Long"],
-                "transport": "cruise",
-                "accommodation": "4_star",
-                "duration_days": 3,
-                "itinerary": "Ngày 1: Hà Nội - Hạ Long, lên du thuyền. Ngày 2: Vịnh Lan Hạ, chèo kayak, ngủ đêm trên vịnh. Ngày 3: Làng chài, về Hà Nội.",
-                "inclusions": "Xe Hà Nội - Hạ Long, du thuyền 4 sao, các bữa ăn trên tàu, kayak, vé vịnh.",
-                "exclusions": "Đồ uống, massage, chi phí cá nhân.",
-                "cancellation_policy": "Hủy trước 10 ngày hoàn 80%.",
-                "surcharges": "",
-                "child_policy": "Trẻ em dưới 4 tuổi miễn phí.",
-                "verification_status": "provider_claimed",
-                "observed_at": now,
-            },
-            offers=[
-                {
-                    "record_key": "sgt-halong-3n-20261227",
-                    "departure_date": "2026-12-27",
-                    "price": 8900000,
-                    "currency": "VND",
-                    "price_type": "from",
-                    "availability": "unknown",
-                    "observed_at": now,
-                },
-            ],
-        ),
-    ]
+def _resolve_fixture(path: str | Path | None) -> Path:
+    if path is not None:
+        candidate = Path(path)
+        if candidate.is_file():
+            return candidate
+        raise AppError("FIXTURE_NOT_FOUND", f"KhÃ´ng tháº¥y fixture catalog: {path}.", 500)
+    for candidate in (Path(__file__).resolve().parents[2] / "configs" / "fixture-catalog.yaml",
+                      Path.cwd() / "configs" / "fixture-catalog.yaml"):
+        if candidate.is_file():
+            return candidate
+    raise AppError("FIXTURE_NOT_FOUND", "Thiáº¿u configs/fixture-catalog.yaml.", 500)
+
+
+def _fixture_rows(path: str | Path | None = None) -> list[TourRow]:
+    import yaml
+
+    data = yaml.safe_load(_resolve_fixture(path).read_text(encoding="utf-8")) or []
+    if not isinstance(data, list):
+        raise AppError("FIXTURE_INVALID", "Fixture catalog pháº£i lÃ  list.", 500)
+    now = now_vn_iso()
+    rows: list[TourRow] = []
+    for entry in data:
+        if not isinstance(entry, dict):
+            raise AppError("FIXTURE_INVALID", "Má»—i fixture pháº£i lÃ  mapping.", 500)
+        tour = dict(entry.get("tour", {}))
+        tour.setdefault("observed_at", now)
+        offers = []
+        for offer in entry.get("offers", []):
+            row = dict(offer)
+            row.setdefault("observed_at", now)
+            offers.append(row)
+        rows.append(TourRow(provider=dict(entry.get("provider", {})), tour=tour, offers=offers))
+    return rows
 
 
 class FixtureCatalog:
     """Explicit dev/test catalog. Never a silent fallback."""
 
-    def list_tours(self, limit: int = 20) -> list[TourRow]:
-        return _fixture_rows()[:limit]
+    def __init__(self, path: str | Path | None = None):
+        self._rows = _fixture_rows(path)
+
+    def list_tours(self, limit: int) -> list[TourRow]:
+        return self._rows[:limit]
 
     def list_destinations(self) -> list[str]:
         seen: list[str] = []
-        for row in _fixture_rows():
+        for row in self._rows:
             for dest in row.tour.get("destinations", []):
                 if isinstance(dest, str) and dest not in seen:
                     seen.append(dest)
@@ -144,10 +67,10 @@ class FixtureCatalog:
 class SupabaseCatalog:
     """Read-only live catalog. Raises, never falls back."""
 
-    def __init__(self, db_url: str, scan_limit: int = 1000,
-                 providers_limit: int = 100, connect_timeout_s: int = 8):
+    def __init__(self, db_url: str, scan_limit: int,
+                 providers_limit: int, connect_timeout_s: int):
         if not db_url:
-            raise AppError("CATALOG_NOT_CONFIGURED", "Chưa cấu hình SUPABASE_TOUR_DB_URL.", 503)
+            raise AppError("CATALOG_NOT_CONFIGURED", "ChÆ°a cáº¥u hÃ¬nh SUPABASE_TOUR_DB_URL.", 503)
         self._db_url = db_url
         self._scan_limit = scan_limit
         self._providers_limit = providers_limit
@@ -157,7 +80,7 @@ class SupabaseCatalog:
         try:
             import psycopg
         except ImportError as exc:
-            raise AppError("CATALOG_DRIVER_MISSING", "Thiếu psycopg.", 500) from exc
+            raise AppError("CATALOG_DRIVER_MISSING", "Thiáº¿u psycopg.", 500) from exc
         try:
             with psycopg.connect(self._db_url, connect_timeout=self._timeout, autocommit=True) as conn:
                 with conn.cursor() as cur:
@@ -170,13 +93,14 @@ class SupabaseCatalog:
         except AppError:
             raise
         except Exception as exc:
+            log.warning("catalog unavailable: %s", exc)
             raise AppError("CATALOG_UNAVAILABLE", "Không đọc được catalog.", 502, retryable=True) from exc
 
-    def list_tours(self, limit: int = 20) -> list[TourRow]:
+    def list_tours(self, limit: int) -> list[TourRow]:
         try:
             import psycopg
         except ImportError as exc:
-            raise AppError("CATALOG_DRIVER_MISSING", "Thiếu psycopg.", 500) from exc
+            raise AppError("CATALOG_DRIVER_MISSING", "Thiáº¿u psycopg.", 500) from exc
         bound = min(limit, self._scan_limit)
         try:
             with psycopg.connect(self._db_url, connect_timeout=self._timeout, autocommit=True) as conn:
@@ -216,6 +140,7 @@ class SupabaseCatalog:
         except AppError:
             raise
         except Exception as exc:
+            log.warning("catalog unavailable: %s", exc)
             raise AppError("CATALOG_UNAVAILABLE", "Không đọc được catalog.", 502, retryable=True) from exc
         out: list[TourRow] = []
         for t in tours:
@@ -240,3 +165,4 @@ def for_settings(settings) -> FixtureCatalog | SupabaseCatalog:
                                settings.tuning.data.providers_limit,
                                settings.tuning.data.connect_timeout_s)
     return FixtureCatalog()
+

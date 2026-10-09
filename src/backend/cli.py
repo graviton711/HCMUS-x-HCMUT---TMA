@@ -4,11 +4,9 @@ import argparse
 
 
 def main() -> None:
-    import sys
+    from shared import ensure_utf8_stdout
 
-    reconfigure = getattr(sys.stdout, "reconfigure", None)
-    if callable(reconfigure):
-        reconfigure(encoding="utf-8")
+    ensure_utf8_stdout()
     parser = argparse.ArgumentParser(description="Tour decision backend")
     parser.add_argument("command", choices=["serve"])
     parser.add_argument("--settings", default=None,

@@ -92,6 +92,8 @@
     "backend": {
       "type": "object",
       "properties": {
+        "data_provider": {"type": "string"},
+        "database_url": {"type": "string"},
         "api": {
           "type": "object",
           "properties": {
@@ -124,6 +126,9 @@
           "type": "object",
           "properties": {
             "money_units": {"type": "object"},
+            "budget_words": {"type": "array", "items": {"type": "string"}},
+            "departure_markers": {"type": "array", "items": {"type": "string"}},
+            "required_slots": {"type": "array", "items": {"type": "string"}},
             "window_before": {"type": "integer"},
             "window_budget": {"type": "integer"},
             "quote_chars": {"type": "integer"}

@@ -8,13 +8,15 @@ from backend.api import create_app
 def _client(tmp_path):
     from backend.settings import Settings
 
-    settings = Settings(_env_file=None, database_url=f"sqlite:///{tmp_path / 'api.db'}",
-                        data_provider="fixture")
+    settings = Settings.load(database_url=f"sqlite:///{tmp_path / 'api.db'}")
+    assert settings.data_provider == "fixture"
     return TestClient(create_app(settings))
 
 
 def test_health(tmp_path):
-    assert _client(tmp_path).get("/health").json() == {"status": "ok", "version": "3.0"}
+    body = _client(tmp_path).get("/health").json()
+    assert body["status"] == "ok"
+    assert body["version"]
 
 
 def test_full_compare_flow(tmp_path):

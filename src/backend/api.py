@@ -17,6 +17,15 @@ from backend.normalize.snapshots import rows_to_snapshots
 from backend.settings import Settings
 
 
+def _version() -> str:
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("mlai")
+    except PackageNotFoundError:
+        return "dev"
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.load()
     tuning = settings.tuning
@@ -26,7 +35,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     settings.nvidia_nim_model, settings.nim_timeout_seconds,
                     prompt=tuning.extract)
 
-    app = FastAPI(title="Tour Decision Backend", version="3.0")
+    app = FastAPI(title="Tour Decision Backend", version=_version())
 
     @app.exception_handler(AppError)
     async def app_error(_: Request, exc: AppError) -> JSONResponse:
@@ -38,7 +47,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict[str, str]:
-        return {"status": "ok", "version": "3.0"}
+        return {"status": "ok", "version": _version()}
 
     def parse_user(text: str, form: dict[str, Any] | None):
         places = catalog.list_destinations()
@@ -69,9 +78,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         tours = rows_to_snapshots(catalog.list_tours(limit))
 
         def assess(ts, soft):
-            if not nim.configured():
-                return {}
-            return assess_soft_llm(ts, soft, nim.api_key, nim.model, nim.timeout,
+            return assess_soft_llm(ts, soft, nim,
                                    prompt=tuning.assess,
                                    excerpt_chars=tuning.decide.excerpt_chars,
                                    quote_chars=tuning.decide.quote_chars,

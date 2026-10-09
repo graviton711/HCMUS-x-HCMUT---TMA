@@ -1,6 +1,8 @@
-"""Backend settings. Tunables live in `configs/settings.yaml`; secrets live in env.
+"""Backend settings. Every tunable comes from YAML or env; code holds no values.
 
-Precedence: explicit constructor args > env vars > YAML file > code fallbacks.
+Precedence: explicit constructor args > env vars > YAML file.
+Missing YAML keys fail loud with ValidationError. Only credentials may be
+empty (absent key = feature off, guarded at use time).
 """
 
 from __future__ import annotations
@@ -16,82 +18,60 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class PromptCfg(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
-    system: str = ""
-    max_tokens: int = 1024
-    temperature: float = 0
-
-
-class ExtractPromptCfg(PromptCfg):
-    system: str = (
-        "Trích yêu cầu tour tiếng Việt thành JSON"
-        " {hard: [{field, operator, value}], soft: [{text}], travelers: int}."
-        " Hard fields: destination, departure_city, date_from, date_to,"
-        " budget_max, duration_days, transport, accommodation."
-        " budget_max là số nguyên VND. date ISO YYYY-MM-DD."
-        " Chỉ dùng thông tin trong câu, không đoán. Thiếu thì bỏ qua."
-    )
-
-
-class AssessPromptCfg(PromptCfg):
-    system: str = (
-        "Chấm từng tour theo từng tiêu chí mềm."
-        " Trả JSON {scores: [{tour_id, condition_id, score 0..1, quote}]}."
-        " quote là trích nguyên văn ngắn từ văn bản tour."
-        " Không suy đoán ngoài văn bản."
-    )
-    max_tokens: int = 2048
+    system: str
+    max_tokens: int
+    temperature: float
 
 
 class InputCfg(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
-    money_units: dict[str, int] = {"tỷ": 1_000_000_000, "tỉ": 1_000_000_000,
-                                   "ty": 1_000_000_000, "ti": 1_000_000_000,
-                                   "triệu": 1_000_000, "tr": 1_000_000, "trieu": 1_000_000,
-                                   "nghìn": 1_000, "k": 1_000, "nghin": 1_000}
-    window_before: int = 16
-    window_budget: int = 40
-    quote_chars: int = 200
+    money_units: dict[str, int]
+    budget_words: list[str]
+    departure_markers: list[str]
+    required_slots: list[str]
+    window_before: int
+    window_budget: int
+    quote_chars: int
 
 
 class DecideCfg(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
-    soft_fields: list[str] = ["itinerary", "inclusions", "exclusions",
-                              "child_policy", "cancellation_policy"]
-    excerpt_chars: int = 6000
-    quote_chars: int = 300
-    risk_words: list[str] = ["không hoàn", "thu phí 100%", "sold_out", "unknown"]
-    analysis_chars: int = 160
-    analysis_items: int = 6
-    top_n: int = 3
+    soft_fields: list[str]
+    excerpt_chars: int
+    quote_chars: int
+    risk_words: list[str]
+    analysis_chars: int
+    analysis_items: int
+    top_n: int
 
 
 class DataCfg(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
-    providers_limit: int = 100
-    connect_timeout_s: int = 8
+    providers_limit: int
+    connect_timeout_s: int
 
 
 class ApiCfg(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
-    host: str = "127.0.0.1"
-    port: int = 8000
-    candidate_min: int = 1
-    candidate_max: int = 100
+    host: str
+    port: int
+    candidate_min: int
+    candidate_max: int
 
 
 class Tuning(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
-    extract: ExtractPromptCfg = ExtractPromptCfg()
-    assess: AssessPromptCfg = AssessPromptCfg()
-    input: InputCfg = InputCfg()
-    decide: DecideCfg = DecideCfg()
-    data: DataCfg = DataCfg()
-    api: ApiCfg = ApiCfg()
+    extract: PromptCfg
+    assess: PromptCfg
+    input: InputCfg
+    decide: DecideCfg
+    data: DataCfg
+    api: ApiCfg
 
 
 def _resolve(path: str | Path | None, *parts: str) -> Path | None:
@@ -138,6 +118,8 @@ def _read_prompt(path: str | Path | None, name: str) -> dict[str, Any]:
 
 # YAML key -> flat Settings field. Env var of the same name wins over YAML.
 _FLAT_MAP = {
+    "database_url": "database_url",
+    "data_provider": "data_provider",
     ("api", "candidate_default"): "candidate_limit",
     ("data", "scan_limit"): "supabase_scan_limit",
     ("nim", "model"): "nvidia_nim_model",
@@ -148,25 +130,25 @@ _FLAT_MAP = {
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", extra="ignore")
 
-    database_url: str = "sqlite:///data/backend.db"
-    data_provider: str = "fixture"
-    candidate_limit: int = 20
+    database_url: str
+    data_provider: str
+    candidate_limit: int
 
     supabase_tour_db_url: str = ""
-    supabase_scan_limit: int = 1000
+    supabase_scan_limit: int
 
     nvidia_nim_api: SecretStr = SecretStr("")
-    nvidia_nim_model: str = "nvidia/nemotron-3-super-120b-a12b"
-    nim_timeout_seconds: float = 45.0
+    nvidia_nim_model: str
+    nim_timeout_seconds: float
 
-    tuning: Tuning = Tuning()
+    tuning: Tuning
 
     @classmethod
     def load(cls, path: str | Path | None = None, **overrides: Any) -> Settings:
         """Build settings from configs, letting env and kwargs win.
 
         `path` is a settings file or a configs dir. Prompts load from
-        `prompts/<name>.yaml` beside it; missing files fall back to code.
+        `prompts/<name>.yaml` beside it.
         """
         backend = _read_settings(path)
         env = {k.lower() for k in os.environ}
@@ -177,9 +159,13 @@ class Settings(BaseSettings):
         tuning.update({k: v for k, v in backend.items()
                        if k in Tuning.model_fields and v is not None})
         init: dict[str, Any] = {"tuning": tuning}
-        for (section, key), field in _FLAT_MAP.items():
-            section_data = backend.get(section)
-            value = section_data.get(key) if isinstance(section_data, dict) else None
+        for key, field in _FLAT_MAP.items():
+            if isinstance(key, tuple):
+                section, sub = key
+                section_data = backend.get(section)
+                value = section_data.get(sub) if isinstance(section_data, dict) else None
+            else:
+                value = backend.get(key)
             if value is not None and field.lower() not in env and field not in overrides:
                 init[field] = value
         init.update(overrides)
