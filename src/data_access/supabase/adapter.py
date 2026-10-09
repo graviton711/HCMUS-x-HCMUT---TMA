@@ -9,9 +9,10 @@ from functools import wraps
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from data_access.supabase.policy import CATALOG_FIELDS, TEXT_FIELDS, receipt, trusted_source
+from data_access.supabase.pricing import CatalogPricing
 from domain.common import instant, now
 from domain.crawl_v2 import CatalogFieldProof, CrawlResultV2
-from requirements.catalog import expand_entities, resolve_entities
+from requirements.catalog import CATALOG_VERSION, expand_entities, resolve_entities
 from requirements.normalize import fold
 
 
@@ -79,10 +80,27 @@ def places(values):
     )
 
 
+def destination_places(values, origin):
+    """Ignore origin endpoints, preserve intermediate visits and unknown names."""
+    places(values)  # Validate the complete raw declaration before deriving a view.
+    values = list(values)
+
+    def is_origin(value):
+        return bool(origin and resolve_entities("departure_origin", [value]).members[0].entity_id == origin)
+
+    while len(values) > 1 and is_origin(values[0]):
+        values.pop(0)
+    while len(values) > 1 and is_origin(values[-1]):
+        values.pop()
+    if values and all(is_origin(v) for v in values):
+        return [], True
+    return places(values)
+
+
 def relevance(row, conditions):
     """Retrieval priority only. Unverified mismatches never become hard exclusions."""
-    found, _ = places(row.get("destinations", []))
     origins = resolve_entities("departure_origin", [row.get("departure_city", "")]).members
+    found, _ = destination_places(row.get("destinations", []), origins[0].entity_id)
     score = 0
     for c in conditions:
         if c.field not in {"destinations", "departure_origin"} or c.operator in {"excludes", "not_in"}:
@@ -202,7 +220,13 @@ class CatalogAdapter:
     ):
         original = row
         for part in field.split("."):
-            original = original.get(part) if isinstance(original, dict) else None
+            original = (
+                original.get(part)
+                if isinstance(original, dict)
+                else original[int(part)]
+                if isinstance(original, list) and part.isdecimal() and int(part) < len(original)
+                else None
+            )
         timestamp = wire(row["observed_at"])
         if instant(timestamp) > now() + timedelta(minutes=5):
             raise ValueError("Catalog observation is in the future")
@@ -273,7 +297,7 @@ class CatalogAdapter:
             allow_proof
             and isinstance(proofs, dict)
             and (metadata is None or isinstance(metadata, dict))
-            and field in CATALOG_FIELDS
+            and (field in CATALOG_FIELDS or field.startswith("field_meta.pricing."))
             and state == "present"
             and self.catalog_source(row, table, provider, url) is not None
         ):
@@ -319,14 +343,14 @@ class CatalogAdapter:
             if self.catalog_source(row, "tours", provider, url) is not None
             else None
         )
-        snapshot = "catalog_ts_" + digest([row, policy] if policy else row)[:40]
+        snapshot = "catalog_ts_" + digest([row, policy, CATALOG_VERSION, "destination-endpoints-v2"])[:40]
         if provider["id"] not in self.providers:
             self.providers[provider["id"]] = provider
             self.payload["suppliers"].append(
                 {"supplier_id": supplier_id(provider), "display_name": provider["display_name"]}
             )
         origin = resolve_entities("departure_origin", [row.get("departure_city", "")]).members[0].entity_id
-        destinations, partial = places(row.get("destinations", []))
+        destinations, partial = destination_places(row.get("destinations", []), origin)
 
         def f(column, value, **kw):
             return self.fact(row, "tours", column, value, snapshot, provider, url, **kw)
@@ -336,13 +360,13 @@ class CatalogAdapter:
                 "departure_city",
                 origin,
                 state="present" if origin else "unsupported",
-                normalization="tour-entities-v2.1",
+                normalization=CATALOG_VERSION,
             ),
             "destinations": f(
                 "destinations",
                 destinations,
                 state="present" if destinations else "unsupported",
-                normalization="tour-entities-v2.1",
+                normalization=CATALOG_VERSION + "/destination-endpoints-v2",
             ),
         }
         if partial:
@@ -393,7 +417,7 @@ class CatalogAdapter:
         routes, route_partial = places(row.get("route", []))
         semantic = {}
         if routes:
-            semantic["route"] = f("route", routes, scope="itinerary", normalization="tour-entities-v2.1")
+            semantic["route"] = f("route", routes, scope="itinerary", normalization=CATALOG_VERSION)
             if route_partial:
                 semantic["route"]["completeness"] = "partial"
         tour = {
@@ -441,9 +465,33 @@ class CatalogAdapter:
                 reason="CATALOG_SUPPLEMENT_APPLICABILITY_UNKNOWN",
             )
         quotes = []
+        charges, pricing_complete = [], None
+        metadata = row.get("field_meta")
+        pricing_requested = isinstance(metadata, dict) and "pricing" in metadata
+        if pricing_requested:
+            try:
+                terms = CatalogPricing.model_validate(metadata["pricing"]).bound(row, tour_row)
+                for i, term in enumerate(terms.quotes):
+                    value = term.model_dump(mode="json")
+                    value["quote_id"] = "catalog_pq_" + digest([snapshot, i])[:32]
+                    quotes.append(f(f"field_meta.pricing.quotes.{i}", value))
+                for i, term in enumerate(terms.extra_charges):
+                    value = term.model_dump(mode="json")
+                    value["charge_id"] = "catalog_ec_" + digest([snapshot, i])[:32]
+                    charges.append(f(f"field_meta.pricing.extra_charges.{i}", value))
+                pricing_complete = f("field_meta.pricing.complete", terms.complete)
+            except (ValueError, TypeError, AttributeError, ArithmeticError):
+                self.issue(
+                    "CATALOG_PRICING_METADATA_INVALID",
+                    source_id(provider),
+                    "Price metadata không khớp offer; giữ giá preview chưa xác nhận.",
+                    snapshot_id=snapshot,
+                    field_path="field_meta.pricing",
+                )
         adult = prices.get("adult") if isinstance(prices, dict) else None
         if (
-            adult is not None
+            not quotes
+            and adult is not None
             and tour_row.get("currency") == "VND"
             and tour_row.get("price_type") in {"from", "exact"}
         ):
@@ -470,7 +518,8 @@ class CatalogAdapter:
             "tour_snapshot_id": tour["snapshot_id"],
             "fields": fields,
             "price_quotes": quotes,
-            "extra_charges": [],
+            "extra_charges": charges,
+            "pricing_complete": pricing_complete,
             "catalog_fields": previews,
         }
         from domain.crawl_v2 import OfferSnapshotV2

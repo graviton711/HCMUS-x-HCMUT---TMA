@@ -545,7 +545,7 @@ def build_comparison(
         "evaluated_at": at,
         "policy_versions": {
             "ranking": RANK_POLICY,
-            "decision": "decision-v2.3-offers",
+            "decision": "decision-v2.4-search",
             "semantic_assessment": "semantic-assessment-v1",
             "catalog_validation": "catalog-validation-v1",
         },

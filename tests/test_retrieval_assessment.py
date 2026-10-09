@@ -652,10 +652,7 @@ def test_api_publication_rechecks_state_and_freshness_after_assessment(settings,
             assert job["status"] == "succeeded", job
             assert output["result"]["recommendations"]["candidate_ids"] == []
             assert output["result"]["empty_reason"] == "ONLY_UNVERIFIED"
-            assert any(
-                e["reason_code"] == "FIELD_STALE_OR_FRESHNESS_UNKNOWN"
-                for e in output["result"]["evaluations"]
-            )
+            assert any(e["reason_code"] == "FIELD_STALE" for e in output["result"]["evaluations"])
         else:
             assert job["status"] == ("cancelled" if mutation == "cancel" else "failed"), job
             if mutation == "pause":

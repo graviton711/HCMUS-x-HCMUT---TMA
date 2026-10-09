@@ -58,6 +58,7 @@ def main():
             ProposalVersion,
             RequirementV2,
         )
+        from data_access.supabase.pricing import CatalogPricing
         from domain.crawl import CrawlRequest, CrawlResult, SourceCapability
         from domain.crawl_v2 import CatalogFieldProof, CatalogValidation, CrawlResultV2
         from domain.requirements import Requirement
@@ -106,6 +107,7 @@ def main():
             CrawlResultV2,
             CatalogFieldProof,
             CatalogValidation,
+            CatalogPricing,
             AssessmentBatch,
             SemanticReport,
             CreateWhatIf,

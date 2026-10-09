@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -77,7 +78,9 @@ export function usePreferences() {
 export function PreferencesControl() {
   const { locale, theme, setLocale, setTheme, t } = usePreferences();
   const [open, setOpen] = useState(false);
+  const optionsId = useId();
   const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const outside = (event: PointerEvent) => {
@@ -86,7 +89,7 @@ export function PreferencesControl() {
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setOpen(false);
-        root.current?.querySelector<HTMLButtonElement>('.preferences-trigger')?.focus();
+        trigger.current?.focus();
       }
     };
     document.addEventListener('pointerdown', outside);
@@ -97,47 +100,74 @@ export function PreferencesControl() {
     };
   }, [open]);
   return (
-    <div className="preferences" ref={root}>
+    <div className="preferences">
+      <div className="language-picker" ref={root}>
+        <button
+          ref={trigger}
+          type="button"
+          className="preferences-trigger"
+          aria-expanded={open}
+          aria-controls={optionsId}
+          aria-label={t('Chọn ngôn ngữ', 'Choose language')}
+          title={t('Chọn ngôn ngữ', 'Choose language')}
+          onClick={() => setOpen(!open)}
+        >
+          <span>{locale === 'vi' ? 'VIE' : 'ENG'}</span>
+          <Icon name="chevron" size={14} />
+        </button>
+        {open && (
+          <div className="preferences-panel" id={optionsId}>
+            <h2>{t('Ngôn ngữ', 'Language')}</h2>
+            <div
+              className="preferences-choices"
+              role="group"
+              aria-label={t('Ngôn ngữ', 'Language')}
+            >
+              {(
+                [
+                  ['vi', 'VIE', 'Tiếng Việt'],
+                  ['en', 'ENG', 'English'],
+                ] as const
+              ).map(([value, code, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-label={label}
+                  aria-pressed={locale === value}
+                  onClick={() => {
+                    setLocale(value);
+                    setOpen(false);
+                    trigger.current?.focus();
+                  }}
+                >
+                  <span className="language-code" aria-hidden="true">
+                    {code}
+                  </span>
+                  <span>{label}</span>
+                  {locale === value && <Icon name="check" size={16} />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
       <button
-        className="preferences-trigger"
-        aria-expanded={open}
-        aria-controls="display-preferences"
-        aria-label={t('Tùy chọn hiển thị', 'Display preferences')}
-        onClick={() => setOpen(!open)}
+        type="button"
+        className="theme-toggle"
+        aria-label={
+          theme === 'light'
+            ? t('Chuyển sang giao diện tối', 'Switch to dark mode')
+            : t('Chuyển sang giao diện sáng', 'Switch to light mode')
+        }
+        title={
+          theme === 'light'
+            ? t('Chuyển sang giao diện tối', 'Switch to dark mode')
+            : t('Chuyển sang giao diện sáng', 'Switch to light mode')
+        }
+        onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
       >
-        <span>{locale === 'vi' ? 'VIE' : 'ENG'}</span>
-        <Icon name={theme === 'light' ? 'sun' : 'moon'} size={17} />
-        <Icon name="chevron" size={14} />
+        <Icon name={theme === 'light' ? 'sun' : 'moon'} size={19} />
       </button>
-      {open && (
-        <div className="preferences-panel" id="display-preferences">
-          <h2>{t('Hiển thị', 'Display')}</h2>
-          <fieldset>
-            <legend>{t('Ngôn ngữ', 'Language')}</legend>
-            <div className="preferences-choices">
-              <button aria-pressed={locale === 'vi'} onClick={() => setLocale('vi')}>
-                Tiếng Việt
-              </button>
-              <button aria-pressed={locale === 'en'} onClick={() => setLocale('en')}>
-                English
-              </button>
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend>{t('Giao diện', 'Appearance')}</legend>
-            <div className="preferences-choices">
-              <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>
-                <Icon name="sun" />
-                {t('Sáng', 'Light')}
-              </button>
-              <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>
-                <Icon name="moon" />
-                {t('Tối', 'Dark')}
-              </button>
-            </div>
-          </fieldset>
-        </div>
-      )}
     </div>
   );
 }

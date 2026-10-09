@@ -172,7 +172,7 @@ def test_date_requires_ttl_and_rechecks_trust(trusted, rows, config):
     fact = crawl.offers[0].fields["departure_date"]
     assert fact.verification == "catalog_validated"
     assert (
-        usable(fact, "departure_date", sources[0], now().isoformat())[1] == "FIELD_STALE_OR_FRESHNESS_UNKNOWN"
+        usable(fact, "departure_date", sources[0], now().isoformat())[1] == "FIELD_FRESHNESS_POLICY_MISSING"
     )
     sources[0].freshness_seconds["departure_date"] = 3600  # Explicit test policy, not a production default.
     assert usable(fact, "departure_date", sources[0], now().isoformat())[0]

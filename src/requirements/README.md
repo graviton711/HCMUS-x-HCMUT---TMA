@@ -1,5 +1,7 @@
 # Requirements — hiểu và chuẩn hóa nhu cầu
 
+Catalog địa danh v2 và hierarchy structured/semantic theo [sửa tìm tour](../../docs/search-correctness-repair.md); alias được duyệt rõ ràng, không suy địa danh từ tên tour hoặc URL.
+
 Completeness v2 thuộc `completeness.py`, sau semantic normalization: năm thông tin cá nhân hóa, targeted questions và prerequisites confirm/search dùng chung. Giữ required/strength/data-proof độc lập; URL-only miễn, hybrid vẫn cần core. [Policy và answer contract](../../docs/personalized-requirement-policy.md).
 
 Generation schema giới hạn answer IDs theo reason được hỗ trợ, yêu cầu đủ answers tường minh cả mixed message và giới hạn operation targets vào condition IDs. Loại tour trống từ từ “tour” chung bị từ chối và bounded repair; không tự loại condition hoặc tự tạo loại tour.

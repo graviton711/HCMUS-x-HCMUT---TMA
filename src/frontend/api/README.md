@@ -11,3 +11,6 @@ Control ngân sách structured hiện có phạm vi VND/người lớn/giá tour
 Kiểm chứng: Vitest cho JSON/envelope/binding, mutation retry và form/edit preservation. Runtime chỉ gọi API thật; fixture chỉ tồn tại trong test.
 
 `backend-runtime.test.ts` chạy `verify_backend.py` bằng Python `.venv` của repo: FastAPI thật/SQLite memory/FakeNim + fixture provider chỉ trong test. Nó kiểm payload actual routes bằng validators FE; không gọi server production, không NIM/network. Cần `uv sync` trước test integration này.
+
+
+Account/history/what-if: client thêm PATCH metadata, list/detail/archive/link và analysis/apply; account transport refresh single-flight với owner guard. Runtime validators kiểm ratio cohorts, IDs, population, rank bindings. Default budget form hard theo personalized policy; explicit strength cũ được giữ. `needs_clarification` là response hợp lệ, không là lỗi transport. Current readiness can_confirm/can_search được ưu tiên khi BE cấp.

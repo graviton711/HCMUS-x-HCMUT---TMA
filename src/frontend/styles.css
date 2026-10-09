@@ -583,70 +583,102 @@ legend {
   flex: 0 0 auto;
 }
 .preferences {
-  position: relative;
-  flex: 0 0 auto;
-}
-.preferences-trigger {
   display: flex;
   align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.language-picker {
+  position: relative;
+}
+.preferences-trigger,
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 7px;
   padding: 8px 10px;
-  min-height: 42px;
+  min-height: 44px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--surface);
   font-size: 12px;
   font-weight: 600;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
+}
+.theme-toggle {
+  width: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  color: var(--muted);
 }
 .preferences-trigger:hover,
-.preferences-trigger[aria-expanded='true'] {
+.preferences-trigger[aria-expanded='true'],
+.theme-toggle:hover {
   background: var(--tint);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent), var(--line) 65%);
+}
+.preferences-trigger > .icon {
+  transition: transform 150ms;
+}
+.preferences-trigger[aria-expanded='true'] > .icon {
+  transform: rotate(180deg);
 }
 .preferences-panel {
   position: absolute;
   top: calc(100% + 9px);
   right: 0;
   z-index: var(--z-overlay);
-  width: 264px;
+  width: 216px;
   max-width: calc(100vw - 32px);
-  padding: 20px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink), transparent 90%);
 }
 .preferences-panel h2 {
-  margin-bottom: 18px;
-  font-size: 17px;
-}
-.preferences-panel fieldset + fieldset {
-  margin-top: 18px;
-}
-.preferences-panel legend {
-  margin-bottom: 9px;
+  margin: 3px 8px 8px;
   color: var(--muted);
-  font-size: 13px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
 }
 .preferences-choices {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 4px;
 }
 .preferences-choices button {
   display: flex;
-  justify-content: center;
+  text-align: left;
   align-items: center;
-  gap: 7px;
+  gap: 10px;
   min-height: 44px;
-  padding: 8px 5px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--paper);
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
   font-size: 13px;
+}
+.preferences-choices button:hover {
+  background: var(--tint);
+}
+.preferences-choices .language-code {
+  width: 34px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.preferences-choices .icon {
+  margin-left: auto;
 }
 .preferences-choices button[aria-pressed='true'] {
   background: var(--tint);
   color: var(--accent);
-  border-color: var(--accent);
 }
 .page-footer {
   display: flex;
@@ -3318,10 +3350,10 @@ html[data-theme='dark'] .dialog::backdrop {
   .preferences-trigger {
     padding: 7px;
     gap: 5px;
-    min-height: 40px;
+    min-height: 44px;
   }
-  .preferences-trigger .icon:last-child {
-    display: none;
+  .preferences {
+    gap: 6px;
   }
   .preferences-panel {
     position: fixed;
@@ -3700,8 +3732,16 @@ html[data-theme='dark'] .dialog::backdrop {
   }
   .account-link {
     font-size: 11px;
-    max-width: 82px;
-    padding-inline: 7px;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .account-link > .icon {
+    display: block;
+  }
+  .account-link span {
+    display: none;
   }
   .main-nav a,
   .main-nav button {
@@ -3775,4 +3815,24 @@ html[data-theme='dark'] .dialog::backdrop {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+.what-if-panel {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  border: 1px solid var(--line, #d7ded8);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.what-if-scenario {
+  margin-top: 1rem;
+  border-top: 1px solid var(--line, #d7ded8);
+  padding-top: 1rem;
+}
+.what-if-scenario summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.what-if-scenario article {
+  padding-block: 0.75rem;
 }

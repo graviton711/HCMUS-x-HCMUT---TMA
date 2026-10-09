@@ -267,7 +267,7 @@ function conditions(values: FormValues): FormCondition[] {
         coverage: 'tour_price',
         coverage_origin: 'system_default',
       },
-      'soft',
+      'hard',
     );
   if (values.durationDays)
     add('duration_days', 'near', { kind: 'number', amount: Number(values.durationDays) }, 'soft');

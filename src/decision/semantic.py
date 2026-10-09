@@ -35,11 +35,11 @@ def evaluate(c, tour, offer, party, source, at, synthetic=False, offer_reason=No
             "evidence_ids": [],
             "data_quality": {},
         }
-    if isinstance(value, SetValue) and c.field == "transport":
+    if isinstance(value, SetValue) and c.field in TYPE_BY_FIELD:
         value = EntitySetValue(
             catalog_version=CATALOG_VERSION,
             members=[
-                EntityMember(raw=eid, entity_type="transport", entity_id=eid, status="resolved")
+                EntityMember(raw=eid, entity_type=TYPE_BY_FIELD[c.field], entity_id=eid, status="resolved")
                 for eid in value.items
             ],
         )

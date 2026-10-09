@@ -96,7 +96,11 @@ class Store:
             connect_args={"check_same_thread": False, "timeout": 15},
             **({"poolclass": StaticPool} if filename == ":memory:" else {}),
         )
-        from api.v2 import state  # noqa: F401 -- register additive tables before create_all.
+        from api.auth import service as auth_tables  # noqa: F401
+        from api.v2 import (
+            history,  # noqa: F401
+            state,  # noqa: F401 -- register additive tables before create_all.
+        )
 
         if inspect(self.engine).has_table("schema_info"):
             with self.engine.connect() as c:
@@ -439,6 +443,11 @@ class Store:
                 c.execute(delete(jobs).where(jobs.c.resource_id.in_(ids)))
                 c.execute(delete(resources).where(resources.c.id.in_(ids)))
             c.execute(delete(idempotency).where(idempotency.c.expires_at < now().isoformat()))
+            from api.auth.service import revoked
+            from api.v2.history import linked_sessions
+
+            c.execute(delete(revoked).where(revoked.c.expires_at < now().isoformat()))
+            c.execute(delete(linked_sessions).where(linked_sessions.c.expires_at < now().isoformat()))
             c.execute(
                 delete(sessions).where(
                     sessions.c.expires_at < now().isoformat(), sessions.c.created_at < cutoff
