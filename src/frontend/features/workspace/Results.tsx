@@ -23,6 +23,7 @@ const labels: Record<string, [string, string]> = {
   invalid: ['Dữ kiện không hợp lệ', 'Invalid data'],
   unsupported: ['Chưa hỗ trợ', 'Unsupported'],
   supplier_published: ['Nhà cung cấp công bố', 'Supplier published'],
+  catalog_validated: ['Đã kiểm tra bản ghi catalog', 'Catalog record validated'],
   independently_verified: ['Đã xác minh độc lập', 'Independently verified'],
   unverified: ['Chưa xác minh', 'Unverified'],
   complete: ['Đầy đủ', 'Complete'],
@@ -46,6 +47,7 @@ const labels: Record<string, [string, string]> = {
   trip_total: ['Tổng chuyến đi', 'Trip total'],
   unspecified: ['Chưa rõ phạm vi giá', 'Price coverage unspecified'],
   cost: ['Chi phí', 'Cost'],
+  estimated_cost: ['Chi phí', 'Cost'],
   comfort: ['Tiện nghi', 'Comfort'],
   pace: ['Nhịp đi', 'Pace'],
   culture: ['Văn hóa', 'Culture'],
@@ -103,7 +105,7 @@ const labels: Record<string, [string, string]> = {
   succeeded: ['Hoàn thành', 'Completed'],
   failed: ['Xử lý thất bại', 'Failed'],
   cancelled: ['Đã hủy', 'Cancelled'],
-  started: ['Đang thực hiện', 'Started'],
+  started: ['Đã bắt đầu', 'Started'],
   completed: ['Hoàn thành', 'Completed'],
   skipped: ['Bỏ qua', 'Skipped'],
   ok: ['Đọc được nguồn', 'Source available'],
@@ -123,6 +125,8 @@ const labels: Record<string, [string, string]> = {
   semantic_assessment: ['Đánh giá ưu tiên', 'Assess preferences'],
   conversation: ['Trả lời trao đổi', 'Answer conversation'],
   reference_collection: ['Thu thập nguồn tour', 'Collect tour sources'],
+  orchestration: ['Tiếp nhận và xử lý', 'Request processing'],
+  publication: ['Lưu kết quả', 'Save result'],
   hard_filter: ['Kiểm tra điều kiện bắt buộc', 'Check required conditions'],
   candidates: ['Tour đã đánh giá', 'Evaluated tours'],
   recommended: ['Tour gợi ý', 'Recommended tours'],
@@ -347,11 +351,139 @@ function reasonLabel(code: string | null, t: Translate): string {
       'Cần chọn một lịch khởi hành để xem dữ kiện và đánh giá đúng lịch.',
       'Select a departure offer to view and evaluate its facts.',
     ],
+    FIELD_FRESHNESS_POLICY_MISSING: [
+      'Nguồn chưa cấu hình thời hạn dữ liệu còn mới.',
+      'Source freshness policy is not configured.',
+    ],
+    FIELD_STALE: [
+      'Dữ liệu đã quá thời hạn; cần cập nhật lại từ nguồn.',
+      'Data has expired and needs refreshing from the source.',
+    ],
+    FIELD_OBSERVATION_IN_FUTURE: [
+      'Thời điểm thu thập dữ liệu không hợp lệ.',
+      'The data observation time is invalid.',
+    ],
+    FIELD_STALE_OR_FRESHNESS_UNKNOWN: [
+      'Dữ liệu đã cũ hoặc chưa xác nhận được độ mới.',
+      'Data is stale or its freshness is unknown.',
+    ],
+    PRICE_COVERAGE_UNCONFIRMED: [
+      'Chưa xác nhận đầy đủ phạm vi giá và các điều kiện áp dụng.',
+      'Price coverage and applicable terms are not fully confirmed.',
+    ],
+    PRICE_MISSING_OR_AMBIGUOUS: [
+      'Chưa có bảng giá áp dụng rõ ràng cho thành viên trong đoàn.',
+      'An applicable price for the party is missing or ambiguous.',
+    ],
+    BUDGET_BOUNDS: [
+      'Giá từ hoặc khoảng giá chưa chứng minh được trần ngân sách.',
+      'The starting price or price interval does not establish the budget cap.',
+    ],
+    FIELD_UNSUPPORTED: [
+      'Nguồn chưa có dữ kiện được chuẩn hóa cho điều kiện này.',
+      'A normalized source fact is not available for this condition.',
+    ],
+    ENTITY_FACT_CATALOG_MISSING: [
+      'Một số địa danh chưa được chuẩn hóa; chưa thể kết luận.',
+      'Some place names are not normalized, so a conclusion is unavailable.',
+    ],
+    NO_ELIGIBLE_SEMANTIC_INPUT: [
+      'Chưa có tour đạt điều kiện bắt buộc để đánh giá ưu tiên bằng AI.',
+      'No tour meets the required conditions for AI preference assessment.',
+    ],
   };
   const known = code ? reasons[code] : null;
   return known
     ? t(...known)
     : t('Chưa đủ dữ kiện để kết luận.', 'There is not enough data for a conclusion.');
+}
+
+export function SearchDiagnostics({
+  result,
+}: {
+  result: Pick<ComparisonResult, 'recommendations' | 'analysis' | 'columns' | 'evaluations'>;
+}) {
+  const { locale, t } = usePreferences();
+  const needs = new Set(result.recommendations.needs_verification);
+  const blockers = new Map<string, { field: string; reason: string; candidates: Set<string> }>();
+  for (const column of result.columns) {
+    if (!needs.has(column.id)) continue;
+    const all = result.evaluations.filter(
+      (e) => e.candidate_id === column.id && e.strength === 'hard',
+    );
+    const perOffer = all.filter((e) => e.offer_snapshot_id !== null);
+    for (const e of perOffer.length ? perOffer : all) {
+      if (e.status !== 'unknown') continue;
+      const key = `${e.field}:${e.reason_code}`;
+      const group = blockers.get(key) ?? {
+        field: e.field,
+        reason: e.reason_code,
+        candidates: new Set<string>(),
+      };
+      group.candidates.add(column.id);
+      blockers.set(key, group);
+    }
+  }
+  const runs = Array.isArray(result.analysis.retrieval.runs)
+    ? result.analysis.retrieval.runs.flatMap((run) => {
+        const value = object(run);
+        return value ? [value] : [];
+      })
+    : [];
+  const limited =
+    result.recommendations.truncated ||
+    runs.some((run) => run.scan_truncated || run.pool_truncated || run.offer_truncated);
+  const semantic = result.analysis.semantic_assessment;
+  if (!needs.size && !limited && semantic.reason_code !== 'NO_ELIGIBLE_SEMANTIC_INPUT') return null;
+  return (
+    <section
+      className="notice"
+      aria-label={t('Chi tiết kết quả tìm kiếm', 'Search result details')}
+    >
+      {needs.size > 0 && (
+        <p>
+          {t(
+            `${needs.size} tour cần xác nhận thêm điều kiện bắt buộc. Đây là các tour để kiểm tra, chưa phải gợi ý phù hợp.`,
+            `${needs.size} tours need verification of required conditions. These are review candidates, not confirmed recommendations.`,
+          )}
+        </p>
+      )}
+      {blockers.size > 0 && (
+        <ul>
+          {[...blockers.entries()].map(([key, group]) => (
+            <li key={key}>
+              <strong>{label(group.field, locale)}</strong> ·{' '}
+              {t(`${group.candidates.size} tour`, `${group.candidates.size} tours`)}:{' '}
+              {reasonLabel(group.reason, t)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {limited && (
+        <p>
+          {t(
+            'Phạm vi dữ liệu bị giới hạn; kết quả này chưa đại diện toàn bộ kho tour.',
+            'The data scope is limited; this result does not represent the entire tour catalog.',
+          )}
+        </p>
+      )}
+      {runs.map((run, index) => (
+        <p key={index}>
+          {t('Lượt đọc', 'Retrieval run')} {index + 1}: {t('đã quét', 'scanned')}{' '}
+          {typeof run.scanned_count === 'number' ? run.scanned_count : '—'}{' '}
+          {t('bản ghi; giữ', 'records; retained')}{' '}
+          {typeof run.retained_count === 'number' ? run.retained_count : '—'} {t('tour', 'tours')}.
+          {run.offer_truncated
+            ? ' ' +
+              t('Danh sách lịch khởi hành chưa đầy đủ.', 'Departure offer coverage is incomplete.')
+            : ''}
+        </p>
+      ))}
+      {semantic.reason_code === 'NO_ELIGIBLE_SEMANTIC_INPUT' && (
+        <p>{reasonLabel(semantic.reason_code, t)}</p>
+      )}
+    </section>
+  );
 }
 
 function EvidenceButtons({
@@ -1100,6 +1232,7 @@ export function Results({ comparison, onOfferChange, onEvidence, busy }: Results
             </p>
           </div>
         )}
+        <SearchDiagnostics result={result} />
         {recommended.length > 0 ? (
           <div className="tour-grid">
             {recommended.map((column) => (
@@ -1442,7 +1575,11 @@ export function Activity({
               key={`${event.job_id}-${event.seq}`}
               className={`activity-event status-${event.status}`}
             >
-              <span className="activity-stage">{label(event.stage, locale)}</span>
+              <span className="activity-stage">
+                {event.stage === 'queued'
+                  ? t('Tiếp nhận yêu cầu', 'Request accepted')
+                  : label(event.stage, locale)}
+              </span>
               <span className="data-badge">{label(event.status, locale)}</span>
               <p className="activity-summary">{event.summary}</p>
               <time className="activity-time" dateTime={event.occurred_at}>

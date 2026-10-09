@@ -6,9 +6,10 @@ import {
   comparison as validateComparison,
   record,
   requirement as validateRequirement,
+  whatIf as validateWhatIf,
 } from '../api/contracts';
 import { formFromRequirement } from '../api/form';
-import type { Comparison, Evidence, Requirement } from '../api/types';
+import type { Comparison, Evidence, Requirement, WhatIf } from '../api/types';
 import type { LocalSession, SessionAccess } from '../app/storage';
 
 const screenshots = resolve(import.meta.dirname, '../../../artifacts/frontend');
@@ -108,16 +109,33 @@ test('responsive public pages and workspace stay within the viewport in both lan
     await noOverflow(page);
     if (width === 1440) await capture(page, 'workspace-desktop-light-vi');
     if (width === 390) await capture(page, 'workspace-mobile-light-vi');
-    await page.getByRole('button', { name: 'Tùy chọn hiển thị', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Chuyển sang giao diện tối', exact: true }),
+    ).toBeVisible();
+    await page
+      .locator('.site-header')
+      .screenshot({ path: resolve(screenshots, `header-controls-${width}-light-vi.png`) });
+    const languageButton = page.getByRole('button', { name: 'Chọn ngôn ngữ', exact: true });
+    await languageButton.click();
     const preferencesBox = await page.locator('.preferences-panel').boundingBox();
     expect(preferencesBox).not.toBeNull();
     if (preferencesBox) {
       expect(preferencesBox.x).toBeGreaterThanOrEqual(0);
       expect(preferencesBox.x + preferencesBox.width).toBeLessThanOrEqual(width);
     }
+    if (width === 1440 || width === 390)
+      await capture(page, `language-menu-${width}-light-vi`, false);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.preferences-panel')).toHaveCount(0);
+    await expect(languageButton).toBeFocused();
+    await languageButton.click();
     await page.getByRole('button', { name: 'English', exact: true }).click();
-    await page.getByRole('button', { name: 'Dark', exact: true }).click();
-    await page.getByRole('button', { name: 'Display preferences', exact: true }).click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator('.preferences-panel')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Choose language', exact: true }).click();
+    await page.getByRole('button', { name: 'Switch to dark mode', exact: true }).click();
+    await expect(page.locator('.preferences-panel')).toHaveCount(0);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await noOverflow(page);
@@ -131,10 +149,9 @@ test('responsive public pages and workspace stay within the viewport in both lan
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await page.getByRole('button', { name: 'Display preferences', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose language', exact: true }).click();
     await page.getByRole('button', { name: 'Tiếng Việt', exact: true }).click();
-    await page.getByRole('button', { name: 'Sáng', exact: true }).click();
-    await page.getByRole('button', { name: 'Tùy chọn hiển thị', exact: true }).click();
+    await page.getByRole('button', { name: 'Chuyển sang giao diện sáng', exact: true }).click();
   }
   expect(errors).toEqual([]);
 });
@@ -316,6 +333,10 @@ test('comparison contract example keeps eight columns within its own scroll regi
   const result = comparison.result;
   if (!result) throw new Error('Missing completed contract result');
   result.origin = 'source'; // Test copy only; production synthetic results remain blocked.
+  result.recommendations.truncated = true;
+  result.analysis.retrieval = {
+    runs: [{ scanned_count: 1000, retained_count: result.columns.length, scan_truncated: true }],
+  }; // Test-only bounded retrieval for diagnosis layout at each viewport.
   const requirement = result.requirement_snapshot;
   for (const column of result.columns) {
     column.origin = 'discovery';
@@ -426,6 +447,9 @@ test('comparison contract example keeps eight columns within its own scroll regi
   page.on('pageerror', (error) => pageErrors.push(error.message));
   await page.goto(`/tours?session=${sessionId}`);
   await expect(page.locator('.compare-table')).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Chi tiết kết quả tìm kiếm' })).toContainText(
+    'kết quả này chưa đại diện toàn bộ kho tour',
+  );
   await expect(page.locator('.compare-table thead th')).toHaveCount(9);
   for (const width of [1440, 1280, 390, 320]) {
     await page.setViewportSize({ width, height: 960 });
@@ -459,4 +483,197 @@ test('comparison contract example keeps eight columns within its own scroll regi
   await noOverflow(page);
   await capture(page, 'comparison-contract-test-320-analysis');
   expect(pageErrors).toEqual([]);
+});
+
+test('hosted identity adapter: confirmation, cross-browser account history, profile and archive', async ({
+  page,
+  browser,
+}) => {
+  test.skip(process.env.E2E_AUTH_STUB !== '1', 'Uses the loopback test Auth provider only.');
+  const title = `E2E account Japan ${Date.now()}`;
+  await page.goto('/auth');
+  await page.getByRole('button', { name: 'Tạo tài khoản', exact: true }).first().click();
+  await page.getByLabel('Họ và tên', { exact: true }).fill('Browser tester');
+  await page.getByLabel('Email', { exact: true }).fill('browser@example.test');
+  await page.getByLabel('Mật khẩu', { exact: true }).fill('test-password');
+  await page.getByLabel('Xác nhận mật khẩu', { exact: true }).fill('test-password');
+  await page.locator('.auth-submit').click();
+  await expect(page.getByRole('status')).toContainText('Kiểm tra email');
+  await expect(page.locator('.account-link')).toHaveText('Đăng nhập');
+  async function login(target: Page) {
+    await target.goto('/auth');
+    await target.getByLabel('Email', { exact: true }).fill('browser@example.test');
+    await target.getByLabel('Mật khẩu', { exact: true }).fill('test-password');
+    await expect(target.locator('.auth-submit')).toBeEnabled();
+    await target.locator('.auth-submit').click();
+    await expect(target).toHaveURL(/\/tours/);
+    await expect(target.locator('.account-link')).not.toHaveText('Đăng nhập');
+  }
+  await login(page);
+  await page.getByRole('button', { name: 'Phiên mới', exact: true }).first().click();
+  await fillTrip(page);
+  await page.getByRole('button', { name: 'Xem lại nhu cầu', exact: true }).click();
+  await page.getByRole('button', { name: 'Xác nhận nhu cầu', exact: true }).click();
+  await expect(page.getByText('Nhu cầu đã được xác nhận', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Đổi tên phiên', exact: true }).first().click();
+  await page.getByLabel('Tên phiên', { exact: true }).fill(title);
+  await page.getByRole('button', { name: 'Lưu tên', exact: true }).click();
+  await expect(page.locator('.session-list:visible')).toContainText(title);
+  const second = await browser.newContext();
+  try {
+    const other = await second.newPage();
+    await login(other);
+    await expect(other.locator('.session-list:visible')).toContainText(title);
+    await expect(other.getByText('Nhu cầu đã được xác nhận', { exact: true })).toBeVisible();
+    expect(
+      await other.evaluate(() => JSON.parse(localStorage.getItem('di-cung:history:v1') ?? '[]')),
+    ).toEqual([]);
+    await other.goto('/account');
+    await other.getByLabel('Họ và tên', { exact: true }).fill('Updated browser tester');
+    await other.getByRole('button', { name: 'Lưu thay đổi', exact: true }).click();
+    await expect(other.getByRole('status')).toContainText('Đã lưu');
+    await noOverflow(other);
+    await capture(other, 'account-auth-stub-desktop');
+    await other.setViewportSize({ width: 390, height: 900 });
+    await noOverflow(other);
+    await capture(other, 'account-auth-stub-mobile');
+    await other.setViewportSize({ width: 1440, height: 960 });
+    await other.goto('/tours');
+    await other
+      .getByRole('button', { name: 'Xóa phiên khỏi lịch sử', exact: true })
+      .first()
+      .click();
+    await other.getByRole('button', { name: 'Xóa bản lưu', exact: true }).click();
+    await expect(other.locator('.session-list:visible')).not.toContainText(title);
+    await page.getByRole('button', { name: 'Tải lại lịch sử tài khoản', exact: true }).click();
+    await expect(page.locator('.session-list:visible')).not.toContainText(title);
+  } finally {
+    await second.close();
+  }
+});
+
+test('what-if contract: measured scenarios open a review proposal without confirming or searching', async ({
+  page,
+}) => {
+  const root = resolve(import.meta.dirname, '../../..');
+  const raw = JSON.parse(
+    execFileSync(
+      resolve(root, process.platform === 'win32' ? '.venv/Scripts/python.exe' : '.venv/bin/python'),
+      [resolve(root, 'src/frontend/api/verify_backend.py')],
+      { cwd: root, encoding: 'utf8', timeout: 30_000 },
+    ),
+  );
+  const captured = (raw as unknown[]).map((entry) => record(entry));
+  const responseFor = (name: string) =>
+    record(captured.find((entry) => entry.name === name)?.response);
+  const compEnvelope = responseFor('hard comparison');
+  const comparison = structuredClone(compEnvelope.data) as Comparison;
+  comparison.result!.origin = 'source'; // Layout test copy; production synthetic gate stays enabled.
+  const requirement = comparison.result!.requirement_snapshot;
+  const analysisEnvelope = responseFor('hard what-if result');
+  const analysis = structuredClone(analysisEnvelope.data) as WhatIf;
+  analysis.result!.origin = 'source';
+  validateComparison(comparison);
+  validateWhatIf(analysis);
+  const accepted = responseFor('hard what-if acceptance');
+  const reviewEnvelope = responseFor('what-if review proposal');
+  const review = record(reviewEnvelope.data);
+  const scenario = analysis.result!.scenarios.find((s) => s.edits.length > 0);
+  if (!scenario || scenario.state !== 'measured')
+    throw new Error('Expected a measured fixture scenario');
+  const id = 'what-if-browser-contract';
+  const time = new Date().toISOString();
+  const session: LocalSession = {
+    id,
+    title: 'What-if contract test',
+    pinned: false,
+    createdAt: time,
+    updatedAt: time,
+    draft: formFromRequirement(requirement),
+    requirementId: requirement.id,
+    proposalId: null,
+    comparisonId: comparison.id,
+    pendingComparisonId: null,
+    jobId: null,
+    pendingMessageId: null,
+    runs: [],
+    chat: [],
+  };
+  await page.addInitScript(
+    ({ session }) => {
+      localStorage.setItem('di-cung:history:v1', JSON.stringify([session]));
+      sessionStorage.setItem(
+        'di-cung:access:v1',
+        JSON.stringify({
+          [session.id]: {
+            token: 'test-only',
+            backendId: 'test-only',
+            expiresAt: '2099-01-01T00:00:00Z',
+          },
+        }),
+      );
+    },
+    { session },
+  );
+  const wrap = (data: unknown) => ({ ...compEnvelope, data });
+  await page.route(`**/v2/requirements/${requirement.id}`, (route) =>
+    route.fulfill({ json: wrap(requirement) }),
+  );
+  await page.route(`**/v2/comparisons/${comparison.id}`, (route) =>
+    route.fulfill({ json: wrap(comparison) }),
+  );
+  await page.route(`**/v2/comparisons/${comparison.id}/what-if`, (route) =>
+    route.fulfill({ json: accepted, status: 202 }),
+  );
+  const jobId = String(record(accepted.data).job_id);
+  const job = record(responseFor('terminal comparison job').data);
+  await page.route(`**/v2/jobs/${jobId}`, (route) =>
+    route.fulfill({
+      json: wrap({ ...job, id: jobId, kind: 'v2_what_if', resource_id: analysis.id }),
+    }),
+  );
+  await page.route(`**/v2/jobs/${jobId}/events?*`, (route) =>
+    route.fulfill({ json: wrap({ items: [], next_seq: 0, has_more: false }) }),
+  );
+  await page.route(`**/v2/what-if/${analysis.id}`, (route) =>
+    route.fulfill({ json: wrap(analysis) }),
+  );
+  await page.route(`**/v2/what-if/${analysis.id}/scenarios/${scenario.id}/proposals`, (route) =>
+    route.fulfill({ json: reviewEnvelope }),
+  );
+  await page.route(`**/v2/proposals/${String(review.id)}`, (route) =>
+    route.fulfill({ json: reviewEnvelope }),
+  );
+  const forbidden: string[] = [];
+  page.on('request', (request) => {
+    if (
+      request.method() === 'POST' &&
+      (/\/confirm$/.test(new URL(request.url()).pathname) ||
+        new URL(request.url()).pathname === '/v2/comparisons')
+    )
+      forbidden.push(request.url());
+  });
+  await page.goto(`/tours?session=${id}`);
+  await page.getByRole('button', { name: 'Phân tích tác động điều kiện', exact: true }).click();
+  await expect(page.locator('.what-if-scenario')).toHaveCount(analysis.result!.scenarios.length);
+  const first = page
+    .locator('.what-if-scenario')
+    .filter({ has: page.locator('summary', { hasText: scenario.label }) })
+    .first();
+  await first.locator('summary').click();
+  await expect(first).toContainText('Bị điều kiện gốc loại, nay đạt');
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await noOverflow(page);
+    await page.locator('.what-if-panel').screenshot({
+      path: resolve(screenshots, `what-if-contract-test-${width}.png`),
+      style: '.site-header, .workspace-toolbar, .skip-link { visibility: hidden !important; }',
+    });
+  }
+  await first.getByRole('button', { name: 'Xem đề xuất sửa nhu cầu', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Kiểm tra thay đổi', exact: true })).toBeVisible();
+  expect(forbidden).toEqual([]);
+  await expect(
+    page.getByRole('button', { name: 'Phân tích tác động điều kiện', exact: true }),
+  ).toBeDisabled();
 });

@@ -52,9 +52,13 @@ def create_app(
     access_checker=None,
     semantic_gateway=None,
     what_if_gateway=None,
+    auth_transport=None,
 ) -> FastAPI:
     settings = settings or Settings()
     store = Store(settings)
+    from api.auth.service import Identity
+
+    identity = Identity(store, auth_transport)
     gateway = gateway or DataGateway(settings)
     worker = Worker(store, nim or NimGateway(settings), gateway)
     from api.v2.admin import Admin, bootstrap
@@ -96,7 +100,8 @@ Xem `examples/backend-v2.md` để nối frontend. Dùng `/v2/catalog` lấy fie
 Nhập text cần NIM; URL-only có proposal cần confirm. Form đầy đủ/rõ tạo revision 1;
 form thiếu/chưa rõ tạo draft + proposal. Form/text cần đủ năm core fields trước confirm/search.
 Đọc completeness và readiness.can_confirm/can_search; hướng dẫn `examples/backend-personalized-v2.md`.
-Frontend prototype hiện vẫn dùng dữ liệu mẫu. API v1 tiếp tục hoạt động:
+Frontend React gọi v2; `/auth` dùng Supabase Auth, `/v2/history` lấy lịch sử theo owner.
+What-if tạo đề xuất sửa nhu cầu, vẫn cần review/confirm rồi search. API v1 tiếp tục hoạt động:
 
 **Kho Supabase thật:** cấu hình `DATA_PROVIDER=supabase`, dùng nhóm **v2** và URL tour có trong catalog.
 Kiểm tra `/health` thấy data_provider=supabase; `probe-supabase` kiểm tra counts và quyền chỉ đọc.
@@ -124,6 +129,7 @@ Các URL `.invalid` là dữ liệu mô phỏng, chỉ dùng với `DATA_PROVIDE
 """,
     )
     app.state.store, app.state.worker, app.state.gateway = store, worker, gateway
+    app.state.identity = identity
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -207,6 +213,17 @@ Các URL `.invalid` là dữ liệu mô phỏng, chỉ dùng với `DATA_PROVIDE
         if credentials is None:
             raise AppError("UNAUTHORIZED", "Cần bearer session token.", 401)
         result = store.authenticate(credentials.credentials)
+        limits.check(f"owner:{result}", 120)
+        return result
+
+    async def owner_v2(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(session_bearer)]):
+        if credentials is None:
+            raise AppError("UNAUTHORIZED", "Cần bearer session hoặc tài khoản.", 401)
+        token = credentials.credentials
+        if token.count(".") == 2:
+            result = await identity.owner(token)
+        else:
+            result = store.authenticate(token)
         limits.check(f"owner:{result}", 120)
         return result
 
@@ -492,5 +509,10 @@ Các URL `.invalid` là dữ liệu mô phỏng, chỉ dùng với `DATA_PROVIDE
 
     from api.v2.routes import router
 
-    app.include_router(router(worker.v2, worker.v2.admin, owner, limits))
+    app.include_router(router(worker.v2, worker.v2.admin, owner_v2, limits))
+    from api.auth.routes import router as auth_router
+    from api.v2.history import router as history_router
+
+    app.include_router(auth_router(identity, limits))
+    app.include_router(history_router(store, owner_v2))
     return app

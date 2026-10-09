@@ -243,6 +243,9 @@ def persist_snapshots(c, owner, cid, crawl):
 
 
 def purge(c, resource_ids, job_ids):
+    from api.v2.history import conversation_meta
+
+    c.execute(delete(conversation_meta).where(conversation_meta.c.requirement_id.in_(resource_ids)))
     c.execute(delete(proposals).where(proposals.c.requirement_id.in_(resource_ids)))
     c.execute(delete(messages).where(messages.c.requirement_id.in_(resource_ids)))
     c.execute(delete(snapshots).where(snapshots.c.comparison_id.in_(resource_ids)))

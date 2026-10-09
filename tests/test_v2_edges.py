@@ -774,6 +774,7 @@ def test_automatic_worker_publishes_url_flow(settings):
 
 def test_schema_export_has_v2_and_keeps_v1(tmp_path, monkeypatch):
     from api.cli import main
+    from data_access.supabase.pricing import CatalogPricing
 
     monkeypatch.setattr("sys.argv", ["tour-backend", "export-schemas", "--output", str(tmp_path)])
     main()
@@ -787,7 +788,11 @@ def test_schema_export_has_v2_and_keeps_v1(tmp_path, monkeypatch):
         json.loads((tmp_path / "v2" / "RequirementV2.schema.json").read_text(encoding="utf-8"))
         == RequirementV2.model_json_schema()
     )
-    assert len(list((tmp_path / "v2").glob("*.schema.json"))) == 28
+    assert (
+        json.loads((tmp_path / "v2" / "CatalogPricing.schema.json").read_text(encoding="utf-8"))
+        == CatalogPricing.model_json_schema()
+    )
+    assert len(list((tmp_path / "v2").glob("*.schema.json"))) == 29
     assert (tmp_path / "v2" / "AssessmentBatch.schema.json").is_file()
     assert (tmp_path / "v2" / "SemanticReport.schema.json").is_file()
 

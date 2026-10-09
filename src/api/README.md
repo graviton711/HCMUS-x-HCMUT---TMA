@@ -1,5 +1,7 @@
 # API và điều phối
 
+Export v2 thêm `CatalogPricing` cho optional metadata bảng giá của crawler, theo [contract](../../examples/catalog-price-metadata.md). History refs hỗ trợ wrapper result của các tác vụ đã hoàn thành.
+
 What-if resource/job lifecycle dùng cùng Store cancellation/recovery/retention và owner/CAS guards; source/snapshot/evidence được lưu độc lập parent comparison. [Policy](../../docs/what-if-analysis.md).
 
 Implementation v2 theo [backend-v2-runtime](../../docs/backend-v2-runtime.md), module [v2](v2/README.md). Schema 2 additive thêm proposals/events/snapshot indexes/registry/contact/audit; các bảng và routes v1 được giữ. Không coi các đặc tả admin/prototype là endpoint đã hoàn tất khi chưa có tests tương ứng.
@@ -61,3 +63,5 @@ Không giữ transaction trong lúc gọi NIM/crawler. Claim/commit bằng condi
 # Catalog configuration
 
 [catalog-validation-v1](../../docs/catalog-validation-policy.md): Settings thêm trusted domain allowlist (mặc định rỗng) và volatile TTL map (mặc định rỗng). Chỉ Supabase v2 nhận dữ liệu catalog đã kiểm tra; credentials không xuất ra API/log. Registry persisted bị giới hạn bởi cấu hình trust hiện hành.
+
+Account identity qua Supabase Auth adapter `/auth`, v2 owner theo verified UUID; lịch sử `/v2/history` trong application DB. Metadata/revocations/link receipts là bảng additive; tour catalog/schema Supabase không bị đổi. [Contract](../../docs/account-history-what-if-integration.md), [Auth module](auth/README.md), [History](v2/HISTORY.md).

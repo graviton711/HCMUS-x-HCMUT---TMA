@@ -17,6 +17,7 @@ Phạm vi: backend trên `backend`, Supabase chỉ đọc. Thay policy bắt bu�
 - Nội dung đã làm sạch được giữ như excerpt của catalog; completeness unknown (hoặc partial khi bị cắt), không dùng để kết luận không có một dịch vụ chỉ vì không thấy trong đoạn. LLM phải trích đúng nội dung đã lưu, chạy sau hard-pass, chưa chấm uy tín/dịch vụ tốt/đáng tiền từ quảng cáo.
 - Ngày/giá/availability vẫn cần TTL được nhóm thống nhất. `SUPABASE_TOUR_FRESHNESS_SECONDS` là JSON map chỉ cho departure_date/return_date/price/availability, positive seconds, mặc định `{}`; chưa cấu hình thì unknown. Không tự chọn TTL chỉ để test pass; config tường minh áp dụng cả registry đã persisted, admin pause vẫn giữ hiệu lực.
 - Không đổi from thành exact; không suy coverage/phụ thu/ngày về/ghép đoàn/số chỗ/giá trẻ em. Chỉ thêm evidence.fields không giải quyết các qualifiers này.
+- Optional price metadata theo [contract crawler](../examples/catalog-price-metadata.md) được validate và ràng buộc với row trước catalog validation. Thiếu metadata vẫn giữ giá preview unverified; `complete` phải tường minh, không suy từ mảng phụ thu rỗng. Local cadence 1 ngày đã được user chốt ngày 09/10, được cấu hình trong `.env`, không đổi default của deployment khác.
 
 ## API, what-if và tương thích
 

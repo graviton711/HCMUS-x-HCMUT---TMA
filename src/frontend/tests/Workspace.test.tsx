@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useWorkspace } from '../features/workspace/useWorkspace';
+import { analysisFixture } from './fixtures/whatIf';
 import { emptyForm, formFromRequirement } from '../api/form';
 import { newSession, putAccess, type LocalSession } from '../app/storage';
 import type { Catalog, Comparison, Job, Proposal, Requirement } from '../api/types';
@@ -26,6 +27,10 @@ const server = vi.hoisted(() => ({
   message: vi.fn(),
   cancelJob: vi.fn(),
   evidence: vi.fn(),
+  historyDetail: vi.fn(),
+  createWhatIf: vi.fn(),
+  whatIf: vi.fn(),
+  applyWhatIf: vi.fn(),
 }));
 vi.mock('../api/client', () => ({
   api: server,
@@ -194,7 +199,7 @@ function deferred<T>() {
   });
   return { promise, resolve, reject };
 }
-function useHarness(initial: LocalSession[]) {
+function useHarness(initial: LocalSession[], accountId?: string) {
   const [sessions, setSessions] = useState(initial);
   const [selectedId, select] = useState(initial[0]?.id ?? '');
   const patch = useCallback(
@@ -212,7 +217,11 @@ function useHarness(initial: LocalSession[]) {
     },
     [],
   );
-  const workspace = useWorkspace(sessions.find((value) => value.id === selectedId) ?? null, patch);
+  const workspace = useWorkspace(
+    sessions.find((value) => value.id === selectedId) ?? null,
+    patch,
+    accountId,
+  );
   return { workspace, sessions, select };
 }
 
@@ -532,5 +541,52 @@ describe('workspace lifecycle and persistence', () => {
     );
     expect(result.current.workspace.state.requirement?.id).toBe('requirement-test');
     expect(result.current.workspace.state.busy).toBe(false);
+  });
+});
+
+describe('account and what-if integration', () => {
+  it('restores an account conversation without creating an anonymous session', async () => {
+    const r = requirement();
+    server.historyDetail.mockResolvedValue({
+      requirement: r,
+      version: 2,
+      transcript: { items: [{ id: 'm', role: 'user', text: 'Saved question' }] },
+    });
+    const { result } = renderHook(() =>
+      useHarness([session({ serverHydrated: false })], 'account-test'),
+    );
+    await waitFor(() => expect(result.current.workspace.state.requirement?.id).toBe(r.id));
+    expect(server.session).not.toHaveBeenCalled();
+    expect(result.current.sessions[0].chat[0].text).toBe('Saved question');
+    expect(result.current.sessions[0].historyVersion).toBe(2);
+  });
+  it('runs analysis, creates a review proposal and leaves the committed revision intact', async () => {
+    const analysis = analysisFixture();
+    analysis.result!.comparison_id = 'comparison-old';
+    analysis.result!.requirement_id = 'requirement-test';
+    server.createWhatIf.mockResolvedValue({
+      analysis_id: analysis.id,
+      job_id: 'job-analysis',
+      comparison_id: 'comparison-old',
+      requirement_id: 'requirement-test',
+      revision: 1,
+    });
+    server.whatIf.mockResolvedValue(analysis);
+    server.applyWhatIf.mockResolvedValue(proposal());
+    const { result } = renderHook(() => useHarness([session({ comparisonId: 'comparison-old' })]));
+    await waitFor(() =>
+      expect(result.current.workspace.state.comparison?.id).toBe('comparison-old'),
+    );
+    await act(async () => {
+      await result.current.workspace.analyze();
+    });
+    expect(result.current.workspace.state.whatIf?.id).toBe(analysis.id);
+    await act(async () => {
+      await result.current.workspace.applyScenario('s');
+    });
+    expect(result.current.workspace.state.proposal?.id).toBe('proposal-test');
+    expect(result.current.workspace.state.requirement?.revision).toBe(1);
+    expect(server.confirmProposal).not.toHaveBeenCalled();
+    expect(server.createComparison).not.toHaveBeenCalled();
   });
 });

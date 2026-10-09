@@ -14,8 +14,10 @@ import type {
   JobEvent,
   Proposal,
   Requirement,
+  WhatIf,
 } from '../../api/types';
 import { getAccess, putAccess, type LocalSession } from '../../app/storage';
+import { accountClient } from '../../app/history';
 
 export interface Resources {
   requirement: Requirement | null;
@@ -26,6 +28,7 @@ export interface Resources {
   busy: boolean;
   error: string | null;
   discardIds: string[];
+  whatIf: WhatIf | null;
 }
 const blank: Resources = {
   requirement: null,
@@ -36,6 +39,7 @@ const blank: Resources = {
   busy: false,
   error: null,
   discardIds: [],
+  whatIf: null,
 };
 const terminal = (status: string) =>
   ['succeeded', 'partial', 'failed', 'cancelled'].includes(status);
@@ -67,7 +71,11 @@ interface Operation {
   state: Resources;
 }
 
-export function useWorkspace(current: LocalSession | null, patchSession: PatchSession) {
+export function useWorkspace(
+  current: LocalSession | null,
+  patchSession: PatchSession,
+  accountId?: string,
+) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [resources, setResources] = useState<Record<string, Resources>>({});
@@ -165,6 +173,16 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
       controllers.current.set(saved.id, ctrl);
       update(saved.id, { busy: true, error: null, discardIds: [] });
       try {
+        if (accountId) {
+          await action({
+            id: saved.id,
+            saved,
+            state: latest.current[saved.id] || blank,
+            client: accountClient(accountId),
+            signal: ctrl.signal,
+          });
+          return;
+        }
         let access = getAccess(saved.id);
         if (!access) {
           if (saved.requirementId)
@@ -191,7 +209,7 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
         }
       }
     },
-    [update],
+    [update, accountId],
   );
 
   const searchWith = useCallback(
@@ -201,7 +219,10 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
       intent: 'initial' | 'next_group' | 'offer_change' = 'initial',
       offer?: { tour_id: string; offer_snapshot_id: string },
     ) => {
-      if (requirement.revision < 1 || !requirement.readiness.can_collect_data)
+      if (
+        requirement.revision < 1 ||
+        !(requirement.readiness.can_search ?? requirement.readiness.can_collect_data)
+      )
         throw new Error('Cần xác nhận và làm rõ nhu cầu trước khi tìm kiếm.');
       const health = await api.health({ signal: op.signal });
       if (health.data_origin === 'synthetic')
@@ -244,7 +265,9 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
       patchRef.current(op.id, {
         pendingComparisonId: accepted.comparison_id,
         jobId: accepted.job_id,
+        analysisId: null,
       });
+      update(op.id, { whatIf: null });
       await poll(op.client, op.id, accepted.job_id, op.signal);
       const comparison = await op.client.comparison(accepted.comparison_id, { signal: op.signal });
       op.signal.throwIfAborted();
@@ -270,6 +293,15 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
   const resume = useCallback(
     async (op: Operation) => {
       if (!op.saved.requirementId) return;
+      if (accountId && !op.saved.serverHydrated) {
+        const detail = await op.client.historyDetail(op.saved.requirementId, { signal: op.signal });
+        patchRef.current(op.id, {
+          draft: formFromRequirement(detail.requirement),
+          chat: detail.transcript.items,
+          serverHydrated: true,
+          historyVersion: detail.version,
+        });
+      }
       const requirement = await op.client.requirement(op.saved.requirementId, {
         signal: op.signal,
       });
@@ -336,7 +368,7 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
           }
         }
         if (proposalId) {
-          const proposal = await readProposal(op, proposalId, true);
+          const proposal = await readProposal(op, proposalId, op.saved.serverHydrated !== false);
           resumed = { ...resumed, proposal };
         }
       }
@@ -346,8 +378,17 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
           resumed.requirement,
           op.saved.pendingMessageId,
         );
+      if (op.saved.analysisId) {
+        const analysis = await op.client.whatIf(op.saved.analysisId, { signal: op.signal });
+        if (
+          analysis.result &&
+          analysis.result.comparison_id === resumed.comparison?.id &&
+          analysis.result.revision === resumed.requirement.revision
+        )
+          update(op.id, { whatIf: analysis });
+      }
     },
-    [poll, readProposal, update],
+    [poll, readProposal, update, accountId],
   );
 
   const selectedId = current?.id;
@@ -363,7 +404,7 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
       evidenceController.current?.abort();
       setEvidenceOpen(false);
     };
-  }, [selectedId, run, resume, update]);
+  }, [selectedId, run, resume, update, accountId]);
 
   const create = (values: FormValues) =>
     run(async (op) => {
@@ -379,6 +420,18 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
           catalog?.destinations.find((d) => d.id === values.destinations[0])?.label ||
           values.text.slice(0, 48),
       });
+      if (accountId) {
+        const title =
+          op.saved.title ||
+          catalog?.destinations.find((d) => d.id === values.destinations[0])?.label ||
+          values.text.slice(0, 48);
+        const meta = await op.client.editHistory(
+          requirementId,
+          { expected_version: 0, title },
+          { signal: op.signal },
+        );
+        patchRef.current(op.id, { historyVersion: meta.version, serverHydrated: true });
+      }
       if ('proposal_id' in created && created.proposal_id) {
         patchRef.current(op.id, { proposalId: created.proposal_id, jobId: created.job_id || null });
         if (created.job_id) await poll(op.client, op.id, created.job_id, op.signal);
@@ -602,9 +655,9 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
     const saved = currentRef.current;
     const job = saved ? latest.current[saved.id]?.job : null;
     const access = saved ? getAccess(saved.id) : null;
-    if (!saved || !job || !access) return;
+    if (!saved || !job || (!access && !accountId)) return;
     try {
-      await new ApiClient(access.token).cancelJob(job.id);
+      await (accountId ? accountClient(accountId) : new ApiClient(access!.token)).cancelJob(job.id);
     } catch (error) {
       update(saved.id, { error: errorText(error) });
     }
@@ -613,6 +666,7 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
     run(async (op) => {
       update(op.id, {
         comparison: await op.client.comparison(comparisonId, { signal: op.signal }),
+        whatIf: null,
       });
       patchRef.current(op.id, { comparisonId });
     });
@@ -627,8 +681,10 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
     setEvidenceError(null);
     try {
       const access = getAccess(saved.id);
-      if (!access) throw new Error('Phiên đã hết hạn.');
-      const item = await new ApiClient(access.token).evidence(evidenceId, { signal: ctrl.signal });
+      if (!access && !accountId) throw new Error('Phiên đã hết hạn.');
+      const item = await (
+        accountId ? accountClient(accountId) : new ApiClient(access!.token)
+      ).evidence(evidenceId, { signal: ctrl.signal });
       ctrl.signal.throwIfAborted();
       setEvidence(item);
     } catch (error) {
@@ -639,6 +695,56 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
     evidenceController.current?.abort();
     setEvidenceOpen(false);
   };
+  const analyze = () =>
+    run(async (op) => {
+      const result = op.state.comparison?.result;
+      if (
+        !result ||
+        !op.state.requirement ||
+        op.state.proposal ||
+        result.revision !== op.state.requirement.revision
+      )
+        throw new Error('Cần kết quả so sánh khớp nhu cầu đã xác nhận.');
+      const accepted = await op.client.createWhatIf(result.id, result.revision, {
+        signal: op.signal,
+      });
+      if (
+        accepted.comparison_id !== result.id ||
+        accepted.requirement_id !== op.state.requirement.id ||
+        accepted.revision !== result.revision
+      )
+        throw new Error('Phân tích không khớp bảng hiện tại.');
+      patchRef.current(op.id, { analysisId: accepted.analysis_id, jobId: accepted.job_id });
+      update(op.id, { whatIf: null });
+      await poll(op.client, op.id, accepted.job_id, op.signal);
+      const analysis = await op.client.whatIf(accepted.analysis_id, { signal: op.signal });
+      if (
+        !analysis.result ||
+        analysis.result.comparison_id !== result.id ||
+        analysis.result.requirement_id !== op.state.requirement.id ||
+        analysis.result.revision !== result.revision
+      )
+        throw new Error('Kết quả phân tích không khớp nhu cầu.');
+      update(op.id, { whatIf: analysis });
+    });
+  const applyScenario = (scenarioId: string) =>
+    run(async (op) => {
+      const analysis = op.state.whatIf?.result;
+      if (
+        !analysis ||
+        op.state.proposal ||
+        analysis.requirement_id !== op.state.requirement?.id ||
+        analysis.revision !== op.state.requirement.revision ||
+        analysis.comparison_id !== op.state.comparison?.id
+      )
+        throw new Error('Nhu cầu hoặc bảng so sánh đã thay đổi; hãy phân tích lại.');
+      const scenario = analysis.scenarios.find((s) => s.id === scenarioId);
+      if (!scenario?.edits.length) throw new Error('Kịch bản này không có thay đổi để áp dụng.');
+      const proposal = await op.client.applyWhatIf(analysis.id, scenarioId, analysis.revision, {
+        signal: op.signal,
+      });
+      await readProposal(op, proposal.id);
+    });
   return {
     catalog,
     catalogError,
@@ -658,6 +764,8 @@ export function useWorkspace(current: LocalSession | null, patchSession: PatchSe
     refresh: () => run(resume),
     openEvidence,
     closeEvidence,
+    analyze,
+    applyScenario,
     evidence,
     evidenceError,
     evidenceOpen,

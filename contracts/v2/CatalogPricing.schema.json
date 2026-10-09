@@ -1,0 +1,255 @@
+{
+  "$defs": {
+    "Applicability": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "enum": [
+            "adults",
+            "children_count",
+            "rooming",
+            "unresolved"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "field",
+        "value"
+      ],
+      "title": "Applicability",
+      "type": "object"
+    },
+    "ExtraCharge": {
+      "additionalProperties": false,
+      "properties": {
+        "charge_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Charge Id",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Amount"
+        },
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "basis": {
+          "enum": [
+            "per_adult",
+            "per_child",
+            "per_person",
+            "per_group",
+            "per_room"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "required": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Required"
+        },
+        "applicability": {
+          "items": {
+            "$ref": "#/$defs/Applicability"
+          },
+          "maxItems": 20,
+          "title": "Applicability",
+          "type": "array"
+        }
+      },
+      "required": [
+        "charge_id",
+        "amount",
+        "currency",
+        "basis",
+        "required"
+      ],
+      "title": "ExtraCharge",
+      "type": "object"
+    },
+    "PriceQuote": {
+      "additionalProperties": false,
+      "properties": {
+        "quote_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[a-zA-Z0-9_.:-]+$",
+          "title": "Quote Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "exact",
+            "from",
+            "range"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Amount"
+        },
+        "upper_amount": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper Amount"
+        },
+        "currency": {
+          "title": "Currency",
+          "type": "string"
+        },
+        "basis": {
+          "enum": [
+            "per_adult",
+            "per_child",
+            "per_infant",
+            "per_room",
+            "per_group"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "coverage": {
+          "enum": [
+            "tour_price",
+            "trip_total",
+            "unspecified"
+          ],
+          "title": "Coverage",
+          "type": "string"
+        },
+        "age_min": {
+          "anyOf": [
+            {
+              "maximum": 120,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Age Min"
+        },
+        "age_max_exclusive": {
+          "anyOf": [
+            {
+              "maximum": 121,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Age Max Exclusive"
+        },
+        "applicability": {
+          "items": {
+            "$ref": "#/$defs/Applicability"
+          },
+          "maxItems": 20,
+          "title": "Applicability",
+          "type": "array"
+        }
+      },
+      "required": [
+        "quote_id",
+        "kind",
+        "amount",
+        "currency",
+        "basis",
+        "coverage"
+      ],
+      "title": "PriceQuote",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "observed_at": {
+      "title": "Observed At",
+      "type": "string"
+    },
+    "quotes": {
+      "items": {
+        "$ref": "#/$defs/PriceQuote"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Quotes",
+      "type": "array"
+    },
+    "extra_charges": {
+      "items": {
+        "$ref": "#/$defs/ExtraCharge"
+      },
+      "maxItems": 50,
+      "title": "Extra Charges",
+      "type": "array"
+    },
+    "complete": {
+      "title": "Complete",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "observed_at",
+    "quotes",
+    "extra_charges",
+    "complete"
+  ],
+  "title": "CatalogPricing",
+  "type": "object"
+}

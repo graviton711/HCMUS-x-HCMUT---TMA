@@ -1,5 +1,7 @@
 # Kiến trúc frontend
 
+Đợt account/history/what-if theo [contract 09/10](../../docs/account-history-what-if-integration.md): Supabase email/password/PKCE qua backend adapter, bearer dùng v2 theo verified owner; hydrate history server và what-if có review proposal. Draft chưa gửi giữ local, server history theo retention. Giữ UI tokens/components hiện hữu.
+
 React + TypeScript + Vite, gọi API backend v2. Runtime/build dùng source và assets độc lập; prototype HTML không là dependency. Giao diện hỗ trợ responsive, VI/EN và sáng/tối.
 
 ## Modules và interfaces
@@ -24,7 +26,7 @@ Catalog cấp canonical destinations/origins/operators/sliders/limits. URL-only 
 - Semantic CSS tokens; motion opacity/transform và reduced-motion. Browser history quản lý route/query phiên; deploy cần SPA fallback.
 - Mutation retry dùng cùng serialized body/idempotency key. `409` giữ draft/proposal và cho tải trạng thái mới; session creation không tự retry.
 - Poll sequential với event cursor, drain `has_more` kể cả terminal. AbortSignal và guard theo phiên chặn response muộn; chuyển màn không cancel job server.
-- localStorage lưu chỉ mục/draft/chat/IDs, sessionStorage lưu bearer/expiry. Resume đọc resource backend đã biết ID; history local không thay auth hay đồng bộ đa thiết bị.
-- Identity adapter tách token khỏi API v2 đến khi backend có ownership mapping. Các giới hạn/contract tại [BACKEND-GAPS](BACKEND-GAPS.md) và [AUTH-ADAPTER](app/AUTH-ADAPTER.md).
+- localStorage lưu chỉ mục/draft/chat/IDs, sessionStorage lưu bearer/expiry. Resume đọc resource backend đã biết ID; history account lấy từ backend, draft chưa gửi chỉ local.
+- Supabase adapter dùng bearer cho API v2 sau backend verification theo owner UUID; anonymous token vẫn giữ riêng. Các giới hạn/contract tại [BACKEND-GAPS](BACKEND-GAPS.md) và [AUTH-ADAPTER](app/AUTH-ADAPTER.md).
 
 Kiểm tra chạy bằng các scripts trong [README](README.md); contract tests dùng backend source thật, SQLite memory và FakeNim. Browser tests kiểm workflow/responsive; các test fixture không xác nhận chất lượng nguồn tour live.

@@ -26,6 +26,11 @@ import type {
   Requirement,
   SendMessageRequest,
   Session,
+  HistoryPage,
+  HistoryDetail,
+  HistoryMetadata,
+  WhatIf,
+  AcceptedWhatIf,
 } from './types';
 
 export interface RequestOptions {
@@ -66,14 +71,14 @@ export class ApiClient {
     validate: contracts.Validator,
     options: RequestOptions = {},
     body?: unknown,
-    method: 'GET' | 'POST' = 'GET',
+    method: 'GET' | 'POST' | 'PATCH' = 'GET',
     v2 = true,
     retryMutation = true,
   ): Promise<T> {
     // Serialize exactly once: retrying a mutable form must never change the request fingerprint.
     const serialized = body === undefined ? undefined : JSON.stringify(body);
     const key =
-      method === 'POST' && retryMutation
+      method !== 'GET' && retryMutation
         ? (options.idempotencyKey ?? newIdempotencyKey())
         : undefined;
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -81,7 +86,7 @@ export class ApiClient {
       headers.Authorization = `Bearer ${this.token}`;
     if (serialized !== undefined) headers['Content-Type'] = 'application/json';
     if (key) headers['Idempotency-Key'] = key;
-    const attempts = method === 'POST' && retryMutation ? 2 : 1;
+    const attempts = method !== 'GET' && retryMutation ? 2 : 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       options.signal?.throwIfAborted();
       try {
@@ -139,14 +144,16 @@ export class ApiClient {
             ? error
             : error instanceof contracts.ContractError
               ? new ApiError('RESPONSE_INVALID', error.message, 0, false, {}, key)
-              : new ApiError(
-                  'NETWORK_ERROR',
-                  'Không kết nối được backend. Kiểm tra kết nối rồi thử lại.',
-                  0,
-                  true,
-                  {},
-                  key,
-                );
+              : error instanceof Error && 'status' in error && typeof error.status === 'number'
+                ? new ApiError('AUTH_ERROR', error.message, error.status, false, {}, key)
+                : new ApiError(
+                    'NETWORK_ERROR',
+                    'Không kết nối được backend. Kiểm tra kết nối rồi thử lại.',
+                    0,
+                    true,
+                    {},
+                    key,
+                  );
         if (
           attempt + 1 < attempts &&
           (apiError.code === 'NETWORK_ERROR' || [502, 503, 504].includes(apiError.status))
@@ -306,6 +313,72 @@ export class ApiClient {
   }
   contact(body: ContactRequest, options?: RequestOptions) {
     return this.request<ContactTicket>('/v2/contacts', contracts.contact, options, body, 'POST');
+  }
+  history(after?: string, options?: RequestOptions) {
+    return this.request<HistoryPage>(
+      `/v2/history?limit=100${after ? `&after=${encodeURIComponent(after)}` : ''}`,
+      contracts.history,
+      options,
+    );
+  }
+  historyDetail(id: string, options?: RequestOptions) {
+    return this.request<HistoryDetail>(
+      `/v2/history/${encodeURIComponent(id)}`,
+      contracts.historyDetail,
+      options,
+    );
+  }
+  editHistory(
+    id: string,
+    body: { expected_version: number; title?: string; pinned?: boolean },
+    options?: RequestOptions,
+  ) {
+    return this.request<HistoryMetadata>(
+      `/v2/history/${encodeURIComponent(id)}`,
+      contracts.historyMetadata,
+      options,
+      body,
+      'PATCH',
+    );
+  }
+  archiveHistory(id: string, expected_version: number, options?: RequestOptions) {
+    return this.request<HistoryMetadata>(
+      `/v2/history/${encodeURIComponent(id)}/archive`,
+      contracts.historyMetadata,
+      options,
+      { expected_version },
+      'POST',
+    );
+  }
+  linkHistory(anonymous_token: string, options?: RequestOptions) {
+    return this.request<{ linked_requirements: number }>(
+      '/v2/history/link-session',
+      contracts.linkedHistory,
+      options,
+      { anonymous_token },
+      'POST',
+    );
+  }
+  createWhatIf(id: string, expected_revision: number, options?: RequestOptions) {
+    return this.request<AcceptedWhatIf>(
+      `/v2/comparisons/${encodeURIComponent(id)}/what-if`,
+      contracts.acceptedWhatIf,
+      options,
+      { expected_revision },
+      'POST',
+    );
+  }
+  whatIf(id: string, options?: RequestOptions) {
+    return this.request<WhatIf>(`/v2/what-if/${encodeURIComponent(id)}`, contracts.whatIf, options);
+  }
+  applyWhatIf(id: string, scenario: string, expected_revision: number, options?: RequestOptions) {
+    return this.request<Proposal>(
+      `/v2/what-if/${encodeURIComponent(id)}/scenarios/${encodeURIComponent(scenario)}/proposals`,
+      contracts.proposal,
+      options,
+      { expected_revision },
+      'POST',
+    );
   }
 }
 

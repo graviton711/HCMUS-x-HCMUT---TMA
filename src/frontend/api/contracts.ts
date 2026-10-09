@@ -1,4 +1,11 @@
-import type { ComparisonResult, Envelope, JsonObject, JsonValue, Requirement } from './types';
+import type {
+  ComparisonResult,
+  Envelope,
+  JsonObject,
+  JsonValue,
+  Requirement,
+  WhatIfAnalysis,
+} from './types';
 
 export class ContractError extends Error {
   constructor(path: string) {
@@ -297,6 +304,9 @@ const requirementShape = shape({
   preference_tree: tree,
   clarifications: list(clarification),
   readiness: shape({
+    can_confirm: optional(boolean),
+    can_search: optional(boolean),
+    completeness: optional(dictionary(json)),
     status: literal('ready', 'needs_clarification', 'unsupported'),
     can_collect_data: boolean,
     can_evaluate_hard_constraints: boolean,
@@ -340,7 +350,8 @@ export const acceptedRequirement = shape({
   revision: literal(0),
   proposal_id: string,
   job_id: optional(string),
-  status: literal('queued', 'pending'),
+  proposal_version: optional(integer),
+  status: literal('queued', 'pending', 'needs_clarification'),
 });
 export const createRequirement = union(requirement, acceptedRequirement);
 export const proposal = shape({
@@ -393,7 +404,12 @@ export const acceptedComparison = shape({
   status: literal('queued'),
 });
 const dataState = literal('present', 'missing', 'conflicting', 'invalid', 'unsupported');
-const verification = literal('supplier_published', 'independently_verified', 'unverified');
+const verification = literal(
+  'supplier_published',
+  'independently_verified',
+  'catalog_validated',
+  'unverified',
+);
 const completeness = literal('complete', 'partial', 'unknown');
 const fact = (contents: Validator) =>
   shape({
@@ -773,4 +789,245 @@ export const contact = shape({
   ticket_id: string,
   status: literal('new', 'in_progress', 'resolved'),
   created_at: string,
+});
+
+export const historyMetadata = shape({
+  version: integer,
+  title: string,
+  pinned: boolean,
+  archived: boolean,
+  updated_at: maybeString,
+});
+const historyItem = shape({
+  requirement_id: string,
+  revision: integer,
+  status: string,
+  title: string,
+  pinned: boolean,
+  version: integer,
+  created_at: string,
+  updated_at: string,
+  proposal_id: maybeString,
+  comparison_id: maybeString,
+  pending_comparison_id: maybeString,
+  job_id: maybeString,
+  analysis_id: maybeString,
+  pending_message_id: maybeString,
+  runs: list(shape({ id: string, revision: integer, created_at: string })),
+  runs_limited: boolean,
+});
+export const history = shape({
+  items: list(historyItem),
+  next_cursor: maybeString,
+  retention_days: integer,
+});
+export const historyDetail: Validator = (v, p = 'data') => {
+  historyItem(v, p);
+  shape({
+    requirement,
+    transcript: shape({
+      items: list(
+        shape({
+          id: string,
+          role: literal('user', 'assistant'),
+          text: string,
+          occurred_at: string,
+        }),
+      ),
+      limited: boolean,
+    }),
+  })(v, p);
+  const d = record(v, p);
+  if (record(d.requirement, p).id !== d.requirement_id) fail(p);
+};
+export const linkedHistory = shape({ linked_requirements: integer });
+const nonnegative: Validator = (v, p) => {
+  integer(v, p);
+  if ((v as number) < 0) fail(p);
+};
+const population: Validator = (v, p = 'population') => {
+  shape({
+    eligible: nonnegative,
+    ineligible: nonnegative,
+    unknown: nonnegative,
+    eligible_candidate_ids: strings,
+    has_hard_constraints: boolean,
+  })(v, p);
+  const r = record(v, p);
+  if (new Set(r.eligible_candidate_ids as string[]).size !== r.eligible) fail(p);
+};
+const whatIfRank = shape({
+  candidate_id: string,
+  rank: integer,
+  score_lower: maybeNumber,
+  score_upper: maybeNumber,
+  coverage: maybeNumber,
+  tied: boolean,
+});
+const scenario = shape({
+  id: string,
+  kind: literal('remove_hard_group', 'remove_soft_group', 'relax_bound', 'remove_hard_pair'),
+  group_ids: strings,
+  condition_ids: strings,
+  label: string,
+  state: literal('measured', 'insufficient_data'),
+  population,
+  additional_candidate_ids: strings,
+  proven_blocked_candidate_ids: strings,
+  previously_unknown_candidate_ids: strings,
+  joint_only_candidate_ids: strings,
+  restriction_ratio: shape({
+    state: literal('computed', 'blocked', 'not_applicable'),
+    numerator: nonnegative,
+    denominator: nonnegative,
+    percent: maybeNumber,
+    reason_code: maybeString,
+    meaning: string,
+  }),
+  top_before: list(whatIfRank),
+  top_after: list(whatIfRank),
+  top_changed: boolean,
+  rank_changes: list(
+    shape({
+      candidate_id: string,
+      before: whatIfRank,
+      after: whatIfRank,
+      rank_delta: integer,
+      evidence_ids: strings,
+    }),
+  ),
+  rank_changes_truncated: boolean,
+  witnesses: list(
+    shape({
+      candidate_id: string,
+      title: maybeString,
+      canonical_url: string,
+      tour_snapshot_id: string,
+      offer_snapshot_id: maybeString,
+      original_status: literal('pass', 'fail', 'unknown'),
+      original_evaluations: list(dictionary(json)),
+      scenario_evaluations: list(dictionary(json)),
+      evidence_ids: strings,
+    }),
+  ),
+  witnesses_truncated: boolean,
+  edits: list(dictionary(json)),
+  tradeoffs: list(dictionary(json)),
+  limitations: strings,
+  minimal_within_tested_subsets: boolean,
+  insight: string,
+});
+export const whatIfAnalysis: Validator = (v, p = 'data') => {
+  shape({
+    id: string,
+    comparison_id: string,
+    requirement_id: string,
+    revision: integer,
+    policy_version: string,
+    origin: literal('source', 'synthetic'),
+    evaluated_at: string,
+    scope: dictionary(json),
+    baseline: population,
+    baseline_top: list(whatIfRank),
+    groups: list(
+      shape({
+        id: string,
+        strength: literal('hard', 'soft'),
+        condition_ids: strings,
+        fields: strings,
+        label: string,
+      }),
+    ),
+    scenarios: list(scenario),
+    candidates: list(dictionary(json)),
+    semantic_assessment: dictionary(json),
+    explanation: dictionary(json),
+    limits: dictionary(json),
+    limitations: strings,
+  })(v, p);
+  const a = v as WhatIfAnalysis;
+  const ids = new Set(a.candidates.map((c) => c.candidate_id));
+  const groups = new Map(a.groups.map((g) => [g.id, g.condition_ids]));
+  const same = (x: string[], y: string[]) =>
+    new Set(x).size === new Set(y).size && x.every((i) => y.includes(i));
+  if (
+    a.revision < 1 ||
+    ids.size !== a.candidates.length ||
+    groups.size !== a.groups.length ||
+    new Set(a.scenarios.map((s) => s.id)).size !== a.scenarios.length
+  )
+    fail(p);
+  for (const pop of [a.baseline, ...a.scenarios.map((s) => s.population)])
+    if (
+      pop.eligible + pop.ineligible + pop.unknown !== ids.size ||
+      pop.eligible_candidate_ids.some((i) => !ids.has(i))
+    )
+      fail(p);
+  for (const s of a.scenarios) {
+    const added = s.population.eligible_candidate_ids.filter(
+      (i) => !a.baseline.eligible_candidate_ids.includes(i),
+    );
+    const r = s.restriction_ratio;
+    if (
+      s.group_ids.some((g) => !groups.has(g)) ||
+      !same(
+        s.condition_ids,
+        s.group_ids.flatMap((g) => groups.get(g) ?? []),
+      ) ||
+      !same(added, s.additional_candidate_ids) ||
+      !same(added, [...s.proven_blocked_candidate_ids, ...s.previously_unknown_candidate_ids]) ||
+      s.proven_blocked_candidate_ids.some((i) => s.previously_unknown_candidate_ids.includes(i)) ||
+      r.numerator !== s.proven_blocked_candidate_ids.length ||
+      r.denominator !== s.population.eligible ||
+      r.numerator > r.denominator ||
+      (r.state === 'computed'
+        ? !r.denominator ||
+          r.percent === null ||
+          s.previously_unknown_candidate_ids.length > 0 ||
+          Math.abs(r.percent - (100 * r.numerator) / r.denominator) > 1e-6
+        : r.percent !== null) ||
+      s.witnesses.some((w) => !added.includes(w.candidate_id)) ||
+      s.joint_only_candidate_ids.some((i) => !added.includes(i))
+    )
+      fail(p);
+    for (const rank of [
+      ...s.top_before,
+      ...s.top_after,
+      ...s.rank_changes.flatMap((c) => [c.before, c.after]),
+    ])
+      if (
+        !ids.has(rank.candidate_id) ||
+        rank.rank < 1 ||
+        (rank.score_lower === null) !== (rank.score_upper === null) ||
+        (rank.score_lower !== null &&
+          (rank.score_lower < 0 || rank.score_upper! > 1 || rank.score_lower > rank.score_upper!))
+      )
+        fail(p);
+    if (
+      s.rank_changes.some(
+        (c) =>
+          c.candidate_id !== c.before.candidate_id ||
+          c.candidate_id !== c.after.candidate_id ||
+          c.rank_delta !== c.before.rank - c.after.rank,
+      )
+    )
+      fail(p);
+  }
+};
+export const whatIf: Validator = (v, p = 'data') => {
+  shape({
+    id: string,
+    status: literal('queued', 'running', 'succeeded', 'partial', 'failed', 'cancelled'),
+    result: nullable(whatIfAnalysis),
+  })(v, p);
+  const d = record(v, p);
+  if (d.result && record(d.result, p).id !== d.id) fail(p);
+};
+export const acceptedWhatIf = shape({
+  analysis_id: string,
+  job_id: string,
+  comparison_id: string,
+  requirement_id: string,
+  revision: integer,
+  status: literal('queued'),
 });

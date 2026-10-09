@@ -196,8 +196,21 @@ class CrawlResultV2(CrawlResult):
                 facts += list(snapshot.policies.values())
             else:
                 facts += snapshot.price_quotes + snapshot.extra_charges
+                expected_columns.update(
+                    {
+                        id(fact): f"field_meta.pricing.quotes.{i}"
+                        for i, fact in enumerate(snapshot.price_quotes)
+                    }
+                )
+                expected_columns.update(
+                    {
+                        id(fact): f"field_meta.pricing.extra_charges.{i}"
+                        for i, fact in enumerate(snapshot.extra_charges)
+                    }
+                )
                 if snapshot.pricing_complete:
                     facts.append(snapshot.pricing_complete)
+                    expected_columns[id(snapshot.pricing_complete)] = "field_meta.pricing.complete"
             for fact in facts:
                 if fact.verification == "catalog_validated":
                     if (
