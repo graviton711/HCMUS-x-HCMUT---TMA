@@ -51,7 +51,7 @@ function evidence(id,key){
   const quote=value===null ? "Chưa ghi nhận được dữ kiện này trong nguồn minh họa." : key==="quality" ? "Bản mẫu có dữ liệu một phần; nguồn do nhà cung cấp tự công bố." : field.label+": "+value+".";
   const missingNote=failed ? "Nguồn tham chiếu đang được mô phỏng là không đọc được. Bạn vẫn có thể xem các gợi ý tìm thêm." : value===null ? "Không có dữ kiện để kết luận. Thông tin còn thiếu không được coi là đã đáp ứng yêu cầu." : key==="price" ? "Đây là giá công bố cho một người lớn ở lịch đang xem. Chưa có đủ mọi phụ thu để tính tổng cuối cho nhóm." : key==="dates" ? "Có lịch khởi hành công bố chưa có nghĩa tour còn chỗ. Cần xác nhận với nhà cung cấp." : "Dữ kiện do nhà cung cấp công bố. Bản mẫu không có nguồn độc lập để xác nhận lại.";
   showDialog(field.label,
-    '<p class="dialog-context">'+escapeHtml(tour.name)+' · '+escapeHtml(tour.provider)+'</p>'+
+    '<p class="dialog-context" data-preserve>'+escapeHtml(tour.name)+' · '+escapeHtml(tour.provider)+'</p>'+
     '<div class="evidence-value"><small>Giá trị ghi nhận · minh họa</small><strong>'+escapeHtml(value??(failed?"Chưa đọc được nguồn":"Chưa có dữ kiện"))+'</strong></div>'+
     '<dl class="evidence-details"><div><dt>Dữ kiện</dt><dd>'+escapeHtml(value===null?"Chưa có": "Có trong nguồn mẫu")+'</dd></div><div><dt>Độ đầy đủ tour</dt><dd>'+tour.quality+'</dd></div><div><dt>Trạng thái nguồn</dt><dd>'+escapeHtml(value===null?"Chưa có chứng cứ cho dữ kiện này":"Nhà cung cấp công bố")+'</dd></div><div><dt>Xác minh độc lập</dt><dd>Chưa có</dd></div><div><dt>Ghi nhận lúc</dt><dd>'+escapeHtml(value===null?"Chưa có thời điểm":"03/10/2026 · 10:42 (minh họa)")+'</dd></div><div><dt>Lịch đang xem</dt><dd>'+escapeHtml(tour.start)+' · phòng 2 người</dd></div></dl>'+
     '<div class="source-block"><span>Trích đoạn minh họa, không phải nội dung crawl thật</span><blockquote>'+escapeHtml(quote)+'</blockquote><code>'+escapeHtml(value!==null&&!failed?'source.html?tour='+id+'&offer='+(id==='a'?state.offerIndex:0)+'#field-'+key:'Chưa có locator cho dữ kiện này')+'</code>'+(value!==null&&!failed?'<a class="btn" href="source.html?tour='+encodeURIComponent(id)+'&offer='+(id==='a'?state.offerIndex:0)+'#field-'+encodeURIComponent(key)+'" target="_blank" rel="noopener noreferrer">Mở đúng đoạn nguồn mẫu '+icon("source")+'</a>':'<button type="button" class="btn" disabled>Chưa có đoạn nguồn cho dữ kiện này</button>')+'</div>'+
@@ -62,7 +62,7 @@ function evidence(id,key){
 function rationale(id){
   const tour=getTour(id);
   showDialog(state.scenario==="url-only"?"Vì sao gợi ý tương tự?":"Vì sao có gợi ý này?",
-    '<p class="dialog-context">'+escapeHtml(tour.name)+'</p><div class="evidence-value"><small>Cơ sở trong bộ dữ liệu minh họa</small><strong>'+escapeHtml(state.scenario==="url-only"?"Cùng phạm vi Nhật Bản":tour.tag)+'</strong></div>'+
+    '<p class="dialog-context" data-preserve>'+escapeHtml(tour.name)+'</p><div class="evidence-value"><small>Cơ sở trong bộ dữ liệu minh họa</small><strong>'+escapeHtml(state.scenario==="url-only"?"Cùng phạm vi Nhật Bản":tour.tag)+'</strong></div>'+
     '<h3>'+(state.scenario==="url-only"?"Dựa trên tour bạn gửi":"Những điểm hợp với ưu tiên")+'</h3><p class="dialog-note">'+escapeHtml(state.scenario==="url-only"?"Tour nằm trong phạm vi Nhật Bản được lấy từ URL tham chiếu. Chưa có nhu cầu cá nhân để kết luận tối ưu cho bạn.":tour.reason)+'</p>'+
     '<h3>Điều cần cân nhắc</h3><p class="dialog-note">'+escapeHtml(tour.caution)+'</p>'+
     '<h3>Kiểm tra dữ kiện</h3><div class="rationale-links">'+["price","dates","shopping","cancel"].map(key=>'<button type="button" class="btn" data-source="'+id+'.'+key+'">'+fields.find(f=>f.key===key).label+' '+icon("source")+'</button>').join("")+'</div>'+
@@ -130,7 +130,7 @@ function render(){
 function editNeeds(){
   const personalNeedsMissing=state.scenario==="url-only";
   showDialog("Sửa nhu cầu của bạn",
-    '<p class="dialog-context">'+(personalNeedsMissing?'Nhật Bản · chỉ có URL tham chiếu':'Nhật Bản · TP.HCM · bản nháp riêng với kết quả hiện tại')+'</p>'+
+    '<p class="dialog-context" data-preserve>'+(personalNeedsMissing?'Nhật Bản · chỉ có URL tham chiếu':'Nhật Bản · TP.HCM · bản nháp riêng với kết quả hiện tại')+'</p>'+
     '<label class="form-field">Bạn muốn thay đổi điều gì?<textarea id="draft-needs" maxlength="1200" aria-describedby="draft-hint">'+escapeHtml(personalNeedsMissing&&draftNeeds===defaultNeeds?'':draftNeeds)+'</textarea><span class="form-hint" id="draft-hint">Ví dụ: đổi tháng đi, thời lượng hoặc ưu tiên về điểm mua sắm.</span></label>'+
     '<p id="draft-error" class="notice" role="alert" hidden>Nhập nhu cầu để lưu bản nháp.</p>'+
     '<h3>'+(personalNeedsMissing?'Phạm vi dùng cho nhóm hiện tại':'Yêu cầu đã dùng cho nhóm hiện tại')+'</h3><p class="dialog-note">'+escapeHtml(personalNeedsMissing?'Nhật Bản từ tour bạn gửi. Chưa có nhu cầu cá nhân.':defaultNeeds)+'</p>'+

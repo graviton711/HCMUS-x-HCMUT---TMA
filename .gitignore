@@ -85,3 +85,13 @@ Thumbs.db
 /docs/frontend-implementation.md
 /src/frontend/QA.md
 /src/frontend/tests/BROWSER-QA.md
+
+# Private frontend conversations and handoff snapshots
+/docs/frontend-private-notes/
+/docs/frontend-conversation*.md
+/docs/frontend-session-notes*.md
+/docs/frontend-planning-*.md
+/docs/frontend-qa*.md
+/src/frontend/**/QA*.md
+/src/frontend/**/BROWSER-QA*.md
+/.pnpm-store/

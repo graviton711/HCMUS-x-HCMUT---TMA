@@ -6,8 +6,9 @@ const preferenceNames={pref_cost:"Tiết kiệm chi phí",pref_comfort:"Khách s
 const preferenceLevels=["Không ưu tiên","Ưu tiên nhẹ","Vừa phải","Quan trọng","Rất quan trọng","Ưu tiên cao nhất"];
 const sampleCriteria={destination:"Nhật Bản",origin:"TP.HCM",date:"2026-11-10",adults:"2",budget:"35000000",duration:"5",children:"0",ages:"",hotel:"",shopping:"few",url:"",notes:"",pref_cost:"3",pref_comfort:"3",pref_pace:"3",pref_culture:"3"};
 let criteria={...sampleCriteria},resultCriteria=null,currentRevision=0,resultRevision=0,hasResults=false;
-let proposal=null,activeRun=0,runTimers=[],running=false,chatBusy=false,chatGeneration=0,notes=[],lastRunRequest=null;
-let activeScreen="home",tourScreen="form";
+let proposal=null,activeRun=0,runTimers=[],running=false,chatBusy=false,chatGeneration=0,notes=[],lastRunRequest=null,interruptedQuestion=null;
+let activeScreen="home",tourScreen="form",formDraft=null;
+function journeyChanged(kind="state",extra={}){document.dispatchEvent(new CustomEvent("journey:change",{detail:{kind,...extra}}));}
 const labels={destination:"Điểm đến",origin:"Khởi hành",date:"Ngày dự kiến",adults:"Người lớn",budget:"Ngân sách",duration:"Thời lượng",children:"Trẻ em",ages:"Tuổi trẻ em",hotel:"Khách sạn",shopping:"Mua sắm",url:"URL tham chiếu",notes:"Lưu ý thêm",...preferenceNames};
 const requiredKeys=["destination","origin","date","adults","budget"];
 const choices={destination:[["Nhật Bản","Nhật Bản"]],origin:[["TP.HCM","TP.HCM"]],duration:[["5","Khoảng 5 ngày"],["6","Khoảng 6 ngày"],["","Chưa chỉ định"]],hotel:[["","Chưa chỉ định"],["3","Từ 3 sao"],["4","Từ 4 sao"],["5","Từ 5 sao"]],shopping:[["","Chưa chỉ định"],["few","Ưu tiên ít điểm"],["none","Bắt buộc không có"]]};
@@ -26,7 +27,7 @@ function sliderMarkup(prefix,data){return Object.entries(preferenceNames).map(([
 }).join("");}
 function updateSlider(input){const level=Number(input.value);input.closest(".preference-control").style.setProperty("--range-progress",String(level/5));$(input.id+"-output").textContent=preferenceLevels[level];input.setAttribute("aria-valuetext",preferenceLevels[level]);}
 function syncForm(source=criteria){Object.keys(sampleCriteria).forEach(key=>{const el=$("need-"+key);if(el){el.value=source[key];if(el.type==="range")updateSlider(el);}});$("child-age-field").hidden=Number(source.children)===0;}
-function fillSample(){syncForm({...sampleCriteria,notes:notes.join(" · ")});toast("Đã điền nhu cầu mẫu Nhật Bản vào form để review. Chưa đổi yêu cầu đã xác nhận.");navigate("form");}
+function fillSample(){if(window.PrototypeWorkspace&&!window.PrototypeWorkspace.requireLogin("sample"))return;formDraft={...sampleCriteria,notes:notes.join(" · ")};syncForm(formDraft);toast("Đã điền nhu cầu mẫu Nhật Bản vào form để review. Chưa đổi yêu cầu đã xác nhận.");navigate("form");journeyChanged();}
 function readForm(){const next={};Object.keys(sampleCriteria).forEach(key=>{next[key]=$("need-"+key)?.value.trim()||"";});next.notes=notes.join(" · ");return next;}
 function validUrl(value){try{const u=new URL(value);return ["http:","https:"].includes(u.protocol)&&!u.username&&!u.password&&(!u.port||["80","443"].includes(u.port));}catch{return false;}}
 function validation(next){
@@ -50,14 +51,15 @@ function showFormErrors(errors){
   $("need-"+Object.keys(errors)[0]).focus();
 }
 function navigate(screen,writeHistory=true){
+  if(window.PrototypeWorkspace&&!window.PrototypeWorkspace.allowNavigation(screen))return;
   if(screen==="tours")screen=tourScreen;
-  if(!["home","form","results","contact","support"].includes(screen))screen="home";
-  if(screen==="results"&&!hasResults&&!running)screen="form";
+  if(!["home","form","results","contact","support","auth","account"].includes(screen))screen="home";
+  if(screen==="results"&&!hasResults&&!running&&!lastRunRequest)screen="form";
   if(screen==="form"&&running)stopRun(false);
   if(screen!=="results"){chatGeneration++;lockChat(false);}
-  if(screen==="form")syncForm({...criteria,...proposal?.changes});
+  if(screen==="form")syncForm(formDraft||{...criteria,...proposal?.changes});
   activeScreen=screen;if(["form","results"].includes(screen))tourScreen=screen;
-  ["home","form","results","contact","support"].forEach(name=>$("screen-"+name).hidden=name!==screen);
+  ["home","form","results","contact","support","auth","account"].forEach(name=>$("screen-"+name).hidden=name!==screen);
   const navSection=["form","results"].includes(screen)?"tours":screen;
   document.querySelectorAll(".app-nav [data-nav]").forEach(el=>{if(el.dataset.nav===navSection)el.setAttribute("aria-current","page");else el.removeAttribute("aria-current");});
   document.querySelector(".site-header").dataset.section=navSection;
@@ -66,6 +68,7 @@ function navigate(screen,writeHistory=true){
   const heading=$(screen+"-heading");heading?.focus({preventScroll:true});
   if(heading){heading.classList.remove("heading-enter");void heading.offsetWidth;heading.classList.add("heading-enter");}
   renderCriteria();
+  document.dispatchEvent(new CustomEvent("journey:navigate",{detail:{screen}}));
 }
 function renderCriteria(){
   const urlOnly=state.scenario==="url-only"&&resultRevision===currentRevision;
@@ -75,7 +78,7 @@ function renderCriteria(){
   function rows(keys){return keys.map(key=>{
     const pending=proposal?.changes[key]!==undefined;
     const value=urlOnly&&!pending?(key==="destination"?"Nhật Bản · từ URL" :key==="url"?"tour-minh-hoa.example/ref":"Chưa chỉ định"):displayValue(key,preview[key]);
-    return '<div class="criteria-row'+(pending?' criteria-pending':'')+'"><span>'+escapeHtml(labels[key])+'</span><button class="criteria-value" type="button" data-inline="'+key+'" aria-label="Sửa '+escapeHtml(labels[key])+'"'+(running||chatBusy?' disabled':'')+'><span>'+escapeHtml(value)+(pending?'<small class="draft-label">Chưa xác nhận</small>':'')+'</span>'+icon("edit")+'</button></div>';
+    return '<div class="criteria-row'+(pending?' criteria-pending':'')+'"><span>'+escapeHtml(labels[key])+'</span><button class="criteria-value" type="button" data-inline="'+key+'" aria-label="Sửa '+escapeHtml(labels[key])+'"'+(running||chatBusy?' disabled':'')+'><span><span'+(key==="notes"&&preview.notes?' data-preserve':'')+'>'+escapeHtml(value)+'</span>'+(pending?'<small class="draft-label">Chưa xác nhận</small>':'')+'</span>'+icon("edit")+'</button></div>';
   }).join("");}
   $("criteria-fields").innerHTML='<p class="criteria-group-label">'+(urlOnly?"Phạm vi từ tour tham chiếu":"Thông tin cần thiết")+'</p>'+rows(core)+'<p class="criteria-group-label">Thông tin bổ sung</p><div class="criteria-extras">'+rows(extras)+'</div><div class="criteria-row readonly"><span>Phạm vi giá</span><p>Giá tour / người lớn · ưu tiên</p></div><section class="preferences-block" aria-labelledby="preferences-heading"><h3 id="preferences-heading">Mức độ sở thích</h3><p>Kéo để sửa ưu tiên · Mức mẫu</p>'+sliderMarkup("result-",{...criteria,...proposal?.changes})+'</section>';
   const stale=hasResults&&resultRevision!==currentRevision;
@@ -93,7 +96,7 @@ function renderSyncStatus(){
   banner.dataset.sync=stale?"stale":pending?"pending":running?"running":hasResults?"matched":"empty";
   const title=stale?(running?"Đang tìm theo yêu cầu mới":"Kết quả chưa theo yêu cầu mới"):pending?"Có thay đổi chưa xác nhận":running?"Đang tìm kiếm":hasResults?"Kết quả dùng đúng bản yêu cầu":"Sẵn sàng tìm kiếm";
   const copy=stale?"Bảng và phân tích bên dưới vẫn dùng bản yêu cầu trước. "+(pending?"Bạn còn thay đổi chưa xác nhận. ":"")+(running?"Kết quả mới sẽ thay thế khi xử lý xong.":"Bấm Tìm kiếm để cập nhật."):pending?"Các ô đang sửa chưa áp dụng. Bạn có thể sửa thêm, xác nhận cả nhóm hoặc hủy về bản đã xác nhận.":running?"Bảng cũ được giữ trong lúc xử lý. Hủy tìm kiếm vẫn giữ yêu cầu đã xác nhận.":hasResults?"Bảng và phân tích dùng cùng bản yêu cầu đã xác nhận. Tour minh họa chưa được kiểm tra đủ để kết luận đáp ứng mọi điều kiện.":"Xác nhận yêu cầu rồi bắt đầu tìm tour.";
-  banner.innerHTML=icon(stale?"warning":pending?"edit":running?"route":hasResults?"check":"info")+'<div><strong>'+title+'</strong><p>'+copy+'</p>'+(changed.length?'<details class="sync-differences"><summary>'+changed.length+' tiêu chí khác với lượt kết quả đang xem</summary><ul>'+changed.map(key=>'<li><span>'+escapeHtml(labels[key])+'</span><span>'+escapeHtml(displayValue(key,resultCriteria?.[key]))+' → <b>'+escapeHtml(displayValue(key,criteria[key]))+'</b></span></li>').join("")+'</ul></details>':"")+(hasResults?'<button class="text-action" type="button" id="sync-basis">Xem yêu cầu của bảng này '+icon("source")+'</button>':"")+'</div>';
+  banner.innerHTML=icon(stale?"warning":pending?"edit":running?"route":hasResults?"check":"info")+'<div><strong>'+title+'</strong><p>'+copy+'</p>'+(changed.length?'<details class="sync-differences"><summary>'+changed.length+' tiêu chí khác với lượt kết quả đang xem</summary><ul>'+changed.map(key=>'<li><span>'+escapeHtml(labels[key])+'</span><span><span'+(key==='notes'&&resultCriteria?.notes?' data-preserve':'')+'>'+escapeHtml(displayValue(key,resultCriteria?.[key]))+'</span> → <b'+(key==='notes'&&criteria.notes?' data-preserve':'')+'>'+escapeHtml(displayValue(key,criteria[key]))+'</b></span></li>').join("")+'</ul></details>':"")+(hasResults?'<button class="text-action" type="button" id="sync-basis">Xem yêu cầu của bảng này '+icon("source")+'</button>':"")+'</div>';
 }
 function selectedTours(){return state.scenario==="empty"?[]:groups[state.round].slice(0,state.scenario==="limited"?2:3).map(getTour);}
 function renderAnalysis(){
@@ -123,7 +126,7 @@ document.addEventListener("prototype:render",refreshExtras);
 function addMessage(role,message,html=false){
   const div=document.createElement("div");div.className="chat-message "+role;
   if(html)div.innerHTML=message;else div.textContent=message;
-  $("results-chat-log").append(div);$("results-chat-log").scrollTop=$("results-chat-log").scrollHeight;return div;
+  $("results-chat-log").append(div);$("results-chat-log").scrollTop=$("results-chat-log").scrollHeight;journeyChanged("message");return div;
 }
 function clearProposal(){proposal=null;$("pending-change").hidden=true;$("pending-change").innerHTML="";}
 function focusConfirmation(){requestAnimationFrame(()=>{if($("pending-change").hidden)return;const action=$("confirm-change");action.scrollIntoView({block:"center",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth"});action.focus({preventScroll:true});});}
@@ -135,9 +138,10 @@ function propose(changes,searchAfterConfirm=false){
   renderCriteria();renderProposal();if(proposal)focusConfirmation();
 }
 function renderProposal(){
+  journeyChanged();
   if(!proposal){$("pending-change").hidden=true;$("pending-change").innerHTML="";return;}
   const entries=Object.entries(proposal.changes);
-  $("pending-change").innerHTML='<h4>'+entries.length+' thay đổi chờ xác nhận</h4><p>So với bản đã xác nhận gần nhất. Bạn có thể tiếp tục sửa nhiều mục.</p>'+entries.map(([key,value])=>'<div class="batch-change"><div class="batch-change-title"><strong>'+escapeHtml(labels[key])+'</strong><button type="button" class="text-action" data-discard-change="'+key+'" aria-label="Bỏ thay đổi '+escapeHtml(labels[key])+'">Bỏ</button></div><div class="change-diff"><div><span>Đã xác nhận</span><strong>'+escapeHtml(displayValue(key,criteria[key]))+'</strong></div>'+icon("arrow")+'<div><span>Đang sửa</span><strong>'+escapeHtml(displayValue(key,value))+'</strong></div></div></div>').join("")+'<p>'+(proposal.searchAfterConfirm?"Bạn đã yêu cầu tìm kiếm; xác nhận cả nhóm xong sẽ bắt đầu tìm.":"Xác nhận cả nhóm để cập nhật. Tìm kiếm khi bạn sẵn sàng.")+'</p><div class="actions"><button class="btn btn-primary" type="button" id="confirm-change">Xác nhận tất cả '+entries.length+' thay đổi</button><button class="text-action" type="button" id="continue-edit">Tiếp tục sửa</button><button class="text-action" type="button" id="reject-change">Hủy tất cả</button></div>';
+  $("pending-change").innerHTML='<h4>'+entries.length+' thay đổi chờ xác nhận</h4><p>So với bản đã xác nhận gần nhất. Bạn có thể tiếp tục sửa nhiều mục.</p>'+entries.map(([key,value])=>'<div class="batch-change"><div class="batch-change-title"><strong>'+escapeHtml(labels[key])+'</strong><button type="button" class="text-action" data-discard-change="'+key+'" aria-label="Bỏ thay đổi '+escapeHtml(labels[key])+'">Bỏ</button></div><div class="change-diff"><div><span>Đã xác nhận</span><strong'+(key==='notes'&&criteria.notes?' data-preserve':'')+'>'+escapeHtml(displayValue(key,criteria[key]))+'</strong></div>'+icon("arrow")+'<div><span>Đang sửa</span><strong'+(key==='notes'&&value?' data-preserve':'')+'>'+escapeHtml(displayValue(key,value))+'</strong></div></div></div>').join("")+'<p>'+(proposal.searchAfterConfirm?"Bạn đã yêu cầu tìm kiếm; xác nhận cả nhóm xong sẽ bắt đầu tìm.":"Xác nhận cả nhóm để cập nhật. Tìm kiếm khi bạn sẵn sàng.")+'</p><div class="actions"><button class="btn btn-primary" type="button" id="confirm-change">Xác nhận tất cả '+entries.length+' thay đổi</button><button class="text-action" type="button" id="continue-edit">Tiếp tục sửa</button><button class="text-action" type="button" id="reject-change">Hủy tất cả</button></div>';
   $("pending-change").hidden=false;
 }
 function rejectProposal(){
@@ -167,21 +171,22 @@ function openInline(key){
   editor.addEventListener("submit",event=>{event.preventDefault();const field=editor.querySelector("input:not([data-child-ages]),select"),value=field.value.trim();const changes={[key]:value};if(key==="children")changes.ages=Number(value)>0?editor.querySelector("[data-child-ages]").value.trim():"";const errors=validation({...preview,...changes});const relatedError=errors[key]||(key==="children"?errors.ages:null);if(relatedError){toast(relatedError);return;}if(Object.entries(changes).every(([name,next])=>preview[name]===next)){editor.remove();button.focus();return;}editor.remove();propose(changes);});
   editor.querySelector("[data-inline-cancel]").addEventListener("click",()=>{editor.remove();button.focus();});
 }
-function lockChat(locked){chatBusy=locked;$("results-chat-form").querySelector("button").disabled=locked;document.querySelectorAll("[data-chat]").forEach(el=>el.disabled=locked);renderCriteria();}
+function renderChatResume(){let panel=$("chat-resume");if(!panel){panel=document.createElement("div");panel.id="chat-resume";panel.className="chat-resume";$("results-chat-log").before(panel);}panel.hidden=!interruptedQuestion||chatBusy||running;panel.innerHTML=panel.hidden?"":'<p>Câu hỏi đang dở: '+escapeHtml(interruptedQuestion)+'</p><button class="text-action" type="button" data-resume-chat>Tiếp tục phản hồi '+icon("arrow")+'</button>';}
+function lockChat(locked){chatBusy=locked;$("results-chat-form").querySelector("button").disabled=locked;document.querySelectorAll("[data-chat]").forEach(el=>el.disabled=locked);renderCriteria();renderChatResume();}
 function searchCurrent(){
   if(running||chatBusy)return;
   if(proposal){addMessage("assistant","Xác nhận sửa hoặc chọn Giữ nguyên trước khi tìm kiếm nhé.");focusConfirmation();return;}
   const changed=resultRevision!==currentRevision;startRun(0,{scenario:changed?"standard":state.scenario,reference:Boolean(criteria.url)||(!changed&&state.reference)});
 }
-function replyToChat(raw){
+function replyToChat(raw,resume=false){
   if(chatBusy||running){toast("Đợi phản hồi hiện tại hoặc dừng chờ để tiếp tục.");return;}
   const text=raw.trim();if(!text)return;
-  window.PrototypeDemo?.message();
-  addMessage("user",text);$("results-chat-message").value="";
-  const placeholder=addMessage("assistant","Đang chuẩn bị phản hồi mẫu…"),generation=++chatGeneration;lockChat(true);
+  interruptedQuestion=text;
+  if(!resume){window.PrototypeDemo?.message();addMessage("user",text);}$("results-chat-message").value="";
+  const placeholder=addMessage("assistant","Đang chuẩn bị phản hồi mẫu…"),generation=++chatGeneration;placeholder.dataset.transient="true";lockChat(true);
   setTimeout(()=>{
-    placeholder.remove();if(generation!==chatGeneration)return;lockChat(false);
-    const lower=text.toLocaleLowerCase("vi-VN");
+    placeholder.remove();if(generation!==chatGeneration)return;interruptedQuestion=null;lockChat(false);journeyChanged();
+    const lower=window.PrototypePresentation?.chatInput(text)||text.toLocaleLowerCase("vi-VN");
     const requestsSearch=/(tìm kiếm|tìm tour|tìm lại|chạy tìm|bắt đầu tìm)/.test(lower)&&!/(cách|thế nào|làm sao)/.test(lower);
     const changes={};
     if(/(đổi|sửa|tăng|giảm|chỉnh).*(ngân sách|giá)|ngân sách.*\d/.test(lower)){
@@ -220,11 +225,13 @@ function replyToChat(raw){
   },700);
 }
 function cancelTimers(){runTimers.forEach(clearTimeout);runTimers=[];activeRun++;}
-function stopRun(showNotice=true){
+function stopRun(showNotice=true,status="cancelled"){
+  const wasRunning=running;
   if(running)window.PrototypeDemo?.finishRun("cancelled");
   cancelTimers();running=false;$("screen-results").dataset.busy="false";$("processing-panel").hidden=true;lockChat(false);$("simulate-run").disabled=false;
-  if(showNotice){$("run-error").innerHTML='Đã dừng chờ mô phỏng. '+(hasResults?'Kết quả trước được giữ lại. ':'Chưa có kết quả mới. ')+'<button class="text-action" type="button" data-run-retry>Tiếp tục xử lý '+icon("refresh")+'</button>';$("run-error").hidden=false;}
+  if(showNotice){$("run-error").innerHTML=(status==="paused"?'Lượt tìm đang tạm dừng. ':'Đã dừng chờ mô phỏng. ')+(hasResults?'Kết quả trước được giữ lại. ':'Chưa có kết quả mới. ')+'<button class="text-action" type="button" data-run-retry>Tiếp tục lượt tìm '+icon("refresh")+'</button>';$("run-error").hidden=false;}
   renderCriteria();
+  if(wasRunning)journeyChanged("run-end",{status});
 }
 function startRun(nextRound=state.round,options={}){
   if(proposal){focusConfirmation();toast("Xác nhận sửa hoặc Giữ nguyên trước khi tìm kiếm.");return;}
@@ -235,6 +242,7 @@ function startRun(nextRound=state.round,options={}){
   $("screen-results").dataset.busy="true";$("processing-panel").hidden=false;$("run-error").hidden=true;$("long-wait").hidden=true;$("results-snapshot").hidden=!hasResults;
   $("activity-log").innerHTML="";renderCriteria();navigate("results");$("processing-title").focus({preventScroll:true});
   const mode=$("response-mode").value,slow=mode==="slow",stepMs=slow?2100:900;
+  journeyChanged("run-start",{request:{...lastRunRequest,mode},criteria:submitted,revision});
   const steps=["Hiểu yêu cầu và kiểm tra dữ kiện đầu vào","Đọc URL tham chiếu và tìm tour từ nguồn mẫu","Chuẩn hóa giá / offer rồi đối chiếu điều kiện","Sắp nhóm, dựng bảng và phân tích có dẫn chứng"];
   steps.forEach((copy,index)=>runTimers.push(setTimeout(()=>{
     if(runId!==activeRun)return;
@@ -249,19 +257,20 @@ function startRun(nextRound=state.round,options={}){
     if(mode==="error"){
       window.PrototypeDemo?.finishRun("failed");
       $("run-error").innerHTML='<strong>Chưa nhận được kết quả mới.</strong>Mất kết nối trong tình huống mô phỏng. Yêu cầu đã xác nhận vẫn được giữ; '+(hasResults?'bảng bên dưới là lượt kết quả trước. ':'chưa có kết quả để so sánh. ')+'<button class="text-action" type="button" data-run-retry>Thử lại '+icon("refresh")+'</button>';
-      $("run-error").hidden=false;renderCriteria();return;
+      $("run-error").hidden=false;renderCriteria();journeyChanged("run-end",{status:"failed"});return;
     }
     state.round=nextRound;state.scenario=scenario;state.reference=reference||["url-only","source-error"].includes(scenario);state.offerIndex=0;state.exhausted=false;
     window.PrototypeDemo?.finishRun(scenario==="source-error"?"partial":"succeeded");
     resultCriteria=submitted;resultRevision=revision;hasResults=true;$("results-snapshot").hidden=false;render();
     addMessage("assistant","Đã chuẩn bị kết quả minh họa. Bạn có thể xem nguồn, phân tích hoặc trao đổi thêm.");
+    journeyChanged("run-end",{status:scenario==="source-error"?"partial":"succeeded"});
     if(activeScreen==="results")$("results-heading").focus({preventScroll:true});
   },stepMs*4));
 }
 function selectTab(which,focus=false){["facts","analysis"].forEach(name=>{const active=name===which;$(name+"-tab").setAttribute("aria-selected",String(active));$(name+"-tab").tabIndex=active?0:-1;$(name+"-panel").hidden=!active;});if(focus)$(which+"-tab").focus();}
 $("needs-form").addEventListener("submit",event=>{
   event.preventDefault();const next=readForm(),errors=validation(next);showFormErrors(errors);if(Object.keys(errors).length)return;
-  criteria=next;currentRevision++;clearProposal();startRun(0,{scenario:"standard",reference:Boolean(next.url)});
+  criteria=next;formDraft=null;currentRevision++;clearProposal();startRun(0,{scenario:"standard",reference:Boolean(next.url)});
 });
 $("need-children").addEventListener("input",event=>{$("child-age-field").hidden=Number(event.target.value)<=0;});
 $("notes-form").addEventListener("submit",event=>{event.preventDefault();const message=$("notes-message").value.trim();if(!message)return;window.PrototypeDemo?.message();notes.push(message);const div=document.createElement("div");div.className="chat-message user";div.textContent=message;$("notes-log").append(div);const reply=document.createElement("div");reply.className="chat-message assistant";reply.textContent="Đã thêm vào lưu ý. Bản mẫu chưa tự chuyển ghi chú thành điều kiện.";$("notes-log").append(reply);$("notes-message").value="";$("notes-log").scrollTop=$("notes-log").scrollHeight;});
@@ -282,7 +291,8 @@ document.querySelector(".analysis-tabs").addEventListener("keydown",event=>{if(!
 document.addEventListener("click",event=>{
   const nav=event.target.closest("[data-nav]");if(nav){event.preventDefault();navigate(nav.dataset.nav);return;}
   if(event.target.closest("[data-demo-fill]")){fillSample();return;}
-  const chat=event.target.closest("[data-chat]");if(chat){replyToChat(chat.dataset.chat);return;}
+  const chat=event.target.closest("[data-chat]");if(chat){replyToChat(window.PrototypePresentation?.prompt(chat.dataset.chat)||chat.dataset.chat);return;}
+  if(event.target.closest("[data-resume-chat]")&&interruptedQuestion){replyToChat(interruptedQuestion,true);return;}
   const inline=event.target.closest("[data-inline]");if(inline){openInline(inline.dataset.inline);return;}
   if(event.target.closest("#reject-change")){rejectProposal();return;}
   if(event.target.closest("#sync-basis")){window.journeyBasis();return;}
@@ -293,7 +303,7 @@ document.addEventListener("click",event=>{
     if(!proposal||proposal.revision!==currentRevision){toast("Yêu cầu đã đổi ở nơi khác. Bản nháp được giữ để review; chưa xác nhận.");return;}
     const next={...criteria,...proposal.changes},errors=validation(next);if(Object.keys(errors).length){addMessage("assistant",Object.values(errors).join(" "));return;}
     const shouldSearch=proposal.searchAfterConfirm;
-    criteria=next;notes=criteria.notes?[criteria.notes]:[];currentRevision++;clearProposal();$("bulk-editor").hidden=true;chatGeneration++;lockChat(false);syncForm();renderCriteria();addMessage("assistant",shouldSearch?"Đã xác nhận toàn bộ thay đổi. Tôi bắt đầu tìm kiếm theo lời nhắn của bạn.":"Đã xác nhận toàn bộ thay đổi. Bấm Tìm kiếm hoặc nhắn “tìm kiếm đi” để cập nhật kết quả.");
+    criteria=next;formDraft=null;notes=criteria.notes?[criteria.notes]:[];currentRevision++;clearProposal();$("bulk-editor").hidden=true;chatGeneration++;lockChat(false);syncForm();renderCriteria();addMessage("assistant",shouldSearch?"Đã xác nhận toàn bộ thay đổi. Tôi bắt đầu tìm kiếm theo lời nhắn của bạn.":"Đã xác nhận toàn bộ thay đổi. Bấm Tìm kiếm hoặc nhắn “tìm kiếm đi” để cập nhật kết quả.");
     if(shouldSearch)searchCurrent();else{$("search-tours").scrollIntoView({block:"center",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth"});$("search-tours").focus({preventScroll:true});}return;
   }
   if(event.target.closest("[data-run-retry]")){$("response-mode").value="normal";startRun(lastRunRequest?.nextRound??state.round,lastRunRequest?.options||{});return;}
@@ -307,9 +317,9 @@ document.addEventListener("click",event=>{
     scenes.forEach((copy,index)=>setTimeout(()=>{$("walkthrough-scene").textContent=(index+1)+" / 3 · "+copy;},index*1600));setTimeout(()=>walkthrough.disabled=false,4800);
   }
 });
-window.addEventListener("popstate",()=>navigate(location.hash.slice(1)||"home",false));
-window.addEventListener("pagehide",()=>{if(running)stopRun(false);});
-window.journeyBasis=()=>showDialog("Căn cứ của lượt đang xem",'<p class="dialog-context">Theo yêu cầu đã dùng cho lượt kết quả này · Fixture minh họa</p><dl class="evidence-details">'+Object.keys(labels).map(key=>'<div><dt>'+escapeHtml(labels[key])+'</dt><dd>'+escapeHtml(state.scenario==="url-only"?(key==="destination"?"Nhật Bản từ URL":"Chưa chỉ định"):displayValue(key,resultCriteria?.[key]))+'</dd></div>').join("")+'</dl><p class="dialog-note">Tour và thứ tự cố định để review bố cục. Bộ mẫu chưa lọc hoặc xếp hạng theo thay đổi nhu cầu; không kết luận đã đáp ứng mọi ràng buộc.</p>',"YÊU CẦU ĐÃ DÙNG");
+window.addEventListener("popstate",event=>{if(window.PrototypeWorkspace?.restoreHistory(event.state))return;navigate(location.hash.slice(1)||"home",false);});
+window.addEventListener("pagehide",()=>{if(running)stopRun(true,"paused");});
+window.journeyBasis=()=>showDialog("Căn cứ của lượt đang xem",'<p class="dialog-context">Theo yêu cầu đã dùng cho lượt kết quả này · Fixture minh họa</p><dl class="evidence-details">'+Object.keys(labels).map(key=>'<div><dt>'+escapeHtml(labels[key])+'</dt><dd'+(key==='notes'&&resultCriteria?.notes?' data-preserve':'')+'>'+escapeHtml(state.scenario==="url-only"?(key==="destination"?"Nhật Bản từ URL":"Chưa chỉ định"):displayValue(key,resultCriteria?.[key]))+'</dd></div>').join("")+'</dl><p class="dialog-note">Tour và thứ tự cố định để review bố cục. Bộ mẫu chưa lọc hoặc xếp hạng theo thay đổi nhu cầu; không kết luận đã đáp ứng mọi ràng buộc.</p>',"YÊU CẦU ĐÃ DÙNG");
 document.addEventListener("input",event=>{if(event.target.matches("[data-preference]"))updateSlider(event.target);});
 document.addEventListener("change",event=>{const input=event.target;if(!input.matches('[data-preference][data-scope="results"]'))return;const key=input.dataset.preference;if(input.value!==(proposal?.changes[key]??criteria[key]))propose({[key]:input.value});});
 $("contact-form").addEventListener("submit",event=>{
@@ -318,6 +328,37 @@ $("contact-form").addEventListener("submit",event=>{
   $("contact-response").textContent="Đã tạo liên hệ mẫu "+(ticket?.id||"")+". Mở trang quản trị cùng tab để xem và xử lý; chưa gửi ra ngoài.";$("contact-response").hidden=false;event.target.reset();
 });
 $("form-preferences").innerHTML=sliderMarkup("need-",sampleCriteria);
+$("needs-form").addEventListener("input",()=>{formDraft=readForm();journeyChanged();});
+$("needs-form").addEventListener("change",()=>{formDraft=readForm();journeyChanged();});
+
+// Persist text and evidence references; never trust HTML from browser storage.
+function journeySourceText(node){return window.PrototypePresentation?.sourceText(node)??node.textContent;}
+function captureMessages(id){return [...$(id).querySelectorAll(".chat-message:not([data-transient])")].map(el=>({role:el.classList.contains("user")?"user":"assistant",parts:[...el.childNodes].map(node=>node.nodeType===1&&node.matches("button[data-source]")?{source:node.dataset.source,text:journeySourceText(node).trim()}:{text:journeySourceText(node).trim()}).filter(part=>part.text)}));}
+function restoreMessages(id,messages){
+  $(id).replaceChildren();
+  (messages||[]).forEach(message=>{const row=document.createElement("div");row.className="chat-message "+(message.role==="user"?"user":"assistant");(message.parts||[]).forEach(part=>{const validSource=typeof part.source==="string"&&Object.hasOwn(tours,part.source.split(".")[0])&&fields.some(field=>field.key===part.source.split(".")[1]);const el=document.createElement(validSource?"button":"p");el.textContent=String(part.text||"");if(validSource){el.type="button";el.className="text-action";el.dataset.source=part.source;}row.append(el);});$(id).append(row);});
+}
+function captureJourney(){
+  return {criteria:{...criteria},resultCriteria:resultCriteria?{...resultCriteria}:null,currentRevision,resultRevision,hasResults,proposal:proposal?JSON.parse(JSON.stringify(proposal)):null,formDraft:formDraft?{...formDraft}:null,notes:[...notes],noteMessages:captureMessages("notes-log"),messages:captureMessages("results-chat-log"),composers:{notes:$("notes-message").value,results:$("results-chat-message").value},fixture:{...state},activeScreen,tourScreen,tab:$("analysis-tab").getAttribute("aria-selected")==="true"?"analysis":"facts",lastRunRequest:lastRunRequest?JSON.parse(JSON.stringify(lastRunRequest)):null,interruptedQuestion,running,runNotice:$("run-error").hidden?null:[...$("run-error").childNodes].filter(node=>node.nodeType!==1||!node.matches("button")).map(journeySourceText).join(""),bulk:$("bulk-editor").hidden?null:Object.fromEntries(new FormData($("bulk-editor"))),responseMode:$("response-mode").value};
+}
+function restoreJourney(saved={},screen){
+  cancelTimers();chatGeneration++;running=false;chatBusy=false;formDraft=saved.formDraft?{...saved.formDraft}:null;
+  criteria={...sampleCriteria,...saved.criteria};resultCriteria=saved.resultCriteria?{...saved.resultCriteria}:null;currentRevision=saved.currentRevision||0;resultRevision=saved.resultRevision||0;hasResults=Boolean(saved.hasResults);
+  proposal=saved.proposal?JSON.parse(JSON.stringify(saved.proposal)):null;notes=[...(saved.notes||[])];lastRunRequest=saved.lastRunRequest||null;interruptedQuestion=saved.interruptedQuestion||null;
+  Object.assign(state,{round:0,scenario:"standard",reference:false,exhausted:false,offerIndex:0},saved.fixture||{});
+  tourScreen=saved.tourScreen==="results"?"results":"form";$("screen-results").dataset.busy="false";$("processing-panel").hidden=true;$("simulate-run").disabled=false;$("results-snapshot").hidden=!hasResults;
+  $("bulk-editor").hidden=true;clearProposal();proposal=saved.proposal?JSON.parse(JSON.stringify(saved.proposal)):null;
+  restoreMessages("results-chat-log",saved.messages||[{role:"assistant",parts:[{text:"Bạn có thể hỏi về tour, sửa yêu cầu hoặc tiếp tục một lượt tìm trước đây."}]}]);
+  restoreMessages("notes-log",saved.noteMessages||[]);$("notes-message").value=saved.composers?.notes||"";$("results-chat-message").value=saved.composers?.results||"";
+  $("response-mode").value=saved.responseMode||"normal";syncForm(formDraft||criteria);showFormErrors({});lockChat(false);
+  if(hasResults)render();else{renderCriteria();renderAnalysis();}
+  if(proposal)renderProposal();selectTab(saved.tab||"facts");
+  $("run-error").hidden=!saved.runNotice;$("run-error").replaceChildren();
+  if(saved.runNotice){$("run-error").textContent=saved.runNotice;const retry=document.createElement("button");retry.type="button";retry.className="text-action";retry.dataset.runRetry="";retry.textContent=" Tiếp tục lượt tìm";$("run-error").append(retry);}
+  if(saved.bulk){openBulk();Object.entries(saved.bulk).forEach(([name,value])=>{const el=$("bulk-editor").elements.namedItem(name);if(el)el.value=value;});}
+  navigate(screen||saved.tourScreen||"form",false);
+}
+window.PrototypeJourney={capture:captureJourney,restore:restoreJourney,pause(){if(running)stopRun(true,"paused");chatGeneration++;$("results-chat-log").querySelectorAll("[data-transient]").forEach(el=>el.remove());lockChat(false);},blank(){const empty={...sampleCriteria,destination:"",origin:"",date:"",adults:"",budget:""};return {criteria:empty,formDraft:empty,currentRevision:0,resultRevision:0,hasResults:false,notes:[],messages:[{role:"assistant",parts:[{text:"Tôi có thể giải thích tour, sửa yêu cầu hoặc tìm nhóm khác. Mọi thay đổi đều chờ bạn xác nhận."}]}],noteMessages:[{role:"assistant",parts:[{text:"Bạn có thể thêm lưu ý về bữa ăn, nhịp đi hay thành viên trong đoàn."}]}],composers:{notes:"",results:""},fixture:{round:0,scenario:"standard",reference:false,offerIndex:0},tourScreen:"form",tab:"facts"};}};
 refreshExtras();hydrateIcons();
 if(new URLSearchParams(location.search).get("demo")==="results"){
   syncForm();currentRevision=1;resultRevision=1;resultCriteria={...criteria};hasResults=true;$("results-snapshot").hidden=false;render();navigate("results",false);
