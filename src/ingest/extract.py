@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import html as _html
 import json as _json
-import os
 import re as _re
 from collections.abc import Callable
 from html.parser import HTMLParser
@@ -33,13 +32,11 @@ DEFAULT_PROFILES = Path("configs/profiles")
 def _resolve(path: Path) -> Path:
     """Find configs in a checkout or an installed deployment.
 
-    Order: explicit path > TOURCRAWL_CONFIGS env > package-relative configs/
-    (repo checkout) > current-directory configs/. Deployment ships configs/
-    alongside the code; it is data, not code.
+    Order: explicit path > package-relative configs/ (repo checkout) >
+    current-directory configs/. Deployment ships configs/ alongside the
+    code; it is data, not code.
     """
     candidates = [path]
-    if env_root := os.getenv("TOURCRAWL_CONFIGS"):
-        candidates.append(Path(env_root) / path.name)
     candidates.append(Path(__file__).resolve().parents[2] / path)
     candidates.append(Path.cwd() / path)
     for candidate in candidates:

@@ -1,9 +1,8 @@
-"""Shared cross-cutting helpers for crawl, backend and frontend.
+"""Shared cross-cutting helpers for crawl and backend.
 
 Nothing domain-specific lives here: only infrastructure every layer needs
-(logging and CLI runtime today, maybe retry/time/ids later). Backend and
-frontend import from this package directly; they must never depend on
-crawler internals.
+(logging and CLI runtime today, maybe retry/time/ids later). Backend imports
+from this package directly; it must never depend on crawler internals.
 """
 
 from .logging import get_logger, redact

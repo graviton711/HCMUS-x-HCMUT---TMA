@@ -22,7 +22,7 @@ dependencies = [
 browser = ["playwright>=1.52"]
 
 [project.scripts]
-tour-backend = "api.cli:main"
+tour-backend = "backend.cli:main"
 tour-crawl = "ingest.pipeline:main"
 
 [dependency-groups]
@@ -39,7 +39,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["ingest*", "shared*", "api*", "data_access*", "decision*", "domain*", "requirements*", "semantic_assessment*"]
+include = ["backend*", "ingest*", "shared*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -58,9 +58,7 @@ reportUnusedCallResult = "none"
 extraPaths = ["src"]
 venvPath = "."
 venv = ".venv"
-# TODO(merge): backend packages chua typecheck (227 loi co san); bật lại từng
-# package khi Khôi dọn xong, khong ha chuan ingest/shared.
-exclude = ["artifacts", ".local", "dist", "src/api", "src/data_access", "src/decision", "src/domain", "src/requirements", "src/tourcrawl", "src/semantic_assessment", "src/frontend"]
+exclude = ["artifacts", ".local", "dist"]
 
 [tool.ruff]
 target-version = "py312"

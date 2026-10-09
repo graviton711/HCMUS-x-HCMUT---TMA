@@ -1,0 +1,23 @@
+# backend/decide — lọc, chấm, rank, phân tích
+
+## Trách nhiệm
+
+Toàn bộ luồng compare: lọc cứng pool → LLM chấm trường mềm trên survivors → rank → phân tích (chi phí ẩn, điều kiện, rủi ro, quyền lợi). Không lưu trữ, không HTTP.
+
+## Input/output
+
+Vào: `Requirement` + list `TourSnapshot` + hook LLM. Ra: `Comparison` gồm rank candidate ids, chấm `pass`/`fail`/`unknown` từng offer kèm evidence, và `Analysis` chi phí/điều kiện/rủi ro/quyền lợi. Unknown không pass, không rank trên pass cứng.
+
+## Workflow
+
+`hard_filter`: mọi điều kiện cứng phải pass trên từng offer (ngân sách chỉ so giá exact cùng currency; giá "from" → `unknown`) → `assess_soft`: một call LLM cho cả pool, chấm itinerary/inclusions/exclusions/child/cancellation kèm quote → `rank`: pass cứng trước, rồi điểm mềm, rồi giá → `analyze`: khui surcharges, điều kiện, rủi ro availability/verification và quyền lợi matched từ text snapshot.
+
+## Interface với module khác
+
+`api` gọi. Đọc rows qua `data`, đổi qua `normalize`, parse user qua `input`. LLM qua `assess_fn` inject; không có thì mềm ở `unknown` và rank bằng cứng + giá.
+
+## Quyết định kỹ thuật
+
+- Cứng trước mềm sau, luôn: pool LLM nhỏ, chi phí chặn trên (`candidate_limit`, excerpt caps).
+- Chấm theo offer, không theo tour: tour pass chỉ qua offer pass của nó.
+- Một call LLM mỗi comparison, không phải mỗi candidate: ít hỏng, merge deterministic.

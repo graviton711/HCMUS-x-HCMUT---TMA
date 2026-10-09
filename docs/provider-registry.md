@@ -1,6 +1,6 @@
 # Danh mục nhà cung cấp
 
-**Trạng thái:** Đặc tả kết quả khảo sát nguồn trong Git. Config crawler hiện ở `configs/profiles/*.yaml`; capability runtime backend dùng [SourceCapability](../src/data_access/crawler-contract.md). Chưa có mapping đầy đủ profile → capability/approval/TTL; không tạo lại `data/providers.toml` thành nguồn chuẩn song song.
+**Trạng thái:** Đặc tả kết quả khảo sát nguồn trong Git. Config crawler hiện ở `configs/profiles/*.yaml`; ranh giới crawler ↔ backend xem [system-architecture](system-architecture.md). Chưa có mapping đầy đủ profile → approval/TTL; không tạo lại `data/providers.toml` thành nguồn chuẩn song song.
 
 ## Mục đích
 

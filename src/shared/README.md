@@ -1,9 +1,9 @@
-# shared — tiện ích dùng chung cho crawl, backend, frontend
+# shared — tiện ích dùng chung cho crawl và backend
 
 ## Trách nhiệm
 
 Chứa helper hạ tầng mọi tầng đều cần (hiện tại: logging), không chứa logic
-nghiệp vụ nào của crawl hay domain tour. Backend/frontend import trực tiếp
+nghiệp vụ nào của crawl hay domain tour. Backend import trực tiếp
 từ đây; cấm import ngược vào `ingest` hay module nghiệp vụ khác.
 
 ## Quy tắc thêm mới

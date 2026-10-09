@@ -220,7 +220,7 @@ prompt: |
     If the printed value contains backslash-u escapes, rewrite the file.
   - Test your `profile.yaml` directly by running:
       python -m ingest.extract raw/tour-1.html raw/tour-2.html raw/tour-3.html raw/tour-4.html raw/tour-5.html raw/tour-6.html raw/tour-7.html raw/tour-8.html raw/tour-9.html raw/tour-10.html raw/tour-11.html raw/tour-12.html raw/tour-13.html raw/tour-14.html raw/tour-15.html raw/tour-16.html raw/tour-17.html raw/tour-18.html raw/tour-19.html raw/tour-20.html --profile profile.yaml -o selftest.jsonl
-  - Inspect `selftest.jsonl` to ensure all 19 canonical fields match Target Canonical Formats in data-contract.md.
+  - Inspect `selftest.jsonl` to ensure canonical values follow `docs/data-contract.md`.
   - If any field is empty, malformed, or has dirty HTML entities, adjust your clean expression or selectors in `profile.yaml` and re-run.
   - Maximum 5 iterations.
   - Record the per-field result as compact `x/20` PASS counts plus the failing

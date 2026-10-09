@@ -54,7 +54,7 @@ Mỗi trường trong `fields.<field_name>` phải tuân thủ đúng một tron
 
 ### 2.2. Cơ chế làm sạch dữ liệu (`clean` & `transform`)
 
-Để đảm bảo dữ liệu đầu ra đạt đúng chuẩn Target Canonical của [docs/data-contract.md](../../docs/data-contract.md) mà không nhồi heuristic vào Runner, **Agent trực tiếp cung cấp code làm sạch qua thuộc tính `clean`**:
+Để dữ liệu crawl khớp catalog và giữ preprocessing theo từng nguồn mà không nhồi heuristic vào Runner, **Agent trực tiếp cung cấp code làm sạch qua thuộc tính `clean`** theo [data contract](../../docs/data-contract.md). Publish ghi bảng Supabase theo `migrations/001_tour_schema.sql` (+ evidence, `field_meta`); backend chỉ đọc:
 
 * **`clean` (Khuyến nghị cốt lõi):** Biểu thức Python một dòng hoặc lambda string biến đổi giá trị thô `val`.
   Môi trường thực thi cung cấp sẵn: biến `val`, các module `re`, `json`, `html`,
