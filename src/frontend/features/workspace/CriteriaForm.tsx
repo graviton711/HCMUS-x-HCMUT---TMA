@@ -3,6 +3,8 @@ import type { Catalog } from '../../api/types';
 import type { FormValues } from '../../api/form';
 import { usePreferences } from '../../app/preferences';
 import { Icon } from '../../components/Icon';
+import { MonthPicker } from '../../components/MonthPicker';
+import { BudgetRange } from '../../components/BudgetRange';
 
 interface Props {
   values: FormValues;
@@ -12,6 +14,7 @@ interface Props {
   busy: boolean;
   editing?: boolean;
   budgetLocked?: string | null;
+  monthsLocked?: string | null;
 }
 export function CriteriaForm({
   values: v,
@@ -21,6 +24,7 @@ export function CriteriaForm({
   busy,
   editing = false,
   budgetLocked = null,
+  monthsLocked = null,
 }: Props) {
   const { t } = usePreferences();
   const prefix = useId();
@@ -123,16 +127,19 @@ export function CriteriaForm({
                   ))}
                 </select>
               </label>
-              <label className="field" htmlFor={`${prefix}-date`}>
-                {label('Ngày khởi hành', 'Departure date')}
-                <input
-                  id={`${prefix}-date`}
-                  type="date"
-                  required={!editing}
-                  value={v.departureDate}
-                  onChange={(e) => update('departureDate', e.target.value)}
-                />
-              </label>
+              <MonthPicker
+                value={v.departureMonths}
+                disabled={!!monthsLocked}
+                onChange={(departureMonths) =>
+                  onChange({ ...v, departureMonths, departureDate: '' })
+                }
+              />
+              {(monthsLocked || v.departureDate) && (
+                <p className="form-hint field-wide">
+                  {monthsLocked ||
+                    `${t('Đang giữ lịch', 'Keeping the existing date')}: ${v.departureDate}. ${t('Chọn tháng để đổi lịch này.', 'Choose months to change this date.')}`}
+                </p>
+              )}
               <label className="field" htmlFor={`${prefix}-adults`}>
                 {label('Người lớn', 'Adults')}
                 <input
@@ -144,27 +151,6 @@ export function CriteriaForm({
                   value={v.adults || ''}
                   onChange={(e) => update('adults', Number(e.target.value))}
                 />
-              </label>
-              <label className="field" htmlFor={`${prefix}-budget`}>
-                {label('Ngân sách / người lớn (VND)', 'Budget / adult (VND)')}
-                <input
-                  id={`${prefix}-budget`}
-                  disabled={!!budgetLocked}
-                  type="number"
-                  min={1}
-                  step={1}
-                  required={!editing}
-                  value={v.budget}
-                  onChange={(e) => update('budget', e.target.value)}
-                  placeholder="30000000"
-                />
-                <small>
-                  {budgetLocked ||
-                    t(
-                      'Giá tour; phụ thu được đối chiếu riêng khi có dữ liệu.',
-                      'Tour price; supplements are compared separately when available.',
-                    )}
-                </small>
               </label>
               <label className="field" htmlFor={`${prefix}-children`}>
                 {label('Trẻ em', 'Children')}
@@ -208,14 +194,26 @@ export function CriteriaForm({
                   />
                 </label>
               ))}
+              <BudgetRange
+                minimum={v.budgetMin}
+                maximum={v.budget}
+                disabled={busy || !!budgetLocked}
+                required={!editing}
+                onChange={(budgetMin, budget) => onChange({ ...v, budgetMin, budget })}
+              />
+              {budgetLocked && <p className="form-hint field-wide">{budgetLocked}</p>}
             </div>
             <details className="optional-fields" open={editing}>
               <summary>
                 {t('Điều kiện và ưu tiên thêm', 'Additional conditions and preferences')}
               </summary>
               <div className="form-grid">
-                <label className="field" htmlFor={`${prefix}-duration`}>
-                  {label('Thời lượng (ngày)', 'Duration (days)')}
+                <div className="field">
+                  <label htmlFor={`${prefix}-duration`}>
+                    {v.strengths.duration_days === 'hard'
+                      ? label('Thời lượng (ngày)', 'Duration (days)')
+                      : label('Thời lượng khoảng (ngày)', 'Approximate duration (days)')}
+                  </label>
                   <input
                     id={`${prefix}-duration`}
                     type="number"
@@ -225,7 +223,7 @@ export function CriteriaForm({
                     onChange={(e) => update('durationDays', e.target.value)}
                   />
                   {strength('duration_days')}
-                </label>
+                </div>
                 <label className="field" htmlFor={`${prefix}-hotel`}>
                   {label('Khách sạn tối thiểu', 'Minimum hotel rating')}
                   <select

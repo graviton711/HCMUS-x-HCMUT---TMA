@@ -13,6 +13,7 @@ import {
 } from './storage';
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
+import { SessionSidebar } from '../components/SessionSidebar';
 import { WorkspacePage } from '../features/workspace/WorkspacePage';
 import { useWorkspace } from '../features/workspace/useWorkspace';
 import { accountClient, allHistory, fromHistory } from './history';
@@ -21,6 +22,7 @@ function locationState() {
   return {
     path: window.location.pathname.replace(/\/$/, '') || '/',
     session: new URLSearchParams(window.location.search).get('session'),
+    hash: window.location.hash,
   };
 }
 function isLinkClick(event: MouseEvent<HTMLAnchorElement>) {
@@ -33,7 +35,6 @@ export function App() {
   const [sessions, setSessions] = useState(() => loadSessions(readAuthProfile()?.id));
   const [profile, setProfile] = useState<AuthProfile | null>(readAuthProfile);
   const [drawer, setDrawer] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
   const [filter, setFilter] = useState('');
   const [rename, setRename] = useState<LocalSession | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -133,11 +134,18 @@ export function App() {
   useEffect(() => {
     document.title = `${route.path === '/tours' ? t('Tìm tour', 'Find tours') : route.path === '/auth' ? t('Tài khoản', 'Account') : 'Đi cùng'} · Đi cùng`;
   }, [route.path, t]);
+  useEffect(() => {
+    if (route.hash)
+      document
+        .getElementById(route.hash.slice(1))
+        ?.scrollIntoView({ block: 'start', behavior: 'instant' });
+  }, [route.path, route.hash]);
   const navigate = (url: string) => {
     window.history.pushState(null, '', url);
     setRoute(locationState());
     setDrawer(false);
-    if (locationState().path !== '/tours') window.scrollTo({ top: 0, behavior: 'instant' });
+    if (locationState().path !== '/tours' && !locationState().hash)
+      window.scrollTo({ top: 0, behavior: 'instant' });
   };
   const startSession = () => {
     const next = newSession();
@@ -287,7 +295,6 @@ export function App() {
   const sidebar = (suffix: string) => (
     <div className="sidebar-content">
       <div className="sidebar-heading">
-        <span className="eyebrow">{t('CHUYẾN ĐI CỦA BẠN', 'YOUR TRIPS')}</span>
         <button className="btn" onClick={startSession}>
           <Icon name="plus" />
           {t('Phiên mới', 'New session')}
@@ -341,7 +348,7 @@ export function App() {
                     current?.id === s.id && route.path === '/tours' ? 'page' : undefined
                   }
                 >
-                  <span>{sessionName(s)}</span>
+                  <span title={sessionName(s)}>{sessionName(s)}</span>
                   <small>
                     {new Date(s.updatedAt).toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-GB', {
                       day: 'numeric',
@@ -486,14 +493,8 @@ export function App() {
           </div>
         </div>
       </header>
-      <div
-        className={`app-shell ${route.path === '/tours' ? 'workspace-open' : ''} ${collapsed ? 'sidebar-collapsed' : ''}`}
-      >
-        {route.path === '/tours' && (
-          <aside className="session-sidebar" aria-label={t('Các phiên tìm tour', 'Tour sessions')}>
-            {sidebar('desktop')}
-          </aside>
-        )}
+      <div className={`app-shell ${route.path === '/tours' ? 'workspace-open' : ''}`}>
+        {route.path === '/tours' && <SessionSidebar>{sidebar('desktop')}</SessionSidebar>}
         <main
           id="main-content"
           className={route.path === '/tours' ? 'workspace-content' : 'page-content'}
@@ -542,12 +543,8 @@ export function App() {
                 <button
                   className="icon-button history-toggle"
                   aria-label={t('Ẩn / hiện lịch sử phiên', 'Toggle session history')}
-                  aria-expanded={!collapsed || drawer}
-                  onClick={() =>
-                    window.matchMedia('(max-width: 1000px)').matches
-                      ? setDrawer(true)
-                      : setCollapsed(!collapsed)
-                  }
+                  aria-expanded={drawer}
+                  onClick={() => setDrawer(true)}
                 >
                   <Icon name="menu" />
                 </button>
@@ -589,13 +586,47 @@ export function App() {
         </main>
       </div>
       <footer className="page-footer">
-        <span>
-          Đi cùng ·{' '}
-          {t('So sánh có nguồn, lựa chọn có cơ sở.', 'Sourced comparisons. Informed choices.')}
-        </span>
-        <a href="/support" onClick={link('/support')}>
-          {t('Cách đọc kết quả', 'How to read results')}
-        </a>
+        <div className="footer-brand">
+          <strong>đi cùng</strong>
+          <p>
+            {t('So sánh có nguồn, lựa chọn có cơ sở.', 'Sourced comparisons. Informed choices.')}
+          </p>
+        </div>
+        {[
+          {
+            title: t('Sản phẩm & Công cụ', 'Product & Tools'),
+            links: [
+              ['/', t('Giới thiệu', 'About')],
+              ['/tours', t('Tìm tour', 'Find tours')],
+              ['/support', t('Cách so sánh tour', 'How to compare tours')],
+            ],
+          },
+          {
+            title: t('Tài khoản & Hỗ trợ', 'Account & Support'),
+            links: [
+              ['/account', t('Tài khoản', 'Account')],
+              ['/support', t('Hỗ trợ người dùng', 'User support')],
+              ['/contact', t('Liên hệ chúng tôi', 'Contact us')],
+            ],
+          },
+          {
+            title: t('Pháp lý & Bảo mật', 'Legal & Security'),
+            links: [
+              ['/support#privacy', t('Dữ liệu & quyền riêng tư', 'Data & privacy')],
+              ['/support#security', t('Quyền truy cập phiên', 'Session access')],
+              ['/support#scope', t('Phạm vi sử dụng', 'Scope of use')],
+            ],
+          },
+        ].map((group) => (
+          <nav key={group.title} aria-label={group.title}>
+            <h2>{group.title}</h2>
+            {group.links.map(([url, label]) => (
+              <a key={url} href={url} onClick={link(url)}>
+                {label}
+              </a>
+            ))}
+          </nav>
+        ))}
       </footer>
       <Dialog
         open={drawer}

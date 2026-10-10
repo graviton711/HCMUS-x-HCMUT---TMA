@@ -1,4 +1,5 @@
 import { emptyForm, type FormValues } from '../api/form';
+import { validMonth } from '../api/travelFilters';
 
 export interface ChatLine {
   id: string;
@@ -54,6 +55,9 @@ function validDraft(v: unknown): v is FormValues {
       (key) => Array.isArray(v[key]) && v[key].every((item) => typeof item === 'string'),
     ) &&
     Array.isArray(v.childAges) &&
+    Array.isArray(v.departureMonths) &&
+    v.departureMonths.length <= 12 &&
+    v.departureMonths.every((month) => typeof month === 'string' && validMonth(month)) &&
     v.childAges.every(
       (age) =>
         age === null || (typeof age === 'number' && Number.isInteger(age) && age >= 0 && age <= 17),
@@ -113,7 +117,20 @@ function scopedHistoryKey(ownerId?: string) {
 export function loadSessions(ownerId?: string): LocalSession[] {
   try {
     const data: unknown = JSON.parse(localStorage.getItem(scopedHistoryKey(ownerId)) || '[]');
-    return Array.isArray(data) ? data.filter(validSession) : [];
+    if (!Array.isArray(data)) return [];
+    return data
+      .map((session: unknown) => {
+        if (!record(session) || !record(session.draft)) return session;
+        return {
+          ...session,
+          draft: {
+            ...session.draft,
+            ...(Object.hasOwn(session.draft, 'departureMonths') ? {} : { departureMonths: [] }),
+            ...(Object.hasOwn(session.draft, 'budgetMin') ? {} : { budgetMin: '' }),
+          },
+        };
+      })
+      .filter(validSession);
   } catch {
     return [];
   }

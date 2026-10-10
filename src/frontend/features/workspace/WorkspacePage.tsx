@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildCreateRequirement, buildEdits, directBudgetReason } from '../../api/form';
+import { directMonthReason } from '../../api/travelFilters';
 import type { ConditionValue, JsonValue, Requirement, Tree } from '../../api/types';
 import type { LocalSession } from '../../app/storage';
 import { usePreferences } from '../../app/preferences';
@@ -381,6 +382,7 @@ export function WorkspacePage({
                       busy={s.busy}
                       editing
                       budgetLocked={draftBase ? directBudgetReason(draftBase) : null}
+                      monthsLocked={draftBase ? directMonthReason(draftBase) : null}
                     />
                   ) : (
                     draftBase && (
@@ -700,12 +702,27 @@ export function WorkspacePage({
             <dt>{t('Khởi hành', 'Departure')}</dt>
             <dd>
               {catalog?.origins.find((d) => d.id === session.draft.departureOrigin)?.label} ·{' '}
-              {session.draft.departureDate}
+              {session.draft.departureMonths.length
+                ? session.draft.departureMonths
+                    .map((month) =>
+                      new Date(`${month}-01T12:00:00Z`).toLocaleDateString(
+                        locale === 'vi' ? 'vi-VN' : 'en-GB',
+                        { month: 'long', year: 'numeric', timeZone: 'UTC' },
+                      ),
+                    )
+                    .join(', ')
+                : session.draft.departureDate}
             </dd>
           </div>
           <div>
             <dt>{t('Ngân sách / người lớn', 'Budget / adult')}</dt>
-            <dd>{Number(session.draft.budget).toLocaleString('vi-VN')} VND</dd>
+            <dd>
+              {Number(session.draft.budgetMin || 0).toLocaleString(
+                locale === 'vi' ? 'vi-VN' : 'en-GB',
+              )}{' '}
+              – {Number(session.draft.budget).toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-GB')}{' '}
+              VND
+            </dd>
           </div>
           <div>
             <dt>{t('Thành viên', 'Party')}</dt>
@@ -714,6 +731,14 @@ export function WorkspacePage({
               {t('trẻ em', 'children')}
             </dd>
           </div>
+          {session.draft.durationDays && (
+            <div>
+              <dt>{t('Thời lượng khoảng', 'Approximate duration')}</dt>
+              <dd>
+                {session.draft.durationDays} {t('ngày', 'days')}
+              </dd>
+            </div>
+          )}
         </dl>
         <p>
           {t(
