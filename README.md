@@ -17,6 +17,7 @@ flowchart LR
 - [Hợp đồng dữ liệu](docs/data-contract.md) · [Hợp đồng backend](docs/backend-contract.md)
 - [Phạm vi MVP](docs/tour-mvp-scope.md) · [Quy ước làm việc](docs/team-workflow.md)
 - [Module backend](src/backend/README.md) · [Module frontend](src/frontend/README.md) · [Module ingest](src/ingest/README.md)
+- [Deploy preview](docs/frontend-vercel-preview.md)
 
 ## Chạy backend
 
