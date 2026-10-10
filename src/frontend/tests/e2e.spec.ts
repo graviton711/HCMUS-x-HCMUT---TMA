@@ -9,6 +9,10 @@ async function startGuestSearch(page: Page) {
 test('guest interprets, compares, and restores the persisted current-backend result', async ({
   page,
 }) => {
+  const legacyRequests: string[] = [];
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.startsWith('/v2/')) legacyRequests.push(request.url());
+  });
   await startGuestSearch(page);
   await page.getByLabel('Mô tả chuyến đi').fill('Đà Lạt 3 ngày, tối đa 8 triệu/người');
   await page.getByLabel('Điểm đến trong catalog').fill('Đà Lạt');
@@ -30,6 +34,7 @@ test('guest interprets, compares, and restores the persisted current-backend res
     )
     .toBe(true);
 
+  expect(legacyRequests).toEqual([]);
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Các tour có thể đối chiếu' })).toBeVisible();
   await expect(page.locator('.current-tour-card').first()).toBeVisible();

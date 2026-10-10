@@ -1,0 +1,104 @@
+/* Styles scoped to SupportPage. */
+
+.supportRoot :global(.support-articles) article[id] {
+  scroll-margin-top: calc(var(--header-height) + 24px);
+}
+
+.supportRoot :global(.service-heading) {
+  margin-bottom: 38px;
+}
+
+.supportRoot :global(.service-heading) h1 {
+  margin-bottom: 20px;
+}
+
+.supportRoot :global(.service-heading) > p {
+  max-width: 660px;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.9;
+}
+
+.supportRoot :global(.service-layout) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(270px, 0.8fr);
+  gap: 8%;
+  align-items: start;
+}
+
+.supportRoot :global(.service-note) {
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--tint);
+}
+
+.supportRoot :global(.service-note) > :global(.icon) {
+  color: var(--accent);
+  margin-bottom: 18px;
+}
+
+.supportRoot :global(.service-note) h2 {
+  font-family: var(--heading);
+  font-size: 29px;
+  font-weight: 400;
+  margin-bottom: 14px;
+}
+
+.supportRoot :global(.service-note) p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.85;
+}
+
+.supportRoot :global(.service-note) :global(.btn) {
+  margin-top: 24px;
+}
+
+.supportRoot :global(.support-articles) article {
+  display: grid;
+  grid-template-columns: 35px minmax(0, 1fr);
+  gap: 18px;
+  padding-bottom: 28px;
+  margin-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.supportRoot :global(.support-articles) article > span {
+  color: var(--clay);
+  font: 400 29px/1.2 var(--heading);
+}
+
+.supportRoot :global(.support-articles) h2 {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.supportRoot :global(.support-articles) p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+@media (max-width: 1250px) {
+  .supportRoot :global(.service-layout) {
+    gap: 5%;
+  }
+}
+
+@media (max-width: 760px) {
+  .supportRoot :global(.service-heading) {
+    margin-bottom: 28px;
+  }
+  .supportRoot :global(.service-layout) {
+    grid-template-columns: 1fr;
+    gap: 30px;
+  }
+  .supportRoot :global(.service-note) {
+    padding: 24px;
+  }
+  .supportRoot :global(.support-articles) article {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 13px;
+  }
+}

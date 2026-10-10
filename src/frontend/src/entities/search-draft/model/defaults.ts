@@ -1,0 +1,25 @@
+import type { SearchDraft } from './types';
+
+export const emptySearchDraft: SearchDraft = {
+  mode: 'structured',
+  text: '',
+  destinations: [],
+  departureOrigin: '',
+  departureDate: '',
+  departureMonths: [],
+  returnDate: '',
+  adults: 0,
+  childAges: [],
+  budget: '',
+  budgetMin: '',
+  budgetBasis: 'per_adult',
+  durationDays: '',
+  hotelStars: '',
+  shopping: 'any',
+  transport: [],
+  includedServices: [],
+  referenceUrls: [],
+  notes: '',
+  preferenceLevels: { cost: 3, comfort: 3, pace: 3, culture: 3 },
+  strengths: {},
+};

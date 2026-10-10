@@ -1,0 +1,121 @@
+/* Styles scoped to preferences. */
+
+.root {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.root :global(.language-picker) {
+  position: relative;
+}
+.root :global(.preferences-trigger),
+.root :global(.theme-toggle) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 10px;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
+}
+.root :global(.theme-toggle) {
+  width: 44px;
+  flex: 0 0 44px;
+  padding: 0;
+  color: var(--muted);
+}
+.root :global(.preferences-trigger):hover,
+.root :global(.preferences-trigger)[aria-expanded='true'],
+.root :global(.theme-toggle):hover {
+  background: var(--tint);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent), var(--line) 65%);
+}
+.root :global(.preferences-trigger) > :global(.icon) {
+  transition: transform 150ms;
+}
+.root :global(.preferences-trigger)[aria-expanded='true'] > :global(.icon) {
+  transform: rotate(180deg);
+}
+.root :global(.preferences-panel) {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  z-index: var(--z-overlay);
+  width: 216px;
+  max-width: calc(100vw - 32px);
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink), transparent 90%);
+}
+.root :global(.preferences-panel) h2 {
+  margin: 3px 8px 8px;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.root :global(.preferences-choices) {
+  display: grid;
+  gap: 4px;
+}
+.root :global(.preferences-choices) button {
+  display: flex;
+  text-align: left;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 13px;
+}
+.root :global(.preferences-choices) button:hover {
+  background: var(--tint);
+}
+.root :global(.preferences-choices) :global(.language-code) {
+  width: 34px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.root :global(.preferences-choices) :global(.icon) {
+  margin-left: auto;
+}
+.root :global(.preferences-choices) button[aria-pressed='true'] {
+  background: var(--tint);
+  color: var(--accent);
+}
+@media (max-width: 760px) {
+  .root :global(.preferences-trigger) {
+    padding: 7px;
+    gap: 5px;
+    min-height: 44px;
+  }
+  .root {
+    gap: 6px;
+  }
+  .root :global(.preferences-panel) {
+    position: fixed;
+    top: calc(var(--header-height) + 9px);
+    right: 16px;
+    max-width: calc(100vw - 32px);
+  }
+}
+@media (max-width: 420px) {
+  .root :global(.preferences-trigger) {
+    font-size: 11px;
+  }
+}

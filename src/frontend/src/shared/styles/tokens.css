@@ -1,0 +1,92 @@
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('/assets/BeVietnamPro-Regular.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('/assets/BeVietnamPro-Medium.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('/assets/BeVietnamPro-SemiBold.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Be Vietnam Pro';
+  src: url('/assets/BeVietnamPro-Bold.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Newsreader';
+  src: url('/assets/Newsreader.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+:root {
+  font-family: 'Be Vietnam Pro', sans-serif;
+  font-size: 15px;
+  line-height: 1.75;
+  font-synthesis: none;
+  --paper: #f7f6f3;
+  --surface: #fff;
+  --ink: #252b29;
+  --muted: #626861;
+  --line: #dedfd8;
+  --accent: #305b46;
+  --on-accent: #fff;
+  --tint: #edf2eb;
+  --clay: #a0442b;
+  --clay-bg: #f4e5db;
+  --good: #366345;
+  --good-bg: #edf3ec;
+  --warn: #856026;
+  --warn-bg: #faf1dc;
+  --danger: #8d3727;
+  --danger-bg: #faeeeb;
+  --sidebar: #f0f0e9;
+  --focus: #397c68;
+  --heading: 'Newsreader', Georgia, serif;
+  --content: 86rem;
+  --header-height: 94px;
+  --header-min-height: 94px;
+  --sidebar-width: 248px;
+  --radius: 8px;
+  --z-header: 20;
+  --z-overlay: 40;
+  color: var(--ink);
+  background: var(--paper);
+  color-scheme: light;
+}
+html[data-theme='dark'] {
+  --paper: #1b1f1c;
+  --surface: #242a25;
+  --ink: #efefe5;
+  --muted: #b4b9ad;
+  --line: #454f44;
+  --accent: #aacaab;
+  --on-accent: #1b291e;
+  --tint: #2c3c30;
+  --clay: #e5b29a;
+  --clay-bg: #3d2e26;
+  --good: #b7d1af;
+  --good-bg: #293b2c;
+  --warn: #e4c28f;
+  --warn-bg: #3a3325;
+  --danger: #e9b0a3;
+  --danger-bg: #3c2c28;
+  --sidebar: #212620;
+  --focus: #b5d4b5;
+  color-scheme: dark;
+}

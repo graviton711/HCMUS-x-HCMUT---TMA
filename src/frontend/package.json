@@ -5,15 +5,15 @@
   "packageManager": "pnpm@11.25.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "dev": "vite --config config/vite.config.ts --host 127.0.0.1",
+    "build": "tsc -b config/tsconfig.json && vite build --config config/vite.config.ts",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
-    "lint": "eslint . --max-warnings 0",
-    "typecheck": "tsc -b",
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "test": "vitest run --config config/vite.config.ts",
+    "test:e2e": "playwright test --config=config/playwright.config.ts",
+    "lint": "eslint . --config config/eslint.config.js --max-warnings 0",
+    "typecheck": "tsc -b config/tsconfig.json",
+    "format": "prettier --config config/.prettierrc.json --ignore-path config/.prettierignore --write .",
+    "format:check": "prettier --config config/.prettierrc.json --ignore-path config/.prettierignore --check ."
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -22,6 +22,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.0",
     "@playwright/test": "^1.58.0",
+    "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.0",
     "jsdom": "^26.1.0",
     "prettier": "^3.6.0",
@@ -30,6 +31,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
     "eslint": "^9.39.0",
+    "eslint-plugin-boundaries": "^7.2.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^16.0.0",
     "typescript": "~5.9.3",

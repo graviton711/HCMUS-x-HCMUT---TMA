@@ -1,0 +1,41 @@
+/* Styles scoped to Dialog. */
+
+.root {
+  padding: 0;
+  width: min(720px, calc(100% - 32px));
+  max-height: calc(100dvh - 48px);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.root::backdrop {
+  background: rgba(22, 31, 24, 0.38);
+}
+:global(html[data-theme='dark']) .root::backdrop {
+  background: rgba(9, 13, 10, 0.65);
+}
+.sidebar {
+  margin: 0;
+  width: min(330px, calc(100% - 32px));
+  max-height: 100dvh;
+  height: 100dvh;
+  border-radius: 0;
+  background: var(--sidebar);
+}
+.sidebar :global(.dialog-shell) {
+  padding: 22px 14px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar :global(.dialog-body) {
+  min-height: 0;
+  flex: 1;
+}
+.sidebar :global(.dialog-head) {
+  margin-inline: 8px;
+}
+.sidebar :global(.dialog-head) h2 {
+  font-size: 26px;
+}
