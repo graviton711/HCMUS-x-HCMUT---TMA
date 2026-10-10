@@ -7,6 +7,7 @@ from itertools import combinations
 from decision.candidates import prepare_candidates
 from decision.candidates import tour_identity as tour_identity
 from decision.engine import freshness, usable
+from decision.listed import cost_disclosure
 from decision.semantic import semantic_fact
 from domain.common import instant
 from domain.crawl import money_wire
@@ -283,6 +284,7 @@ def build_comparison(
         for i, f in enumerate(field_names)
     ]
     for field, label, scope in [
+        ("listed_price_quotes", "Giá tour niêm yết / người lớn", "offer"),
         ("price_quotes", "Giá công bố", "offer"),
         ("extra_charges", "Phụ thu", "offer"),
         ("pricing_complete", "Độ đầy đủ giá", "offer"),
@@ -312,8 +314,8 @@ def build_comparison(
             values = []
             if c:
                 o, t = c["selected"], c["tour"]
-                if row["field"] in {"price_quotes", "extra_charges"}:
-                    values = getattr(o, row["field"]) if o else []
+                if row["field"] in {"price_quotes", "extra_charges", "listed_price_quotes"}:
+                    values = getattr(o, row["field"], []) if o else []
                 elif row["field"] == "pricing_complete":
                     values = [o.pricing_complete] if o and o.pricing_complete else []
                 else:
@@ -339,6 +341,7 @@ def build_comparison(
                 if row["field"]
                 in {
                     "price_quotes",
+                    "listed_price_quotes",
                     "extra_charges",
                     "pricing_complete",
                     "published_price",
@@ -354,7 +357,8 @@ def build_comparison(
                     "row_id": row["id"],
                     "column_id": column["id"],
                     "value": [f["value"] for f in serialized]
-                    if row["field"] in {"price_quotes", "extra_charges", "published_price"}
+                    if row["field"]
+                    in {"price_quotes", "extra_charges", "published_price", "listed_price_quotes"}
                     else serialized[0]["value"]
                     if serialized
                     else None,
@@ -545,7 +549,7 @@ def build_comparison(
         "evaluated_at": at,
         "policy_versions": {
             "ranking": RANK_POLICY,
-            "decision": "decision-v2.4-search",
+            "decision": "decision-v2.5-listed",
             "semantic_assessment": "semantic-assessment-v1",
             "catalog_validation": "catalog-validation-v1",
         },
@@ -598,6 +602,10 @@ def build_comparison(
             "evaluated_count": len(evaluated),
         },
         "analysis": {
+            "budget_measures": sorted(
+                {getattr(c.value, "measure", "payable") for c in r.conditions if c.field == "estimated_cost"}
+            ),
+            "cost_disclosures": [cost_disclosure(c, at, synthetic) for c in visible],
             "metrics": metrics,
             "semantic_assessment": semantic_report
             or {"state": "skipped", "reason_code": "ASSESSMENT_NOT_REQUESTED", "items": []},

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type MouseEvent } from 'react';
 import { AccountPage, AuthPage, readAuthProfile, type AuthProfile } from './AuthPages';
 import { ContactPage, LandingPage, SupportPage } from './PublicPages';
+import { Footer } from './Footer';
 import { PreferencesControl, usePreferences } from './preferences';
 import {
   loadSessions,
@@ -21,6 +22,7 @@ import { accountClient, allHistory, fromHistory } from './history';
 function locationState() {
   return {
     path: window.location.pathname.replace(/\/$/, '') || '/',
+    search: window.location.search,
     session: new URLSearchParams(window.location.search).get('session'),
     hash: window.location.hash,
   };
@@ -129,17 +131,22 @@ export function App() {
   useEffect(() => {
     const back = () => setRoute(locationState());
     window.addEventListener('popstate', back);
-    return () => window.removeEventListener('popstate', back);
+    window.addEventListener('hashchange', back);
+    return () => {
+      window.removeEventListener('popstate', back);
+      window.removeEventListener('hashchange', back);
+    };
   }, []);
   useEffect(() => {
     document.title = `${route.path === '/tours' ? t('Tìm tour', 'Find tours') : route.path === '/auth' ? t('Tài khoản', 'Account') : 'Đi cùng'} · Đi cùng`;
   }, [route.path, t]);
   useEffect(() => {
-    if (route.hash)
-      document
-        .getElementById(route.hash.slice(1))
-        ?.scrollIntoView({ block: 'start', behavior: 'instant' });
-  }, [route.path, route.hash]);
+    if (route.hash) {
+      const target = document.getElementById(route.hash.slice(1));
+      target?.focus({ preventScroll: true });
+      target?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    }
+  }, [route]);
   const navigate = (url: string) => {
     window.history.pushState(null, '', url);
     setRoute(locationState());
@@ -535,8 +542,10 @@ export function App() {
               historyBusy={historyBusy}
             />
           )}
-          {route.path === '/contact' && <ContactPage />}
-          {route.path === '/support' && <SupportPage onStart={continueTours} />}
+          {route.path === '/contact' && (
+            <ContactPage requestedCategory={new URLSearchParams(route.search).get('category')} />
+          )}
+          {route.path === '/support' && <SupportPage onStart={continueTours} link={link} />}
           {route.path === '/tours' && (
             <>
               <div className="workspace-toolbar">
@@ -585,49 +594,7 @@ export function App() {
           )}
         </main>
       </div>
-      <footer className="page-footer">
-        <div className="footer-brand">
-          <strong>đi cùng</strong>
-          <p>
-            {t('So sánh có nguồn, lựa chọn có cơ sở.', 'Sourced comparisons. Informed choices.')}
-          </p>
-        </div>
-        {[
-          {
-            title: t('Sản phẩm & Công cụ', 'Product & Tools'),
-            links: [
-              ['/', t('Giới thiệu', 'About')],
-              ['/tours', t('Tìm tour', 'Find tours')],
-              ['/support', t('Cách so sánh tour', 'How to compare tours')],
-            ],
-          },
-          {
-            title: t('Tài khoản & Hỗ trợ', 'Account & Support'),
-            links: [
-              ['/account', t('Tài khoản', 'Account')],
-              ['/support', t('Hỗ trợ người dùng', 'User support')],
-              ['/contact', t('Liên hệ chúng tôi', 'Contact us')],
-            ],
-          },
-          {
-            title: t('Pháp lý & Bảo mật', 'Legal & Security'),
-            links: [
-              ['/support#privacy', t('Dữ liệu & quyền riêng tư', 'Data & privacy')],
-              ['/support#security', t('Quyền truy cập phiên', 'Session access')],
-              ['/support#scope', t('Phạm vi sử dụng', 'Scope of use')],
-            ],
-          },
-        ].map((group) => (
-          <nav key={group.title} aria-label={group.title}>
-            <h2>{group.title}</h2>
-            {group.links.map(([url, label]) => (
-              <a key={url} href={url} onClick={link(url)}>
-                {label}
-              </a>
-            ))}
-          </nav>
-        ))}
-      </footer>
+      <Footer link={link} />
       <Dialog
         open={drawer}
         onClose={() => setDrawer(false)}

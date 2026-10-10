@@ -12,6 +12,8 @@ Phạm vi: backend trên `backend`, Supabase chỉ đọc. Thay policy bắt bu�
 
 ## Các field dùng được
 
+10/10/2026: [Listed measure](recommendation-recovery-plan.md) cho phép adult amount của đúng offer tham gia hard cap niêm yết khi source/binding/normalization/freshness hợp lệ. Không cần payable pricing_complete cho phép so sánh này. Giữ from; không suy tổng thực trả hoặc phụ thu bằng 0. Các quy tắc price preview/qualifiers bên dưới áp dụng cho tính payable.
+
 - Nơi xuất phát, điểm đến, thời lượng, transport enum rõ, ngày khởi hành, route và nội dung itinerary/policies hiện có. Giá/availability text/single supplement vẫn là preview khi thiếu qualifiers/capacity/applicability.
 - Scalar được nhận là complete cho giá trị catalog đó; destinations/route là danh sách khai báo trong catalog, chỉ complete khi toàn bộ tên được chuẩn hóa, danh sách không rỗng. Có tên chưa biết → partial, không dùng absence làm fail. Transport mixed không được nhận là coach, không tự gán main_journey scope.
 - Nội dung đã làm sạch được giữ như excerpt của catalog; completeness unknown (hoặc partial khi bị cắt), không dùng để kết luận không có một dịch vụ chỉ vì không thấy trong đoạn. LLM phải trích đúng nội dung đã lưu, chạy sau hard-pass, chưa chấm uy tín/dịch vụ tốt/đáng tiền từ quảng cáo.

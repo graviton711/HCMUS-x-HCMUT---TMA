@@ -180,12 +180,19 @@ def test_japan_text_and_structured_have_identical_normalized_predicates(settings
                 x["field"]: (
                     x["operator"],
                     x["strength"],
-                    legacy_condition(ConditionV2.model_validate(x)).value.model_dump(),
+                    legacy_condition(ConditionV2.model_validate(x)).value.model_dump(
+                        exclude={"coverage_origin"}
+                    ),
                 )
                 for x in req["conditions"]
             }
 
         assert predicates(r) == predicates(structured)
+        for req in (r, structured):
+            assert (
+                next(c for c in req["conditions"] if c["field"] == "estimated_cost")["value"]["measure"]
+                == "listed"
+            )
 
 
 @pytest.mark.parametrize("change", ["soft", "near", "lower", "zero", "currency", "basis"])

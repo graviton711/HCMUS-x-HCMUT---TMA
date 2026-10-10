@@ -421,3 +421,39 @@ describe('processing activity', () => {
     expect(html).toContain('một phần dữ liệu');
   });
 });
+
+describe('listed tour price disclosure', () => {
+  it('preserves starting-price wording and keeps payable charges separate', () => {
+    const original = comparison().result!;
+    const priceRow = {
+      id: 'listed',
+      field: 'listed_price_quotes',
+      label: 'Giá tour niêm yết / người lớn',
+      scope: 'offer' as const,
+      value_type: 'price_list' as const,
+      unit: null,
+      order: 1,
+      condition_ids: [],
+    };
+    const priceCell = {
+      ...cell,
+      id: 'listed-cell',
+      row_id: 'listed',
+      value: [
+        {
+          kind: 'from',
+          amount: 10000000,
+          currency: 'VND',
+          basis: 'per_adult',
+          coverage: 'tour_price',
+        },
+      ],
+    };
+    const html = render(
+      comparison({ rows: [...original.rows, priceRow], cells: [...original.cells, priceCell] }),
+    );
+    expect(html).toContain('Từ');
+    expect(html).toContain('Giá tour niêm yết/người lớn');
+    expect(html).toContain('Phụ thu và tổng tiền thực trả cần xác nhận riêng');
+  });
+});

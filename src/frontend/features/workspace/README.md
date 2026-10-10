@@ -21,3 +21,6 @@ Interfaces: `useWorkspace` quản lý resources; `CriteriaForm` thu input và re
 - Lịch đi chọn một hoặc nhiều tháng dương lịch kèm năm, tối đa 12 tháng; tháng rời nhau có nghĩa OR. Mỗi tháng là khoảng ngày đầu/cuối tháng, không gồm các tháng nằm giữa hai lựa chọn. Thời lượng vẫn là ưu tiên `duration_days near` độc lập; chọn Bắt buộc thì dùng số ngày chính xác `eq`, không gửi `near hard`. Nhãn số ngày và control strength được gắn riêng để đọc đúng bằng screen reader.
 - Ngân sách có hai đầu kéo và ô nhập chính xác, VND/người lớn/giá tour; khoảng mới được gửi bằng `estimated_cost between hard` để lọc đúng range. Giữ strength đã có khi sửa nhu cầu cũ. Chưa thao tác thì chưa có ngân sách, không ngầm nhận giá mặc định trên slider. Hai đầu không vượt nhau; ô số cho phép nhập giá ngoài thang ban đầu.
 - Review ban đầu hiển thị đầy đủ các tháng, hai đầu giá và thời lượng. Lịch/ngân sách khác định dạng control được giữ nguyên khi sửa mục khác; nhóm ngày phức tạp sửa qua chat để bảo toàn cây.
+# Recommendation recovery
+
+Giá card/offer picker ưu tiên listed_price_quotes, giữ kind=from và ghi rõ niêm yết/phụ thu chưa xác nhận. Khung yêu cầu phân biệt measure listed/payable. [Contract](../../../../docs/recommendation-recovery-ui.md).

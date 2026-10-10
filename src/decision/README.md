@@ -1,8 +1,10 @@
 # Decision
 
+[Recovery policy](../../docs/recommendation-recovery-plan.md): decision-v2.5-listed kiểm listed budget riêng; không cần pricing_complete cho giá niêm yết đã xác nhận, không cộng phụ thu vào tiêu chí này. Payable estimator giữ bounds/completeness; kết quả listed có cảnh báo tổng thực trả chưa được xác nhận. What-if dùng cùng measure.
+
 [Sửa tìm tour](../../docs/search-correctness-repair.md): structured entity sets v2 dùng chung hierarchy; tách freshness missing-policy/stale/time-invalid; chọn offer unknown chỉ để đối chiếu, không nâng hard eligibility. Giữ v1 và bounds from/exact.
 
-Comparison mới công bố decision-v2.4-search; snapshot cũ không bị viết lại. Metadata giá đầy đủ nhận qua adapter catalog, evaluator vẫn dùng bounds/applicability/freshness hiện hành.
+Comparison mới công bố decision-v2.5-listed; snapshot cũ không bị viết lại. Metadata giá đầy đủ nhận qua adapter catalog, payable evaluator vẫn dùng bounds/applicability/freshness hiện hành. `analysis.cost_disclosures` giữ riêng nội dung bao gồm/không bao gồm/phụ thu và các terms của từng offer; chưa tính tổng trả thì ghi not_calculated.
 
 Phân tích what-if theo [policy](../../docs/what-if-analysis.md): evaluate universe trước pool, hard/soft group ablation, mức nới có bằng chứng và cặp blockers; cùng snapshot/time/party. `what_if.py` tính metrics/witnesses, `v2.py` dùng chung rank; không gọi model hoặc tự sửa requirement. DTO ở `domain/what_if.py`.
 

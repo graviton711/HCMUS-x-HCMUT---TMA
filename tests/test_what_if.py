@@ -106,7 +106,19 @@ def test_actionable_budget_bound_uses_actual_price_and_keeps_basis(case):
 
 @pytest.mark.parametrize("kind", ["from", "unverified", "foreign", "stale"])
 def test_no_actionable_price_from_unqualified_data(case, kind):
-    _, crawl = case
+    r, crawl = case
+    # This test checks guarantees on payable cost; listed "from" amounts have separate semantics.
+    r = r.model_copy(
+        update={
+            "conditions": [
+                c.model_copy(update={"value": c.value.model_copy(update={"measure": "payable"})})
+                if c.field == "estimated_cost"
+                else c
+                for c in r.conditions
+            ]
+        }
+    )
+    case = r, crawl
     q = offer(crawl, "tour-c").price_quotes[0]
     if kind == "from":
         q.value.kind = "from"

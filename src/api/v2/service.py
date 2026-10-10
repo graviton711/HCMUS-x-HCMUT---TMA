@@ -10,7 +10,6 @@ from api.v2.models import (
     Change,
     ComparisonV2,
     CreateProposal,
-    FormV2,
     Interpretation,
     Preferences,
     Proposal,
@@ -191,6 +190,17 @@ def typed_edits(previous, edits):
                     submitted_value={k: v for k, v in raw.items() if k != "sources"},
                 ).model_dump(),
             ]
+            from domain.semantic import BudgetV2
+
+            submitted = edit.condition.value if edit.condition else edit.value
+            if isinstance(submitted, BudgetV2) and "measure" not in submitted.model_fields_set:
+                raw["value"]["measure"] = (
+                    old["value"].get("measure", "payable")
+                    if old
+                    else "listed"
+                    if submitted.coverage == "tour_price"
+                    else "payable"
+                )
             new = ConditionV2.model_validate(raw)
             if old is None or old["strength"] != new.strength:
                 hard, soft = prune(hard, {cid}) or Tree(kind="all"), prune(soft, {cid}) or Tree(kind="all")
@@ -276,7 +286,7 @@ class Service:
         if body.input.kind == "structured":
             form = body.input.form
             core = form_requirement(
-                FormV2.model_validate(form.model_dump(exclude={"preference_levels", "notes"})),
+                form,
                 requirement_id=rid,
                 mode=common["mode"],
                 timezone=body.timezone,
@@ -675,6 +685,9 @@ class Service:
         if r.revision != body.revision:
             raise AppError("REVISION_CONFLICT", "Chỉ tìm theo revision hiện tại đã xác nhận.", 409)
         require_ready(r, "search")
+        from requirements.search_dates import require_future_departure
+
+        require_future_departure(r)
         pending = (
             c.execute(
                 select(state.proposals.c.id).where(

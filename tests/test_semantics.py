@@ -1143,7 +1143,7 @@ def test_old_v2_values_and_policy_remain_readable():
     r = RequirementV2.model_validate(old)
     assert r.policy_version == "requirements-v1" and r.conditions[0].value.kind == "set"
     updated = finalize_v2(r)
-    assert updated.policy_version == "requirements-v2.2"
+    assert updated.policy_version == "requirements-v2.3-listed"
     assert updated.readiness.status == "needs_clarification" and not updated.readiness.can_confirm
     assert updated.readiness.can_evaluate_hard_constraints
 

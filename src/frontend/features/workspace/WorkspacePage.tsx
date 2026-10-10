@@ -60,6 +60,7 @@ function showValue(value: JsonValue | ConditionValue | undefined, english = fals
           currency?: string;
           basis?: string;
           coverage?: string;
+          measure?: string;
         };
         const amount = (v: string | number) =>
           /^\d+$/.test(String(v))
@@ -89,7 +90,15 @@ function showValue(value: JsonValue | ConditionValue | undefined, english = fals
             : english
               ? 'tour price'
               : 'giá tour';
-        return `${amount(budget.amount)}${budget.upper ? ` — ${amount(budget.upper)}` : ''} ${budget.currency || ''} · ${basis} · ${coverage}`;
+        const measure =
+          budget.measure === 'listed'
+            ? english
+              ? 'listed price'
+              : 'giá niêm yết'
+            : english
+              ? 'payable cost'
+              : 'chi phí thực trả';
+        return `${amount(budget.amount)}${budget.upper ? ` — ${amount(budget.upper)}` : ''} ${budget.currency || ''} · ${basis} · ${coverage} · ${measure}`;
       }
       case 'entities':
         return (value as { members: { raw: string }[] }).members

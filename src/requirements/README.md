@@ -1,5 +1,7 @@
 # Requirements — hiểu và chuẩn hóa nhu cầu
 
+[Recovery](../../docs/recommendation-recovery-plan.md): text/form v2 mới khai báo BudgetV2.measure, tour_price mặc định listed, yêu cầu tổng/thực trả dùng payable. Value-only edits giữ measure cũ; shared v1 normalization không đổi. Date validation khi tìm mới không viết lại lịch sử.
+
 Catalog địa danh v2 và hierarchy structured/semantic theo [sửa tìm tour](../../docs/search-correctness-repair.md); alias được duyệt rõ ràng, không suy địa danh từ tên tour hoặc URL.
 
 Completeness v2 thuộc `completeness.py`, sau semantic normalization: năm thông tin cá nhân hóa, targeted questions và prerequisites confirm/search dùng chung. Giữ required/strength/data-proof độc lập; URL-only miễn, hybrid vẫn cần core. [Policy và answer contract](../../docs/personalized-requirement-policy.md).

@@ -142,11 +142,15 @@ class Engine:
             )
         if "public.providers" in sql:
             return Result(copy.deepcopy(self.providers))
-        if "public.tours" in sql:
+        if "public.tours" in sql and "SELECT offers.*" not in sql:
             if "provider_id IN" not in sql:
                 return Result(copy.deepcopy([t for t in self.tours if t["id"] in params["ids"]]))
             return Result(
-                copy.deepcopy([t for t in self.tours if t["provider_id"] in params["ids"]][: params["lim"]])
+                copy.deepcopy(
+                    [t for t in self.tours if t["provider_id"] in params["ids"]][
+                        params.get("offset", 0) : params.get("offset", 0) + params["lim"]
+                    ]
+                )
             )
         if "public.offers" in sql:
             groups = {tid: [] for tid in params["ids"]}

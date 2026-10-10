@@ -1052,6 +1052,14 @@
           ],
           "default": null
         },
+        "listed_price_quotes": {
+          "items": {
+            "$ref": "#/$defs/FactV2_PriceQuote_"
+          },
+          "maxItems": 3,
+          "title": "Listed Price Quotes",
+          "type": "array"
+        },
         "catalog_fields": {
           "additionalProperties": {
             "$ref": "#/$defs/FactV2_JsonValue_"

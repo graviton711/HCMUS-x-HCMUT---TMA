@@ -5,6 +5,7 @@
 - `storage.test.ts`: history theo owner không đọc nhầm lịch sử anonymous/owner khác; restore loại draft hỏng ở dữ liệu lồng nhau; bearer nằm ngoài history/export; access hết hạn bị từ chối; tìm nhiều từ có dấu và Đ/đ. Chỉ dùng browser storage của test, không dữ liệu hay token người dùng.
 - API/form tests: serialization, OR tháng rời nhau/năm nhuận, range giá/giá trần cũ, bảo toàn nhóm khác, contract và idempotency; integration harness gọi backend source thật khi dependencies sẵn sàng.
 - Fixtures/mock chỉ nằm trong test, không import vào runtime/build. Dùng deferred promise để kiểm tra race thay vì timeout dài hoặc simulate trong sản phẩm.
+- Footer/support: unit kiểm allowlist contact category và giữ nội dung khi query đổi, submit đúng category/key; browser kiểm link/focus/deep-link/back-forward/FAQ, VI/EN và hai theme ở desktop/mobile. Contact transport chỉ mock trong kiểm này, không gửi ticket/email thật.
 - Chạy `npm test`, `npm run typecheck`, `npm run lint`, `npm run build`; browser integration kiểm tra luồng thật và responsive sau các kiểm tra module.
 
 ## Browser integration
@@ -40,3 +41,6 @@ Account harness riêng: `uv run python tests/frontend_server.py --port 18001 --a
 Account browser kiểm xác nhận email chưa login, login, hydrate ở context sạch khác, rename/profile và archive đồng bộ. What-if browser lấy hard comparison/analysis/proposal actual từ isolated backend capture, intercept test-only và đổi origin trên bản test để qua gate synthetic; xác nhận không POST confirm/search. Screenshot `what-if-contract-test-*`, `account-auth-stub-*` là bằng chứng UI/test, không chứng minh nguồn tour/Google/email live.
 
 Ảnh riêng panel what-if tạm ẩn header/toolbar/skip link chỉ trong lúc chụp để các phần sticky không che nội dung ảnh dài; kiểm overflow và tương tác vẫn dùng giao diện đầy đủ.
+# Recommendation recovery
+
+Kiểm form mới listed và giữ payable khi sửa lịch sử; quá khứ theo timezone Việt Nam, tháng không liền nhau theo OR; card hiển thị giá niêm yết/from và phụ thu chưa xác nhận. Không gọi NIM/Supabase trong unit tests.

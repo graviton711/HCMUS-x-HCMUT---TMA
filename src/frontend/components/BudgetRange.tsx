@@ -131,8 +131,8 @@ export function BudgetRange({
       </div>
       <small>
         {t(
-          'Kéo hai đầu hoặc nhập khoảng giá chính xác. Chỉ tính giá tour.',
-          'Drag either end or enter exact amounts. Tour price only.',
+          'Trần giá tour niêm yết/người lớn. Phụ thu và tổng tiền thực trả được xác nhận riêng.',
+          'Listed tour price cap/adult. Surcharges and the final payable total are confirmed separately.',
         )}
       </small>
     </fieldset>

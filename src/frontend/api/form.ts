@@ -14,6 +14,7 @@ import type {
 import {
   directMonthReason,
   editMonths,
+  localToday,
   monthConditions,
   monthsFromRequirement,
   treesWithMonths,
@@ -33,6 +34,7 @@ export interface FormValues {
   budget: string;
   budgetMin: string;
   budgetBasis: 'per_adult' | 'per_person' | 'group_total';
+  budgetMeasure: 'listed' | 'payable';
   durationDays: string;
   hotelStars: string;
   shopping: 'any' | 'few' | 'none';
@@ -57,6 +59,7 @@ export const emptyForm: FormValues = {
   budget: '',
   budgetMin: '',
   budgetBasis: 'per_adult',
+  budgetMeasure: 'listed',
   durationDays: '',
   hotelStars: '',
   shopping: 'any',
@@ -109,6 +112,7 @@ export function formFromRequirement(requirement: Requirement): FormValues {
     result.budget = String(budget.upper ?? budget.amount);
     result.budgetMin = budget.upper != null ? String(budget.amount) : '';
     result.budgetBasis = budget.basis ?? 'per_adult';
+    result.budgetMeasure = budget.measure ?? 'payable';
   }
   result.durationDays = numeric(field('duration_days'));
   result.hotelStars = numeric(field('hotel_stars_min'));
@@ -203,6 +207,11 @@ function validateStructured(values: FormValues, requireCore: boolean, catalog?: 
     values.departureMonths.some((month) => !validMonth(month))
   )
     errors.departureMonths = 'Chọn tối đa 12 tháng, có tháng và năm hợp lệ.';
+  const today = localToday();
+  if (values.departureMonths.some((month) => validMonth(month) && month < today.slice(0, 7)))
+    errors.departureMonths = 'Tháng khởi hành đã qua. Chọn lại tháng và năm.';
+  if (values.departureDate && values.departureDate < today)
+    errors.departureDate = 'Ngày khởi hành đã qua. Chọn lại ngày.';
   for (const key of ['departureDate', 'returnDate'] as const)
     if (
       values[key] &&
@@ -295,6 +304,7 @@ function conditions(values: FormValues): FormCondition[] {
       values.budgetMin === '' ? 'lte' : 'between',
       {
         kind: 'budget',
+        measure: values.budgetMeasure,
         amount: Number(values.budgetMin === '' ? values.budget : values.budgetMin),
         ...(values.budgetMin === '' ? {} : { upper: Number(values.budget) }),
         currency: 'VND',
@@ -422,6 +432,8 @@ export function buildEdits(
   validateStructured(
     {
       ...values,
+      ...(same(values.departureMonths, before.departureMonths) ? { departureMonths: [] } : {}),
+      ...(values.departureDate === before.departureDate ? { departureDate: '' } : {}),
       ...(values.budget === before.budget && values.budgetMin === before.budgetMin
         ? { budget: '', budgetMin: '' }
         : {}),
@@ -470,8 +482,11 @@ export function buildEdits(
       control.field === 'estimated_cost' &&
       next.value.kind === 'budget' &&
       old.value.kind === 'budget'
-    )
+    ) {
       next.value.coverage_origin = old.value.coverage_origin;
+      next.value.coverage = old.value.coverage;
+      next.value.measure = old.value.measure ?? 'payable';
+    }
     const updated = {
       ...next,
       id: old.id,

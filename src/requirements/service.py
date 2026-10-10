@@ -18,7 +18,7 @@ from domain.requirements import (
     UnresolvedValue,
 )
 from requirements.extraction import Extraction
-from requirements.normalize import ground, money, normalize, normalize_party
+from requirements.normalize import fold, ground, money, normalize, normalize_party
 
 
 def conjunction(conditions: list[Condition], soft: bool) -> Tree:
@@ -54,7 +54,11 @@ def contradictions(r: Requirement) -> list[str]:
         if c.id not in required_ids(r.hard_tree) or isinstance(c.value, (UnresolvedValue, SetValue)):
             continue
         v = c.value
-        scope = (c.field, v.currency, v.basis, v.coverage) if isinstance(v, Budget) else (c.field,)
+        scope = (
+            (c.field, v.currency, v.basis, v.coverage, getattr(v, "measure", "payable"))
+            if isinstance(v, Budget)
+            else (c.field,)
+        )
         lower, upper, lower_closed, upper_closed = bounds.get(scope, (None, None, True, True))
         n = v.value if isinstance(v, DateValue) else Decimal(v.amount)
         hi = getattr(v, "upper", None)
@@ -269,12 +273,28 @@ def from_extraction(
                         amount = Decimal(values[key]) + delta
                         values[key] = int(amount) if old.value.currency == "VND" else format(amount, "f")
                 replacement = condition_model.model_validate(
-                    {**old.model_dump(), "value": Budget(**values), "sources": [*old.sources, ref]}
+                    {**old.model_dump(), "value": type(old.value)(**values), "sources": [*old.sources, ref]}
                 )
             elif op.op in {"add", "replace"}:
                 replacement = next(replacements)
                 if op.op == "replace":
                     replacement = replacement.model_copy(update={"id": old.id})
+                    if (
+                        isinstance(old.value, Budget)
+                        and hasattr(old.value, "measure")
+                        and isinstance(replacement.value, Budget)
+                    ):
+                        if not re.search(
+                            r"\b(?:niem yet|gia tour|thuc tra|phai tra|tong chi phi|toan bo|phu thu)\b",
+                            fold(op.quote),
+                        ):
+                            replacement = replacement.model_copy(
+                                update={
+                                    "value": replacement.value.model_copy(
+                                        update={"measure": old.value.measure}
+                                    )
+                                }
+                            )
                 elif any(c.id == replacement.id for c in conditions):
                     raise AppError("LLM_INVALID_OUTPUT", "ID điều kiện mới bị trùng.", 502)
             else:

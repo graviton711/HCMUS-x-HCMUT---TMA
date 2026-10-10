@@ -1,6 +1,16 @@
 import type { Condition, FormCondition, Requirement, Tree, TypedEdit } from './types';
 
 export const validMonth = (month: string) => /^[1-9]\d{3}-(0[1-9]|1[0-2])$/u.test(month);
+export function localToday(at = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(at);
+  const get = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)!.value;
+  return `${get('year')}-${get('month')}-${get('day')}`;
+}
 export function monthBounds(month: string) {
   const [year, number] = month.split('-').map(Number);
   const last = new Date(Date.UTC(year, number, 0)).getUTCDate();

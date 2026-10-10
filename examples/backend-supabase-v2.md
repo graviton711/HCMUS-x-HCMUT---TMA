@@ -1,6 +1,8 @@
 # Test backend v2 với kho tour Supabase thật
 
-Ngày 08/10/2026: reader đã đọc được 1 provider, 234 tours và 2.373 offers. Đây là dữ liệu crawler trong Supabase. Session/requirement/proposal/job/comparison vẫn ở `data/backend.db`; backend không ghi vào ba bảng catalog.
+Hướng dẫn hiện hành: [test recovery ngày 10/10](backend-recommendation-recovery.md), [kết quả kiểm chứng](../docs/recommendation-recovery-verification.md). Ngân sách mới mặc định kiểm **giá tour niêm yết**, giữ giá từ và báo phụ thu riêng; snapshot cũ thiếu measure vẫn kiểm payable.
+
+Ngày 10/10/2026: kho có 3 providers, 1.210 tours và 3.319 offers. Đây là dữ liệu crawler trong Supabase. Session/requirement/proposal/job/comparison vẫn ở `data/backend.db`; backend không ghi vào ba bảng catalog.
 
 ## 1. Khởi động
 
@@ -71,12 +73,13 @@ Kết quả nằm ở **`data.result`**:
 |---|---|
 | `origin` | `source` là catalog thật |
 | `columns` | Tour và `offer_options` cho các lịch khởi hành |
-| `cells`, row `published_price` | Giá công bố; `kind=from` là giá từ, basis/coverage chưa xác nhận |
-| `evaluations` | `unknown` khi thiếu bằng chứng/freshness; không kết luận đạt budget |
+| `cells`, row `listed_price_quotes` | Giá niêm yết của đúng lịch/người lớn; `kind=from` giữ là giá từ, không bảo đảm tổng tiền thực trả |
+| `cells`, row `published_price` | Raw giá công bố để đối chiếu khi chưa có listed quote usable |
+| `evaluations` | Đọc measure listed/payable và pass/fail/unknown riêng; thiếu dữ kiện/freshness không được coi đạt |
 | `recommendations.items`, `empty_reason` | Có thể rỗng dù có tour để tham khảo; ONLY_UNVERIFIED khi chưa chứng minh được điều kiện |
 | `source_coverage`, `warnings` | Partial, unresolved places, dữ liệu thiếu proof, truncation |
 
-Với kho hiện tại, smoke text sau sửa trả 20 tour, 20 preview giá, evaluations unknown và không có recommendation cá nhân hóa. SQL ưu tiên địa danh match nhưng không loại hàng chưa kiểm chứng như hard fail. Do vậy cột tham khảo có thể chưa khớp tất cả nhu cầu; đọc evaluations trước quyết định.
+Ở lần kiểm tra 10/10, dữ liệu ngày/giá mới nhất đã quá TTL 24 giờ; chưa có recommendation. Riêng Nhật Bản từ TP.HCM trong tháng 11/2026 với giá <=30 triệu không có lịch raw phù hợp. Dùng ca 40 triệu trong hướng dẫn mới và crawl lại nguồn trước khi kiểm positive; không tự nới ngân sách user. SQL ưu tiên địa danh/ngày/giá trước scan giới hạn; evaluator vẫn giữ hàng chưa đủ dữ kiện là unknown.
 
 ## 5. Test URL và hybrid
 
@@ -106,9 +109,9 @@ Lấy một evidence_id trong cell → `GET /v2/evidence/{eid}`. `method=databas
 
 ## Việc team cần bổ sung tiếp
 
-Crawler: field proofs theo [CatalogFieldProof](../src/data_access/supabase/README.md), price kind/basis/coverage/age brackets, scope transport, cadence từng field. Hiện chỉ có một provider và mọi origin là TP.HCM; ca Hải Phòng chưa có dữ liệu phù hợp để chứng minh.
+Crawler: cập nhật ngày/giá thực sự đã quan sát theo [handoff](backend-recommendation-recovery.md). Website proof là bổ sung cho nguồn opt-in, không cần backfill toàn kho. Metadata pricing/age brackets cần cho chi phí thực trả và nhóm có trẻ em; scope transport cần cho yêu cầu phương tiện.
 
-Frontend: nối API v2, hiển thị from-price/raw provenance/unknown/partial/truncation, proposal confirm và job polling. Prototype hiện vẫn dùng dữ liệu mẫu; thay DATA_PROVIDER chỉ chuyển nguồn backend.
+Frontend React đã nối API v2, review/confirm và polling. Phần recovery ở worktree feature/minh-phu bổ sung measure giá niêm yết, phụ thu và chặn tháng quá khứ; cần chạy đúng checkout được ghi trong hướng dẫn mới.
 # Policy dữ liệu hiện hành
 
 [catalog-validation-v1](../docs/catalog-validation-policy.md) cho phép field đã kiểm tra thuộc nguồn opt-in tham gia lọc, không cần proof từng field. [Cấu hình](backend-catalog-validation.md) và [nghiệm thu](../docs/backend-catalog-validation-verification.md). Các ví dụ/baseline `unverified` bên dưới áp dụng cho nguồn chưa opt-in hoặc field thiếu nghĩa dữ liệu, không là trạng thái mặc định của mọi field catalog.
