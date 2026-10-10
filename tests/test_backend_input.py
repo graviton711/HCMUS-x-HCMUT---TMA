@@ -18,7 +18,7 @@ def _mock_nim(payload: dict) -> NimClient:
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(payload)}}]})
 
     return NimClient("key", "model", 9.0,
-                     prompt=PromptCfg(system="s", max_tokens=64, temperature=0),
+                     prompt=PromptCfg(system="s", max_tokens=64, temperature=0, timeout_s=5),
                      transport=httpx.MockTransport(handler))
 
 

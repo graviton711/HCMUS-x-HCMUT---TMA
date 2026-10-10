@@ -58,7 +58,8 @@ backend:
     freshness_seconds: {departure_date: 86400, price: 86400}
   nim:
     model: "nvidia/nemotron-3-super-120b-a12b"
-    timeout_s: 120.0
+    timeout_s: 45.0
+    connect_timeout_s: 10.0
   input:
     money_units: {"tỷ": 1000000000, "tỉ": 1000000000, "ty": 1000000000, "ti": 1000000000,
       "triệu": 1000000, "tr": 1000000, "trieu": 1000000,

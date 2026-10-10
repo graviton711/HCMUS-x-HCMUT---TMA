@@ -21,6 +21,7 @@ class PromptCfg(BaseModel):
     system: str
     max_tokens: int
     temperature: float
+    timeout_s: float
 
 
 class InputCfg(BaseModel):
@@ -114,7 +115,8 @@ def _read_prompt(path: str | Path | None, name: str) -> dict[str, Any]:
         raise ValueError(f"Prompt must be a mapping: {resolved}")
     return {"system": data.get("system"),
             "max_tokens": data.get("max_tokens"),
-            "temperature": data.get("temperature")}
+            "temperature": data.get("temperature"),
+            "timeout_s": data.get("timeout_s")}
 
 
 # YAML key -> flat Settings field. Env var of the same name wins over YAML.
@@ -127,6 +129,7 @@ _FLAT_MAP = {
     ("data", "scan_limit"): "supabase_scan_limit",
     ("nim", "model"): "nvidia_nim_model",
     ("nim", "timeout_s"): "nim_timeout_seconds",
+    ("nim", "connect_timeout_s"): "nim_connect_timeout_s",
 }
 
 
@@ -147,6 +150,7 @@ class Settings(BaseSettings):
     nvidia_nim_api: SecretStr = SecretStr("")
     nvidia_nim_model: str
     nim_timeout_seconds: float
+    nim_connect_timeout_s: float
 
     tuning: Tuning
 

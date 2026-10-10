@@ -12,7 +12,7 @@ backend:
   api: {host: "127.0.0.1", port: 8000, candidate_default: 7, candidate_min: 1, candidate_max: 100,
     session_ttl_seconds: 2592000}
   data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3}
-  nim: {model: test-model, timeout_s: 9}
+  nim: {model: test-model, timeout_s: 9, connect_timeout_s: 4}
   input: {money_units: {trieu: 1000000}, budget_words: [bw], departure_markers: [dm],
     required_slots: [destination], window_before: 5, window_budget: 9, quote_chars: 9}
   decide: {soft_fields: [itinerary], excerpt_chars: 99, quote_chars: 9,
@@ -25,10 +25,10 @@ def _configs(tmp_path, yaml_text=_YAML, extract="EXTRACT!", assess="ASSESS!"):
     (root / "prompts").mkdir(parents=True)
     (root / "settings.yaml").write_text(yaml_text, encoding="utf-8")
     (root / "prompts" / "extract.yaml").write_text(
-        f"description: t\nmax_tokens: 11\ntemperature: 0.5\nsystem: |\n  {extract}\n",
+        f"description: t\nmax_tokens: 11\ntemperature: 0.5\ntimeout_s: 30\nsystem: |\n  {extract}\n",
         encoding="utf-8")
     (root / "prompts" / "assess.yaml").write_text(
-        f"description: t\nmax_tokens: 22\ntemperature: 0.5\nsystem: |\n  {assess}\n",
+        f"description: t\nmax_tokens: 22\ntemperature: 0.5\ntimeout_s: 60\nsystem: |\n  {assess}\n",
         encoding="utf-8")
     return root
 
@@ -40,6 +40,9 @@ def test_yaml_tuning_and_prompts_loaded(tmp_path):
     assert settings.supabase_scan_limit == 50
     assert settings.nvidia_nim_model == "test-model"
     assert settings.nim_timeout_seconds == 9
+    assert settings.nim_connect_timeout_s == 4
+    assert settings.tuning.extract.timeout_s == 30
+    assert settings.tuning.assess.timeout_s == 60
     assert settings.tuning.input.budget_words == ["bw"]
     assert settings.tuning.input.required_slots == ["destination"]
     assert settings.tuning.decide.top_n == 1
