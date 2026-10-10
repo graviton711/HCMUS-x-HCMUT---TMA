@@ -8,6 +8,7 @@ import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
 import { CriteriaForm, PreferenceSliders } from './CriteriaForm';
 import { Activity, Results } from './Results';
+import { WhatIfPanel } from './WhatIfPanel';
 import type { useWorkspace } from './useWorkspace';
 
 type Workspace = ReturnType<typeof useWorkspace>;
@@ -560,7 +561,10 @@ export function WorkspacePage({
                           s.busy ||
                           dirty ||
                           s.proposal.status !== 'pending' ||
-                          !s.proposal.preview.readiness.can_collect_data
+                          !(
+                            s.proposal.preview.readiness.can_confirm ??
+                            s.proposal.preview.readiness.can_collect_data
+                          )
                         }
                         onClick={() => void w.confirm()}
                       >
@@ -645,6 +649,20 @@ export function WorkspacePage({
                   onOfferChange={(tourId, offerId) => void w.offerChange(tourId, offerId)}
                   onEvidence={(id) => void w.openEvidence(id)}
                 />
+                {s.comparison?.result?.origin === 'source' && (
+                  <WhatIfPanel
+                    analysis={
+                      s.whatIf?.result?.comparison_id === s.comparison.id &&
+                      s.whatIf.result.revision === s.requirement?.revision
+                        ? s.whatIf
+                        : null
+                    }
+                    disabled={s.busy || !!s.proposal || dirty || outdated}
+                    onAnalyze={() => void w.analyze()}
+                    onApply={(id) => void w.applyScenario(id)}
+                    onEvidence={(id) => void w.openEvidence(id)}
+                  />
+                )}
               </div>
             </div>
           )}
@@ -770,9 +788,11 @@ export function WorkspacePage({
                   <dd>
                     {w.evidence.quality.verification === 'independently_verified'
                       ? t('Đã xác minh độc lập', 'Independently verified')
-                      : w.evidence.quality.verification === 'supplier_published'
-                        ? t('Nhà cung cấp công bố', 'Supplier published')
-                        : t('Chưa xác minh', 'Unverified')}
+                      : w.evidence.quality.verification === 'catalog_validated'
+                        ? t('Đã kiểm tra bản ghi catalog', 'Catalog record validated')
+                        : w.evidence.quality.verification === 'supplier_published'
+                          ? t('Nhà cung cấp công bố', 'Supplier published')
+                          : t('Chưa xác minh', 'Unverified')}
                   </dd>
                 </div>
                 <div>

@@ -23,6 +23,9 @@ export interface LocalSession {
   comparisonId: string | null;
   pendingComparisonId: string | null;
   jobId: string | null;
+  analysisId?: string | null;
+  historyVersion?: number;
+  serverHydrated?: boolean;
   pendingMessageId: string | null;
   runs: SavedRun[];
   chat: ChatLine[];

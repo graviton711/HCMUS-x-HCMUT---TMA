@@ -75,6 +75,14 @@ Mở **http://127.0.0.1:5173** → Tìm tour → Tiếp tục với phiên ẩn 
 Có chọn nhiều tháng/năm, khoảng ngân sách, thời lượng, form/chat/proposal, history cục bộ, comparison/evidence/activity, Việt/Anh và sáng/tối. Auth user/full history còn thiếu, xem [giới hạn tích hợp](src/frontend/BACKEND-GAPS.md) và [contract auth adapter](src/frontend/app/AUTH-ADAPTER.md).
 
 Preview chung dự kiến dùng **frontend Vercel nối backend riêng** để người xem chỉ mở link. [Cấu hình và phụ thuộc Vercel](docs/frontend-vercel-preview.md) mô tả phần cần chuẩn bị; repo chưa có link deploy được xác nhận.
+Frontend React + TypeScript + Vite nằm tại [src/frontend](src/frontend/README.md). Nếu terminal chưa nhận `pnpm` nhưng có Corepack, chạy từ repo root:
+
+```powershell
+corepack pnpm --dir src/frontend install --frozen-lockfile
+corepack pnpm --dir src/frontend dev
+```
+
+Mở `http://127.0.0.1:5173/`; backend local ở port 8000. Nếu dùng lệnh `pnpm` trực tiếp, phải chạy trong `src/frontend`, nơi có package.json/script dev. Có form/chat/proposal, history tài khoản + draft cục bộ, comparison/evidence/activity/what-if, Việt/Anh và sáng/tối. Backend cần provider dữ liệu thật để tìm kiếm; Supabase Auth adapter và lịch sử server đã nối, xem [hướng dẫn đăng nhập/what-if](examples/frontend-account-what-if.md), [giới hạn tích hợp](src/frontend/BACKEND-GAPS.md) và [contract auth adapter](src/frontend/app/AUTH-ADAPTER.md).
 
 - [Prototype frontend](prototypes/frontend-design/README.md)
 - [Flow và trạng thái UI](docs/frontend-flows.md)

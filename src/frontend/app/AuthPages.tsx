@@ -3,159 +3,20 @@ import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
 import { usePreferences } from './preferences';
 
-export interface AuthProfile {
-  id: string;
-  name: string;
-  username: string;
-  google_email?: string | null;
-  has_password?: boolean;
-}
-interface AuthSession {
-  token: string | null;
-  profile: AuthProfile;
-}
-const authKey = 'di-cung-identity-v1';
-const configuredBase = import.meta.env.VITE_AUTH_BASE_URL?.trim() as string | undefined;
-const googleEnabled = import.meta.env.VITE_AUTH_GOOGLE_ENABLED === 'true';
-let activeSession: AuthSession | null = null;
-let sessionLoaded = false;
-export const hasAuthConfiguration = Boolean(configuredBase);
-function authBase() {
-  if (!configuredBase) throw new Error('Account sign-in is unavailable.');
-  const url = new URL(configuredBase, window.location.origin);
-  if (
-    !['http:', 'https:'].includes(url.protocol) ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash
-  )
-    throw new Error('The account service address is invalid.');
-  return url.href.replace(/\/$/, '');
-}
-function profileFrom(value: unknown): AuthProfile {
-  if (!value || typeof value !== 'object')
-    throw new Error('The account service returned an invalid profile.');
-  const candidate = value as Record<string, unknown>;
-  const profile =
-    candidate.user && typeof candidate.user === 'object'
-      ? (candidate.user as Record<string, unknown>)
-      : candidate;
-  if (
-    typeof profile.id !== 'string' ||
-    typeof profile.name !== 'string' ||
-    typeof profile.username !== 'string'
-  )
-    throw new Error('The account service returned an incomplete profile.');
-  return {
-    id: profile.id,
-    name: profile.name,
-    username: profile.username,
-    ...(typeof profile.google_email === 'string' || profile.google_email === null
-      ? { google_email: profile.google_email }
-      : {}),
-    ...(typeof profile.has_password === 'boolean' ? { has_password: profile.has_password } : {}),
-  };
-}
-function readSession(): AuthSession | null {
-  if (sessionLoaded) return activeSession;
-  sessionLoaded = true;
-  try {
-    if (!configuredBase) return null;
-    const raw = JSON.parse(sessionStorage.getItem(authKey) ?? 'null') as Record<
-      string,
-      unknown
-    > | null;
-    if (
-      !raw ||
-      raw.service !== configuredBase ||
-      !(raw.token === null || typeof raw.token === 'string')
-    )
-      return null;
-    activeSession = { token: raw.token, profile: profileFrom(raw.profile) };
-    return activeSession;
-  } catch {
-    return null;
-  }
-}
-export function readAuthProfile() {
-  return readSession()?.profile ?? null;
-}
-function saveSession(session: AuthSession | null) {
-  activeSession = session;
-  sessionLoaded = true;
-  try {
-    if (session)
-      sessionStorage.setItem(authKey, JSON.stringify({ service: configuredBase, ...session }));
-    else sessionStorage.removeItem(authKey);
-  } catch {
-    /* Active account still works without tab persistence. */
-  }
-}
-async function authRequest(
-  path: string,
-  body?: object,
-  method = body ? 'POST' : 'GET',
-  signal?: AbortSignal,
-): Promise<unknown> {
-  const token = readSession()?.token;
-  const response = await fetch(`${authBase()}${path}`, {
-    method,
-    credentials: 'include',
-    signal,
-    headers: {
-      Accept: 'application/json',
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  let data: unknown = null;
-  try {
-    data = await response.json();
-  } catch {
-    if (response.ok && response.status !== 204)
-      throw new Error('The account service returned an unreadable response.');
-  }
-  if (!response.ok) {
-    if (response.status === 401) saveSession(null);
-    const candidate = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
-    const nested =
-      candidate.error && typeof candidate.error === 'object'
-        ? (candidate.error as Record<string, unknown>)
-        : {};
-    throw new Error(
-      typeof nested.message === 'string'
-        ? nested.message
-        : typeof candidate.message === 'string'
-          ? candidate.message
-          : `Account service error (${response.status}).`,
-    );
-  }
-  return data;
-}
-async function currentProfile(signal?: AbortSignal) {
-  const profile = profileFrom(await authRequest('/auth/me', undefined, 'GET', signal));
-  saveSession({ token: readSession()?.token ?? null, profile });
-  return profile;
-}
-async function startGoogle() {
-  const result = await authRequest('/auth/google/start', {
-    return_url: new URL(`${import.meta.env.BASE_URL}auth`, window.location.origin).href,
-  });
-  const redirect =
-    result && typeof result === 'object' ? (result as Record<string, unknown>).redirect_url : null;
-  if (typeof redirect !== 'string')
-    throw new Error('The account service did not provide a sign-in link.');
-  const target = new URL(redirect, window.location.origin);
-  if (
-    target.username ||
-    target.password ||
-    (target.protocol !== 'https:' && target.origin !== window.location.origin)
-  )
-    throw new Error('The sign-in link is not secure.');
-  window.location.assign(target.href);
-}
+import {
+  authConfig,
+  authRequest,
+  clearAuth,
+  currentProfile,
+  finishGoogle,
+  profileFrom,
+  readAuthProfile,
+  returnUrl,
+  saveAuth,
+  startGoogle,
+  type AuthProfile,
+} from './auth';
+export { readAuthProfile, type AuthProfile } from './auth';
 function GoogleSymbol() {
   return (
     <svg className="google-symbol" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
@@ -199,7 +60,7 @@ function PasswordField({
           id={name}
           type={visible ? 'text' : 'password'}
           required
-          minLength={8}
+          minLength={autoComplete === 'current-password' ? 1 : 8}
           maxLength={128}
           autoComplete={autoComplete}
           disabled={disabled}
@@ -239,18 +100,35 @@ export function AuthPage({
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
+  const [config, setConfig] = useState({
+    enabled: false,
+    email_enabled: false,
+    google_enabled: false,
+  });
+  const [success, setSuccess] = useState('');
+  const hasAuthConfiguration = config.enabled && config.email_enabled;
+  const googleEnabled = config.enabled && config.google_enabled;
   const register = mode === 'register';
   const authenticatedCallback = useRef(onAuthenticated);
   useEffect(() => {
     authenticatedCallback.current = onAuthenticated;
   }, [onAuthenticated]);
   useEffect(() => {
-    if (!hasAuthConfiguration) return;
     const controller = new AbortController();
-    void currentProfile(controller.signal)
-      .then((profile) => authenticatedCallback.current?.(profile))
-      .catch(() => {
-        /* A visitor may not have an account session. */
+    void authConfig(controller.signal)
+      .then(setConfig)
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted)
+          setError(cause instanceof Error ? cause.message : 'Chưa tải được cấu hình tài khoản.');
+      });
+    void finishGoogle()
+      .then(async (profile) => profile ?? (readAuthProfile() ? await currentProfile() : null))
+      .then((profile) => {
+        if (!controller.signal.aborted && profile) authenticatedCallback.current?.(profile);
+      })
+      .catch((cause: unknown) => {
+        if (!controller.signal.aborted)
+          setError(cause instanceof Error ? cause.message : 'Chưa đăng nhập được.');
       });
     return () => controller.abort();
   }, []);
@@ -265,12 +143,9 @@ export function AuthPage({
     const confirmation = String(values.get('password_confirmation') ?? '');
     const invalid: Record<string, string> = {};
     if (register && !name) invalid.name = t('Nhập họ và tên.', 'Enter your full name.');
-    if (username.length < 3 || username.length > 32)
-      invalid.username = t(
-        'Tên tài khoản cần từ 3 đến 32 ký tự.',
-        'Your username must have 3–32 characters.',
-      );
-    if (password.length < 8)
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(username) || username.length > 254)
+      invalid.username = t('Nhập địa chỉ email hợp lệ.', 'Enter a valid email address.');
+    if (password.length < (register ? 8 : 1))
       invalid.password = t(
         'Mật khẩu cần ít nhất 8 ký tự.',
         'Use at least 8 characters for your password.',
@@ -291,22 +166,31 @@ export function AuthPage({
       const result = await authRequest(
         register ? '/auth/register' : '/auth/login',
         register
-          ? { name, username, password, password_confirmation: confirmation }
-          : { username, password },
+          ? {
+              name,
+              email: username,
+              password,
+              password_confirmation: confirmation,
+              return_url: returnUrl(),
+            }
+          : { email: username, password },
       );
-      const profile = profileFrom(result);
-      const token =
-        result && typeof result === 'object'
-          ? (result as Record<string, unknown>).access_token
-          : null;
-      if (typeof token !== 'string' || !token)
-        throw new Error(
+      if (
+        result &&
+        typeof result === 'object' &&
+        'status' in result &&
+        result.status === 'confirmation_required'
+      ) {
+        form.reset();
+        setSuccess(
           t(
-            'Dịch vụ tài khoản chưa trả về phiên đăng nhập hợp lệ.',
-            'The account service did not return a valid sign-in session.',
+            'Kiểm tra email để xác nhận tài khoản, sau đó quay lại đăng nhập.',
+            'Check your email to confirm your account, then sign in.',
           ),
         );
-      saveSession({ token, profile });
+        return;
+      }
+      const profile = saveAuth(result);
       form.reset();
       if (onAuthenticated) onAuthenticated(profile);
       else onContinue();
@@ -423,7 +307,7 @@ export function AuthPage({
             onClick={() => {
               void google();
             }}
-            disabled={!hasAuthConfiguration || !googleEnabled || busy}
+            disabled={!googleEnabled || busy}
           >
             <GoogleSymbol />
             {t('Tiếp tục bằng Google', 'Continue with Google')}
@@ -451,7 +335,7 @@ export function AuthPage({
               </label>
             )}
             <label className="field" htmlFor="auth-username">
-              {t('Tên tài khoản', 'Username')}
+              {t('Email', 'Email')}
               <input
                 id="auth-username"
                 name="username"
@@ -459,7 +343,8 @@ export function AuthPage({
                 autoCapitalize="none"
                 spellCheck={false}
                 minLength={3}
-                maxLength={32}
+                maxLength={254}
+                type="email"
                 required
                 disabled={!hasAuthConfiguration || busy}
                 aria-invalid={Boolean(errors.username)}
@@ -481,6 +366,11 @@ export function AuthPage({
                 error={errors.password_confirmation}
                 disabled={!hasAuthConfiguration || busy}
               />
+            )}
+            {success && (
+              <p className="success-text" role="status">
+                {success}
+              </p>
             )}
             {error && (
               <p className="notice notice-error" role="alert">
@@ -526,6 +416,8 @@ export interface AccountPageProps {
   onExportHistory?: () => void;
   onDeleteHistory?: () => void;
   sessionCount?: number;
+  onLinkGuestHistory?: () => void;
+  historyBusy?: boolean;
 }
 export function AccountPage({
   onContinue,
@@ -535,6 +427,8 @@ export function AccountPage({
   onExportHistory,
   onDeleteHistory,
   sessionCount,
+  onLinkGuestHistory,
+  historyBusy,
 }: AccountPageProps) {
   const { t } = usePreferences();
   const [profile, setProfile] = useState<AuthProfile | null>(readAuthProfile);
@@ -543,7 +437,7 @@ export function AccountPage({
   const [success, setSuccess] = useState('');
   const [deleteOpen, setDeleteOpen] = useState(false);
   useEffect(() => {
-    if (!hasAuthConfiguration) return;
+    if (!readAuthProfile()) return;
     const controller = new AbortController();
     void currentProfile(controller.signal)
       .then(setProfile)
@@ -564,8 +458,7 @@ export function AccountPage({
     if (busy) return;
     const values = new FormData(event.currentTarget);
     const name = String(values.get('name') ?? '').trim();
-    const username = String(values.get('username') ?? '').trim();
-    if (!name || username.length < 3) {
+    if (!name) {
       setError(t('Kiểm tra họ tên và tên tài khoản.', 'Check your full name and username.'));
       return;
     }
@@ -573,8 +466,8 @@ export function AccountPage({
     setError('');
     setSuccess('');
     try {
-      const next = profileFrom(await authRequest('/auth/me', { name, username }, 'PATCH'));
-      saveSession({ token: readSession()?.token ?? null, profile: next });
+      const next = profileFrom(await authRequest('/auth/me', { name }, 'PATCH'));
+      await currentProfile();
       setProfile(next);
       onProfileChanged?.(next);
       setSuccess(t('Đã lưu thông tin cá nhân.', 'Your profile has been saved.'));
@@ -594,7 +487,7 @@ export function AccountPage({
     setError('');
     try {
       await authRequest('/auth/logout', {}, 'POST');
-      saveSession(null);
+      clearAuth();
       setProfile(null);
       onSignedOut?.();
     } catch (cause) {
@@ -738,8 +631,8 @@ export function AccountPage({
             <h2>{t('Thông tin cá nhân', 'Personal information')}</h2>
             <p>
               {t(
-                'Tên hiển thị giúp cuộc trò chuyện gần gũi hơn. Tên tài khoản dùng để đăng nhập.',
-                'Your display name personalises your conversations. Your username is used to sign in.',
+                'Bạn có thể đổi tên hiển thị. Email được dùng để đăng nhập.',
+                'You can change your display name. Your email is used to sign in.',
               )}
             </p>
             <form
@@ -760,16 +653,17 @@ export function AccountPage({
                   />
                 </label>
                 <label className="field">
-                  {t('Tên tài khoản', 'Username')}
+                  {t('Email', 'Email')}
                   <input
                     name="username"
                     autoComplete="username"
                     autoCapitalize="none"
                     required
                     minLength={3}
-                    maxLength={32}
+                    maxLength={254}
+                    type="email"
                     defaultValue={profile.username}
-                    disabled={busy}
+                    readOnly
                   />
                 </label>
               </div>
@@ -819,20 +713,32 @@ export function AccountPage({
                     'Các phiên tìm tour trên trình duyệt này.',
                     'The tour sessions kept in this browser.',
                   )
-                : t(
-                    `${sessionCount} phiên trên trình duyệt này.`,
-                    `${sessionCount} sessions in this browser.`,
-                  )}{' '}
+                : t(`${sessionCount} phiên đang hiển thị.`, `${sessionCount} sessions shown.`)}{' '}
               {t(
-                'Lịch sử chưa đồng bộ sang thiết bị khác.',
-                'History is not yet synced to other devices.',
+                'Nhu cầu đã gửi và cuộc trò chuyện được đồng bộ với tài khoản; bản nháp chưa gửi nằm trên trình duyệt.',
+                'Submitted requirements and conversations are synced with your account; unsent drafts stay in this browser.',
               )}
             </p>
             <HistoryActions
               onExportHistory={onExportHistory}
               onDeleteHistory={() => setDeleteOpen(true)}
               canDelete={Boolean(onDeleteHistory)}
+              account
+              busy={historyBusy}
             />
+            {onLinkGuestHistory && (
+              <>
+                <p>
+                  {t(
+                    'Nhập các phiên ẩn danh còn quyền truy cập trong tab này vào tài khoản. Phiên đang chạy cần hoàn tất trước.',
+                    'Import anonymous sessions accessible in this tab into your account. Active jobs must finish first.',
+                  )}
+                </p>
+                <button className="btn" disabled={historyBusy} onClick={onLinkGuestHistory}>
+                  {t('Nhập lịch sử ẩn danh vào tài khoản', 'Import anonymous history')}
+                </button>
+              </>
+            )}
           </section>
         </div>
       </div>
@@ -843,8 +749,8 @@ export function AccountPage({
       >
         <p>
           {t(
-            'Các phiên đã lưu trên trình duyệt này sẽ bị xóa.',
-            'The sessions kept in this browser will be deleted.',
+            'Các phiên hiển thị sẽ được ẩn khỏi lịch sử tài khoản. Tác vụ và dữ kiện vẫn theo thời hạn lưu của backend.',
+            'Displayed sessions will be archived from your account history. Jobs and evidence follow backend retention.',
           )}
         </p>
         <div className="dialog-actions">
@@ -869,10 +775,14 @@ function HistoryActions({
   onExportHistory,
   onDeleteHistory,
   canDelete,
+  account = false,
+  busy = false,
 }: {
   onExportHistory?: () => void;
   onDeleteHistory: () => void;
   canDelete: boolean;
+  account?: boolean;
+  busy?: boolean;
 }) {
   const { t } = usePreferences();
   return (
@@ -887,25 +797,33 @@ function HistoryActions({
             )}
           </p>
         </div>
-        <button className="btn" onClick={onExportHistory} disabled={!onExportHistory}>
+        <button className="btn" onClick={onExportHistory} disabled={!onExportHistory || busy}>
           <Icon name="download" />
           {t('Xuất dữ liệu', 'Export data')}
         </button>
       </div>
       <div className="data-action-row">
         <div>
-          <h3>{t('Xóa lịch sử tìm tour', 'Delete tour history')}</h3>
+          <h3>
+            {account
+              ? t('Ẩn lịch sử tài khoản', 'Archive account history')
+              : t('Xóa lịch sử tìm tour', 'Delete tour history')}
+          </h3>
           <p>
             {t(
-              'Xóa các phiên được lưu trên trình duyệt này.',
-              'Remove the sessions saved in this browser.',
+              account
+                ? 'Ẩn các hội thoại khỏi danh sách trên mọi thiết bị. Bản nháp chưa gửi được xóa trên máy này.'
+                : 'Xóa các phiên được lưu trên trình duyệt này.',
+              account
+                ? 'Hide conversations on all devices. Unsent drafts are removed from this browser.'
+                : 'Remove the sessions saved in this browser.',
             )}
           </p>
         </div>
         <button
           className="text-action danger-action"
           onClick={onDeleteHistory}
-          disabled={!canDelete}
+          disabled={!canDelete || busy}
         >
           {t('Xóa lịch sử', 'Delete history')}
         </button>

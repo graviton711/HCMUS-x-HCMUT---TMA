@@ -3,7 +3,7 @@
 from domain.semantic import EntityMember, EntitySetValue
 from requirements.normalize import ALIASES, PLACE_PARENTS, fold
 
-CATALOG_VERSION = "tour-entities-v2.1"
+CATALOG_VERSION = "tour-entities-v2.2"
 TYPE_BY_FIELD = {
     "destinations": "place",
     "departure_origin": "place",
@@ -26,6 +26,18 @@ PLACE_ENTRIES = {
     "city:vn:buonmathuot": ["Buôn Ma Thuột", "Buon Ma Thuot"],
     "city:vn:quynhon": ["Quy Nhơn", "Quy Nhon"],
     "city:vn:nhatrang": ["Nha Trang"],
+    "city:cn:shanghai": ["Thượng Hải", "Shanghai"],
+    "city:cn:beijing": ["Bắc Kinh", "Beijing"],
+    "city:cn:hangzhou": ["Hàng Châu", "Hangzhou"],
+    "city:cn:nanjing": ["Nam Kinh", "Nanjing"],
+    "city:cn:shenzhen": ["Thẩm Quyến", "Shenzhen"],
+    "city:cn:wuzhen": ["Ô Trấn", "Tây Ô Trấn", "Wuzhen"],
+    "city:tw:taipei": ["Đài Bắc", "Taipei"],
+    "city:tw:taichung": ["Đài Trung", "Taichung"],
+    "city:tw:kaohsiung": ["Cao Hùng", "Kaohsiung"],
+    "region:tw:nantou": ["Nam Đầu", "Nantou"],
+    "country:bn": ["Brunei", "Brunei Darussalam"],
+    "city:bn:bandar_seri_begawan": ["Bandar Seri Begawan"],
 }
 for eid, aliases in PLACE_ENTRIES.items():
     CATALOG["place"].update({fold(alias): eid for alias in aliases})
@@ -61,6 +73,9 @@ PLACE_RELATIONS.update(
         "city:vn:nhatrang": {"region:vn:central"},
     }
 )
+for eid in PLACE_ENTRIES:
+    if eid.startswith(("city:cn:", "city:tw:", "region:tw:", "city:bn:")):
+        PLACE_RELATIONS[eid] = {"country:" + eid.split(":")[1]}
 TRANSPORT_RELATIONS = {"car": {"motor_vehicle"}, "coach": {"motor_vehicle"}, "minibus": {"motor_vehicle"}}
 
 

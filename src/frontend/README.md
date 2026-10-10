@@ -11,6 +11,14 @@ Cần **Node.js 24 LTS** (hoặc 22.x >=22.13), **pnpm 11.25.0**, **Python >=3.1
 1. Nếu `node` hoặc `npm` báo “not recognized”, cài **Node.js 24 LTS** bằng **Windows Installer (.msi)** tại [nodejs.org](https://nodejs.org/en/download). Giữ các thành phần npm và Add to PATH của installer.
 2. Đóng rồi mở lại PowerShell. Nếu dùng terminal trong VS Code, đóng/mở lại VS Code để nhận PATH mới.
 3. Kiểm tra Node/npm rồi cài phiên bản pnpm dùng cho frontend:
+Cần Node >=20.19 (hoặc >=22.12), Corepack hoặc pnpm, và backend Python đã cài dependency bằng `uv sync` từ repo root. Nếu máy có Corepack nhưng chưa nhận lệnh pnpm, chạy trực tiếp từ repo root:
+
+```powershell
+corepack pnpm --dir src/frontend install --frozen-lockfile
+corepack pnpm --dir src/frontend dev
+```
+
+Nếu pnpm đã có trong PATH, có thể chạy trong thư mục frontend:
 
 ```powershell
 node --version
@@ -57,6 +65,9 @@ Nếu chỉ chạy frontend, vẫn xem được Giới thiệu, Đăng nhập v�
 | Báo không chạy được `npm.ps1` / `pnpm.ps1` | Dùng `npm.cmd` / `pnpm.cmd` trong PowerShell                                                                       |
 | `uv` không tồn tại                         | Cài uv cho backend và mở lại terminal để nhận PATH                                                                 |
 | Mở port 8000 chỉ thấy trang backend        | Mở website ở port 5173                                                                                             |
+Mở http://127.0.0.1:5173. Chạy `uv run tour-backend serve` từ repo root trong terminal khác. Vite proxy `/v2`, `/health` và `/auth/…` tới backend port 8000; có thể đặt `BACKEND_URL` trong environment của terminal trước `pnpm dev`.
+
+`pnpm` không được nhận nghĩa là terminal chưa có lệnh trong PATH. `corepack pnpm dev` ở repo root báo `Command "dev" not found` vì package.json và script dev nằm tại `src/frontend`; dùng `--dir` như trên hoặc chuyển vào đúng thư mục. Python `.venv` không cấp các lệnh Node/pnpm.
 
 ## Cấu hình kết nối
 
@@ -68,6 +79,10 @@ Nếu chỉ chạy frontend, vẫn xem được Giới thiệu, Đăng nhập v�
 | `VITE_AUTH_BASE_URL`       | Địa chỉ identity adapter theo [contract auth](app/AUTH-ADAPTER.md)                                       | Rỗng: auth chưa được bật                   |
 | `VITE_AUTH_GOOGLE_ENABLED` | Bật Google login sau khi adapter/OAuth đã sẵn sàng                                                       | `false`                                    |
 | `BACKEND_URL`              | Origin backend khác port/host, chỉ cho proxy dev; đặt trong environment của terminal trước khi chạy Vite | `http://127.0.0.1:8000`                    |
+| Biến                       | Ý nghĩa                                                            | Mặc định                                   |
+| -------------------------- | ------------------------------------------------------------------ | ------------------------------------------ |
+| `VITE_API_BASE_URL`        | Địa chỉ backend, không thêm `/v2`; client tự nối endpoint          | Rỗng: cùng origin, dùng Vite proxy khi dev |
+| `VITE_AUTH_BASE_URL`       | Địa chỉ identity adapter theo [contract auth](app/AUTH-ADAPTER.md) | Rỗng: cùng backend API                   |
 
 Backend tự cấp token phiên qua `POST /v2/sessions`; frontend nhận và dùng token khi chạy. Các biến `VITE_*` là cấu hình công khai trong bundle; không đặt NIM/Supabase/admin/OAuth secret ở đây.
 
@@ -84,14 +99,14 @@ Vercel cần Root Directory `src/frontend`, preset Vite, build `pnpm build`, ins
 Giới thiệu → form/URL/chat → review và xác nhận → tìm kiếm → bảng/evidence/phân tích/activity. Sửa field/slider/chat chung proposal; confirm chỉ commit, search riêng. Không tự tính giá, rank, sinh analysis hoặc nhật ký.
 
 - `api/`: DTO/validation/client `/v2`, canonical catalog, serializer và typed edits giữ IDs/tree/version/idempotency.
-- `app/`: navigation, preferences, public/auth/account pages, local history theo identity nếu adapter được cấu hình.
+- `app/`: navigation, preferences, public/auth/account pages, history server theo tài khoản, draft local và identity adapter.
 - `features/workspace/`: draft/committed/proposal, jobs/events, snapshots/chat/evidence; chuyển phiên và response muộn được guard.
 - `components/`: controls dùng chung; `public/assets/`: font/ảnh độc lập kèm license/provenance.
 - `tests/` và `api/*.test.ts`: test-only transport, không import vào runtime/build.
 
 Input là form/text/URLs và JSON backend; output là proposal/comparison/ticket request và UI theo dữ kiện BE. URL-only không ép party/budget/ngày. Backend trả thiếu/unknown/unsupported thì giữ trạng thái; bảng cũ giữ khi chờ/lỗi hoặc chưa khớp criteria mới.
 
-Bearer ẩn danh lưu sessionStorage theo expiry; chỉ mục phiên, draft và chat lưu localStorage. Resume bằng IDs đã biết + GET BE; không coi local history là auth hoặc đồng bộ đa thiết bị. Ảnh giới thiệu là điểm đến, không giả tour/giá/weather.
+Bearer ẩn danh lưu sessionStorage theo expiry; chỉ mục phiên, draft và chat lưu localStorage. Anonymous resume bằng IDs + bearer còn hạn. Account lấy danh sách/detail/transcript từ backend, hỗ trợ đổi thiết bị trong retention. Ảnh giới thiệu là điểm đến, không giả tour/giá/weather.
 
 ## Kiểm tra
 
@@ -110,6 +125,6 @@ Test contract dùng backend thật trong SQLite memory + FakeNim test-only, cầ
 
 Backend v2 đã có flow proposal/chat/comparison/events/evidence, nhưng default provider còn synthetic. Frontend kiểm `/health` và chặn kết quả synthetic. Cần cấu hình nguồn thật ở BE để sử dụng tìm tour.
 
-Auth người dùng/Google và history server chưa có; màn giữ nguyên, adapter chỉ bật khi được cấu hình đúng. Tiếp tục ẩn danh dùng session thật. Các endpoint giả định và giới hạn tại [BACKEND-GAPS.md](BACKEND-GAPS.md), [AUTH-ADAPTER.md](app/AUTH-ADAPTER.md).
+Auth email/password, Google PKCE adapter, history account và what-if đã nối. Google chỉ bật theo GET /auth/config khi provider sẵn sàng. Chi tiết cấu hình/test ở [hướng dẫn account](../../examples/frontend-account-what-if.md). Giới hạn tại [BACKEND-GAPS.md](BACKEND-GAPS.md), [AUTH-ADAPTER.md](app/AUTH-ADAPTER.md).
 
 Kiến trúc/workflow: [IMPLEMENTATION.md](IMPLEMENTATION.md).

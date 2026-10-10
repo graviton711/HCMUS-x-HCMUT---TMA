@@ -25,6 +25,11 @@ describe('Actual backend route contracts', () => {
     expect(Array.isArray(raw)).toBe(true);
     if (!Array.isArray(raw)) throw new Error('Invalid contract verification output');
     const validators: Record<string, contracts.Validator> = {
+      history: contracts.history,
+      historyDetail: contracts.historyDetail,
+      historyMetadata: contracts.historyMetadata,
+      acceptedWhatIf: contracts.acceptedWhatIf,
+      whatIf: contracts.whatIf,
       health: contracts.health,
       session: contracts.session,
       catalog: contracts.catalog,

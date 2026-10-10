@@ -1,5 +1,9 @@
 # Decision
 
+[Sửa tìm tour](../../docs/search-correctness-repair.md): structured entity sets v2 dùng chung hierarchy; tách freshness missing-policy/stale/time-invalid; chọn offer unknown chỉ để đối chiếu, không nâng hard eligibility. Giữ v1 và bounds from/exact.
+
+Comparison mới công bố decision-v2.4-search; snapshot cũ không bị viết lại. Metadata giá đầy đủ nhận qua adapter catalog, evaluator vẫn dùng bounds/applicability/freshness hiện hành.
+
 Phân tích what-if theo [policy](../../docs/what-if-analysis.md): evaluate universe trước pool, hard/soft group ablation, mức nới có bằng chứng và cặp blockers; cùng snapshot/time/party. `what_if.py` tính metrics/witnesses, `v2.py` dùng chung rank; không gọi model hoặc tự sửa requirement. DTO ở `domain/what_if.py`.
 
 What-if công khai condition diagnostics (counts/reason codes trên candidate summaries) để tìm thiếu dữ liệu, giữ phân biệt với eligibility toàn cây và contribution/causal metrics.

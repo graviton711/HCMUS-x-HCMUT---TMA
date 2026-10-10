@@ -82,8 +82,25 @@ def collect():
         work()
         save("chat answer", "message", client.get(f"/v2/conversations/{rid}/messages/answer_contract"))
 
+        analysis = save("what-if acceptance", "acceptedWhatIf", client.post(f"/v2/comparisons/{comparison['id']}/what-if", json={"expected_revision": 1}), 202)
+        work()
+        save("what-if result", "whatIf", client.get(f"/v2/what-if/{analysis['analysis_id']}"))
+        save("history index", "history", client.get("/v2/history"))
+        save("history detail", "historyDetail", client.get(f"/v2/history/{rid}"))
+        save("history metadata", "historyMetadata", client.patch(f"/v2/history/{rid}", json={"expected_version": 0, "title": "Contract"}))
+
         structured = save("structured form", "createRequirement", client.post("/v2/requirements", json=form()), 201)
         structured_id = structured["id"]
+        hard_comparison = save("hard comparison acceptance", "acceptedComparison", client.post("/v2/comparisons", json={"requirement_id": structured_id, "revision": 1}), 202)
+        work()
+        hard_result = save("hard comparison", "comparison", client.get(f"/v2/comparisons/{hard_comparison['comparison_id']}"))
+        hard_analysis = save("hard what-if acceptance", "acceptedWhatIf", client.post(f"/v2/comparisons/{hard_result['id']}/what-if", json={"expected_revision": 1}), 202)
+        work()
+        hard_analysis_result = save("hard what-if result", "whatIf", client.get(f"/v2/what-if/{hard_analysis['analysis_id']}"))
+        scenarios = hard_analysis_result["result"]["scenarios"]
+        scenario = next(s for s in scenarios if s["edits"])
+        applied = save("what-if review proposal", "proposal", client.post(f"/v2/what-if/{hard_analysis['analysis_id']}/scenarios/{scenario['id']}/proposals", json={"expected_revision": 1}))
+        save("what-if proposal cancel", "cancelProposal", client.post(f"/v2/proposals/{applied['id']}/cancel", json={"expected_proposal_version": applied['version']}))
         body = {"expected_revision": 1, "input": {"kind": "structured", "edits": [{"op": "replace_condition_value", "condition_id": "duration", "value": {"kind": "number", "amount": 6}}]}}
         proposal = save("direct edit", "createProposal", client.post(f"/v2/requirements/{structured_id}/proposals", json=body))
         proposal = save("discard individual change", "proposal", client.post(f"/v2/proposals/{proposal['id']}/discard-changes", json={"expected_revision": 1, "expected_proposal_version": proposal["version"], "change_ids": [proposal["changes"][0]["id"]]}))

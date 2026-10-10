@@ -205,6 +205,9 @@ export interface SemanticIssue {
   blocking: boolean;
 }
 export interface Readiness {
+  can_confirm?: boolean;
+  can_search?: boolean;
+  completeness?: JsonObject;
   status: 'ready' | 'needs_clarification' | 'unsupported';
   can_collect_data: boolean;
   can_evaluate_hard_constraints: boolean;
@@ -261,7 +264,8 @@ export interface AcceptedRequirement {
   revision: 0;
   proposal_id: string;
   job_id?: string;
-  status: 'queued' | 'pending';
+  proposal_version?: number;
+  status: 'queued' | 'pending' | 'needs_clarification';
 }
 export type CreateRequirementResponse = Requirement | AcceptedRequirement;
 export interface Change {
@@ -338,7 +342,8 @@ export interface AcceptedComparison {
   status: 'queued';
 }
 export type DataState = 'present' | 'missing' | 'conflicting' | 'invalid' | 'unsupported';
-export type Verification = 'supplier_published' | 'independently_verified' | 'unverified';
+export type Verification =
+  'catalog_validated' | 'supplier_published' | 'independently_verified' | 'unverified';
 export type Completeness = 'complete' | 'partial' | 'unknown';
 export interface Fact<T = JsonValue> {
   value: T | null;
@@ -704,3 +709,143 @@ export interface ContactTicket {
 export type Column = ComparisonColumn;
 export type Row = ComparisonRow;
 export type Cell = ComparisonCell;
+
+export interface HistoryItem {
+  requirement_id: string;
+  revision: number;
+  status: string;
+  title: string;
+  pinned: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+  proposal_id: string | null;
+  comparison_id: string | null;
+  pending_comparison_id: string | null;
+  job_id: string | null;
+  analysis_id: string | null;
+  pending_message_id: string | null;
+  runs: { id: string; revision: number; created_at: string }[];
+  runs_limited: boolean;
+}
+export interface HistoryPage {
+  items: HistoryItem[];
+  next_cursor: string | null;
+  retention_days: number;
+}
+export interface HistoryDetail extends HistoryItem {
+  requirement: Requirement;
+  transcript: {
+    items: { id: string; role: 'user' | 'assistant'; text: string; occurred_at: string }[];
+    limited: boolean;
+  };
+}
+export interface HistoryMetadata {
+  version: number;
+  title: string;
+  pinned: boolean;
+  archived: boolean;
+  updated_at: string | null;
+}
+export interface Population {
+  eligible: number;
+  ineligible: number;
+  unknown: number;
+  eligible_candidate_ids: string[];
+  has_hard_constraints: boolean;
+}
+export interface WhatIfRank {
+  candidate_id: string;
+  rank: number;
+  score_lower: number | null;
+  score_upper: number | null;
+  coverage: number | null;
+  tied: boolean;
+}
+export interface WhatIfScenario {
+  id: string;
+  kind: 'remove_hard_group' | 'remove_soft_group' | 'relax_bound' | 'remove_hard_pair';
+  group_ids: string[];
+  condition_ids: string[];
+  label: string;
+  state: 'measured' | 'insufficient_data';
+  population: Population;
+  additional_candidate_ids: string[];
+  proven_blocked_candidate_ids: string[];
+  previously_unknown_candidate_ids: string[];
+  joint_only_candidate_ids: string[];
+  restriction_ratio: {
+    state: 'computed' | 'blocked' | 'not_applicable';
+    numerator: number;
+    denominator: number;
+    percent: number | null;
+    reason_code: string | null;
+    meaning: string;
+  };
+  top_before: WhatIfRank[];
+  top_after: WhatIfRank[];
+  top_changed: boolean;
+  rank_changes: {
+    candidate_id: string;
+    before: WhatIfRank;
+    after: WhatIfRank;
+    rank_delta: number;
+    evidence_ids: string[];
+  }[];
+  rank_changes_truncated: boolean;
+  witnesses: {
+    candidate_id: string;
+    title: string | null;
+    canonical_url: string;
+    tour_snapshot_id: string;
+    offer_snapshot_id: string | null;
+    original_status: 'pass' | 'fail' | 'unknown';
+    original_evaluations: JsonObject[];
+    scenario_evaluations: JsonObject[];
+    evidence_ids: string[];
+  }[];
+  witnesses_truncated: boolean;
+  edits: JsonObject[];
+  tradeoffs: JsonObject[];
+  limitations: string[];
+  minimal_within_tested_subsets: boolean;
+  insight: string;
+}
+export interface WhatIfAnalysis {
+  id: string;
+  comparison_id: string;
+  requirement_id: string;
+  revision: number;
+  policy_version: string;
+  origin: 'source' | 'synthetic';
+  evaluated_at: string;
+  scope: JsonObject;
+  baseline: Population;
+  baseline_top: WhatIfRank[];
+  groups: {
+    id: string;
+    strength: 'hard' | 'soft';
+    condition_ids: string[];
+    fields: string[];
+    label: string;
+  }[];
+  scenarios: WhatIfScenario[];
+  candidates: JsonObject[];
+  semantic_assessment: JsonObject;
+  explanation: JsonObject;
+  limits: JsonObject;
+  limitations: string[];
+}
+export interface WhatIf {
+  id: string;
+  status: JobStatus;
+  result: WhatIfAnalysis | null;
+}
+export interface AcceptedWhatIf {
+  analysis_id: string;
+  job_id: string;
+  comparison_id: string;
+  requirement_id: string;
+  revision: number;
+  status: 'queued';
+}

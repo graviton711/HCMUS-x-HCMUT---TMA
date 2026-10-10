@@ -40,8 +40,13 @@ def usable(fact: Fact | None, field: str, source, at, synthetic=False) -> tuple[
         source is None or source.access_status != "approved" or source.limits.get("catalog_validated") != 1
     ):
         return False, "CATALOG_TRUST_NOT_APPROVED"
-    if field in VOLATILE and freshness(fact, field, source, at) != "fresh":
-        return False, "FIELD_STALE_OR_FRESHNESS_UNKNOWN"
+    if field in VOLATILE:
+        if (instant(at) - instant(fact.observed_at)).total_seconds() < -300:
+            return False, "FIELD_OBSERVATION_IN_FUTURE"
+        if source is None or field not in source.freshness_seconds:
+            return False, "FIELD_FRESHNESS_POLICY_MISSING"
+        if freshness(fact, field, source, at) != "fresh":
+            return False, "FIELD_STALE"
     return True, "OK"
 
 
@@ -80,6 +85,8 @@ def estimate_cost(budget: Budget, party, offer: OfferSnapshot | None, source, at
     if not offer:
         return unknown("OFFER_REQUIRED")
     ok, reason = usable(offer.pricing_complete, "price", source, at, synthetic)
+    if offer.pricing_complete is not None and not ok:
+        return unknown(reason)
     if not ok or offer.pricing_complete.value is not True:
         return unknown("PRICE_COVERAGE_UNCONFIRMED")
     result["evidence_ids"].extend(offer.pricing_complete.evidence_ids)

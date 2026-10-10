@@ -244,6 +244,18 @@ describe('Form serialization', () => {
     if (condition.op !== 'upsert_condition') throw new Error('Expected a range condition');
     r.conditions[r.conditions.length - 1] = { ...condition.condition, sources: [] };
     expect(buildEdits(formFromRequirement(r), r)).toEqual([]);
+    });
+  it('defaults the personalized budget to hard while leaving optional preferences soft', () => {
+    const input = buildCreateRequirement({ ...structuredValues(), durationDays: '5' }).input;
+    if (input.kind !== 'structured') throw new Error('Expected structured input');
+    expect(input.form.conditions.find((c) => c.field === 'estimated_cost')?.strength).toBe('hard');
+    expect(input.form.conditions.find((c) => c.field === 'duration_days')?.strength).toBe('soft');
+    const legacy = buildCreateRequirement({
+      ...structuredValues(),
+      strengths: { estimated_cost: 'soft' },
+    }).input;
+    if (legacy.kind !== 'structured') throw new Error('Expected structured input');
+    expect(legacy.form.conditions.find((c) => c.field === 'estimated_cost')?.strength).toBe('soft');
   });
   it('requires explicit structured inputs and does not infer them from URLs', () => {
     expect(() => buildCreateRequirement(emptyForm)).toThrow(FormValidationError);

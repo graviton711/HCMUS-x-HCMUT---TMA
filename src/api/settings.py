@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     supabase_tour_db_url: SecretStr = SecretStr("")
     supabase_tour_url: str | None = None
     supabase_tour_publishable_key: SecretStr = SecretStr("")
+    supabase_auth_url: str | None = None
+    supabase_auth_publishable_key: SecretStr = SecretStr("")
+    auth_timeout_seconds: float = Field(default=10, ge=1, le=30)
     supabase_tour_connect_timeout_seconds: int = Field(default=8, ge=1, le=30)
     supabase_tour_query_timeout_seconds: int = Field(default=15, ge=1, le=60)
     supabase_tour_pool_size: int = Field(default=2, ge=1, le=5)
@@ -67,6 +70,19 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def deployment(self):
+        for address in (self.supabase_auth_url, self.supabase_tour_url):
+            if address:
+                u = urlsplit(address)
+                if (
+                    u.scheme != "https"
+                    or not u.hostname
+                    or u.username
+                    or u.password
+                    or u.query
+                    or u.fragment
+                    or u.path not in {"", "/"}
+                ):
+                    raise ValueError("Supabase project URL must be an HTTPS origin")
         if len(set(self.supabase_tour_trusted_domains)) != len(self.supabase_tour_trusted_domains) or any(
             not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+", d)
             for d in self.supabase_tour_trusted_domains

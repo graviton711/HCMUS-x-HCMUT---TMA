@@ -61,7 +61,7 @@ def assess_options(
     if selected_id:
         selected = next((o for o in options if o.snapshot_id == selected_id), None)
         if selected is None or any(
-            freshness(f, name, source, at) != "fresh" for name, f in selected.fields.items()
+            freshness(f, name, source, at) == "stale" for name, f in selected.fields.items()
         ):
             raise AppError("OFFER_SELECTION_INVALID", "Offer sai binding hoặc đã cũ.", 409)
     elif len(options) == 1 and complete:

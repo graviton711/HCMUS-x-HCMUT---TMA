@@ -302,7 +302,7 @@ function conditions(values: FormValues): FormCondition[] {
         coverage: 'tour_price',
         coverage_origin: 'system_default',
       },
-      values.budgetMin === '' ? 'soft' : 'hard',
+      'hard',
     );
   if (values.durationDays)
     add(
