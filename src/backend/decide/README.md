@@ -22,3 +22,4 @@ Vào: `Requirement` + list `TourSnapshot` + hook LLM. Ra: `Comparison` gồm ran
 - Chấm theo offer, không theo tour: tour pass chỉ qua offer pass của nó.
 - Không chạy soft assessment cho tour đã bị loại bởi hard filter; khi một tour có nhiều offer, chỉ gửi một snapshot mỗi tour.
 - Một call LLM mỗi comparison, không phải mỗi candidate: ít hỏng, merge deterministic.
+- What-if chạy trên comparison/revision đã lưu, trả trạng thái/result có binding; apply chỉ tạo proposal. Search tiếp theo cần user confirm tường minh.

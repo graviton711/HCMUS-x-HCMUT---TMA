@@ -10,7 +10,7 @@ Vào: `TourRow` (fields tour + offers + evidence + `field_meta` + timestamps). R
 
 ## Workflow
 
-Map fields vô hướng (enums transport/accommodation, durations, destinations) → tách offers (mỗi offer một ngày/giá/availability; giá "from" gắn cờ `price_type="from"`, không tính là exact) → gắn evidence từng snapshot → giữ `observed_at` (giờ VN) và verification.
+Map fields vô hướng (enums transport/accommodation, durations, destinations) → tách offers (mỗi offer một ngày/giá/availability; giá "from" gắn cờ `price_type="from"`, không tính là exact) → validate optional structured pricing metadata gắn đúng offer, currency, basis và observation time → gắn evidence từng snapshot → giữ `observed_at` (giờ VN) và verification. Metadata thiếu, stale hoặc mâu thuẫn không được nâng thành giá exact.
 
 ## Interface với module khác
 
@@ -20,3 +20,4 @@ Map fields vô hướng (enums transport/accommodation, durations, destinations)
 
 - Cơ học như `src/ingest`: không branch theo nguồn, không heuristic.
 - Một offer = một ngày khởi hành + một basis giá. Gộp cross-offer là bug, không phải tối ưu.
+- Giữ raw values/evidence khi normalized pricing invalid; metadata không thể chứng minh thì để unknown/unverified.
