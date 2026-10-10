@@ -1,6 +1,6 @@
 # Account/Auth integration target
 
-Current `src/backend` does not yet provide an identity adapter or owner-scoped account routes. The UI-auth implementation from `main` is therefore not runtime-connected. This document records the port target; no account credential flow should be enabled until backend routes and tests exist.
+Current `src/backend` provides anonymous guest sessions and owner-scoped records/history, but no identity adapter or account routes. The UI-auth implementation from `main` is therefore not runtime-connected. This document records the port target; no account credential flow should be enabled until backend routes and tests exist.
 
 ## Target boundary
 
@@ -8,7 +8,7 @@ Current `src/backend` does not yet provide an identity adapter or owner-scoped a
 - Frontend never trusts a client-supplied owner ID. Anonymous guest session remains separate from account identity.
 - Password is memory-only; provider tokens live in `sessionStorage` scoped to the service origin, never localStorage, URL, logs or SQLite.
 - Supabase configuration is optional. Without it, UI must show account unavailable while guest workflow remains usable.
-- Account history uses current backend `/history` routes after owner-scoped persistence is implemented; do not call `/v2/history`.
+- Guest history uses current backend `/history` routes. Account history, linking, archive and metadata use require separate owner verification/contracts; do not call `/v2/history`.
 
 ## Required tests before enabling UI
 

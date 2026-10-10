@@ -6,7 +6,7 @@ Toàn bộ luồng compare: lọc cứng pool → LLM chấm trường mềm tr�
 
 ## Input/output
 
-Vào: `Requirement` + list `TourSnapshot` + hook LLM. Ra: `Comparison` gồm rank candidate ids, chấm `pass`/`fail`/`unknown` từng offer kèm evidence, và `Analysis` chi phí/điều kiện/rủi ro/quyền lợi. Unknown không pass, không rank trên pass cứng.
+Vào: `Requirement` + list `TourSnapshot` + hook LLM. Ra: `Comparison` gồm rank candidate ids, snapshot đầy đủ của candidates, chấm `pass`/`fail`/`unknown` từng offer kèm evidence, và `Analysis` chi phí/điều kiện/rủi ro/quyền lợi. Snapshots được lưu cùng comparison để detail/history render lại đúng dữ kiện đã chấm. Unknown không pass, không rank trên pass cứng.
 
 ## Workflow
 

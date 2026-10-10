@@ -75,6 +75,7 @@ export function useWorkspace(
   current: LocalSession | null,
   patchSession: PatchSession,
   accountId?: string,
+  active = true,
 ) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -106,10 +107,11 @@ export function useWorkspace(
     }
   }, []);
   useEffect(() => {
+    if (!active) return;
     const ctrl = new AbortController();
     void loadCatalog(ctrl.signal);
     return () => ctrl.abort();
-  }, [loadCatalog]);
+  }, [loadCatalog, active]);
 
   const poll = useCallback(
     async (client: ApiClient, id: string, jobId: string, signal: AbortSignal) => {
@@ -393,6 +395,7 @@ export function useWorkspace(
 
   const selectedId = current?.id;
   useEffect(() => {
+    if (!active) return;
     const activeControllers = controllers.current;
     if (currentRef.current?.requirementId) void run(resume);
     return () => {
@@ -404,7 +407,7 @@ export function useWorkspace(
       evidenceController.current?.abort();
       setEvidenceOpen(false);
     };
-  }, [selectedId, run, resume, update, accountId]);
+  }, [selectedId, run, resume, update, accountId, active]);
 
   const create = (values: FormValues) =>
     run(async (op) => {

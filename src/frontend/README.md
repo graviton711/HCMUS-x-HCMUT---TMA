@@ -10,11 +10,11 @@ Nhận dữ liệu form/text, session identity và resources qua HTTP. Trả v�
 
 ## Workflow
 
-`app/` quản lý route/preferences/session shell; `features/workspace/` điều phối form, proposal, jobs, history và results; `components/` giữ control dùng lại. Phần UI được port từ `main`, nhưng API client hiện còn DTO/path `/v2`; chưa dùng được với API runtime hiện tại. Local storage chỉ giữ draft/guest metadata; credential không được ghi vào local storage hoặc URL.
+`app/` quản lý route/preferences/session shell; guest workspace dùng API hiện tại cho session, catalog, requirement interpretation, synchronous comparison và persisted snapshots. Local storage chỉ giữ draft/guest metadata; bearer token chỉ nằm trong session storage, không vào local storage hoặc URL. Account/Auth, proposals, jobs, full account history, evidence/messages và what-if từ `main` vẫn chưa được port.
 
 ## Interface với module khác
 
-Contract đích nằm ở [`docs/backend-contract.md`](../../docs/backend-contract.md). Client/DTO `/v2` còn sót là code migration chưa hoàn tất; không mở rộng chúng. Không mang backend v2 hoặc logic domain vào frontend. Supabase Auth chỉ được gọi qua backend.
+Runtime contract nằm ở [`docs/backend-contract.md`](../../docs/backend-contract.md). `api/current.ts` là HTTP boundary cho guest workspace. Client/DTO `/v2` còn lại chỉ là migration source cho features chưa port; không mở rộng hoặc dùng chúng với current backend. Không mang backend v2 hoặc logic domain vào frontend. Supabase Auth chỉ được gọi qua backend.
 
 ## Quyết định kỹ thuật
 
@@ -39,4 +39,4 @@ pnpm.cmd --dir src/frontend install --frozen-lockfile
 pnpm.cmd --dir src/frontend dev
 ```
 
-UI dev server có thể chạy ở <http://127.0.0.1:5173>, nhưng một số workspace actions chưa nối với runtime API. Kiểm tra package bằng `corepack pnpm@11.25.0 --dir src/frontend typecheck`, `test` và `build`.
+UI dev server có thể chạy ở <http://127.0.0.1:5173>. Guest search dùng current runtime; account and advanced workspace actions remain unavailable until their backend contracts are ported. Kiểm tra package bằng `corepack pnpm@11.25.0 --dir src/frontend typecheck`, `test` và `build`.

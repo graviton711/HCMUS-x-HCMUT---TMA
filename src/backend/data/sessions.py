@@ -95,12 +95,9 @@ class SessionStore:
         owner_session_id: str,
         limit: int = 100,
         before: tuple[str, str] | None = None,
-    ) -> list[dict[str, str]]:
+    ) -> tuple[list[dict[str, str]], bool]:
         safe_limit = max(1, min(limit, 100))
-        query = (
-            "SELECT id, kind, created_at FROM records"
-            " WHERE owner_session_id = ?"
-        )
+        query = "SELECT id, kind, created_at FROM records WHERE owner_session_id = ?"
         params: list[str | int] = [owner_session_id]
         if before is not None:
             query += " AND (created_at < ? OR (created_at = ? AND id < ?))"
@@ -108,12 +105,15 @@ class SessionStore:
         query += " ORDER BY created_at DESC, id DESC LIMIT ?"
         params.append(safe_limit + 1)
         rows = self._conn.execute(query, params).fetchall()
-        return [{"id": str(row[0]), "kind": str(row[1]), "created_at": str(row[2])} for row in rows]
+        has_more = len(rows) > safe_limit
+        items = [
+            {"id": str(row[0]), "kind": str(row[1]), "created_at": str(row[2])} for row in rows[:safe_limit]
+        ]
+        return items, has_more
 
     def get_history_item(self, item_id: str, owner_session_id: str) -> dict[str, object]:
         row = self._conn.execute(
-            "SELECT kind, created_at, payload FROM records"
-            " WHERE id = ? AND owner_session_id = ?",
+            "SELECT kind, created_at, payload FROM records WHERE id = ? AND owner_session_id = ?",
             (item_id, owner_session_id),
         ).fetchone()
         if row is None:

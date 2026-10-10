@@ -29,7 +29,7 @@ API: <http://127.0.0.1:8000/docs>. Mặc định `DATA_PROVIDER=fixture`; catalo
 
 ## Frontend
 
-React UI của `main` nằm tại `src/frontend`; package đã cài/build được. Contract phía UI hiện vẫn chứa các call `/v2` và chưa chạy end-to-end với backend chuẩn. Xem [tình trạng tích hợp](src/frontend/BACKEND-GAPS.md); phần chuyển client/flow phải tiếp tục trên `src/backend`, không khôi phục `src/api` cũ.
+React UI nằm tại `src/frontend`. Guest search đã nối với API hiện tại từ session đến comparison snapshot; Auth, account history, proposals, jobs, contact và what-if chưa được port. Xem [tình trạng tích hợp](src/frontend/BACKEND-GAPS.md); tiếp tục phát triển trên `src/backend`, không khôi phục `src/api` cũ.
 
 ## Kiểm tra
 

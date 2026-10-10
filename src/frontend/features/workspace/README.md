@@ -4,9 +4,9 @@ Theo [sửa tìm tour](../../../../docs/search-correctness-repair.md), Activity 
 
 What-if: create/poll/read trên comparison hiện tại, kiểm binding/late-response; apply tạo proposal để review/confirm/search riêng. History account được hydrate từ refs server; anonymous flow giữ nguyên. [Integration contract](../../../../docs/account-history-what-if-integration.md).
 
-Trách nhiệm UI: orchestrate form/criteria, proposal/chat, progress và results từ API; không tự parse ngôn ngữ, rank, tính giá hoặc sinh activity. Components hiện từ `main` còn phụ thuộc DTO/path `/v2`, chưa được nối với API runtime chuẩn.
+Trách nhiệm UI: orchestrate form/criteria, proposal/chat, progress và results từ API; không tự parse ngôn ngữ, rank, tính giá hoặc sinh activity. Runtime vertical slice dùng guest session, destination lookup, requirement interpretation và synchronous comparison qua `backend.api`; UI render candidate snapshots lưu cùng comparison.
 
-Input đích: current catalog/draft/requirement/comparison resources. Output đích: review → explicit confirm/search; edits/what-if không tự commit. API runtime hiện chỉ hỗ trợ create/read requirement và comparison đồng bộ, nên các flow còn lại đang chờ port.
+Runtime input: text hoặc supported structured fields (destination, departure city/date, budget cap, duration). Output: interpreted requirement → explicit search → persisted comparison/snapshots. Unsupported form fields are rejected before submission. Review proposals, edits, jobs, account history, contact and what-if remain blocked until corresponding current-backend contracts exist.
 
 Local history lưu IDs, draft, messages đã nhận và metadata của lượt tìm; bearer chỉ sessionStorage. Refresh lấy lại resource qua API, không xem local IDs là access. State theo từng phiên; AbortSignal và guard ngăn response trễ ghi đè, job không bị cancel khi đổi màn. Poll job/events theo thứ tự, drain events terminal; cancel job có thao tác riêng. Kết quả cũ giữ khi criteria khác/pending/failure, không tự gắn vào revision mới.
 

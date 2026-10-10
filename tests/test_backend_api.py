@@ -21,16 +21,20 @@ def test_health(tmp_path):
 
 def test_full_compare_flow(tmp_path):
     client = _client(tmp_path)
-    req = client.post("/requirements", json={"text": "Đà Lạt 3 ngày, từ Sài Gòn, tối đa 8 triệu/người"}).json()["requirement"]
+    req = client.post(
+        "/requirements", json={"text": "Đà Lạt 3 ngày, từ Sài Gòn, tối đa 8 triệu/người"}
+    ).json()["requirement"]
     assert req["id"]
     assert "destination" not in req["missing"]
 
     comp = client.post("/comparisons", json={"requirement_id": req["id"]}).json()["comparison"]
     assert comp["ranked"], "fixture Đà Lạt under 8tr must rank"
+    assert comp["tour_snapshots"]
     assert comp["analysis"]["benefits"]
 
     again = client.get(f"/comparisons/{comp['id']}").json()["comparison"]
     assert again["id"] == comp["id"]
+    assert again["tour_snapshots"] == comp["tour_snapshots"]
 
 
 def test_text_only_comparison(tmp_path):
@@ -103,9 +107,7 @@ def test_history_cursor_and_detail_are_owner_scoped(tmp_path):
     assert first.status_code == 200
     assert len(first.json()["items"]) == 1
     assert first.json()["next_cursor"]
-    second = client.get(
-        "/history?limit=1&cursor=" + first.json()["next_cursor"], headers=headers
-    )
+    second = client.get("/history?limit=1&cursor=" + first.json()["next_cursor"], headers=headers)
     assert second.status_code == 200
     assert second.json()["next_cursor"] is None
     assert first.json()["items"][0]["id"] != second.json()["items"][0]["id"]
@@ -116,9 +118,7 @@ def test_history_cursor_and_detail_are_owner_scoped(tmp_path):
     assert detail.json()["resource"]["id"] == item_id
 
     other = client.post("/sessions").json()
-    forbidden = client.get(
-        f"/history/{item_id}", headers={"Authorization": f"Bearer {other['token']}"}
-    )
+    forbidden = client.get(f"/history/{item_id}", headers={"Authorization": f"Bearer {other['token']}"})
     assert forbidden.status_code == 404
 
     invalid = client.get("/history?cursor=not-a-cursor", headers=headers)

@@ -31,8 +31,7 @@ def _contains(haystack: str, needle: str) -> bool:
 
 def _fold(value: str) -> str:
     text = value.replace("đ", "d").replace("Đ", "D")
-    text = "".join(c for c in unicodedata.normalize("NFD", text)
-                   if unicodedata.category(c) != "Mn")
+    text = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
@@ -80,21 +79,49 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) ->
     if f == "destination":
         vals = v if any_op else [v]
         states = [_destination_state(str(x), tour) for x in vals]
-        return ("pass", "") if "pass" in states else (("unknown", "DESTINATION_PARTIAL") if "unknown" in states else ("fail", "DESTINATION_MISMATCH"))
+        return (
+            ("pass", "")
+            if "pass" in states
+            else (
+                ("unknown", "DESTINATION_PARTIAL")
+                if "unknown" in states
+                else ("fail", "DESTINATION_MISMATCH")
+            )
+        )
     if f == "departure_city":
         vals = v if any_op else [v]
-        return ("pass", "") if any(_contains(tour.departure_city, str(x)) for x in vals) else ("fail", "DEPARTURE_CITY_MISMATCH")
+        return (
+            ("pass", "")
+            if any(_contains(tour.departure_city, str(x)) for x in vals)
+            else ("fail", "DEPARTURE_CITY_MISMATCH")
+        )
     if f == "transport":
         if str(v) not in ("flight", "bus", "train", "cruise", "mixed"):
             return "unknown", "UNSUPPORTED_TRANSPORT"
-        return (("pass", "") if tour.transport == str(v) else (("unknown", "FIELD_MISSING") if not tour.transport else ("fail", "TRANSPORT_MISMATCH")))
+        return (
+            ("pass", "")
+            if tour.transport == str(v)
+            else (("unknown", "FIELD_MISSING") if not tour.transport else ("fail", "TRANSPORT_MISMATCH"))
+        )
     if f == "accommodation":
-        return (("pass", "") if _contains(tour.accommodation, str(v)) else (("unknown", "FIELD_MISSING") if not tour.accommodation else ("fail", "ACCOMMODATION_MISMATCH")))
+        return (
+            ("pass", "")
+            if _contains(tour.accommodation, str(v))
+            else (
+                ("unknown", "FIELD_MISSING") if not tour.accommodation else ("fail", "ACCOMMODATION_MISMATCH")
+            )
+        )
     if f == "duration_days":
-        return (("unknown", "FIELD_MISSING") if tour.duration_days is None else (("pass", "") if tour.duration_days == v else ("fail", "DURATION_MISMATCH")))
+        return (
+            ("unknown", "FIELD_MISSING")
+            if tour.duration_days is None
+            else (("pass", "") if tour.duration_days == v else ("fail", "DURATION_MISMATCH"))
+        )
     if f in ("date_from", "date_to"):
         if offer.departure_freshness != "fresh":
-            return "unknown", _unknown_reason(offer.departure_freshness, offer.departure_freshness_policy_seconds)
+            return "unknown", _unknown_reason(
+                offer.departure_freshness, offer.departure_freshness_policy_seconds
+            )
         if not offer.departure_date:
             return "unknown", "FIELD_MISSING"
         try:
@@ -103,7 +130,7 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) ->
         except ValueError:
             return "unknown", "FIELD_INVALID"
         ok = day >= bound if f == "date_from" else day <= bound
-        return (("pass", "") if ok else ("fail", "DATE_MISMATCH"))
+        return ("pass", "") if ok else ("fail", "DATE_MISMATCH")
     if f == "budget_max":
         if offer.price_freshness != "fresh":
             return "unknown", _unknown_reason(offer.price_freshness, offer.price_freshness_policy_seconds)
@@ -129,10 +156,14 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) ->
         except (TypeError, ValueError):
             return "unknown", "PRICE_BUDGET_INVALID"
         if offer.price_basis == "from":
-            return (("fail", "PRICE_LOWER_BOUND_OVER_BUDGET") if offer.price > maximum else ("unknown", "PRICE_FROM_LOWER_BOUND"))
+            return (
+                ("fail", "PRICE_LOWER_BOUND_OVER_BUDGET")
+                if offer.price > maximum
+                else ("unknown", "PRICE_FROM_LOWER_BOUND")
+            )
         if offer.price_basis != "exact":
             return "unknown", "PRICE_NOT_EXACT"
-        return (("pass", "") if offer.price <= maximum else ("fail", "PRICE_OVER_BUDGET"))
+        return ("pass", "") if offer.price <= maximum else ("fail", "PRICE_OVER_BUDGET")
     return "unknown", "FIELD_UNSUPPORTED"
 
 
@@ -143,13 +174,15 @@ def hard_filter(req: Requirement, tours: list[TourSnapshot]) -> list[Evaluation]
         for offer in tour.offers:
             for cond in hard:
                 state, reason = eval_hard(cond, tour, offer)
-                evals.append(Evaluation(offer_id=offer.id, condition_id=cond.id,
-                                        state=state, reason_code=reason))
+                evals.append(
+                    Evaluation(offer_id=offer.id, condition_id=cond.id, state=state, reason_code=reason)
+                )
     return evals
 
 
-def passing_offers(req: Requirement, tours: list[TourSnapshot],
-                   evals: list[Evaluation]) -> list[tuple[TourSnapshot, str]]:
+def passing_offers(
+    req: Requirement, tours: list[TourSnapshot], evals: list[Evaluation]
+) -> list[tuple[TourSnapshot, str]]:
     hard_ids = {c.id for c in req.hard()}
     bad: set[str] = set()
     for e in evals:
@@ -163,11 +196,15 @@ def passing_offers(req: Requirement, tours: list[TourSnapshot],
     return out
 
 
-def assess_soft_llm(tours: list[TourSnapshot], soft: list[Condition],
-                    nim: NimClient | None,
-                    prompt: PromptCfg | None,
-                    excerpt_chars: int, quote_chars: int,
-                    soft_fields: list[str]) -> dict[tuple[str, str], tuple[float, str]]:
+def assess_soft_llm(
+    tours: list[TourSnapshot],
+    soft: list[Condition],
+    nim: NimClient | None,
+    prompt: PromptCfg | None,
+    excerpt_chars: int,
+    quote_chars: int,
+    soft_fields: list[str],
+) -> dict[tuple[str, str], tuple[float, str]]:
     """One bounded LLM call over survivors. Returns {(tour_id, cond_id): (score, quote)}."""
     if not soft or nim is None or not nim.configured():
         return {}
@@ -177,23 +214,29 @@ def assess_soft_llm(tours: list[TourSnapshot], soft: list[Condition],
     for tour in tours:
         blob = "\n".join(f"{f}: {getattr(tour, f, '')}" for f in soft_fields)[:excerpt_chars]
         docs.append({"tour_id": tour.id, "text": blob})
-    user = json.dumps({"criteria": [{"id": c.id, "text": str(c.value)} for c in soft],
-                       "tours": docs}, ensure_ascii=False)
-    scores = nim.complete_json(system=prompt.system, user=user,
-                               max_tokens=prompt.max_tokens,
-                               temperature=prompt.temperature).get("scores", [])
+    user = json.dumps(
+        {"criteria": [{"id": c.id, "text": str(c.value)} for c in soft], "tours": docs}, ensure_ascii=False
+    )
+    scores = nim.complete_json(
+        system=prompt.system, user=user, max_tokens=prompt.max_tokens, temperature=prompt.temperature
+    ).get("scores", [])
     out: dict[tuple[str, str], tuple[float, str]] = {}
     for s in scores:
         try:
             out[(str(s["tour_id"]), str(s["condition_id"]))] = (
-                max(0.0, min(1.0, float(s["score"]))), str(s.get("quote", ""))[:quote_chars])
+                max(0.0, min(1.0, float(s["score"]))),
+                str(s.get("quote", ""))[:quote_chars],
+            )
         except (KeyError, TypeError, ValueError):
             continue
     return out
 
 
-def rank(req: Requirement, surviving: list[tuple[TourSnapshot, str]],
-         soft_scores: dict[tuple[str, str], tuple[float, str]]) -> list[RankedCandidate]:
+def rank(
+    req: Requirement,
+    surviving: list[tuple[TourSnapshot, str]],
+    soft_scores: dict[tuple[str, str], tuple[float, str]],
+) -> list[RankedCandidate]:
     soft_ids = [c.id for c in req.soft()]
     scored = []
     for tour, offer_id in surviving:
@@ -208,37 +251,43 @@ def rank(req: Requirement, surviving: list[tuple[TourSnapshot, str]],
     return [RankedCandidate(tour_id=t, offer_id=o, score=s) for s, _, t, o in scored]
 
 
-def analyze(tours: list[TourSnapshot], ranked: list[RankedCandidate],
-            cfg: DecideCfg) -> Analysis:
+def analyze(tours: list[TourSnapshot], ranked: list[RankedCandidate], cfg: DecideCfg) -> Analysis:
     by_id = {t.id: t for t in tours}
     costs, conds, risks, benefits = [], [], [], []
-    for cand in ranked[:cfg.top_n]:
+    for cand in ranked[: cfg.top_n]:
         tour = by_id[cand.tour_id]
-        for label, text in (("Phụ thu", tour.surcharges), ("Loại trừ", tour.exclusions),
-                            ("Hủy", tour.cancellation_policy), ("Trẻ em", tour.child_policy)):
+        for label, text in (
+            ("Phụ thu", tour.surcharges),
+            ("Loại trừ", tour.exclusions),
+            ("Hủy", tour.cancellation_policy),
+            ("Trẻ em", tour.child_policy),
+        ):
             if text.strip():
-                conds.append(f"{tour.name} — {label}: {text[:cfg.analysis_chars]}")
+                conds.append(f"{tour.name} — {label}: {text[: cfg.analysis_chars]}")
         if tour.surcharges.strip():
-            costs.append(f"{tour.name}: {tour.surcharges[:cfg.analysis_chars]}")
+            costs.append(f"{tour.name}: {tour.surcharges[: cfg.analysis_chars]}")
         if tour.exclusions.strip():
-            risks.append(f"{tour.name} chưa gồm: {tour.exclusions[:cfg.analysis_chars]}")
+            risks.append(f"{tour.name} chưa gồm: {tour.exclusions[: cfg.analysis_chars]}")
         avail = "/".join(o.availability for o in tour.offers)
         if any(w in (tour.cancellation_policy + avail).lower() for w in cfg.risk_words):
             risks.append(f"{tour.name}: chính sách hủy/khan hiếm cần đọc kỹ.")
         if tour.inclusions.strip():
-            benefits.append(f"{tour.name}: {tour.inclusions[:cfg.analysis_chars]}")
-    def dedup(items: list[str]) -> list[str]:
-        return list(dict.fromkeys(items))[:cfg.analysis_items]
+            benefits.append(f"{tour.name}: {tour.inclusions[: cfg.analysis_chars]}")
 
-    return Analysis(hidden_costs=dedup(costs),
-                    conditions=dedup(conds), risks=dedup(risks), benefits=dedup(benefits))
+    def dedup(items: list[str]) -> list[str]:
+        return list(dict.fromkeys(items))[: cfg.analysis_items]
+
+    return Analysis(
+        hidden_costs=dedup(costs), conditions=dedup(conds), risks=dedup(risks), benefits=dedup(benefits)
+    )
 
 
 AssessFn = Callable[[list[TourSnapshot], list[Condition]], dict[tuple[str, str], tuple[float, str]]]
 
 
-def compare(req: Requirement, tours: list[TourSnapshot],
-            assess: AssessFn | None, cfg: DecideCfg) -> Comparison:
+def compare(
+    req: Requirement, tours: list[TourSnapshot], assess: AssessFn | None, cfg: DecideCfg
+) -> Comparison:
     evals = hard_filter(req, tours)
     surviving = passing_offers(req, tours, evals)
     seen: set[str] = set()
@@ -248,10 +297,14 @@ def compare(req: Requirement, tours: list[TourSnapshot],
     for (tour_id, cid), (_, quote) in soft_scores.items():
         offer_ids = [o.id for t in tours if t.id == tour_id for o in t.offers]
         for oid in offer_ids:
-            evaluations.append(Evaluation(offer_id=oid, condition_id=cid,
-                                          state="pass", quote=quote))
+            evaluations.append(Evaluation(offer_id=oid, condition_id=cid, state="pass", quote=quote))
     ranked = rank(req, surviving, soft_scores)
-    return Comparison(id=uid("cmp"), requirement=req, ranked=ranked,
-                      evaluations=evaluations,
-                      analysis=analyze(tours, ranked, cfg),
-                      candidates_considered=len(tours))
+    return Comparison(
+        id=uid("cmp"),
+        requirement=req,
+        ranked=ranked,
+        tour_snapshots=tours,
+        evaluations=evaluations,
+        analysis=analyze(tours, ranked, cfg),
+        candidates_considered=len(tours),
+    )

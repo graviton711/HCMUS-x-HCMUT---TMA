@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useId, useRef, useState, type MouseEvent } from 'react';
-import { AccountPage, AuthPage, readAuthProfile, type AuthProfile } from './AuthPages';
-import { ContactPage, LandingPage, SupportPage } from './PublicPages';
+import { readAuthProfile, type AuthProfile } from './AuthPages';
+import { LandingPage, SupportPage } from './PublicPages';
 import { PreferencesControl, usePreferences } from './preferences';
 import {
   loadSessions,
-  getAccess,
   newSession,
   normalizeSearch,
   removeAccess,
@@ -14,9 +13,7 @@ import {
 import { Dialog } from '../components/Dialog';
 import { Icon } from '../components/Icon';
 import { SessionSidebar } from '../components/SessionSidebar';
-import { WorkspacePage } from '../features/workspace/WorkspacePage';
-import { useWorkspace } from '../features/workspace/useWorkspace';
-import { accountClient, allHistory, fromHistory } from './history';
+import { CurrentWorkspace } from '../features/workspace/CurrentWorkspace';
 
 function locationState() {
   return {
@@ -33,7 +30,7 @@ export function App() {
   const { t, locale } = usePreferences();
   const [route, setRoute] = useState(locationState);
   const [sessions, setSessions] = useState(() => loadSessions(readAuthProfile()?.id));
-  const [profile, setProfile] = useState<AuthProfile | null>(readAuthProfile);
+  const [profile] = useState<AuthProfile | null>(readAuthProfile);
   const [drawer, setDrawer] = useState(false);
   const [filter, setFilter] = useState('');
   const [rename, setRename] = useState<LocalSession | null>(null);
@@ -41,10 +38,6 @@ export function App() {
   const [remove, setRemove] = useState<LocalSession | null>(null);
   const [storageError, setStorageError] = useState(false);
   const [historyError, setHistoryError] = useState('');
-  const [historyBusy, setHistoryBusy] = useState(false);
-  const [retention, setRetention] = useState<number | null>(null);
-  const profileRef = useRef(profile);
-  profileRef.current = profile;
   const searchId = useId();
   const headerRef = useRef<HTMLElement>(null);
   const current =
@@ -66,51 +59,6 @@ export function App() {
     },
     [],
   );
-  const workspace = useWorkspace(current, patchSession, profile?.id);
-  const reloadHistory = useCallback(async (signal?: AbortSignal) => {
-    const owner = profileRef.current?.id;
-    if (!owner) return;
-    setHistoryBusy(true);
-    setHistoryError('');
-    try {
-      const remote = await allHistory(accountClient(owner), signal);
-      if (profileRef.current?.id !== owner || signal?.aborted) return;
-      setRetention(remote.retention);
-      setSessions((previous) => [
-        ...previous.filter((s) => !s.requirementId),
-        ...remote.items.map((item) => {
-          const local = previous.find((s) => s.requirementId === item.requirement_id);
-          if (local && (local.historyVersion ?? 0) > item.version) return local;
-          return fromHistory(item, local);
-        }),
-      ]);
-    } catch (cause) {
-      if (!signal?.aborted && profileRef.current?.id === owner)
-        setHistoryError(cause instanceof Error ? cause.message : 'Chưa tải được lịch sử.');
-    } finally {
-      if (!signal?.aborted && profileRef.current?.id === owner) setHistoryBusy(false);
-    }
-  }, []);
-  useEffect(() => {
-    const controller = new AbortController();
-    if (profile?.id) void reloadHistory(controller.signal);
-    else {
-      setHistoryError('');
-      setHistoryBusy(false);
-      setRetention(null);
-    }
-    return () => controller.abort();
-  }, [profile?.id, reloadHistory]);
-  useEffect(() => {
-    const changed = () => {
-      if (!readAuthProfile()) {
-        setProfile(null);
-        setSessions(loadSessions());
-      }
-    };
-    window.addEventListener('di-cung-auth', changed);
-    return () => window.removeEventListener('di-cung-auth', changed);
-  }, []);
   useEffect(() => {
     setStorageError(!saveSessions(sessions, profile?.id));
   }, [sessions, profile?.id]);
@@ -156,131 +104,17 @@ export function App() {
     if (sessions.length) navigate(`/tours?session=${sessions[0].id}`);
     else startSession();
   };
-  const onStart = () => (profile ? continueTours() : navigate('/auth'));
-  const changeProfile = (next: AuthProfile | null) => {
-    setProfile(next);
-    setSessions(loadSessions(next?.id));
-    navigate(next ? '/tours' : '/auth');
-  };
-  const updateMetadata = async (
-    session: LocalSession,
-    changes: { title?: string; pinned?: boolean },
-  ) => {
-    const owner = profileRef.current?.id;
-    try {
-      if (owner && session.requirementId) {
-        const result = await accountClient(owner).editHistory(session.requirementId, {
-          expected_version: session.historyVersion ?? 0,
-          ...changes,
-        });
-        if (profileRef.current?.id !== owner) return;
-        patchSession(session.id, {
-          title: result.title,
-          pinned: result.pinned,
-          historyVersion: result.version,
-        });
-      } else patchSession(session.id, changes);
-    } catch (cause) {
-      setHistoryError(cause instanceof Error ? cause.message : 'Chưa lưu được lịch sử.');
-    }
-  };
+  const onStart = () => continueTours();
+  const updateMetadata = (session: LocalSession, changes: { title?: string; pinned?: boolean }) =>
+    patchSession(session.id, changes);
   const archive = async (session: LocalSession) => {
-    const owner = profileRef.current?.id;
-    if (owner && session.requirementId)
-      await accountClient(owner).archiveHistory(session.requirementId, session.historyVersion ?? 0);
-    if (profileRef.current?.id !== owner) return;
     setSessions((all) => all.filter((s) => s.id !== session.id));
     removeAccess(session.id);
-  };
-  const deleteHistory = async () => {
-    setHistoryBusy(true);
-    setHistoryError('');
-    try {
-      for (const session of sessions) await archive(session);
-    } catch (cause) {
-      setHistoryError(cause instanceof Error ? cause.message : 'Chưa ẩn hết lịch sử.');
-    } finally {
-      setHistoryBusy(false);
-    }
-  };
-  const linkGuestHistory = async () => {
-    const owner = profileRef.current?.id;
-    if (!owner || historyBusy) return;
-    setHistoryBusy(true);
-    setHistoryError('');
-    try {
-      let guests = loadSessions();
-      const missing = guests.some((s) => s.requirementId && !getAccess(s.id));
-      for (const guest of guests.filter((s) => s.requirementId && getAccess(s.id))) {
-        await accountClient(owner).linkHistory(getAccess(guest.id)!.token);
-        if (profileRef.current?.id !== owner) return;
-        const detail = await accountClient(owner).historyDetail(guest.requirementId!);
-        await accountClient(owner).editHistory(guest.requirementId!, {
-          expected_version: detail.version,
-          title: guest.title,
-          pinned: guest.pinned,
-        });
-        if (profileRef.current?.id !== owner) return;
-        removeAccess(guest.id);
-        guests = guests.filter((s) => s.id !== guest.id);
-        saveSessions(guests);
-      }
-      await reloadHistory();
-      if (missing)
-        setHistoryError(
-          'Một số phiên ẩn danh không còn token trong tab này hoặc đã hết hạn; bản lưu vẫn được giữ.',
-        );
-    } catch (cause) {
-      setHistoryError(cause instanceof Error ? cause.message : 'Chưa nhập được phiên ẩn danh.');
-    } finally {
-      setHistoryBusy(false);
-    }
   };
   const link = (url: string) => (event: MouseEvent<HTMLAnchorElement>) => {
     if (isLinkClick(event)) {
       event.preventDefault();
       navigate(url);
-    }
-  };
-  const exportHistory = async () => {
-    const owner = profileRef.current?.id;
-    setHistoryBusy(true);
-    setHistoryError('');
-    try {
-      const exported = owner
-        ? await (async () => {
-            const client = accountClient(owner);
-            const remote = await allHistory(client);
-            const details = [];
-            for (const item of remote.items)
-              details.push(await client.historyDetail(item.requirement_id));
-            return {
-              retention_days: remote.retention,
-              conversations: details,
-              unsent_drafts: sessions.filter((s) => !s.requirementId),
-              limited: details.some((d) => d.transcript.limited || d.runs_limited),
-            };
-          })()
-        : { sessions };
-      if (profileRef.current?.id !== owner) return;
-      const url = URL.createObjectURL(
-        new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), ...exported }, null, 2)], {
-          type: 'application/json',
-        }),
-      );
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'di-cung-history.json';
-      a.click();
-      URL.revokeObjectURL(url);
-      if ('limited' in exported && exported.limited)
-        setHistoryError(
-          'Đã xuất dữ liệu; một số hội thoại dài được giới hạn. File có đánh dấu limited.',
-        );
-    } catch (cause) {
-      setHistoryError(cause instanceof Error ? cause.message : 'Chưa xuất được lịch sử.');
-    } finally {
-      setHistoryBusy(false);
     }
   };
   const sorted = [...sessions].sort(
@@ -362,7 +196,6 @@ export function App() {
                     aria-label={s.pinned ? t('Bỏ ghim', 'Unpin') : t('Ghim phiên', 'Pin session')}
                     aria-pressed={s.pinned}
                     onClick={() => void updateMetadata(s, { pinned: !s.pinned })}
-                    disabled={historyBusy}
                   >
                     <Icon name="pin" size={15} />
                   </button>
@@ -390,23 +223,12 @@ export function App() {
         })}
       </nav>
       {profile && (
-        <>
-          <button
-            className="btn"
-            disabled={historyBusy || workspace.state.busy}
-            onClick={() => void reloadHistory()}
-          >
-            {t('Tải lại lịch sử tài khoản', 'Reload account history')}
-          </button>
-          {retention !== null && (
-            <p className="form-hint">
-              {t(
-                `Hệ thống lưu lịch sử trong: ${retention} ngày. Bản nháp chưa gửi lưu trên máy này.`,
-                `History retention: ${retention} days. Unsent drafts stay in this browser.`,
-              )}
-            </p>
+        <p className="form-hint">
+          {t(
+            'Đồng bộ tài khoản chưa được nối với backend hiện tại; các phiên guest vẫn lưu trong trình duyệt.',
+            'Account sync is not connected to the current backend; guest sessions remain in this browser.',
           )}
-        </>
+        </p>
       )}
       <div className="sidebar-foot">
         <Icon name="user" />
@@ -414,7 +236,7 @@ export function App() {
           <strong>{profile?.name || t('Phiên ẩn danh', 'Anonymous session')}</strong>
           <p>
             {profile
-              ? t('Lịch sử tài khoản', 'Account history')
+              ? t('Phiên guest trên trình duyệt', 'Guest sessions in this browser')
               : t('Lịch sử trên trình duyệt này', 'History on this browser')}
           </p>
         </div>
@@ -508,11 +330,6 @@ export function App() {
               )}
             </p>
           )}
-          {historyBusy && (
-            <p className="notice" role="status">
-              {t('Đang đồng bộ lịch sử…', 'Syncing history…')}
-            </p>
-          )}
           {historyError && (
             <p className="notice notice-error" role="alert">
               {historyError}
@@ -520,22 +337,47 @@ export function App() {
           )}
           {route.path === '/' && <LandingPage onStart={onStart} />}
           {route.path === '/auth' && (
-            <AuthPage onContinue={continueTours} onAuthenticated={changeProfile} />
+            <section className="empty-state">
+              <h1>{t('Đăng nhập chưa được nối.', 'Sign-in is not connected yet.')}</h1>
+              <p>
+                {t(
+                  'Bạn vẫn có thể tìm tour bằng phiên guest; tài khoản sẽ được port sau với backend hiện tại.',
+                  'You can search using a guest session; account support will be ported against the current backend later.',
+                )}
+              </p>
+              <button className="btn btn-primary" onClick={continueTours}>
+                {t('Tiếp tục với guest', 'Continue as guest')}
+              </button>
+            </section>
           )}
           {route.path === '/account' && (
-            <AccountPage
-              onContinue={continueTours}
-              onSignedOut={() => changeProfile(null)}
-              onProfileChanged={setProfile}
-              onSignIn={() => navigate('/auth')}
-              onExportHistory={exportHistory}
-              onDeleteHistory={deleteHistory}
-              sessionCount={sessions.length}
-              onLinkGuestHistory={() => void linkGuestHistory()}
-              historyBusy={historyBusy}
-            />
+            <section className="empty-state">
+              <h1>{t('Tài khoản chưa khả dụng.', 'Account features are not available yet.')}</h1>
+              <p>
+                {t(
+                  'Auth, đồng bộ lịch sử và quản lý dữ liệu tài khoản chưa có API runtime trên backend hiện tại.',
+                  'Auth, history sync and account data management do not yet have runtime APIs on the current backend.',
+                )}
+              </p>
+              <button className="btn btn-primary" onClick={continueTours}>
+                {t('Tiếp tục với guest', 'Continue as guest')}
+              </button>
+            </section>
           )}
-          {route.path === '/contact' && <ContactPage />}
+          {route.path === '/contact' && (
+            <section className="empty-state">
+              <h1>{t('Liên hệ chưa khả dụng.', 'Contact is not available yet.')}</h1>
+              <p>
+                {t(
+                  'Form liên hệ sẽ chỉ được bật sau khi backend hiện tại có route tiếp nhận và lưu ticket.',
+                  'The contact form will be enabled when the current backend has a ticket submission route.',
+                )}
+              </p>
+              <button className="btn btn-primary" onClick={continueTours}>
+                {t('Quay lại tìm tour', 'Return to tour search')}
+              </button>
+            </section>
+          )}
           {route.path === '/support' && <SupportPage onStart={continueTours} />}
           {route.path === '/tours' && (
             <>
@@ -552,10 +394,9 @@ export function App() {
                 <small>{profile ? profile.name : t('Phiên ẩn danh', 'Anonymous session')}</small>
               </div>
               {current ? (
-                <WorkspacePage
+                <CurrentWorkspace
                   session={current}
-                  workspace={workspace}
-                  onDraft={(draft) => patchSession(current.id, { draft })}
+                  onChangeSession={(changes) => patchSession(current.id, changes)}
                 />
               ) : (
                 <section className="empty-state">
@@ -666,13 +507,8 @@ export function App() {
         title={t('Xóa khỏi lịch sử?', 'Remove from history?')}
       >
         <p>
-          {profile
-            ? t('Ẩn khỏi lịch sử tài khoản', 'Archive from your account history')
-            : t(
-                'Xóa bản lưu trên trình duyệt của phiên',
-                'Remove this browser’s saved session',
-              )}{' '}
-          “{remove ? sessionName(remove) : ''}”.{' '}
+          {t('Xóa bản lưu trên trình duyệt của phiên', 'Remove this browser’s saved session')} “
+          {remove ? sessionName(remove) : ''}”.{' '}
           {t(
             'Tác vụ đang xử lý trên dịch vụ không bị hủy.',
             'Running service tasks will continue.',

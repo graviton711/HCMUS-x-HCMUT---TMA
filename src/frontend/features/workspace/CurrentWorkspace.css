@@ -1,0 +1,217 @@
+.current-workspace {
+  display: grid;
+  gap: 1.5rem;
+  width: min(100%, 1120px);
+  margin: 0 auto;
+  padding: clamp(1rem, 3vw, 2.5rem);
+}
+
+.current-heading {
+  max-width: 760px;
+  padding: 1rem 0;
+}
+
+.current-heading h1 {
+  margin: 0.4rem 0 0.75rem;
+  font-family: var(--font-display, inherit);
+  font-size: clamp(2rem, 5vw, 3.8rem);
+  line-height: 1.05;
+}
+
+.current-heading p,
+.current-hint {
+  max-width: 68ch;
+  color: var(--muted, #5f625e);
+  line-height: 1.6;
+}
+
+.current-card,
+.current-results {
+  padding: clamp(1rem, 3vw, 2rem);
+  border: 1px solid var(--line, #deded6);
+  border-radius: 1.25rem;
+  background: var(--surface, #fffefa);
+  box-shadow: 0 12px 35px rgb(26 35 29 / 5%);
+}
+
+.current-card h2,
+.current-results h2 {
+  margin-top: 0;
+}
+
+.current-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.2rem;
+}
+
+.current-wide {
+  grid-column: 1 / -1;
+}
+
+.current-grid .field {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.current-grid input,
+.current-grid textarea {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line, #deded6);
+  border-radius: 0.7rem;
+  background: white;
+  color: inherit;
+  font: inherit;
+}
+
+.current-grid textarea {
+  resize: vertical;
+}
+
+.current-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.current-missing {
+  padding: 0.8rem 1rem;
+  border-left: 3px solid #b77a23;
+  background: #fbf4e8;
+}
+
+.current-condition-list {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.current-condition-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line, #deded6);
+}
+
+.current-condition-list code {
+  overflow-wrap: anywhere;
+  color: var(--ink, #252a26);
+}
+
+.current-condition-list small {
+  margin-left: auto;
+  color: var(--muted, #5f625e);
+}
+
+.current-results-heading,
+.current-tour-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.current-tour-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.current-tour-card {
+  padding: 1.1rem;
+  border: 1px solid var(--line, #deded6);
+  border-radius: 1rem;
+  background: #fff;
+}
+
+.current-tour-card h3 {
+  margin: 0.75rem 0 0.25rem;
+}
+
+.current-tour-card p {
+  line-height: 1.5;
+}
+
+.current-supplier,
+.current-results-heading small {
+  color: var(--muted, #5f625e);
+}
+
+.current-state {
+  display: inline-flex;
+  padding: 0.25rem 0.55rem;
+  border-radius: 2rem;
+  background: #f5efd9;
+  color: #684c05;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.current-state.pass {
+  background: #e9f4ec;
+  color: #205a37;
+}
+
+.current-state.fail {
+  background: #fae9e7;
+  color: #872f29;
+}
+
+.current-tour-facts {
+  display: grid;
+  gap: 0.55rem;
+  margin: 1rem 0;
+}
+
+.current-tour-facts div {
+  display: grid;
+  grid-template-columns: minmax(6rem, 0.7fr) 1.3fr;
+  gap: 0.5rem;
+}
+
+.current-tour-facts dt {
+  color: var(--muted, #5f625e);
+}
+
+.current-tour-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.current-analysis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 1rem;
+}
+
+.current-analysis ul {
+  padding-left: 1.25rem;
+  line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .current-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .current-wide {
+    grid-column: auto;
+  }
+
+  .current-results-heading {
+    align-items: start;
+  }
+
+  .current-tour-facts div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+}

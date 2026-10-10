@@ -1,10 +1,10 @@
 # App shell
 
-Shell cung cấp navigation công khai, account UI scaffold, language/theme và sidebar phiên. Route đọc URL, back/forward đồng bộ; `tours?session=<local-id>` chọn phiên đã biết. Local metadata/draft/chat/IDs lưu browser. Account UI chưa nối backend vì `src/backend` chưa có Auth/history routes.
+Shell cung cấp navigation công khai, language/theme và sidebar phiên. Route đọc URL, back/forward đồng bộ; `tours?session=<local-id>` chọn phiên đã biết. Guest draft/metadata lưu browser; current backend giữ guest resource ownership. Auth/account flows chưa có current runtime adapter và UI chỉ giải thích trạng thái, không gọi legacy routes.
 
-Input: UI preferences và workspace state. Output: navigation không mất draft; metadata/draft local cho guest và workspace actions. Server history/archive/job đang là target, không được coi là connected. [Contract auth/history](AUTH-ADAPTER.md).
+Input: UI preferences và guest workspace state. Output: navigation không mất draft; metadata/draft local và current backend guest resources. Guest history list/detail API exists; archive/job/account history remain target. [Contract auth/history](AUTH-ADAPTER.md).
 
-Preferences giữ VI/EN + light/dark độc lập dữ liệu source, áp semantic CSS roles và reduced-motion. Asset bản quyền lưu độc lập tại public/assets. Public form contact gửi ticket BE qua anonymous bearer. Auth giả định adapter được tài liệu hóa, không coi bearer auth là compatible v2 nếu BE chưa mapping.
+Preferences giữ VI/EN + light/dark độc lập dữ liệu source, áp semantic CSS roles và reduced-motion. Asset bản quyền lưu độc lập tại public/assets. Public contact form is disabled until the current backend accepts tickets. Auth giả định adapter được tài liệu hóa, không coi bearer auth là compatible v2 nếu BE chưa mapping.
 
 Sidebar desktop mở mặc định 300px; thu gọn còn cột 64px, toàn cột là nút mở bằng click/Enter/Space. Chỉ có một nút thu gọn trong sidebar; nút toolbar dành cho drawer mobile. Kéo cạnh phải hoặc dùng phím trái/phải/Home/End để đổi rộng 240–520px, còn giới hạn theo viewport để giữ chỗ cho nội dung. Lưu rộng/trạng thái riêng trong localStorage; tên phiên có tooltip và có thể xuống dòng. Mobile giữ dialog có focus/Escape; reload trên mobile giữ lựa chọn độ rộng desktop.
 

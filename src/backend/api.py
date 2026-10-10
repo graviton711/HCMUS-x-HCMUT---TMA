@@ -35,9 +35,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     tuning = settings.tuning
     store = SessionStore(settings.database_url)
     catalog = for_settings(settings)
-    nim = NimClient(settings.nvidia_nim_api.get_secret_value(),
-                    settings.nvidia_nim_model, settings.nim_timeout_seconds,
-                    prompt=tuning.extract)
+    nim = NimClient(
+        settings.nvidia_nim_api.get_secret_value(),
+        settings.nvidia_nim_model,
+        settings.nim_timeout_seconds,
+        prompt=tuning.extract,
+    )
 
     app = FastAPI(title="Tour Decision Backend", version=_version())
 
@@ -73,14 +76,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def parse_user(text: str, form: dict[str, Any] | None):
         places = catalog.list_destinations()
         ref_date = now_vn_iso()[:10]
-        return build_requirement(text, form, nim, cfg=tuning.input,
-                                 known_places=places, ref_date=ref_date)
+        return build_requirement(text, form, nim, cfg=tuning.input, known_places=places, ref_date=ref_date)
 
     @app.post("/requirements")
     async def create_requirement(body: dict[str, Any], request: Request) -> dict[str, Any]:
         owner_id = owner_session(request)
-        req = parse_user(str(body.get("text", "")),
-                         body.get("form") if isinstance(body.get("form"), dict) else None)
+        req = parse_user(
+            str(body.get("text", "")), body.get("form") if isinstance(body.get("form"), dict) else None
+        )
         store.save_requirement(req, owner_id)
         return {"requirement": req.model_dump()}
 
@@ -94,8 +97,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if body.get("requirement_id"):
             req = store.get_requirement(str(body["requirement_id"]), owner_id)
         else:
-            req = parse_user(str(body.get("text", "")),
-                             body.get("form") if isinstance(body.get("form"), dict) else None)
+            req = parse_user(
+                str(body.get("text", "")), body.get("form") if isinstance(body.get("form"), dict) else None
+            )
             store.save_requirement(req, owner_id)
         lo, hi = tuning.api.candidate_min, tuning.api.candidate_max
         limit = body.get("candidate_limit", settings.candidate_limit)
@@ -108,14 +112,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         )
 
         def assess(ts, soft):
-            return assess_soft_llm(ts, soft, nim,
-                                   prompt=tuning.assess,
-                                   excerpt_chars=tuning.decide.excerpt_chars,
-                                   quote_chars=tuning.decide.quote_chars,
-                                   soft_fields=tuning.decide.soft_fields)
+            return assess_soft_llm(
+                ts,
+                soft,
+                nim,
+                prompt=tuning.assess,
+                excerpt_chars=tuning.decide.excerpt_chars,
+                quote_chars=tuning.decide.quote_chars,
+                soft_fields=tuning.decide.soft_fields,
+            )
 
-        comp = compare(req, tours, assess if req.soft() and nim.configured() else None,
-                       cfg=tuning.decide)
+        comp = compare(req, tours, assess if req.soft() and nim.configured() else None, cfg=tuning.decide)
         store.save_comparison(comp, owner_id)
         return {"comparison": comp.model_dump()}
 
@@ -138,17 +145,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 padded = cursor + "=" * (-len(cursor) % 4)
                 decoded = base64.urlsafe_b64decode(padded.encode()).decode("utf-8")
                 cursor_data = json.loads(decoded)
-                if (not isinstance(cursor_data, list) or len(cursor_data) != 2
-                        or not all(isinstance(value, str) for value in cursor_data)):
+                if (
+                    not isinstance(cursor_data, list)
+                    or len(cursor_data) != 2
+                    or not all(isinstance(value, str) for value in cursor_data)
+                ):
                     raise ValueError
                 before = (cursor_data[0], cursor_data[1])
             except (ValueError, UnicodeDecodeError, binascii.Error, json.JSONDecodeError):
                 raise AppError("CURSOR_INVALID", "Cursor lịch sử không hợp lệ.", 400) from None
 
         page_size = max(1, min(limit, 100))
-        rows = store.list_history(owner_id, page_size, before)
-        has_more = len(rows) > page_size
-        items = rows[:page_size]
+        items, has_more = store.list_history(owner_id, page_size, before)
         next_cursor = None
         if has_more and items:
             last = items[-1]

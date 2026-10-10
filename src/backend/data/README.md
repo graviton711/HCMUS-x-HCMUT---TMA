@@ -10,7 +10,7 @@ Vào: requirement/comparison records cần lưu; truy vấn catalog (giới hạ
 
 ## Workflow
 
-`sessions.py`: token hash + expiry cho guest session; `save_*`/`get_*` buộc resource vào owner session khi có token; `list_history` dùng cursor theo `(created_at, id)` và `get_history_item` trả model đã validate. Migration thêm owner column, giữ nguyên records cũ ở trạng thái unowned. `catalog.py`: `FixtureCatalog.list_tours()` hoặc `SupabaseCatalog.list_tours()` → rows thô. `for_settings()` chọn provider theo `DATA_PROVIDER`; scan/provider limits, trust allowlist và freshness đọc từ `configs/settings.yaml` (`backend.data`), env thắng YAML.
+`sessions.py`: token hash + expiry cho guest session; `save_*`/`get_*` buộc resource vào owner session khi có token; `list_history` dùng cursor theo `(created_at, id)` và trả page cùng `has_more`; `get_history_item` trả model đã validate. Migration thêm owner column, giữ nguyên records cũ ở trạng thái unowned. `catalog.py`: `FixtureCatalog.list_tours()` hoặc `SupabaseCatalog.list_tours()` → rows thô. `for_settings()` chọn provider theo `DATA_PROVIDER`; scan/provider limits, trust allowlist và freshness đọc từ `configs/settings.yaml` (`backend.data`), env thắng YAML.
 
 ## Interface với module khác
 

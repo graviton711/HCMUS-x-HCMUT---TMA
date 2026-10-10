@@ -121,6 +121,7 @@ class Comparison(BaseModel):
     id: str
     requirement: Requirement
     ranked: list[RankedCandidate] = Field(default_factory=list)
+    tour_snapshots: list[TourSnapshot] = Field(default_factory=list)
     evaluations: list[Evaluation] = Field(default_factory=list)
     analysis: Analysis = Field(default_factory=Analysis)
     candidates_considered: int = 0

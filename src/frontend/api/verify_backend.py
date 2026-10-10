@@ -21,23 +21,31 @@ def collect() -> list[dict[str, object]]:
     )
     captured: list[dict[str, object]] = []
 
-    def save(name: str, validator: str, response) -> dict:
-        assert response.status_code == 200, response.text
+    def save(name: str, validator: str, response, expected_status: int = 200) -> dict:
+        assert response.status_code == expected_status, response.text
         body = response.json()
         captured.append({"name": name, "validator": validator, "response": body})
         return body
 
     with TestClient(create_app(settings)) as client:
         save("health", "health", client.get("/health"))
+        session = save("guest session", "session", client.post("/sessions"), 201)
+        headers = {"Authorization": f"Bearer {session['token']}"}
+        save("basic catalog", "catalog", client.get("/catalog"))
         req = save(
-            "requirement", "requirement", client.post("/requirements", json={"text": "Đà Lạt"})
+            "requirement",
+            "requirement",
+            client.post("/requirements", headers=headers, json={"text": "Đà Lạt"}),
         )["requirement"]
-        save("saved requirement", "requirement", client.get(f"/requirements/{req['id']}"))
+        save("saved requirement", "requirement", client.get(f"/requirements/{req['id']}", headers=headers))
         comp = save(
-            "comparison", "comparison",
-            client.post("/comparisons", json={"requirement_id": req["id"]}),
+            "comparison",
+            "comparison",
+            client.post("/comparisons", headers=headers, json={"requirement_id": req["id"]}),
         )["comparison"]
-        save("saved comparison", "comparison", client.get(f"/comparisons/{comp['id']}"))
+        save("saved comparison", "comparison", client.get(f"/comparisons/{comp['id']}", headers=headers))
+        save("guest history", "history", client.get("/history", headers=headers))
+        save("guest history detail", "history_detail", client.get(f"/history/{req['id']}", headers=headers))
     return captured
 
 
