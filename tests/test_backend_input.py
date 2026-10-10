@@ -101,6 +101,14 @@ def test_form_only_requirement(input_cfg):
     assert "budget_max" not in req.missing
 
 
+def test_structured_destination_options_are_or(input_cfg):
+    req = build_requirement("", {"destinations": ["Đà Nẵng", "Đà Lạt"]}, cfg=input_cfg)
+    destinations = [condition for condition in req.conditions if condition.field == "destination"]
+    assert len(destinations) == 1
+    assert destinations[0].operator == "any"
+    assert destinations[0].value == ["Đà Nẵng", "Đà Lạt"]
+
+
 def test_nim_or_splits_into_any_condition(input_cfg):
     nim = _mock_nim({"hard": [{"field": "destination", "operator": "any",
                                "value": ["Đà Nẵng", "Tây Nguyên"]}],
@@ -140,8 +148,7 @@ def test_nim_raw_transport_kept_for_eval(input_cfg, decide_cfg):
     assert req.conditions[0].value == "xe ô tô"
     tour = rows_to_snapshots(FixtureCatalog().list_tours(10))[0]
     offer = tour.offers[0]
-    assert eval_hard(req.conditions[0], tour, offer.price,
-                     offer.price_basis, offer.departure_date) == "unknown"
+    assert eval_hard(req.conditions[0], tour, offer) == ("unknown", "UNSUPPORTED_TRANSPORT")
 
 
 def test_nim_soft_preferences_extracted(input_cfg):

@@ -144,9 +144,14 @@ def build_requirement(text: str = "", form: dict[str, Any] | None = None,
         if value is None or value == "" or value == []:
             continue
         if field == "destination" and isinstance(value, list):
-            for place in value:
-                conditions.append(Condition(id=f"h{len(conditions)+1}", field=field,
-                                            operator="contains", value=str(place), strength="hard"))
+            places = list(dict.fromkeys(str(place) for place in value if str(place).strip()))
+            if places:
+                conditions.append(Condition(
+                    id=f"h{len(conditions)+1}", field=field,
+                    operator="contains" if len(places) == 1 else "any",
+                    value=places[0] if len(places) == 1 else places,
+                    strength="hard",
+                ))
         else:
             conditions.append(Condition(id=f"h{len(conditions)+1}", field=field,
                                         operator="eq", value=value, strength="hard"))

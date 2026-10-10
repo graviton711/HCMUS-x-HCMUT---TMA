@@ -1,25 +1,23 @@
-# backend/data — lưu phiên + đọc catalog
+# backend/data — persistence + catalog I/O
 
 ## Trách nhiệm
 
-Giữ I/O và persistence: phiên SQLite (requirements, revisions, comparisons, proposals, jobs, history, ownership) và đọc catalog (fixture mẫu cho dev/test, Supabase cho live). Auth provider call được điều phối ở API boundary; không rank hoặc gọi LLM.
+Giữ I/O và persistence hiện có: SQLite guest sessions, owner-scoped requirement/comparison records và history, cùng đọc catalog (fixture mẫu cho dev/test, Supabase cho live). Không rank hoặc gọi LLM. Account/Auth và metadata/archive history vẫn là phần tích hợp tiếp theo.
 
 ## Input/output
 
-Vào: records có owner/session cần lưu; truy vấn catalog (giới hạn số tour). Ra: records trong đúng owner scope; `TourRow` (rows catalog kèm evidence + `field_meta`). Supabase lỗi thì raise `AppError` `retryable`; không bao giờ fallback fixture lén.
+Vào: requirement/comparison records cần lưu; truy vấn catalog (giới hạn số tour). Ra: records theo id; `TourRow` (rows catalog kèm evidence + `field_meta`). Supabase lỗi thì raise `AppError` `retryable`; không bao giờ fallback fixture lén.
 
 ## Workflow
 
-`sessions.py`: lưu/đọc session, requirement revisions, comparison, proposal, job event và history metadata trong SQLite/WAL; mọi account read/write có owner check, guest import chỉ qua thao tác explicit. `catalog.py`: `FixtureCatalog.list_tours()` hoặc `SupabaseCatalog.list_tours()` → rows thô. `for_settings()` chọn provider theo `DATA_PROVIDER`; scan/providers limits và timeout đọc từ `configs/settings.yaml` (`backend.data`), env thắng YAML.
+`sessions.py`: token hash + expiry cho guest session; `save_*`/`get_*` buộc resource vào owner session khi có token; `list_history` dùng cursor theo `(created_at, id)` và `get_history_item` trả model đã validate. Migration thêm owner column, giữ nguyên records cũ ở trạng thái unowned. `catalog.py`: `FixtureCatalog.list_tours()` hoặc `SupabaseCatalog.list_tours()` → rows thô. `for_settings()` chọn provider theo `DATA_PROVIDER`; scan/provider limits, trust allowlist và freshness đọc từ `configs/settings.yaml` (`backend.data`), env thắng YAML.
 
 ## Interface với module khác
 
-`decide` dùng rows catalog; `api` dùng persistence. Đọc bảng Supabase `providers`/`tours`/`offers` (+ `evidence`, `field_meta`) theo `migrations/`. Không import module crawler; không ghi catalog.
+`decide` dùng rows catalog; `api` dùng persistence. `GET /catalog` hiện chỉ công bố destinations, chưa phải catalog DTO đầy đủ cho UI. Đọc bảng Supabase `providers`/`tours`/`offers` (+ `evidence`, `field_meta`) theo `migrations/`. Không import module crawler; không ghi catalog.
 
 ## Quyết định kỹ thuật
 
-- SQLite cho application records; schema upgrade phải giữ nguyên guest records hiện có.
-- Owner identity chỉ lấy từ token đã verify với Supabase Auth; không nhận owner ID do client tự khai.
-- Không lưu password, access/refresh token hoặc response credential của provider trong SQLite/log.
+- SQLite là store cho requirement/comparison records hiện tại.
 - Fixture là explicit (`DATA_PROVIDER=fixture`), không phải fallback lén.
 - Supabase đọc SQL thô qua `psycopg`, transaction chỉ đọc, `LIMIT` chặn trên.

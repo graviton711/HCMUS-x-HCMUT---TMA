@@ -49,10 +49,13 @@ backend:
     candidate_default: 20
     candidate_min: 1
     candidate_max: 100
+    session_ttl_seconds: 2592000
   data:
     scan_limit: 1000
     providers_limit: 100
     connect_timeout_s: 8
+    trusted_domains: []
+    freshness_seconds: {departure_date: 86400, price: 86400}
   nim:
     model: "nvidia/nemotron-3-super-120b-a12b"
     timeout_s: 120.0

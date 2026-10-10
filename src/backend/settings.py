@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -61,6 +61,7 @@ class ApiCfg(BaseModel):
     port: int
     candidate_min: int
     candidate_max: int
+    session_ttl_seconds: int
 
 
 class Tuning(BaseModel):
@@ -120,6 +121,8 @@ def _read_prompt(path: str | Path | None, name: str) -> dict[str, Any]:
 _FLAT_MAP = {
     "database_url": "database_url",
     "data_provider": "data_provider",
+    ("data", "trusted_domains"): "supabase_tour_trusted_domains",
+    ("data", "freshness_seconds"): "supabase_tour_freshness_seconds",
     ("api", "candidate_default"): "candidate_limit",
     ("data", "scan_limit"): "supabase_scan_limit",
     ("nim", "model"): "nvidia_nim_model",
@@ -136,6 +139,10 @@ class Settings(BaseSettings):
 
     supabase_tour_db_url: str = ""
     supabase_scan_limit: int
+    supabase_tour_trusted_domains: list[str] = Field(default_factory=list)
+    supabase_tour_freshness_seconds: dict[str, int] = Field(
+        default_factory=lambda: {"departure_date": 86400, "price": 86400}
+    )
 
     nvidia_nim_api: SecretStr = SecretStr("")
     nvidia_nim_model: str

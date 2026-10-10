@@ -44,6 +44,7 @@ Offer    { fields }
 
 - `Tour` là hồ sơ tương đối ổn định; `Offer` là lựa chọn khởi hành biến động theo ngày.
 - `Offer` tồn tại kể cả khi tour có giá cố định (khi đó chỉ có một phần tử).
+- `destinations` chứa nơi tham quan; `route` giữ tuyến nguyên thứ tự và có thể chứa điểm xuất phát/điểm trung chuyển. Backend loại origin chỉ khỏi destination chuẩn hóa, không xóa raw value/evidence/route.
 
 ## Provider.fields
 
@@ -108,6 +109,8 @@ Plain text thuần túy cho cả 6 field: sạch thẻ HTML, giải mã entities
 
 - Khi nguồn không công bố ngày cụ thể: ghi `departure_pattern` ở `Tour.fields` kèm `status: partial`, và `offers` để rỗng.
 - Field phụ nguồn không công bố thì bỏ hẳn khỏi dict, không ghi null đoán mò.
+
+`offers.field_meta.pricing` có thể bổ sung quote có cấu trúc nhưng không thay raw columns/evidence. Mỗi quote phải gắn với offer và khớp amount, currency, kind và observation time; chỉ host thuộc allowlist mới được xác thực. `from` luôn là lower bound; phụ thu rỗng không đồng nghĩa `complete=true`. Freshness quá TTL hoặc metadata không kiểm chứng được thì eligibility là `unknown`.
 
 ## Required policy
 

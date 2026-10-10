@@ -1,6 +1,7 @@
 """Decide: hard filter → rank → analyze. Offline, soft stays unknown without LLM."""
 
 import json
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -8,7 +9,7 @@ from backend.data.catalog import FixtureCatalog
 from backend.decide.engine import assess_soft_llm, compare
 from backend.input.nim import NimClient
 from backend.input.pipeline import build_requirement
-from backend.models import Condition
+from backend.models import Condition, Requirement, TourRow, uid
 from backend.normalize.snapshots import rows_to_snapshots
 from backend.settings import PromptCfg
 
@@ -112,8 +113,15 @@ def test_budget_hard_filter_per_offer(input_cfg, decide_cfg):
     assert ("dlv-dalat-3n", "dlv-dalat-3n-20261225") not in kept
 
 
-def test_from_price_is_unknown_never_filtered_nor_trusted(input_cfg, decide_cfg):
+def test_from_price_above_cap_fails_but_lower_bound_below_cap_is_unknown(input_cfg, decide_cfg):
     req = _req({"destinations": ["Hạ Long"], "budget_max": 1_000_000}, input_cfg)
+    comp = compare(req, _snapshots(), None, decide_cfg)
+    states = {(e.offer_id, e.condition_id): e.state for e in comp.evaluations}
+    budget_id = next(c.id for c in req.conditions if c.field == "budget_max")
+    assert states[("sgt-halong-3n-20261227", budget_id)] == "fail"
+    assert not comp.ranked
+
+    req = _req({"destinations": ["Hạ Long"], "budget_max": 10_000_000}, input_cfg)
     comp = compare(req, _snapshots(), None, decide_cfg)
     states = {(e.offer_id, e.condition_id): e.state for e in comp.evaluations}
     budget_id = next(c.id for c in req.conditions if c.field == "budget_max")
@@ -127,6 +135,47 @@ def test_destination_mismatch_fails(input_cfg, decide_cfg):
     comp = compare(req, _snapshots(), None, decide_cfg)
     tours = {c.tour_id for c in comp.ranked}
     assert tours == {"dlv-dalat-3n"}
+
+
+def test_country_match_ignores_origin_endpoints_but_keeps_unknown_places(decide_cfg):
+    now = datetime.now(UTC).isoformat()
+    foreign = TourRow(
+        tour={"record_key": "foreign", "departure_city": "TP.HCM",
+              "destinations": ["TP.HCM", "Thượng Hải", "Hàng Châu", "TP.HCM"],
+              "route": ["TP.HCM", "Thượng Hải", "Hàng Châu", "TP.HCM"]},
+        offers=[{"record_key": "foreign-offer", "departure_date": "2027-02-01",
+                 "price": 20_000_000, "price_type": "fixed", "observed_at": now}],
+    )
+    unknown = TourRow(
+        tour={"record_key": "partial", "departure_city": "TP.HCM",
+              "destinations": ["TP.HCM", "Unmapped city", "TP.HCM"]},
+        offers=[{"record_key": "partial-offer", "departure_date": "2027-02-01",
+                 "price": 20_000_000, "price_type": "fixed", "observed_at": now}],
+    )
+    req = Requirement(id=uid("req"), conditions=[
+        Condition(id="country", field="destination", operator="contains",
+                  value="Việt Nam", strength="hard"),
+        Condition(id="city", field="destination", operator="contains",
+                  value="Tokyo", strength="hard")],
+    )
+    comp = compare(req, rows_to_snapshots([foreign, unknown]), None, decide_cfg)
+    states = {(e.offer_id, e.condition_id): e.state for e in comp.evaluations}
+    assert states[("foreign-offer", "country")] == "fail"
+    assert states[("partial-offer", "country")] == "unknown"
+    assert states[("partial-offer", "city")] == "unknown"
+    assert {c.tour_id for c in comp.ranked} == {"partial"}
+
+
+def test_stale_offer_cannot_pass_hard_budget_or_date(input_cfg, decide_cfg):
+    rows = FixtureCatalog().list_tours(10)
+    future = datetime.now(UTC) + timedelta(days=2)
+    stale_tours = rows_to_snapshots(rows, now=future)
+    req = _req({"destinations": ["Đà Lạt"], "budget_max": 8_000_000}, input_cfg)
+    req.conditions.append(Condition(id="old-date", field="date_from", value="2026-12-01"))
+    comp = compare(req, stale_tours, None, decide_cfg)
+    reasons = {(e.offer_id, e.condition_id): e.reason_code for e in comp.evaluations}
+    assert reasons[("dlv-dalat-3n-20261225", "h2")] == "FIELD_STALE"
+    assert reasons[("dlv-dalat-3n-20261225", "old-date")] == "FIELD_STALE"
 
 
 def test_any_operator_matches_either(input_cfg, decide_cfg):

@@ -5,43 +5,38 @@ Hệ thống hỗ trợ người Việt so sánh tour và nhà cung cấp dựa 
 ```mermaid
 flowchart LR
     U[Người dùng nhập nhu cầu] --> Q[Chuẩn hóa điều kiện cứng/mềm]
-    Q --> S[Đọc catalog đã kiểm tra]
-    S --> C[Lọc cứng thu pool, LLM chấm trường mềm]
-    C --> R[Bảng rank, bằng chứng, chi phí ẩn, rủi ro]
+    Q --> S[Backend đọc catalog]
+    S --> C[Lọc cứng, chấm mềm, xếp hạng]
+    C --> R[Bảng so sánh, bằng chứng, trade-off]
     R --> U
+    Ingest[src/ingest] --> Catalog[(Supabase catalog)]
+    S --> Catalog
 ```
 
-Tầng ingest đã implement (`src/ingest` + Supabase tour); backend 4 module đã implement (`src/backend`: data/input/normalize/decide + `api` mỏng). Crawler xuất bản catalog, backend chỉ đọc.
-
-- [Proposal và phân tích bài toán](docs/idea.md)
 - [Kiến trúc hệ thống](docs/system-architecture.md)
-- [Hợp đồng dữ liệu](docs/data-contract.md)
-- [Hợp đồng backend](docs/backend-contract.md)
-- [Phạm vi MVP](docs/tour-mvp-scope.md)
-- [Phân công và quy ước Git](docs/team-workflow.md)
+- [Hợp đồng dữ liệu](docs/data-contract.md) · [Hợp đồng backend](docs/backend-contract.md)
+- [Phạm vi MVP](docs/tour-mvp-scope.md) · [Quy ước làm việc](docs/team-workflow.md)
+- [Module backend](src/backend/README.md) · [Module frontend](src/frontend/README.md) · [Module ingest](src/ingest/README.md)
 
-## Chạy tối thiểu backend
+## Chạy backend
 
 ```powershell
 uv sync
 uv run tour-backend serve
 ```
 
-Trang chào: <http://127.0.0.1:8000/> · API tương tác: <http://127.0.0.1:8000/docs>
+API: <http://127.0.0.1:8000/docs>. Mặc định `DATA_PROVIDER=fixture`; catalog thật dùng `DATA_PROVIDER=supabase` và `SUPABASE_TOUR_DB_URL` (chỉ đọc). LLM dùng `NVIDIA_NIM_API`.
 
-Mặc định `DATA_PROVIDER=fixture`, không cần credentials. Catalog thật: `DATA_PROVIDER=supabase` + `SUPABASE_TOUR_DB_URL` (chỉ đọc). LLM thật: `NVIDIA_NIM_API`. Chi tiết: [backend-contract](docs/backend-contract.md), [module backend](src/backend/README.md).
+## Frontend
 
-## Chạy tối thiểu module ingest
-
-```powershell
-uv run python -m ingest.run --source <source>
-```
-
-Bỏ `--source` nghĩa là chạy tất cả (`configs/sources-mvp.csv` / `configs/profiles/`). Audit (`uv run python -m ingest.audit --profile <source>`) chỉ chạy tay khi đổi profile hoặc thêm nguồn mới. Chi tiết: `src/ingest/README.md`.
+React UI của `main` nằm tại `src/frontend`; package đã cài/build được. Contract phía UI hiện vẫn chứa các call `/v2` và chưa chạy end-to-end với backend chuẩn. Xem [tình trạng tích hợp](src/frontend/BACKEND-GAPS.md); phần chuyển client/flow phải tiếp tục trên `src/backend`, không khôi phục `src/api` cũ.
 
 ## Kiểm tra
 
 ```powershell
 uv run pytest -q
 uv run ruff check src tests
+pnpm.cmd --dir src/frontend typecheck
+pnpm.cmd --dir src/frontend test
+pnpm.cmd --dir src/frontend build
 ```

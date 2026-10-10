@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from collections.abc import Callable
 from datetime import date
 
@@ -13,6 +15,7 @@ from backend.models import (
     Comparison,
     Condition,
     Evaluation,
+    OfferSnapshot,
     RankedCandidate,
     Requirement,
     State,
@@ -23,48 +26,114 @@ from backend.settings import DecideCfg, PromptCfg
 
 
 def _contains(haystack: str, needle: str) -> bool:
-    return needle.lower() in haystack.lower()
+    return _fold(needle) in _fold(haystack)
 
 
-def eval_hard(condition: Condition, tour: TourSnapshot, offer_price: int | None,
-              offer_basis: str, offer_date: str) -> State:
+def _fold(value: str) -> str:
+    text = value.replace("đ", "d").replace("Đ", "D")
+    text = "".join(c for c in unicodedata.normalize("NFD", text)
+                   if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+_COUNTRY_ALIASES = {
+    "vn": {"vietnam", "trongnuoc"},
+    "cn": {"china", "trungquoc"},
+    "tw": {"taiwan", "dailoan"},
+    "bn": {"brunei", "bruneidarussalam"},
+    "jp": {"japan", "nhatban"},
+    "kr": {"korea", "southkorea", "hanquoc"},
+    "th": {"thailand", "thailan"},
+    "sg": {"singapore"},
+    "my": {"malaysia"},
+    "id": {"indonesia"},
+    "ph": {"philippines"},
+    "la": {"laos"},
+    "kh": {"cambodia", "campuchia"},
+}
+
+
+def _destination_state(value: str, tour: TourSnapshot) -> State:
+    key = _fold(value)
+    country = next((code for code, aliases in _COUNTRY_ALIASES.items() if key in aliases), None)
+    if country:
+        if country in tour.destination_countries:
+            return "pass"
+        return "fail" if tour.destination_country_complete else "unknown"
+    if any(_contains(place, value) for place in tour.destinations):
+        return "pass"
+    return "fail" if tour.destination_country_complete else "unknown"
+
+
+def _unknown_reason(freshness: str, policy_seconds: int | None) -> str:
+    if policy_seconds is None or policy_seconds <= 0:
+        return "FIELD_FRESHNESS_POLICY_MISSING"
+    if freshness == "stale":
+        return "FIELD_STALE"
+    return "FIELD_FRESHNESS_UNKNOWN"
+
+
+def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) -> tuple[State, str]:
     """Per-offer hard evaluation. Anything unprovable is `unknown`."""
     f, v = condition.field, condition.value
     any_op = condition.operator == "any" and isinstance(v, list)
     if f == "destination":
-        if not tour.destinations:
-            return "unknown"
         vals = v if any_op else [v]
-        return "pass" if any(_contains(d, str(x)) for d in tour.destinations for x in vals) else "fail"
+        states = [_destination_state(str(x), tour) for x in vals]
+        return ("pass", "") if "pass" in states else (("unknown", "DESTINATION_PARTIAL") if "unknown" in states else ("fail", "DESTINATION_MISMATCH"))
     if f == "departure_city":
         vals = v if any_op else [v]
-        return "pass" if any(_contains(tour.departure_city, str(x)) for x in vals) else "fail"
+        return ("pass", "") if any(_contains(tour.departure_city, str(x)) for x in vals) else ("fail", "DEPARTURE_CITY_MISMATCH")
     if f == "transport":
         if str(v) not in ("flight", "bus", "train", "cruise", "mixed"):
-            return "unknown"
-        return "pass" if tour.transport == str(v) else ("unknown" if not tour.transport else "fail")
+            return "unknown", "UNSUPPORTED_TRANSPORT"
+        return (("pass", "") if tour.transport == str(v) else (("unknown", "FIELD_MISSING") if not tour.transport else ("fail", "TRANSPORT_MISMATCH")))
     if f == "accommodation":
-        return "pass" if _contains(tour.accommodation, str(v)) else ("unknown" if not tour.accommodation else "fail")
+        return (("pass", "") if _contains(tour.accommodation, str(v)) else (("unknown", "FIELD_MISSING") if not tour.accommodation else ("fail", "ACCOMMODATION_MISMATCH")))
     if f == "duration_days":
-        return "unknown" if tour.duration_days is None else ("pass" if tour.duration_days == v else "fail")
+        return (("unknown", "FIELD_MISSING") if tour.duration_days is None else (("pass", "") if tour.duration_days == v else ("fail", "DURATION_MISMATCH")))
     if f in ("date_from", "date_to"):
-        if not offer_date:
-            return "unknown"
+        if offer.departure_freshness != "fresh":
+            return "unknown", _unknown_reason(offer.departure_freshness, offer.departure_freshness_policy_seconds)
+        if not offer.departure_date:
+            return "unknown", "FIELD_MISSING"
         try:
-            day = date.fromisoformat(offer_date)
+            day = date.fromisoformat(offer.departure_date)
             bound = date.fromisoformat(str(v))
         except ValueError:
-            return "unknown"
+            return "unknown", "FIELD_INVALID"
         ok = day >= bound if f == "date_from" else day <= bound
-        return "pass" if ok else "fail"
+        return (("pass", "") if ok else ("fail", "DATE_MISMATCH"))
     if f == "budget_max":
-        if offer_price is None or offer_basis != "exact" or isinstance(v, list):
-            return "unknown"
+        if offer.price_freshness != "fresh":
+            return "unknown", _unknown_reason(offer.price_freshness, offer.price_freshness_policy_seconds)
+        if not offer.price_trusted:
+            return "unknown", "PRICE_UNVERIFIED"
+        if offer.price is None or isinstance(v, list):
+            return "unknown", "PRICE_MISSING"
+        amount = v
+        currency = "VND"
+        basis = "per_adult"
+        coverage = "tour_price"
+        if isinstance(v, dict):
+            amount = v.get("amount", v.get("upper"))
+            currency = str(v.get("currency") or "")
+            basis = str(v.get("basis") or "")
+            coverage = str(v.get("coverage") or "")
+        if currency and currency.upper() != offer.currency.upper():
+            return "unknown", "PRICE_CURRENCY_MISMATCH"
+        if basis not in ("", "per_adult") or coverage not in ("", "tour_price"):
+            return "unknown", "PRICE_BASIS_MISMATCH"
         try:
-            return "pass" if offer_price <= int(v) else "fail"
+            maximum = int(amount)
         except (TypeError, ValueError):
-            return "unknown"
-    return "unknown"
+            return "unknown", "PRICE_BUDGET_INVALID"
+        if offer.price_basis == "from":
+            return (("fail", "PRICE_LOWER_BOUND_OVER_BUDGET") if offer.price > maximum else ("unknown", "PRICE_FROM_LOWER_BOUND"))
+        if offer.price_basis != "exact":
+            return "unknown", "PRICE_NOT_EXACT"
+        return (("pass", "") if offer.price <= maximum else ("fail", "PRICE_OVER_BUDGET"))
+    return "unknown", "FIELD_UNSUPPORTED"
 
 
 def hard_filter(req: Requirement, tours: list[TourSnapshot]) -> list[Evaluation]:
@@ -73,8 +142,9 @@ def hard_filter(req: Requirement, tours: list[TourSnapshot]) -> list[Evaluation]
     for tour in tours:
         for offer in tour.offers:
             for cond in hard:
-                state = eval_hard(cond, tour, offer.price, offer.price_basis, offer.departure_date)
-                evals.append(Evaluation(offer_id=offer.id, condition_id=cond.id, state=state))
+                state, reason = eval_hard(cond, tour, offer)
+                evals.append(Evaluation(offer_id=offer.id, condition_id=cond.id,
+                                        state=state, reason_code=reason))
     return evals
 
 

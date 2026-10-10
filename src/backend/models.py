@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 State = Literal["pass", "fail", "unknown"]
 Strength = Literal["hard", "soft"]
 PriceBasis = Literal["exact", "from", "contact"]
+Freshness = Literal["fresh", "stale", "unknown"]
+PricingMetadataState = Literal["missing", "validated", "invalid", "untrusted"]
 
 
 def uid(prefix: str) -> str:
@@ -53,6 +55,16 @@ class OfferSnapshot(BaseModel):
     price: int | None = None
     currency: str = "VND"
     price_basis: PriceBasis = "contact"
+    price_trusted: bool = False
+    price_freshness: Freshness = "unknown"
+    departure_freshness: Freshness = "unknown"
+    price_freshness_policy_seconds: int | None = None
+    departure_freshness_policy_seconds: int | None = None
+    pricing_metadata_state: PricingMetadataState = "missing"
+    pricing_issue: str = ""
+    pricing_complete: bool | None = None
+    price_quotes: list[dict[str, Any]] = Field(default_factory=list)
+    extra_charges: list[dict[str, Any]] = Field(default_factory=list)
     availability: str = "unknown"
     conditions: str = ""
     evidence: Evidence = Field(default_factory=Evidence)
@@ -64,6 +76,10 @@ class TourSnapshot(BaseModel):
     name: str = ""
     url: str = ""
     destinations: list[str] = Field(default_factory=list)
+    raw_destinations: list[str] = Field(default_factory=list)
+    route: list[str] = Field(default_factory=list)
+    destination_countries: list[str] = Field(default_factory=list)
+    destination_country_complete: bool = False
     departure_city: str = ""
     duration_days: int | None = None
     transport: str = ""
@@ -85,6 +101,7 @@ class Evaluation(BaseModel):
     condition_id: str
     state: State = "unknown"
     quote: str = ""
+    reason_code: str = ""
 
 
 class RankedCandidate(BaseModel):

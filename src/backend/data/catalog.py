@@ -112,7 +112,8 @@ class SupabaseCatalog:
                     providers = {r[0]: {"source_key": r[1], "display_name": r[2]} for r in cur.fetchall()}
                     cur.execute(
                         "SELECT id, provider_id, record_key, url, tour_name, departure_city,"
-                        " destinations, transport, accommodation, duration_days, itinerary,"
+                        " destinations, route, transport, accommodation, duration_days,"
+                        " price, currency, price_type, field_meta, itinerary,"
                         " inclusions, exclusions, cancellation_policy, surcharges, child_policy,"
                         " verification_status, observed_at FROM tours LIMIT %s",
                         (bound,),
@@ -123,7 +124,8 @@ class SupabaseCatalog:
                         return []
                     cur.execute(
                         "SELECT tour_id, record_key, departure_date, price, availability,"
-                        " observed_at FROM offers WHERE tour_id = ANY(%s)",
+                        " price_by_age, field_meta, observed_at"
+                        " FROM offers WHERE tour_id = ANY(%s)",
                         ([t["id"] for t in tours],),
                     )
                     offer_cols = [d[0] for d in (cur.description or [])]

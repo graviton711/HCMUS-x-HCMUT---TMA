@@ -101,7 +101,8 @@
             "port": {"type": "integer"},
             "candidate_default": {"type": "integer"},
             "candidate_min": {"type": "integer"},
-            "candidate_max": {"type": "integer"}
+            "candidate_max": {"type": "integer"},
+            "session_ttl_seconds": {"type": "integer", "minimum": 60}
           },
           "additionalProperties": true
         },

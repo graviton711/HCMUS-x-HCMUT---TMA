@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -50,6 +53,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok", "version": _version()}
 
+    def owner_session(request: Request) -> str | None:
+        header = request.headers.get("Authorization", "")
+        if not header:
+            return None
+        scheme, separator, token = header.partition(" ")
+        if not separator or scheme.lower() != "bearer" or not token.strip():
+            raise AppError("SESSION_INVALID", "Phiên truy cập không hợp lệ.", 401)
+        return store.authenticate_session(token.strip())
+
+    @app.post("/sessions", status_code=201)
+    async def create_session() -> dict[str, str]:
+        return store.create_session(tuning.api.session_ttl_seconds)
+
+    @app.get("/catalog")
+    async def get_catalog() -> dict[str, list[str]]:
+        return {"destinations": catalog.list_destinations()}
+
     def parse_user(text: str, form: dict[str, Any] | None):
         places = catalog.list_destinations()
         ref_date = now_vn_iso()[:10]
@@ -57,28 +77,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                                  known_places=places, ref_date=ref_date)
 
     @app.post("/requirements")
-    async def create_requirement(body: dict[str, Any]) -> dict[str, Any]:
+    async def create_requirement(body: dict[str, Any], request: Request) -> dict[str, Any]:
+        owner_id = owner_session(request)
         req = parse_user(str(body.get("text", "")),
                          body.get("form") if isinstance(body.get("form"), dict) else None)
-        store.save_requirement(req)
+        store.save_requirement(req, owner_id)
         return {"requirement": req.model_dump()}
 
     @app.get("/requirements/{rid}")
-    async def get_requirement(rid: str) -> dict[str, Any]:
-        return {"requirement": store.get_requirement(rid).model_dump()}
+    async def get_requirement(rid: str, request: Request) -> dict[str, Any]:
+        return {"requirement": store.get_requirement(rid, owner_session(request)).model_dump()}
 
     @app.post("/comparisons")
-    async def create_comparison(body: dict[str, Any]) -> dict[str, Any]:
+    async def create_comparison(body: dict[str, Any], request: Request) -> dict[str, Any]:
+        owner_id = owner_session(request)
         if body.get("requirement_id"):
-            req = store.get_requirement(str(body["requirement_id"]))
+            req = store.get_requirement(str(body["requirement_id"]), owner_id)
         else:
             req = parse_user(str(body.get("text", "")),
                              body.get("form") if isinstance(body.get("form"), dict) else None)
-            store.save_requirement(req)
+            store.save_requirement(req, owner_id)
         lo, hi = tuning.api.candidate_min, tuning.api.candidate_max
         limit = body.get("candidate_limit", settings.candidate_limit)
         limit = limit if isinstance(limit, int) and lo <= limit <= hi else settings.candidate_limit
-        tours = rows_to_snapshots(catalog.list_tours(limit))
+        tours = rows_to_snapshots(
+            catalog.list_tours(limit),
+            trusted_domains=settings.supabase_tour_trusted_domains,
+            freshness_seconds=settings.supabase_tour_freshness_seconds,
+            require_trusted_pricing=settings.data_provider == "supabase",
+        )
 
         def assess(ts, soft):
             return assess_soft_llm(ts, soft, nim,
@@ -89,11 +116,51 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         comp = compare(req, tours, assess if req.soft() and nim.configured() else None,
                        cfg=tuning.decide)
-        store.save_comparison(comp)
+        store.save_comparison(comp, owner_id)
         return {"comparison": comp.model_dump()}
 
     @app.get("/comparisons/{cid}")
-    async def get_comparison(cid: str) -> dict[str, Any]:
-        return {"comparison": store.get_comparison(cid).model_dump()}
+    async def get_comparison(cid: str, request: Request) -> dict[str, Any]:
+        return {"comparison": store.get_comparison(cid, owner_session(request)).model_dump()}
+
+    @app.get("/history")
+    async def get_history(
+        request: Request,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        owner_id = owner_session(request)
+        if owner_id is None:
+            raise AppError("SESSION_REQUIRED", "Cần phiên truy cập để đọc lịch sử.", 401)
+        before = None
+        if cursor:
+            try:
+                padded = cursor + "=" * (-len(cursor) % 4)
+                decoded = base64.urlsafe_b64decode(padded.encode()).decode("utf-8")
+                cursor_data = json.loads(decoded)
+                if (not isinstance(cursor_data, list) or len(cursor_data) != 2
+                        or not all(isinstance(value, str) for value in cursor_data)):
+                    raise ValueError
+                before = (cursor_data[0], cursor_data[1])
+            except (ValueError, UnicodeDecodeError, binascii.Error, json.JSONDecodeError):
+                raise AppError("CURSOR_INVALID", "Cursor lịch sử không hợp lệ.", 400) from None
+
+        page_size = max(1, min(limit, 100))
+        rows = store.list_history(owner_id, page_size, before)
+        has_more = len(rows) > page_size
+        items = rows[:page_size]
+        next_cursor = None
+        if has_more and items:
+            last = items[-1]
+            encoded = json.dumps([last["created_at"], last["id"]], separators=(",", ":"))
+            next_cursor = base64.urlsafe_b64encode(encoded.encode()).decode().rstrip("=")
+        return {"items": items, "next_cursor": next_cursor}
+
+    @app.get("/history/{item_id}")
+    async def get_history_item(item_id: str, request: Request) -> dict[str, Any]:
+        owner_id = owner_session(request)
+        if owner_id is None:
+            raise AppError("SESSION_REQUIRED", "Cần phiên truy cập để đọc lịch sử.", 401)
+        return store.get_history_item(item_id, owner_id)
 
     return app
