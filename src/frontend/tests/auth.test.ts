@@ -22,6 +22,26 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 describe('account credentials and PKCE', () => {
+  it('discards an avatar response after switching accounts', async () => {
+    let release!: (response: Response) => void;
+    const fetcher = vi.fn(
+      () =>
+        new Promise<Response>((resolve) => {
+          release = resolve;
+        }),
+    );
+    vi.stubGlobal('fetch', fetcher);
+    const auth = await import('../app/auth');
+    auth.saveAuth(session('account-a'));
+    const pending = auth.authRequest('/auth/me/avatar', { image: 'test' });
+    const rejected = expect(pending).rejects.toThrow('Account changed');
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    auth.clearAuth();
+    auth.saveAuth(session('account-b'));
+    release(json({ user: session('account-a').user }));
+    await rejected;
+    expect(auth.readAuthProfile()?.id).toBe('account-b');
+  });
   it('rotates one refresh token for concurrent API calls and keeps credentials outside history', async () => {
     const fetcher = vi.fn().mockResolvedValue(json(session()));
     vi.stubGlobal('fetch', fetcher);

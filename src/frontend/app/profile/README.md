@@ -1,0 +1,5 @@
+# Profile Hub UI
+
+Contract: [Profile Hub](../../../../docs/profile-hub.md). Cloud client validates typed hub responses; hook clears state on owner changes and preserves local editor values on failed writes. Hub composes recent searches, preferences, templates, saved-tour collections and export/delete actions. Apply helpers always create a new draft, clearing dates/prices/child ages and retaining explicit soft strengths. App owns navigation; Results only sends comparison/column IDs to save. No browser persistent cache of personal hub documents.
+
+AccountPage owns the six-view navigation; ProfileHub accepts the selected content view, keeps editors mounted but hidden and contains no second navigation. ProfileEditor owns optional personal fields and avatar preview; Avatar is shared by header/sidebar/editor with initials on load failure. Avatar preparation uses browser Canvas only for uploaded account photos, never image generation or attached screenshot editing. Settings shows history and hub actions with explicit labels and display controls once.

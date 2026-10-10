@@ -6,6 +6,11 @@ export interface AuthProfile {
   email?: string;
   google_email?: string | null;
   has_password?: boolean;
+  phone?: string;
+  home_city?: string;
+  bio?: string;
+  avatar_url?: string | null;
+  avatar_kind?: 'initials' | 'google' | 'uploaded';
 }
 interface Session {
   access_token: string;
@@ -59,6 +64,16 @@ export function profileFrom(value: unknown): AuthProfile {
     ...(typeof p.has_password === 'boolean' ? { has_password: p.has_password } : {}),
     ...(typeof p.google_email === 'string' || p.google_email === null
       ? { google_email: p.google_email }
+      : {}),
+    ...Object.fromEntries(
+      ['phone', 'home_city', 'bio'].filter((k) => typeof p[k] === 'string').map((k) => [k, p[k]]),
+    ),
+    ...(p.avatar_url === null ||
+    (typeof p.avatar_url === 'string' && /^https:\/\//.test(p.avatar_url))
+      ? { avatar_url: p.avatar_url as string | null }
+      : {}),
+    ...(['initials', 'google', 'uploaded'].includes(String(p.avatar_kind))
+      ? { avatar_kind: p.avatar_kind as AuthProfile['avatar_kind'] }
       : {}),
   };
 }
@@ -163,6 +178,7 @@ async function refresh() {
         }
         active = next;
         persist();
+        window.dispatchEvent(new Event('di-cung-auth'));
         return next;
       })
       .catch((error: unknown) => {
@@ -210,26 +226,40 @@ export async function authRequest(
   method = body ? 'POST' : 'GET',
   signal?: AbortSignal,
 ) {
+  const epoch = generation;
   const owner = readAuthProfile()?.id;
   const token = owner ? await accountToken(owner) : undefined;
   try {
-    return await raw(path, body, method, signal, token);
+    const result = await raw(path, body, method, signal, token);
+    if (epoch !== generation) throw new DOMException('Account changed', 'AbortError');
+    return result;
   } catch (error) {
     if (
       !owner ||
-      !['/auth/me', '/auth/logout'].includes(path) ||
+      !(path === '/auth/logout' || path === '/auth/me' || path.startsWith('/auth/me/')) ||
       (error as { status?: number }).status !== 401
     )
       throw error;
     await refresh();
     signal?.throwIfAborted();
     try {
-      return await raw(path, body, method, signal, await accountToken(owner));
+      const result = await raw(path, body, method, signal, await accountToken(owner));
+      if (epoch !== generation) throw new DOMException('Account changed', 'AbortError');
+      return result;
     } catch (next) {
       if ((next as { status?: number }).status === 401) clearAuth();
       throw next;
     }
   }
+}
+export function rememberProfile(value: unknown) {
+  const profile = profileFrom(value);
+  if (!active || active.user.id !== profile.id)
+    throw new DOMException('Account changed', 'AbortError');
+  active = { ...active, user: profile };
+  persist();
+  window.dispatchEvent(new Event('di-cung-auth'));
+  return profile;
 }
 export async function currentProfile(signal?: AbortSignal) {
   if (!read()) throw new Error('Bạn đang dùng phiên ẩn danh.');

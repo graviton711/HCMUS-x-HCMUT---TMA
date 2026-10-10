@@ -18,6 +18,11 @@ import { SessionSidebar } from '../components/SessionSidebar';
 import { WorkspacePage } from '../features/workspace/WorkspacePage';
 import { useWorkspace } from '../features/workspace/useWorkspace';
 import { accountClient, allHistory, fromHistory } from './history';
+import { ProfileHub } from './profile/ProfileHub';
+import { Avatar } from './profile/Avatar';
+import { useHub } from './profile/useHub';
+import { templateFromDraft } from './profile/apply';
+import { formFromRequirement, type FormValues } from '../api/form';
 
 function locationState() {
   return {
@@ -69,6 +74,11 @@ export function App() {
     [],
   );
   const workspace = useWorkspace(current, patchSession, profile?.id);
+  const hub = useHub(profile?.id);
+  const [hubMessage, setHubMessage] = useState('');
+  const [templateCandidate, setTemplateCandidate] = useState<FormValues | null>(null);
+  const [templateName, setTemplateName] = useState('');
+  const [templateId, setTemplateId] = useState('');
   const reloadHistory = useCallback(async (signal?: AbortSignal) => {
     const owner = profileRef.current?.id;
     if (!owner) return;
@@ -105,8 +115,11 @@ export function App() {
   }, [profile?.id, reloadHistory]);
   useEffect(() => {
     const changed = () => {
-      if (!readAuthProfile()) {
-        setProfile(null);
+      const next = readAuthProfile();
+      setProfile(next);
+      if (!next) {
+        setTemplateCandidate(null);
+        setHubMessage('');
         setSessions(loadSessions());
       }
     };
@@ -154,10 +167,20 @@ export function App() {
     if (locationState().path !== '/tours' && !locationState().hash)
       window.scrollTo({ top: 0, behavior: 'instant' });
   };
-  const startSession = () => {
+  const startSession = (draft?: FormValues, title?: string) => {
     const next = newSession();
+    if (draft) next.draft = structuredClone(draft);
+    if (title) next.title = title;
     setSessions((all) => [next, ...all]);
     navigate(`/tours?session=${next.id}`);
+    setHubMessage(
+      draft
+        ? t(
+            'Đã tạo bản nháp mới. Kiểm tra thông tin, chọn lại lịch/ngân sách và xác nhận trước khi tìm.',
+            'New draft created. Review the details, set current dates/budget, and confirm before searching.',
+          )
+        : '',
+    );
   };
   const continueTours = () => {
     if (sessions.length) navigate(`/tours?session=${sessions[0].id}`);
@@ -165,6 +188,8 @@ export function App() {
   };
   const onStart = () => (profile ? continueTours() : navigate('/auth'));
   const changeProfile = (next: AuthProfile | null) => {
+    setHubMessage('');
+    setTemplateCandidate(null);
     setProfile(next);
     setSessions(loadSessions(next?.id));
     navigate(next ? '/tours' : '/auth');
@@ -302,7 +327,7 @@ export function App() {
   const sidebar = (suffix: string) => (
     <div className="sidebar-content">
       <div className="sidebar-heading">
-        <button className="btn" onClick={startSession}>
+        <button className="btn" onClick={() => startSession()}>
           <Icon name="plus" />
           {t('Phiên mới', 'New session')}
         </button>
@@ -442,6 +467,65 @@ export function App() {
       <a className="skip-link" href="#main-content">
         {t('Đến nội dung chính', 'Skip to main content')}
       </a>
+      <Dialog
+        open={templateCandidate !== null}
+        onClose={() => {
+          if (!hub.busy) setTemplateCandidate(null);
+        }}
+        title={t('Lưu mẫu nhu cầu', 'Save requirement template')}
+      >
+        <p>
+          {t(
+            'Mẫu giữ nơi đi/đến, số người và ưu tiên mềm. Lịch, ngân sách và tuổi trẻ em cần nhập lại cho chuyến mới.',
+            'Templates keep places, party counts and soft preferences. Dates, budget and child ages must be entered again for a new trip.',
+          )}
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!templateCandidate || !templateName.trim()) return;
+            void hub
+              .mutate('templates', {
+                item_id: templateId,
+                expected_version: 0,
+                template: templateFromDraft(templateCandidate, templateName),
+              })
+              .then(() => {
+                setTemplateCandidate(null);
+                setHubMessage(t('Đã lưu mẫu vào Tài khoản.', 'Template saved to your account.'));
+              })
+              .catch(() => {});
+          }}
+        >
+          <label className="field">
+            {t('Tên mẫu', 'Template name')}
+            <input
+              required
+              maxLength={80}
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+            />
+          </label>
+          {hub.error && (
+            <p className="notice notice-error" role="alert">
+              {hub.error}
+            </p>
+          )}
+          <div className="button-row">
+            <button
+              type="button"
+              className="btn"
+              disabled={hub.busy}
+              onClick={() => setTemplateCandidate(null)}
+            >
+              {t('Hủy', 'Cancel')}
+            </button>
+            <button className="btn btn-primary" disabled={hub.busy || !templateName.trim()}>
+              {t('Lưu mẫu', 'Save template')}
+            </button>
+          </div>
+        </form>
+      </Dialog>
       <header className="site-header" ref={headerRef}>
         <div className="header-inner">
           <a className="brand" href="/" onClick={link('/')}>
@@ -484,7 +568,7 @@ export function App() {
           <div className="account-actions">
             <PreferencesControl />
             <a
-              className="account-link"
+              className={`account-link ${profile ? 'account-avatar-link' : ''}`}
               aria-label={
                 profile
                   ? t(`Tài khoản của ${profile.name}`, `Account for ${profile.name}`)
@@ -494,8 +578,14 @@ export function App() {
               href={profile ? '/account' : '/auth'}
               onClick={link(profile ? '/account' : '/auth')}
             >
-              <Icon name="user" />
-              <span>{profile?.name || t('Đăng nhập', 'Sign in')}</span>
+              {profile ? (
+                <Avatar profile={profile} />
+              ) : (
+                <>
+                  <Icon name="user" />
+                  <span>{t('Đăng nhập', 'Sign in')}</span>
+                </>
+              )}
             </a>
           </div>
         </div>
@@ -531,6 +621,23 @@ export function App() {
           )}
           {route.path === '/account' && (
             <AccountPage
+              key={profile?.id ?? 'guest'}
+              hub={(view) => (
+                <ProfileHub
+                  key={profile?.id ?? 'guest'}
+                  owner={profile?.id}
+                  view={view}
+                  hub={hub}
+                  sessions={sessions}
+                  retention={retention}
+                  historyBusy={historyBusy}
+                  onNew={startSession}
+                  onOpen={(id) => navigate(`/tours?session=${id}`)}
+                  onPin={(s) => void updateMetadata(s, { pinned: !s.pinned })}
+                  onArchive={setRemove}
+                  onSignIn={() => navigate('/auth')}
+                />
+              )}
               onContinue={continueTours}
               onSignedOut={() => changeProfile(null)}
               onProfileChanged={setProfile}
@@ -548,6 +655,11 @@ export function App() {
           {route.path === '/support' && <SupportPage onStart={continueTours} link={link} />}
           {route.path === '/tours' && (
             <>
+              {hubMessage && (
+                <p className="notice" role="status">
+                  {hubMessage}
+                </p>
+              )}
               <div className="workspace-toolbar">
                 <button
                   className="icon-button history-toggle"
@@ -562,6 +674,44 @@ export function App() {
               </div>
               {current ? (
                 <WorkspacePage
+                  personalBusy={hub.busy}
+                  onSaveTour={
+                    profile && hub.data
+                      ? async (comparisonId, columnId, url) => {
+                          setHubMessage('');
+                          try {
+                            const old = hub.data?.saved_tours.find((i) => i.value.url === url);
+                            await hub.mutate('saved-tours', {
+                              expected_version: old?.version ?? 0,
+                              comparison_id: comparisonId,
+                              column_id: columnId,
+                            });
+                            setHubMessage(
+                              t(
+                                'Đã lưu tour vào Tài khoản. Đây là dữ liệu tại lúc lưu, cần kiểm tra lại trước khi đặt.',
+                                'Saved to your account. This is a historical snapshot; recheck before booking.',
+                              ),
+                            );
+                          } catch (e) {
+                            setHubMessage(
+                              e instanceof Error
+                                ? e.message
+                                : t('Chưa lưu được tour.', 'Unable to save tour.'),
+                            );
+                          }
+                        }
+                      : undefined
+                  }
+                  onSaveTemplate={
+                    profile && hub.data
+                      ? () => {
+                          if (!workspace.state.requirement) return;
+                          setTemplateCandidate(formFromRequirement(workspace.state.requirement));
+                          setTemplateId(crypto.randomUUID());
+                          setTemplateName(current.title || t('Mẫu chuyến đi', 'Trip template'));
+                        }
+                      : undefined
+                  }
                   session={current}
                   workspace={workspace}
                   onDraft={(draft) => patchSession(current.id, { draft })}
@@ -575,7 +725,7 @@ export function App() {
                       'Create a session for your requirements and comparisons.',
                     )}
                   </p>
-                  <button className="btn btn-primary" onClick={startSession}>
+                  <button className="btn btn-primary" onClick={() => startSession()}>
                     {t('Phiên mới', 'New session')}
                     <Icon name="plus" />
                   </button>

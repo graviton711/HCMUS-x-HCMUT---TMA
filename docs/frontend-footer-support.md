@@ -38,6 +38,8 @@ Giữ phong cách, tokens và route hiện hành. Footer giúp điều hướng,
 
 ## Bàn giao gộp
 
-Theo yêu cầu user ngày 10/10, 23 file FE recovery/footer/support đã chuyển từ worktree nguồn sang checkout chính `HCMUS-x-HCMUT---TMA`, nhánh `backend`, để commit/push cùng BE một lần. Baseline hai checkout giống nhau; các file đích được kiểm chưa có sửa riêng trước khi chép. Worktree `feature/minh-phu` giữ bản làm việc; không push nhánh đó trong lần bàn giao này.
+Theo yêu cầu user ngày 10/10, 23 file FE recovery/footer/support đã chuyển từ worktree nguồn sang checkout chính `HCMUS-x-HCMUT---TMA`, nhánh `backend`, để commit/push cùng BE một lần. Baseline hai checkout giống nhau; các file đích được kiểm chưa có sửa riêng trước khi chép. Không push nhánh `feature/minh-phu` trong lần bàn giao này.
 
 Kiểm lại trên checkout chính: 84 frontend tests, build/TypeScript và lint passed; hai browser footer/help tests trên FE 5173 passed, gồm layout VI/EN/light/dark ở 1440/1280/390/320px. Backend 510 tests và Ruff passed. Các kiểm browser tiếp tục chặn auth/v2; không tạo dữ liệu thật.
+
+Theo yêu cầu tiếp theo, worktree phụ đã gỡ khỏi Git và Desktop; bản sao code/tài liệu/artifacts cần giữ cùng phần folder còn lại được lưu local dưới `artifacts/worktree-backups/` (Git ignored). Từ nay FE và BE cùng làm trên `backend`. FE dev ở 5173 đã chuyển sang checkout chính; hai browser footer/help tests chạy lại tại đây passed.

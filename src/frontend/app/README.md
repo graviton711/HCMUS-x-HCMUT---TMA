@@ -1,5 +1,9 @@
 # App shell
 
+`/account` includes the personal Profile Hub. Supabase data is separate from SQLite search history; explicit reuse creates a new draft. Contract and setup: [Profile Hub](../../../docs/profile-hub.md).
+
+Account navigation is one responsive six-view workspace; personal fields/avatar live in Profile and account/data/display actions in Settings. Signed-in header shows only an accessible round avatar. Layout and data contract: [account layout](../../../docs/profile-hub-layout.md). Avatar metadata/profile fields remain in the tab's Auth session; no extra persistent local cache or implicit search preference is created.
+
 Shell cung cấp navigation công khai, auth/account adapter, language/theme và sidebar phiên. Route đọc URL, back/forward đồng bộ; `tours?session=<local-id>` chọn phiên đã biết. Local metadata/draft/chat/IDs lưu browser; session bearer/expiry ở sessionStorage; không giả tài khoản.
 
 Input: UI preferences và workspace state. Output: navigation không mất draft; metadata/draft local cho guest, history server theo account; gọi job/resource BE qua workspace. Archive account ẩn history; không hủy job hoặc xóa evidence. [Contract auth/history](AUTH-ADAPTER.md).

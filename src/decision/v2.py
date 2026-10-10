@@ -11,9 +11,9 @@ from decision.listed import cost_disclosure
 from decision.semantic import semantic_fact
 from domain.common import instant
 from domain.crawl import money_wire
-from domain.requirements import NumberValue
+from domain.requirements import Budget, NumberValue
 
-RANK_POLICY = "rank-v2.3-bounds"
+RANK_POLICY = "rank-v2.4-listed-preference"
 DIMENSIONS = {"estimated_cost": "cost", "hotel_stars_min": "comfort", "included_services": "comfort"}
 LABELS = {
     "duration_days": "Thời lượng",
@@ -44,6 +44,24 @@ LABELS = {
 
 
 def preference_utility(condition, evaluation, domain=()):
+    if (
+        isinstance(condition.value, Budget)
+        and getattr(condition.value, "measure", "payable") == "listed"
+        and condition.operator == "prefer_low"
+    ):
+        actual = evaluation.get("actual")
+        scale = Decimal(condition.value.amount)
+        if (
+            not isinstance(actual, dict)
+            or scale <= 0
+            or actual.get("measure") != "listed"
+            or actual.get("lower") is None
+            or actual.get("upper") != actual.get("lower")
+            or actual.get("reasons")
+        ):
+            return None
+        amount = Decimal(str(actual["lower"]))
+        return float(1 / (1 + max(amount, Decimal(0)) / scale))
     if evaluation["status"] in {"pass", "fail"}:
         return 1.0 if evaluation["status"] == "pass" else 0.0
     if evaluation["reason_code"] != "PREFERENCE_VALUE":

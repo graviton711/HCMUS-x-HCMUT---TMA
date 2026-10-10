@@ -699,6 +699,7 @@ function RecommendationCard({
   busy,
   onOfferChange,
   onEvidence,
+  onSave,
 }: {
   column: ComparisonColumn;
   item: Recommendation | undefined;
@@ -706,6 +707,7 @@ function RecommendationCard({
   busy: boolean;
   onOfferChange: (tourId: string, offerId: string) => void;
   onEvidence: (id: string) => void;
+  onSave?: () => void;
 }) {
   const { locale, t } = usePreferences();
   const prices = result.rows
@@ -749,6 +751,11 @@ function RecommendationCard({
           </span>
         </div>
         <h3>{columnTitle(column, t)}</h3>
+        {onSave && (
+          <button className="text-action" disabled={busy} onClick={onSave}>
+            {t('Lưu tour', 'Save tour')}
+          </button>
+        )}
         <p className="tour-supplier">
           {column.supplier?.display_name ?? t('Nhà cung cấp chưa rõ', 'Supplier unknown')}
         </p>
@@ -1125,13 +1132,14 @@ function AnalysisPanel({
 }
 
 export interface ResultsProps {
+  onSaveTour?: (comparisonId: string, columnId: string, url: string) => Promise<void>;
   comparison: Comparison | null;
   onOfferChange: (tourId: string, offerId: string) => void;
   onEvidence: (evidenceId: string) => void;
   busy: boolean;
 }
 
-export function Results({ comparison, onOfferChange, onEvidence, busy }: ResultsProps) {
+export function Results({ comparison, onOfferChange, onEvidence, busy, onSaveTour }: ResultsProps) {
   const { locale, t } = usePreferences();
   const [tab, setTab] = useState<'facts' | 'analysis'>('facts');
   const id = useId();
@@ -1265,6 +1273,11 @@ export function Results({ comparison, onOfferChange, onEvidence, busy }: Results
           <div className="tour-grid">
             {recommended.map((column) => (
               <RecommendationCard
+                onSave={
+                  onSaveTour
+                    ? () => void onSaveTour(comparison!.id, column.id, column.canonical_url)
+                    : undefined
+                }
                 key={column.id}
                 column={column}
                 item={result.recommendations.items.find((item) => item.candidate_id === column.id)}
@@ -1459,6 +1472,17 @@ export function Results({ comparison, onOfferChange, onEvidence, busy }: Results
                                   : t('Cần kiểm tra thêm', 'Needs verification')}
                           </span>
                           <span className="table-tour-name">{columnTitle(column, t)}</span>
+                          {onSaveTour && column.tour_snapshot_id && (
+                            <button
+                              className="text-action"
+                              disabled={busy}
+                              onClick={() =>
+                                void onSaveTour(comparison!.id, column.id, column.canonical_url)
+                              }
+                            >
+                              {t('Lưu tour', 'Save tour')}
+                            </button>
+                          )}
                           <small className="table-tour-date">
                             {column.supplier?.display_name ??
                               t('Nhà cung cấp chưa rõ', 'Supplier unknown')}

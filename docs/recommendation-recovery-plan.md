@@ -1,6 +1,6 @@
 # Khôi phục gợi ý tour từ catalog thật
 
-Trạng thái: **đã triển khai ngày 10/10/2026**. Backend trên `backend`; frontend trong worktree `feature/minh-phu`. Catalog Supabase tiếp tục read-only. Kết quả và giới hạn ở [verification](recommendation-recovery-verification.md).
+Trạng thái: **đã triển khai ngày 10/10/2026**. Frontend và backend đã gộp, commit/push trên `backend` tại checkout chính theo yêu cầu user. Từ nay cả hai phần tiếp tục làm trên `backend`; worktree frontend riêng không còn dùng. Catalog Supabase tiếp tục read-only. Kết quả và giới hạn ở [verification](recommendation-recovery-verification.md).
 
 ## Kết quả kiểm tra
 
