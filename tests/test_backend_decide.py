@@ -41,6 +41,52 @@ def test_assess_goes_through_shared_gateway(input_cfg, decide_cfg):
     assert "Langbiang" in scores[("dlv-dalat-3n", "s1")][1]
 
 
+def test_assess_receives_only_survivors(input_cfg, decide_cfg):
+    seen: list[list[str]] = []
+
+    def spy(ts, soft):
+        seen.append([t.id for t in ts])
+        return {}
+
+    req = build_requirement("", {"destinations": ["Đà Lạt"]}, cfg=input_cfg)
+    req.conditions.append(Condition(
+        id="s1", field="preference", value="thích núi", strength="soft"))
+    compare(req, _snapshots(), spy, decide_cfg)
+    assert seen and seen[0] == ["dlv-dalat-3n"]
+
+
+def test_gateway_retries_malformed_json_once():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            return httpx.Response(200, json={"choices": [{"message": {"content": "not json"}}]})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    nim = NimClient("key", "model", 9.0,
+                    prompt=PromptCfg(system="s", max_tokens=64, temperature=0),
+                    transport=httpx.MockTransport(handler))
+    assert nim.complete_json(system="s", user="u", max_tokens=64, temperature=0) == {}
+    assert len(calls) == 2
+
+
+def test_gateway_raises_after_second_malformed():
+    from backend.errors import AppError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": [{"message": {"content": "not json"}}]})
+
+    nim = NimClient("key", "model", 9.0,
+                    prompt=PromptCfg(system="s", max_tokens=64, temperature=0),
+                    transport=httpx.MockTransport(handler))
+    try:
+        nim.complete_json(system="s", user="u", max_tokens=64, temperature=0)
+        raise AssertionError("should have raised")
+    except AppError as exc:
+        assert exc.code == "LLM_INVALID_OUTPUT"
+
+
 def test_compare_uses_soft_scores_in_rank(input_cfg, decide_cfg):
     nim = _mock_nim({"scores": [{"tour_id": "vtr-phuquoc-4n", "condition_id": "s1",
                                  "score": 1.0, "quote": "VinWonders"}]})
@@ -81,6 +127,16 @@ def test_destination_mismatch_fails(input_cfg, decide_cfg):
     comp = compare(req, _snapshots(), None, decide_cfg)
     tours = {c.tour_id for c in comp.ranked}
     assert tours == {"dlv-dalat-3n"}
+
+
+def test_any_operator_matches_either(input_cfg, decide_cfg):
+    from backend.models import Condition, Requirement, uid
+
+    req = Requirement(id=uid("req"), conditions=[
+        Condition(id="h1", field="destination", operator="any",
+                  value=["Đà Nẵng", "Hạ Long"], strength="hard")], missing=[])
+    comp = compare(req, _snapshots(), None, decide_cfg)
+    assert {c.tour_id for c in comp.ranked} == {"sgt-halong-3n"}
 
 
 def test_rank_prefers_cheaper_on_tie(input_cfg, decide_cfg):

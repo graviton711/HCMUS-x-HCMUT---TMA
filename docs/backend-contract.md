@@ -2,6 +2,8 @@
 
 API HTTP cho requirements và comparisons. JSON only. Schema live ở `/openapi.json`; models trong `src/backend/models.py` là nguồn chuẩn duy nhất.
 
+NIM extraction nhận ngày tham chiếu theo giờ Việt Nam. Ngày âm lịch chỉ được đưa vào condition sau khi backend resolve và kiểm tra hợp lệ thành ngày ISO dương lịch; OR trong cùng field được biểu diễn bằng operator `any`. Ngân sách do LLM suy ra cần có con số trong câu nhập, còn giá trị từ form là explicit.
+
 ## Endpoints
 
 - `GET /health` → `{status, version}`.
@@ -10,7 +12,7 @@ API HTTP cho requirements và comparisons. JSON only. Schema live ở `/openapi.
 - `POST /comparisons` — body `{requirement_id?, text?, form?, candidate_limit?}` → `{comparison}` gồm rank ứng viên, chấm từng offer, evidence và phân tích (chi phí ẩn, điều kiện, rủi ro, quyền lợi).
 - `GET /comparisons/{id}` → comparison đã lưu.
 
-Lỗi dùng `{error: {code, message}}`. Thiếu là `unknown`, không tính là đạt. Giá chỉ so khi cùng basis (giá exact/người lớn, cùng currency); giá "from" không bao giờ quyết định so sánh.
+Lỗi dùng `{error: {code, message}}`. Thiếu là `unknown`, không tính là đạt. Destination không có dữ liệu cũng là `unknown`. Giá chỉ so khi cùng basis (giá exact/người lớn, cùng currency); giá "from" không bao giờ quyết định so sánh. LLM chấm soft chỉ nhận tour còn offer qua hard filter.
 
 ## Pipeline
 

@@ -128,7 +128,7 @@ _FLAT_MAP = {
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="", env_file=".env", extra="ignore")
 
     database_url: str
     data_provider: str
@@ -151,7 +151,13 @@ class Settings(BaseSettings):
         `prompts/<name>.yaml` beside it.
         """
         backend = _read_settings(path)
-        env = {k.lower() for k in os.environ}
+        from dotenv import dotenv_values
+
+        try:
+            dotkeys = {k.lower() for k in dotenv_values(overrides.get("_env_file", ".env"))}
+        except Exception:
+            dotkeys = set()
+        env = {k.lower() for k in os.environ} | dotkeys
         tuning: dict[str, Any] = {
             name: {k: v for k, v in _read_prompt(path, name).items() if v is not None}
             for name in ("extract", "assess")

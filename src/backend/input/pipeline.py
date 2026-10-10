@@ -7,6 +7,7 @@ import unicodedata
 from typing import Any
 
 from backend.errors import AppError
+from backend.input.lunar import resolve_lunar as _resolve_lunar
 from backend.input.nim import NimClient
 from backend.models import Condition, Requirement, uid
 from backend.settings import InputCfg
@@ -97,17 +98,41 @@ def _clean_hard(items: list[dict[str, Any]], quote: str, cfg: InputCfg) -> list[
             value = value if isinstance(value, int) else _money_to_vnd(str(value or ""), cfg.money_units)
             if value is None:
                 continue
+        if field in ("date_from", "date_to") and isinstance(value, dict):
+            if value.get("calendar") != "lunar":
+                continue
+            value = _resolve_lunar(value)
+            if value is None:
+                continue
         if value is None or value == "":
             continue
+        operator = str(item.get("operator", "eq"))
+        if operator == "contains" and isinstance(value, list):
+            # Shape normalization: single-element lists unwrap, multi becomes any.
+            if len(value) == 1:
+                value = value[0]
+            elif value:
+                operator = "any"
+            else:
+                continue
+        if operator == "any":
+            vals = [v for v in (value if isinstance(value, list) else [value])
+                    if v not in (None, "")]
+            if not vals:
+                continue
+            if len(vals) == 1:
+                operator, value = "contains", vals[0]
+            else:
+                value = vals
         out.append(Condition(id=f"h{i+1}", field=field,
-                             operator=str(item.get("operator", "eq")),
+                             operator=operator,
                              value=value, strength="hard", quote=quote[:cfg.quote_chars]))
     return out
 
 
 def build_requirement(text: str = "", form: dict[str, Any] | None = None,
                       nim: NimClient | None = None, cfg: InputCfg | None = None,
-                      known_places: list[str] | None = None) -> Requirement:
+                      known_places: list[str] | None = None, ref_date: str = "") -> Requirement:
     form = form or {}
     if cfg is None:
         raise AppError("CONFIG_MISSING", "Thiếu InputCfg.", 500)
@@ -133,19 +158,24 @@ def build_requirement(text: str = "", form: dict[str, Any] | None = None,
     soft: list[Condition] = []
     if text.strip():
         if nim is not None and nim.configured():
-            parsed = nim.extract(text)
+            parsed = nim.extract(text, ref_date)
         else:
             parsed = keyword_extract(text, cfg, known_places)
         items = [item for item in parsed.get("hard", [])
                  if isinstance(item, dict) and item.get("field") not in seen]
+        # Budgets must be grounded in an explicit number in the text.
+        # Form budgets bypass this (explicit user data, trusted).
+        if nim is not None and nim.configured() and not re.search(r"\d", text):
+            items = [it for it in items if it.get("field") != "budget_max"]
         conditions.extend(_clean_hard(items, text, cfg))
         raw_soft = parsed.get("soft", [])
         if isinstance(raw_soft, list):
             for i, s in enumerate(raw_soft):
-                if isinstance(s, dict) and s.get("text"):
+                pref = s.get("text") if isinstance(s, dict) else s
+                if isinstance(pref, str) and pref.strip():
                     soft.append(Condition(id=f"s{i+1}", field="preference",
-                                          operator="contains", value=str(s["text"]),
-                                          strength="soft", quote=text[:cfg.quote_chars]))
+                                          operator="contains", value=pref.strip(),
+                                          strength="soft", quote=pref[:cfg.quote_chars]))
         if isinstance(parsed.get("travelers"), int) and parsed["travelers"] > 0 and "travelers" not in form:
             travelers = parsed["travelers"]
 

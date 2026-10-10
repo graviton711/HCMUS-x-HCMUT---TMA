@@ -30,11 +30,18 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer_price: int | None,
               offer_basis: str, offer_date: str) -> State:
     """Per-offer hard evaluation. Anything unprovable is `unknown`."""
     f, v = condition.field, condition.value
+    any_op = condition.operator == "any" and isinstance(v, list)
     if f == "destination":
-        return "pass" if any(_contains(d, str(v)) for d in tour.destinations) else "fail"
+        if not tour.destinations:
+            return "unknown"
+        vals = v if any_op else [v]
+        return "pass" if any(_contains(d, str(x)) for d in tour.destinations for x in vals) else "fail"
     if f == "departure_city":
-        return "pass" if _contains(tour.departure_city, str(v)) else "fail"
+        vals = v if any_op else [v]
+        return "pass" if any(_contains(tour.departure_city, str(x)) for x in vals) else "fail"
     if f == "transport":
+        if str(v) not in ("flight", "bus", "train", "cruise", "mixed"):
+            return "unknown"
         return "pass" if tour.transport == str(v) else ("unknown" if not tour.transport else "fail")
     if f == "accommodation":
         return "pass" if _contains(tour.accommodation, str(v)) else ("unknown" if not tour.accommodation else "fail")
@@ -51,7 +58,7 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer_price: int | None,
         ok = day >= bound if f == "date_from" else day <= bound
         return "pass" if ok else "fail"
     if f == "budget_max":
-        if offer_price is None or offer_basis != "exact":
+        if offer_price is None or offer_basis != "exact" or isinstance(v, list):
             return "unknown"
         try:
             return "pass" if offer_price <= int(v) else "fail"
@@ -164,7 +171,9 @@ def compare(req: Requirement, tours: list[TourSnapshot],
             assess: AssessFn | None, cfg: DecideCfg) -> Comparison:
     evals = hard_filter(req, tours)
     surviving = passing_offers(req, tours, evals)
-    soft_scores = assess(tours, req.soft()) if assess and req.soft() else {}
+    seen: set[str] = set()
+    survivor_tours = [t for t, _ in surviving if not (t.id in seen or seen.add(t.id))]
+    soft_scores = assess(survivor_tours, req.soft()) if assess and req.soft() else {}
     evaluations = list(evals)
     for (tour_id, cid), (_, quote) in soft_scores.items():
         offer_ids = [o.id for t in tours if t.id == tour_id for o in t.offers]

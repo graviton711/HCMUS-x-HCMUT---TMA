@@ -10,7 +10,7 @@ Vào: `{text?, form?}` với form (điểm đến, nơi khởi hành, ngày đi/
 
 ## Workflow
 
-Form map thẳng thành điều kiện cứng → text gửi NIM `extract` (prompt ở `configs/prompts/extract.yaml`, model/timeout ở `configs/settings.yaml` → `backend.nim`) → merge (form thắng khi conflict) → normalize (currency về VND, ngày về ISO) → check readiness (slot nào trong `required_slots` còn thiếu thì vào `missing`, không đoán). Không có key thì keyword offline, tên địa danh lấy từ catalog đang search (không list cứng).
+Form map thẳng thành điều kiện cứng → text gửi NIM `extract` (prompt ở `configs/prompts/extract.yaml`, model/timeout ở `configs/settings.yaml` → `backend.nim`) → merge (form thắng khi conflict) → normalize (currency về VND, ngày về ISO) → check readiness (slot nào trong `required_slots` còn thiếu thì vào `missing`, không đoán). Ngày âm lịch được đổi sang dương lịch bằng `vi_lunaire` sau khi kiểm tra round-trip; NIM chỉ nhận ngày tham chiếu và mốc Tết đã tính sẵn, không tự tính lịch. Điều kiện nhiều lựa chọn dùng operator `any`; singleton được chuẩn hóa về `contains`. Ngân sách do NIM trả về chỉ được nhận khi câu nhập có chữ số tường minh. Không có key thì keyword offline, tên địa danh lấy từ catalog đang search (không list cứng).
 
 ## Interface với module khác
 
@@ -21,3 +21,5 @@ Form map thẳng thành điều kiện cứng → text gửi NIM `extract` (prom
 - Một prompt duy nhất, không prompt từng field: rẻ, ít chỗ hỏng.
 - Form thắng text khi conflict: dữ liệu explicit hơn suy diễn.
 - Không machine trạng thái hội thoại/proposal: một lượt vào, một requirement ra.
+- Lịch âm luôn tính bằng thư viện xác định; output của mô hình chỉ cung cấp thành phần năm/tháng/ngày để validate và resolve.
+- Nhiều lựa chọn trong cùng một field được giữ thành một condition OR, không bị hiểu nhầm thành nhiều điều kiện AND.

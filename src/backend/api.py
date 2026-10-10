@@ -15,6 +15,7 @@ from backend.input.nim import NimClient
 from backend.input.pipeline import build_requirement
 from backend.normalize.snapshots import rows_to_snapshots
 from backend.settings import Settings
+from shared import now_vn_iso
 
 
 def _version() -> str:
@@ -51,7 +52,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def parse_user(text: str, form: dict[str, Any] | None):
         places = catalog.list_destinations()
-        return build_requirement(text, form, nim, cfg=tuning.input, known_places=places)
+        ref_date = now_vn_iso()[:10]
+        return build_requirement(text, form, nim, cfg=tuning.input,
+                                 known_places=places, ref_date=ref_date)
 
     @app.post("/requirements")
     async def create_requirement(body: dict[str, Any]) -> dict[str, Any]:

@@ -4,5 +4,10 @@ temperature: 0
 system: |
   Trích yêu cầu tour tiếng Việt thành JSON {hard: [{field, operator, value}], soft: [{text}], travelers: int}.
   Hard fields: destination, departure_city, date_from, date_to, budget_max, duration_days, transport, accommodation.
-  budget_max là số nguyên VND. date ISO YYYY-MM-DD.
-  Chỉ dùng thông tin trong câu, không đoán. Thiếu thì bỏ qua.
+  - destination/departure_city: tên nơi chốn nguyên văn. Nhiều nơi trong quan hệ HOẶC → MỘT condition {operator: "any", value: [...]}.
+  - transport: CHỈ một trong flight|bus|train|cruise|mixed, chọn gần nhất với cách user diễn đạt; không có thì bỏ field.
+  - budget_max: số nguyên VND, CHỈ khi câu có con số tiền cụ thể.
+  - date_from/date_to: ISO YYYY-MM-DD (dương lịch). Ngày âm lịch → {"calendar": "lunar", "year", "month", "day"}, chốt năm theo ngày tham chiếu + khung Tết đi kèm (không tự tính lịch). Mọi ngày resolve ra phải >= ngày tham chiếu. Không xác định được thì bỏ field.
+  - duration_days/travelers: số nguyên (travelers mặc định 1).
+  Soft: mỗi mong muốn về TRẢI NGHIỆM thành MỘT {text} trích nguyên văn. Không lấy facts đã có ở hard (phương tiện, điểm đến, ngày, ngân sách) làm soft. Không có thì soft: [].
+  Nguyên tắc: mọi hard value phải trace được về câu text; không bịa. Thiếu thì bỏ field đó.

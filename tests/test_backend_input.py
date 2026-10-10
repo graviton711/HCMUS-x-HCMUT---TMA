@@ -1,9 +1,25 @@
 """Input: text/form → conditions. Offline, no NIM. Places come from the catalog."""
 
+import json
+
+import httpx
+
 from backend.data.catalog import FixtureCatalog
+from backend.input.lunar import resolve_lunar as _resolve_lunar
+from backend.input.nim import NimClient
 from backend.input.pipeline import build_requirement, keyword_extract
+from backend.settings import PromptCfg
 
 PLACES = ["Đà Lạt", "Phú Quốc", "Hạ Long", "Sài Gòn", "Hà Nội"]
+
+
+def _mock_nim(payload: dict) -> NimClient:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(payload)}}]})
+
+    return NimClient("key", "model", 9.0,
+                     prompt=PromptCfg(system="s", max_tokens=64, temperature=0),
+                     transport=httpx.MockTransport(handler))
 
 
 def test_keyword_extract_destination_and_departure(input_cfg):
@@ -62,9 +78,114 @@ def test_condition_ids_unique(input_cfg):
     assert len(ids) == len(set(ids)) > 1
 
 
+def test_nim_invented_budget_without_digits_dropped(input_cfg):
+    nim = _mock_nim({"hard": [{"field": "budget_max", "operator": "lte", "value": 5000000}],
+                     "soft": [], "travelers": 1})
+    req = build_requirement("tour giá hợp lý", nim=nim, cfg=input_cfg)
+    assert "budget_max" not in {c.field for c in req.conditions}
+    assert "budget_max" in req.missing
+
+
+def test_nim_grounded_budget_kept(input_cfg):
+    nim = _mock_nim({"hard": [{"field": "budget_max", "operator": "lte", "value": 8000000}],
+                     "soft": [], "travelers": 1})
+    req = build_requirement("tour tối đa 8 triệu", nim=nim, cfg=input_cfg)
+    assert [c.value for c in req.conditions if c.field == "budget_max"] == [8000000]
+
+
 def test_form_only_requirement(input_cfg):
     req = build_requirement("", {"destinations": ["Đà Lạt"], "budget_max": 8_000_000,
                                  "departure_city": "Sài Gòn", "travelers": 2}, cfg=input_cfg)
     assert req.travelers == 2
     assert "destination" not in req.missing
     assert "budget_max" not in req.missing
+
+
+def test_nim_or_splits_into_any_condition(input_cfg):
+    nim = _mock_nim({"hard": [{"field": "destination", "operator": "any",
+                               "value": ["Đà Nẵng", "Tây Nguyên"]}],
+                     "soft": [], "travelers": 1})
+    req = build_requirement("Đà Nẵng hoặc Tây Nguyên", nim=nim, cfg=input_cfg)
+    dests = [c for c in req.conditions if c.field == "destination"]
+    assert len(dests) == 1
+    assert dests[0].operator == "any"
+    assert dests[0].value == ["Đà Nẵng", "Tây Nguyên"]
+
+
+def test_nim_single_any_unwraps_to_contains(input_cfg):
+    nim = _mock_nim({"hard": [{"field": "destination", "operator": "any",
+                               "value": ["Đà Lạt"]}],
+                     "soft": [], "travelers": 1})
+    req = build_requirement("Đà Lạt", nim=nim, cfg=input_cfg)
+    dests = [c for c in req.conditions if c.field == "destination"]
+    assert len(dests) == 1
+    assert dests[0].operator == "contains"
+    assert dests[0].value == "Đà Lạt"
+
+
+def test_nim_transport_passes_through_enum(input_cfg):
+    nim = _mock_nim({"hard": [{"field": "transport", "operator": "eq", "value": "bus"}],
+                     "soft": [], "travelers": 1})
+    req = build_requirement("đi xe ô tô", nim=nim, cfg=input_cfg)
+    assert req.conditions[0].value == "bus"
+
+
+def test_nim_raw_transport_kept_for_eval(input_cfg, decide_cfg):
+    from backend.decide.engine import eval_hard
+    from backend.normalize.snapshots import rows_to_snapshots
+
+    nim = _mock_nim({"hard": [{"field": "transport", "operator": "eq", "value": "xe ô tô"}],
+                     "soft": [], "travelers": 1})
+    req = build_requirement("đi xe ô tô", nim=nim, cfg=input_cfg)
+    assert req.conditions[0].value == "xe ô tô"
+    tour = rows_to_snapshots(FixtureCatalog().list_tours(10))[0]
+    offer = tour.offers[0]
+    assert eval_hard(req.conditions[0], tour, offer.price,
+                     offer.price_basis, offer.departure_date) == "unknown"
+
+
+def test_nim_soft_preferences_extracted(input_cfg):
+    nim = _mock_nim({"hard": [], "soft": [{"text": "gần gũi thiên nhiên"},
+                                          {"text": "dịch vụ tốt"}], "travelers": 2})
+    req = build_requirement("tour thiên nhiên, dịch vụ tốt", nim=nim, cfg=input_cfg)
+    assert req.travelers == 2
+    assert [(c.id, str(c.value)) for c in req.soft()] == [
+        ("s1", "gần gũi thiên nhiên"), ("s2", "dịch vụ tốt")]
+
+
+def test_nim_soft_strings_accepted(input_cfg):
+    nim = _mock_nim({"hard": [], "soft": ["uy tín", "dịch vụ tốt"], "travelers": 1})
+    req = build_requirement("cty uy tín, dịch vụ tốt", nim=nim, cfg=input_cfg)
+    assert [str(c.value) for c in req.soft()] == ["uy tín", "dịch vụ tốt"]
+
+
+def test_resolve_lunar_ground_truth():
+    assert _resolve_lunar({"calendar": "lunar", "year": 2026, "month": 12, "day": 27}) == "2027-02-03"
+    assert _resolve_lunar({"calendar": "lunar", "year": 2027, "month": 1, "day": 4}) == "2027-02-09"
+    assert _resolve_lunar({"calendar": "lunar", "year": 2026, "month": 1, "day": 1}) == "2026-02-17"
+    assert _resolve_lunar({"calendar": "lunar", "year": 2026, "month": 13, "day": 1}) is None
+    assert _resolve_lunar({"calendar": "lunar", "year": 2026, "month": 2, "day": 40}) is None
+    assert _resolve_lunar({"calendar": "solar"}) is None
+
+
+def test_tet_frame_upcoming():
+    from backend.input.lunar import tet_frame
+
+    frame = tet_frame("2026-10-09")
+    assert "2027-02-06" in frame
+    assert "2026" in frame
+    assert tet_frame("not-a-date") == ""
+
+
+def test_nim_lunar_ref_resolves_to_iso(input_cfg):
+    nim = _mock_nim({"hard": [
+        {"field": "date_from", "operator": "eq",
+         "value": {"calendar": "lunar", "year": 2026, "month": 12, "day": 27}},
+        {"field": "date_to", "operator": "eq",
+         "value": {"calendar": "lunar", "year": 2027, "month": 1, "day": 4}}],
+        "soft": [], "travelers": 1})
+    req = build_requirement("từ 27/12 âm đến mùng 4 Tết", nim=nim, cfg=input_cfg)
+    dates = {c.field: c.value for c in req.conditions}
+    assert dates["date_from"] == "2027-02-03"
+    assert dates["date_to"] == "2027-02-09"
+    assert "date_from" not in req.missing

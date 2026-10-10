@@ -53,6 +53,15 @@ def test_env_wins_over_yaml(tmp_path, monkeypatch):
     assert Settings.load(_configs(tmp_path)).candidate_limit == 42
 
 
+def test_dotenv_file_wins_over_yaml(tmp_path):
+    env = tmp_path / "t.env"
+    env.write_text("CANDIDATE_LIMIT=33\nNVIDIA_NIM_MODEL=test-dotenv-model\n",
+                   encoding="utf-8")
+    settings = Settings.load(_configs(tmp_path), _env_file=str(env))
+    assert settings.candidate_limit == 33
+    assert settings.nvidia_nim_model == "test-dotenv-model"
+
+
 def test_incomplete_yaml_fails_loud(tmp_path):
     root = tmp_path / "configs"
     root.mkdir()
