@@ -90,6 +90,7 @@ export interface DateValue {
 }
 export interface BudgetValue {
   kind: 'budget';
+  measure?: 'listed' | 'payable';
   amount: number | string;
   upper?: number | string | null;
   currency?: string | null;
@@ -388,6 +389,7 @@ export interface Offer {
   tour_snapshot_id: string;
   fields: Record<string, Fact>;
   price_quotes: Fact<PriceQuote>[];
+  listed_price_quotes?: Fact<PriceQuote>[];
   extra_charges: Fact<ExtraCharge>[];
   pricing_complete: Fact<boolean> | null;
   catalog_fields: Record<string, Fact>;

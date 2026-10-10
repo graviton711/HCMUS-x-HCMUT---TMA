@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { localToday } from '../api/travelFilters';
 import { usePreferences } from '../app/preferences';
 import { Icon } from './Icon';
 
@@ -12,6 +13,8 @@ export function MonthPicker({
   disabled?: boolean;
 }) {
   const { t, locale } = usePreferences();
+  const currentMonth = localToday().slice(0, 7);
+  const currentYear = Number(currentMonth.slice(0, 4));
   const [year, setYear] = useState(
     () =>
       Number(value[0]?.slice(0, 4)) ||
@@ -35,7 +38,7 @@ export function MonthPicker({
           type="button"
           className="icon-button"
           aria-label={t('Năm trước', 'Previous year')}
-          disabled={year <= 1000}
+          disabled={year <= currentYear}
           onClick={() => setYear(year - 1)}
         >
           <Icon name="left" />
@@ -61,7 +64,7 @@ export function MonthPicker({
               key={month}
               aria-label={name(month)}
               aria-pressed={selected}
-              disabled={!selected && value.length >= 12}
+              disabled={!selected && (month < currentMonth || value.length >= 12)}
               onClick={() =>
                 onChange(
                   selected ? value.filter((item) => item !== month) : [...value, month].sort(),
@@ -94,7 +97,10 @@ export function MonthPicker({
         </div>
       )}
       <small>
-        {t('Chọn một hoặc nhiều tháng, tối đa 12 tháng.', 'Choose one or more months, up to 12.')}
+        {t(
+          'Chọn tháng hiện tại hoặc sắp tới, tối đa 12 tháng.',
+          'Choose current or future months, up to 12.',
+        )}
       </small>
     </fieldset>
   );

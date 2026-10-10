@@ -1,5 +1,7 @@
 # Backend verification
 
+Recommendation recovery: `test_recommendation_recovery.py` kiểm listed/payable, quote `from`, freshness/source/evidence binding, địa danh và phạm vi OR tháng, date guard và API create/edit/history. SQL integration đọc live riêng, không ghi Supabase. Contract: [recovery](../docs/recommendation-recovery-plan.md).
+
 Personalized core: form/text parity, missing/ambiguous/negative core fields, hard cap/OR coverage, targeted answer và preservation, remove/discard/CAS, URL/hybrid và legacy readiness bypass. Kiểm tra mixed semantic/core reply, generation targets, repair loại tour không được nói và grounding/polarity/slider tường minh. [Contract](../docs/personalized-requirement-policy.md).
 
 08/10/2026: **358 passed** (311 baseline + 47 checks bổ sung), Ruff/diff đạt; 24 schemas v2, v1 không đổi. Live được chạy riêng: Nhật/Tết/follow-up15 assertions và semantic smoke5/5. [Báo cáo, failed attempts và giới hạn](../docs/backend-personalized-verification.md).

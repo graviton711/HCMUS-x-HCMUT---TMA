@@ -486,7 +486,7 @@ def test_supabase_filter_before_pool_and_unknown_not_excluded(
     )
     assert len(out.tours) == 1 and out.tours[0].tour_id == "catalog_tour_" + second["record_key"]
     assert out.retrieval["static_rejected"] == static_rejected
-    queried = next(params["ids"] for sql, params in engine.calls if "public.offers" in sql)
+    queried = next(params["ids"] for sql, params in engine.calls if "SELECT offers.*" in sql)
     assert set(queried) == ({2} if proven else {1, 2})
     assert out.offer_coverage[out.tours[0].snapshot_id]
 

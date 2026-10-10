@@ -3,6 +3,7 @@
 from collections import Counter
 from datetime import timedelta
 
+from decision.engine import usable
 from domain.common import now, uid
 from domain.crawl import CrawlRequest
 from domain.requirements import QuerySpec, RequirementState
@@ -32,6 +33,15 @@ def summarize(crawl, registry=()):
             "complete_facts": sum(f is not None and f.completeness == "complete" for f in facts),
         }
     quotes = [q for o in crawl.offers for q in o.price_quotes]
+    listed = [q for o in crawl.offers for q in o.listed_price_quotes]
+    evidence = {e.id: e for e in crawl.evidence}
+    sources = {s.supplier_id: s for s in registry}
+    at = now().isoformat()
+    listed_reasons = Counter()
+    for q in listed:
+        source = sources.get(evidence[q.evidence_ids[0]].publisher) if q.evidence_ids else None
+        ok, reason = usable(q, "price", source, at, crawl.origin == "synthetic")
+        listed_reasons["usable" if ok else reason] += 1
     return {
         "policy_version": "catalog-quality-audit-v2",
         "catalog_policy": "catalog-validation-v1",
@@ -56,6 +66,15 @@ def summarize(crawl, registry=()):
                 "unclassified_prices" in o.catalog_fields for o in crawl.offers
             ),
         },
+        "listed_prices": {
+            "count": len(listed),
+            "kinds": dict(Counter(q.value.kind for q in listed if q.value)),
+            "verification": dict(Counter(q.verification for q in listed)),
+            "eligibility_reasons": dict(listed_reasons),
+            "missing_quotes": sum(not o.listed_price_quotes for o in crawl.offers),
+            "measure": "listed",
+            "payable_total_status": "not_calculated",
+        },
         "issue_counts": dict(Counter(i.code for i in crawl.issues)),
         "freshness": {
             "registry_origin": "catalog_bootstrap_only",
@@ -65,7 +84,7 @@ def summarize(crawl, registry=()):
             "required_for_fields": ["price", "departure_date", "return_date", "availability"],
         },
         "adapter_limitations": [
-            "Qualified price coverage/applicability is not imported from catalog evidence yet.",
+            "Payable pricing requires bound field_meta.pricing; listed adult amounts do not establish a payable upper bound.",
             "Child price amounts without age brackets cannot price the group.",
             "Return date, tour type and numeric seat capacity are not inferred from other columns.",
         ],

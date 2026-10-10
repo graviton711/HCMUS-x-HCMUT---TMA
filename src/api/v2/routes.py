@@ -165,6 +165,7 @@ def router(service, admin, owner, limits):
                         "currency": "VND",
                         "basis": "per_adult",
                         "coverage": "tour_price",
+                        "measure": "listed",
                     },
                     "budget_defaults_apply_to": "labeled_form_only",
                     "text_preserves_explicit_strength_and_asks_missing_cap": True,

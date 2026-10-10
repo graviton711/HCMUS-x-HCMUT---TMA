@@ -16,3 +16,6 @@ Kiểm chứng: Vitest cho JSON/envelope/binding, mutation retry và form/edit p
 
 
 Account/history/what-if: client thêm PATCH metadata, list/detail/archive/link và analysis/apply; account transport refresh single-flight với owner guard. Runtime validators kiểm ratio cohorts, IDs, population, rank bindings. Default budget form hard theo personalized policy; explicit strength cũ được giữ. `needs_clarification` là response hợp lệ, không là lỗi transport. Current readiness can_confirm/can_search được ưu tiên khi BE cấp.
+# Listed tour budget and future search dates
+
+Contract: [recovery UI](../../../docs/recommendation-recovery-ui.md). Budget mới gửi `measure=listed`; lịch sử thiếu measure là payable, edit giữ measure. Kiểm ngày/tháng quá khứ theo Asia/Ho_Chi_Minh khi tạo và khi sửa thời gian; tháng OR giữ riêng từng khoảng.

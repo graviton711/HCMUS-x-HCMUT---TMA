@@ -3,7 +3,7 @@
 from datetime import date
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import BeforeValidator, Field, model_validator
 
 from domain.common import Identifier, Model
 from domain.requirements import (
@@ -18,7 +18,7 @@ from domain.requirements import (
     UnresolvedValue,
 )
 
-SEMANTIC_POLICY = "requirements-v2.2"
+SEMANTIC_POLICY = "requirements-v2.3-listed"
 QUALITATIVE_FIELDS = {"supplier_reputation", "service_quality", "price_value", "nature"}
 CORE_FIELDS = ("destinations", "departure_origin", "departure_date", "party.adults", "estimated_cost")
 COMPLETENESS_POLICY = "personalized-core-v1"
@@ -117,16 +117,28 @@ class QualitativeValue(Model):
         return self
 
 
+class BudgetV2(Budget):
+    # Missing in persisted payloads retains the original conservative cost policy.
+    measure: Literal["listed", "payable"] = "payable"
+
+    @model_validator(mode="after")
+    def measure_scope(self):
+        if self.measure == "listed" and self.coverage != "tour_price":
+            raise ValueError("Listed price applies only to tour_price coverage")
+        return self
+
+
 ValueV2 = Annotated[
     NumberValue
     | SetValue
     | DateValue
-    | Budget
+    | BudgetV2
     | UnresolvedValue
     | EntitySetValue
     | TemporalValue
     | QualitativeValue,
     Field(discriminator="kind"),
+    BeforeValidator(lambda v: v.model_dump() if isinstance(v, Budget) and not isinstance(v, BudgetV2) else v),
 ]
 
 
@@ -175,7 +187,10 @@ class ConditionV2(Condition):
             if self.operator == "requires" and self.strength != "hard":
                 raise ValueError("Requires requires hard strength")
         elif self.field in FIELDS:
-            Condition.model_validate(self.model_dump(exclude={"scope", "trace"}))
+            legacy = self.model_dump(exclude={"scope", "trace"})
+            if isinstance(self.value, BudgetV2):
+                legacy["value"].pop("measure")
+            Condition.model_validate(legacy)
         elif not isinstance(self.value, UnresolvedValue):
             raise ValueError("New fields require a semantic value")
         if self.scope == "main_journey" and self.field != "transport":

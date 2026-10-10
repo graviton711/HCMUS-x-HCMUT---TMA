@@ -1,6 +1,6 @@
 {
   "$defs": {
-    "Budget": {
+    "BudgetV2": {
       "additionalProperties": false,
       "properties": {
         "kind": {
@@ -82,12 +82,21 @@
           ],
           "title": "Coverage Origin",
           "type": "string"
+        },
+        "measure": {
+          "default": "payable",
+          "enum": [
+            "listed",
+            "payable"
+          ],
+          "title": "Measure",
+          "type": "string"
         }
       },
       "required": [
         "amount"
       ],
-      "title": "Budget",
+      "title": "BudgetV2",
       "type": "object"
     },
     "Child": {
@@ -279,7 +288,7 @@
         "value": {
           "discriminator": {
             "mapping": {
-              "budget": "#/$defs/Budget",
+              "budget": "#/$defs/BudgetV2",
               "date": "#/$defs/DateValue",
               "entities": "#/$defs/EntitySetValue",
               "number": "#/$defs/NumberValue",
@@ -301,7 +310,7 @@
               "$ref": "#/$defs/DateValue"
             },
             {
-              "$ref": "#/$defs/Budget"
+              "$ref": "#/$defs/BudgetV2"
             },
             {
               "$ref": "#/$defs/UnresolvedValue"
@@ -920,7 +929,7 @@
             {
               "discriminator": {
                 "mapping": {
-                  "budget": "#/$defs/Budget",
+                  "budget": "#/$defs/BudgetV2",
                   "date": "#/$defs/DateValue",
                   "entities": "#/$defs/EntitySetValue",
                   "number": "#/$defs/NumberValue",
@@ -942,7 +951,7 @@
                   "$ref": "#/$defs/DateValue"
                 },
                 {
-                  "$ref": "#/$defs/Budget"
+                  "$ref": "#/$defs/BudgetV2"
                 },
                 {
                   "$ref": "#/$defs/UnresolvedValue"

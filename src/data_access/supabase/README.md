@@ -1,10 +1,12 @@
 # Supabase tour catalog
 
+[Recovery](../../../docs/recommendation-recovery-plan.md): listed adult offer quote riêng với payable terms; nguồn opt-in + value/time/currency/kind binding, không cần assertion complete để đọc giá niêm yết. Retrieval ưu tiên ở SQL trước scan có phân trang/giới hạn; full hard evaluator vẫn quyết định pass/fail/unknown. Date OR và giá cùng offer được ưu tiên trước global cap. Không auto recrawl hoặc đổi TTL/timestamp.
+
 Sửa tìm tour 09/10 theo [quy tắc và nghiệm thu](../../../docs/search-correctness-repair.md): loại origin endpoints khỏi destinations, giữ raw/route; pricing metadata tùy chọn, không suy qualifiers; freshness local được cấu hình theo cadence một ngày đã được user chốt.
 
-`pricing.py` validate optional `offers.field_meta.pricing` trước khi tạo catalog quote/charge/completeness facts. [JSON cho crawler](../../../examples/catalog-price-metadata.md); thiếu metadata giữ preview như trước. `CatalogPricing` được export cùng schemas v2.
+`pricing.py` validate optional `offers.field_meta.pricing` trước khi tạo payable quote/charge/completeness facts. [JSON cho crawler](../../../examples/catalog-price-metadata.md); thiếu metadata giữ payable preview. Listed adult quote có đường validation riêng, không yêu cầu complete=true. `CatalogPricing` được export cùng schemas v2.
 
-Policy hiện hành: [catalog-validation-v1](../../../docs/catalog-validation-policy.md). Nguồn opt-in qua `SUPABASE_TOUR_TRUSTED_DOMAINS` được dùng field đã kiểm tra dưới trạng thái `catalog_validated`, giữ provenance database_record; website proof là đường bổ sung. Giá thiếu qualifiers, mixed transport, field thiếu và freshness chưa cấu hình vẫn unknown. Không cần backfill proof mọi field. Các đoạn proof bên dưới mô tả đường website proof, không là prerequisite cho catalog opt-in.
+Policy hiện hành: [catalog-validation-v1](../../../docs/catalog-validation-policy.md). Nguồn opt-in qua `SUPABASE_TOUR_TRUSTED_DOMAINS` được dùng field đã kiểm tra dưới trạng thái `catalog_validated`, giữ provenance database_record; website proof là đường bổ sung. Payable price thiếu qualifiers, mixed transport, field thiếu và freshness chưa cấu hình vẫn unknown. Listed price kiểm riêng adult/currency/kind/source/freshness. Không cần backfill proof mọi field. Các đoạn proof bên dưới mô tả đường website proof, không là prerequisite cho catalog opt-in.
 
 `audit.py` tạo báo cáo aggregate từ **pool retrieval có giới hạn** qua đúng reader/adapter/validator, không claim audit toàn kho nếu scan/pool/offers bị cắt. `uv run tour-backend audit-supabase --output data/catalog-audit.local.json` chỉ đọc catalog, không tạo application DB, không gọi NIM/crawler. Report công bố counts/coverage, catalog_validated/proof/value, thiếu qualifiers và các field adapter chưa hỗ trợ. TTL audit lấy config bootstrap tường minh, không đại diện toàn bộ registry persisted/admin của app; không tự đặt TTL hoặc nâng independent verification. [Policy](../../../docs/catalog-validation-policy.md).
 
@@ -16,11 +18,11 @@ Reader PostgreSQL read-only + adapter records providers/tours/offers → CrawlRe
 
 1. Validate cấu hình/schema, load provider metadata để bootstrap namespace catalog; registry persisted có quyền pause.
 2. Trong repeatable-read transaction, normalize bounded tour scan, loại static hard fail có bằng chứng trước SQL lookup offers. Đánh giá toàn bộ hard tree cho từng offer rồi mới cắt pool; ưu tiên pass/unknown/relevance. Unknown không bị loại. Lookup URL giữ nguyên kể cả không đạt hard.
-3. Lấy offers với thứ tự công bằng giữa tours, ưu tiên ngày gần mốc departure đã biết; giới hạn và truncation công khai.
+3. Lấy offers với thứ tự công bằng giữa tours; ưu tiên toàn bộ date tree và listed budget trên cùng offer, rồi ngày gần mốc departure đã biết. Giới hạn và truncation công khai.
 4. Adapter chuẩn hóa bằng catalog chung, giữ raw/missing/conflict/scope. Hash toàn bộ record + observed_at để tạo snapshot bất biến.
 5. Gateway validate toàn bộ references/domain/time rồi API lưu snapshots cùng comparison. DB row update không sửa comparison cũ.
 
-Retrieval/per-offer coverage theo [contract](../../../docs/retrieval-semantic-ranking.md). SQL dùng IDs sau evidence validation; chưa có raw-field trusted index. Registry persisted truyền vào reader để freshness theo đúng policy hiện hành.
+Retrieval/per-offer coverage theo [contract](../../../docs/retrieval-semantic-ranking.md). SQL ưu tiên acquisition bằng raw địa danh/đúng offer ngày và giá trước bounded scan có phân trang; chỉ evaluator sau validation mới kết luận hard pass/fail. Registry persisted truyền vào reader để freshness theo đúng policy hiện hành.
 
 ## Quyết định
 
@@ -54,7 +56,7 @@ Value phải khớp column/path của đúng record, time khớp observed_at c�
 
 Raw_value còn phải chứng minh value: scalar text khớp hoặc dùng alias catalog đã duyệt; địa danh list phải có đủ tên nguyên văn; ngày chỉ ISO/dd-mm-yyyy/dd/mm/yyyy có năm; số phải parse đúng giá trị. Không nhận proof có value đúng DB nhưng quote/raw_value nói địa danh hoặc con số khác.
 
-Price kind/basis/coverage/age/applicability không được đoán từ text. Raw price_by_age được giữ trong unclassified_prices. Nếu chưa có field_meta.pricing, typed adult preview chỉ dùng label adult + currency/type tour có sẵn và vẫn unverified nếu thiếu proof; metadata hợp lệ dùng đường validation ở đầu tài liệu. Child/infant prices chưa có age brackets không dùng tính tổng. Return date/tour type/nature chưa có column/proof sẽ không tự tạo.
+Price kind/basis/coverage/age/applicability không được đoán từ text. Raw price_by_age được giữ trong unclassified_prices. Nếu chưa có field_meta.pricing, payable preview vẫn unverified; listed_price_quotes đọc label adult + currency/type tour qua nguồn opt-in hoặc proof hợp lệ và giữ nhãn from. Listed quote không chứng minh tổng tiền thực trả. Metadata pricing mâu thuẫn không được bypass qua đường listed. Child/infant prices chưa có age brackets không dùng tính tổng. Return date/tour type/nature chưa có column/proof sẽ không tự tạo.
 
 Xem kế hoạch và baseline chất lượng ở docs/supabase-tour-integration-plan.md. Tests dùng fake repository/engine và rows tổng hợp; CLI probe/kiểm chứng API live dùng read-only DB + application DB tạm, không nằm trong test suite offline.
 # What-if acquisition

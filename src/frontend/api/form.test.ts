@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildCreateRequirement,
   buildEdits,
@@ -10,7 +10,7 @@ import {
 import type { FormValues } from './form';
 import * as contracts from './contracts';
 import type { ComparisonResult, Condition, Requirement, Tree } from './types';
-import { directMonthReason } from './travelFilters';
+import { directMonthReason, localToday } from './travelFilters';
 
 const predicate = (id: string, field: string, amount: number): Condition => ({
   id,
@@ -244,7 +244,7 @@ describe('Form serialization', () => {
     if (condition.op !== 'upsert_condition') throw new Error('Expected a range condition');
     r.conditions[r.conditions.length - 1] = { ...condition.condition, sources: [] };
     expect(buildEdits(formFromRequirement(r), r)).toEqual([]);
-    });
+  });
   it('defaults the personalized budget to hard while leaving optional preferences soft', () => {
     const input = buildCreateRequirement({ ...structuredValues(), durationDays: '5' }).input;
     if (input.kind !== 'structured') throw new Error('Expected structured input');
@@ -405,5 +405,62 @@ describe('Form serialization', () => {
     expect(() => contracts.comparisonResult(comparison)).not.toThrow();
     comparison.recommendations.candidate_ids = ['missing'];
     expect(() => contracts.comparisonResult(comparison)).toThrow(contracts.ContractError);
+  });
+});
+
+describe('listed budget and future search dates', () => {
+  it('new form explicitly uses listed price', () => {
+    const body = buildCreateRequirement(structuredValues());
+    if (body.input.kind !== 'structured') throw new Error('Expected structured form');
+    expect(
+      body.input.form.conditions.find((c) => c.field === 'estimated_cost')?.value,
+    ).toMatchObject({ measure: 'listed' });
+  });
+  it('old budget edits preserve payable semantics', () => {
+    const r = requirement();
+    r.conditions.push({
+      id: 'legacy_budget',
+      field: 'estimated_cost',
+      operator: 'lte',
+      strength: 'hard',
+      value: {
+        kind: 'budget',
+        amount: 30000000,
+        currency: 'VND',
+        basis: 'per_adult',
+        coverage: 'tour_price',
+      },
+      sources: [],
+    });
+    r.hard_tree = { kind: 'predicate', condition_id: 'legacy_budget' };
+    const values = formFromRequirement(r);
+    expect(values.budgetMeasure).toBe('payable');
+    values.budget = '40000000';
+    const edit = buildEdits(values, r).find((e) => e.op === 'replace_condition_value');
+    expect(edit?.value).toMatchObject({ measure: 'payable' });
+  });
+  it('rejects expired months but keeps historical conditions editable', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-10T03:00:00Z'));
+    try {
+      const values = { ...structuredValues(), departureDate: '', departureMonths: ['2026-02'] };
+      expect(() => buildCreateRequirement(values)).toThrow(FormValidationError);
+      const r = requirement();
+      r.conditions.push({
+        id: 'old_date',
+        field: 'departure_date',
+        operator: 'eq',
+        strength: 'hard',
+        value: { kind: 'date', value: '2026-02-01' },
+        sources: [],
+      });
+      r.hard_tree = { kind: 'predicate', condition_id: 'old_date' };
+      expect(() => buildEdits(formFromRequirement(r), r)).not.toThrow();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it('uses Vietnam day across UTC midnight', () => {
+    expect(localToday(new Date('2026-10-09T17:30:00Z'))).toBe('2026-10-10');
   });
 });

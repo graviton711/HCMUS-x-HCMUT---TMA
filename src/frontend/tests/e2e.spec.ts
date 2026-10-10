@@ -13,6 +13,11 @@ import type { Comparison, Evidence, Requirement, WhatIf } from '../api/types';
 import type { LocalSession, SessionAccess } from '../app/storage';
 
 const screenshots = resolve(import.meta.dirname, '../../../artifacts/frontend');
+// Public help checks are isolated from real tickets, auth accounts and tour sources.
+async function isolateHelp(page: Page) {
+  await page.route('**/v2/**', (route) => route.abort());
+  await page.route('**/auth/**', (route) => route.abort());
+}
 async function capture(page: Page, name: string, fullPage = true) {
   await mkdir(screenshots, { recursive: true });
   await page.evaluate(async () => {
@@ -47,6 +52,112 @@ async function begin(page: Page) {
   await page.getByRole('button', { name: 'Tiếp tục với phiên ẩn danh', exact: true }).click();
   await expect(page.getByRole('combobox', { name: 'Điểm đến', exact: true })).toBeVisible();
 }
+
+test('footer help links preserve route, focus, keyboard FAQ and contact draft intent', async ({
+  page,
+}) => {
+  await isolateHelp(page);
+  await page.goto('/');
+  const footer = page.getByRole('contentinfo');
+  for (const id of ['compare', 'faq', 'sources', 'privacy', 'security', 'scope']) {
+    await footer.locator(`a[href="/support#${id}"]`).click();
+    await expect(page).toHaveURL(new RegExp(`/support#${id}$`));
+    const heading = page.locator(`#${id}`);
+    await expect(heading).toBeFocused();
+    const position = await heading.boundingBox();
+    const header = await page.locator('.site-header').boundingBox();
+    expect(position!.y).toBeGreaterThanOrEqual(header!.y + header!.height);
+  }
+  await page.goBack();
+  await expect(page.locator('#security')).toBeFocused();
+  await page.goForward();
+  await expect(page.locator('#scope')).toBeFocused();
+  await footer.locator('a[href="/support#faq"]').click();
+  // Re-entering the same anchor must scroll and focus after the footer was reached.
+  await footer.locator('a[href="/support#faq"]').click();
+  await expect(page.locator('#faq')).toBeFocused();
+  const summary = page.locator('.support-faq summary').first();
+  await page.keyboard.press('Tab');
+  await expect(summary).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.support-faq details').first()).toHaveAttribute('open', '');
+  await expect(page.locator('.support-faq details').first().locator('p')).toBeVisible();
+  await page.keyboard.press('Space');
+  await expect(page.locator('.support-faq details').first()).not.toHaveAttribute('open', '');
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Chọn ngôn ngữ', exact: true }).click();
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await expect(page.locator('.support-faq details').first()).toHaveAttribute('open', '');
+  await expect(summary).toHaveText('Why are there no recommendations?');
+  await page.getByRole('button', { name: 'Choose language', exact: true }).click();
+  await page.getByRole('button', { name: 'Tiếng Việt', exact: true }).click();
+  await footer.locator('a[href="/contact?category=data_issue"]').click();
+  await expect(page.getByRole('combobox')).toHaveValue('data_issue');
+  const message = page.getByRole('textbox', { name: 'Bạn muốn nhắn điều gì?' });
+  const email = page.getByRole('textbox', { name: 'Email liên hệ (tùy chọn)' });
+  await message.fill('Kiểm tra https://example.test/tour, lịch và giá hiển thị.');
+  await email.fill('browser@example.test');
+  await footer.locator('a[href="/contact"]').click();
+  await expect(page.getByRole('combobox')).toHaveValue('feedback');
+  await expect(message).toHaveValue('Kiểm tra https://example.test/tour, lịch và giá hiển thị.');
+  await expect(email).toHaveValue('browser@example.test');
+  await page.goBack();
+  await expect(page.getByRole('combobox')).toHaveValue('data_issue');
+  await expect(message).toHaveValue('Kiểm tra https://example.test/tour, lịch và giá hiển thị.');
+  await page.goto('/contact?category=admin');
+  await expect(page.getByRole('combobox')).toHaveValue('feedback');
+  await page.goto('/support#privacy');
+  await expect(page.locator('#privacy')).toBeFocused();
+  await page.reload();
+  await expect(page.locator('#privacy')).toBeFocused();
+  await noOverflow(page);
+});
+
+test('footer help layout stays usable in VI/EN, both themes and desktop/mobile widths', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await isolateHelp(page);
+  await mkdir(screenshots, { recursive: true });
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  for (const width of [1440, 1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 960 });
+    for (const locale of ['vi', 'en']) {
+      for (const theme of ['light', 'dark']) {
+        await page.goto('/');
+        await page.evaluate(
+          ({ locale, theme }) => {
+            localStorage.setItem('di-cung-display-v1', JSON.stringify({ locale, theme }));
+          },
+          { locale, theme },
+        );
+        await page.goto('/support#faq');
+        await expect(page.locator('html')).toHaveAttribute('lang', locale);
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await page.locator('.support-faq summary').first().click();
+        await noOverflow(page);
+        const footer = page.getByRole('contentinfo');
+        await expect(footer.getByRole('navigation')).toHaveCount(3);
+        for (const anchor of await footer.locator('a').all()) {
+          const box = await anchor.boundingBox();
+          expect(box!.height).toBeGreaterThanOrEqual(44);
+          expect(box!.x).toBeGreaterThanOrEqual(0);
+          expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+        }
+        await footer.scrollIntoViewIfNeeded();
+        await footer.screenshot({
+          path: resolve(screenshots, `footer-help-${width}-${theme}-${locale}.png`),
+        });
+        if (width === 1440 || width === 390) {
+          await page.locator('#faq').scrollIntoViewIfNeeded();
+          await capture(page, `support-faq-${width}-${theme}-${locale}`, false);
+        }
+      }
+    }
+  }
+  expect(errors).toEqual([]);
+});
 async function fillTrip(page: Page) {
   await page.getByRole('combobox', { name: 'Điểm đến', exact: true }).selectOption('country:jp');
   await page

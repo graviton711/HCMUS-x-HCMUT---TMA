@@ -21,6 +21,18 @@ def form_requirement(
         )
         sources = [source]
         raw = c.model_dump()
+        from domain.semantic import BudgetV2
+
+        if isinstance(c.value, BudgetV2) and "measure" not in c.value.model_fields_set:
+            raw["value"]["measure"] = "listed" if c.value.coverage == "tour_price" else "payable"
+            sources.append(
+                SourceReference(
+                    kind="system_default",
+                    field_path="value.measure",
+                    submitted_value=raw["value"]["measure"],
+                    rule="budget-measure-v2",
+                )
+            )
         if isinstance(c.value, Budget):
             raw["value"]["coverage_origin"] = (
                 "explicit" if "coverage" in c.value.model_fields_set else "system_default"

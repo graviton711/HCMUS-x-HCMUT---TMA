@@ -2,6 +2,8 @@
 
 Đã triển khai và kiểm chứng: [báo cáo](search-correctness-verification.md).
 
+10/10/2026: bổ sung [recovery policy](recommendation-recovery-plan.md). Quy tắc giá from không chứng minh upper bound bên dưới tiếp tục áp dụng cho payable; listed hard cap có evaluator riêng. Mở rộng catalog và ưu tiên SQL trước bounded paginated scan; tìm mới chặn window chứng minh đã qua.
+
 Phạm vi đã được user cho phép: FE/BE trên `backend`; catalog Supabase chỉ đọc. Giữ hard → soft → LLM, snapshot lịch sử và các thay đổi chưa commit.
 
 ## Quy tắc triển khai

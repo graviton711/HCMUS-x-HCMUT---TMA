@@ -1,5 +1,7 @@
 # Domain
 
+Khôi phục recommendation theo [contract ngày 10/10](../../docs/recommendation-recovery-plan.md): BudgetV2.measure tách listed/payable, default payable cho snapshots cũ; optional listed_price_quotes không thay payable facts. V1 models giữ nguyên.
+
 `what_if.py` cung cấp DTO và invariants cho baseline/scenarios/groups/metrics có mẫu số, witness và ranking sensitivity. [Policy](../../docs/what-if-analysis.md); không gọi network hoặc sửa requirement.
 
 V2 bổ sung retrieval diagnostics/offer coverage; hai trục strength và processing độc lập. Xem [structured retrieval](../../docs/retrieval-semantic-ranking.md).

@@ -230,11 +230,23 @@ def evaluate(c: Condition, tour, offer, party, source, at, synthetic=False, offe
         out["reason_code"] = c.value.reason
         return out
     if isinstance(c.value, Budget):
-        cost = estimate_cost(c.value, party, offer, source, at, synthetic)
+        if getattr(c.value, "measure", "payable") == "listed":
+            from decision.listed import listed_price
+
+            cost = listed_price(c.value, party, offer, source, at, synthetic)
+        else:
+            cost = estimate_cost(c.value, party, offer, source, at, synthetic)
         out.update(
             actual=cost,
             evidence_ids=cost["evidence_ids"],
-            reason_code=offer_reason or (cost["reasons"][0] if cost["reasons"] else "BUDGET_BOUNDS"),
+            reason_code=offer_reason
+            or (
+                cost["reasons"][0]
+                if cost["reasons"]
+                else "LISTED_PRICE_AMOUNT"
+                if cost.get("measure") == "listed"
+                else "BUDGET_BOUNDS"
+            ),
         )
         lo = Decimal(cost["lower"]) if cost["lower"] is not None else None
         hi = Decimal(cost["upper"]) if cost["upper"] is not None else None

@@ -19,6 +19,7 @@ from data_access.supabase.adapter import (
     supplier_id,
     wire,
 )
+from data_access.supabase.priority import acquisition_priority
 from decision.candidates import assess_options
 from domain.common import AppError, instant, now
 from domain.crawl import SourceCapability
@@ -251,17 +252,62 @@ class SupabaseRepository:
                                 409,
                             )
                         providers[p["id"]] = p
+                priority, offer_priority, priority_params = acquisition_priority(
+                    criteria,
+                    conditions,
+                    analysis=analysis,
+                    targets=request.targets if request.mode == "compare_urls" else (),
+                )
                 stmt = text(
-                    "SELECT * FROM public.tours WHERE provider_id IN :ids ORDER BY id LIMIT :lim"
+                    "SELECT * FROM (SELECT prioritized.*,row_number() OVER (PARTITION BY provider_id "
+                    "ORDER BY catalog_priority DESC,id) AS provider_order FROM (SELECT tours.*, "
+                    + priority
+                    + " AS catalog_priority FROM public.tours WHERE provider_id IN :ids) prioritized) balanced "
+                    "ORDER BY catalog_priority DESC,provider_order,provider_id,id LIMIT :lim OFFSET :offset"
                 ).bindparams(bindparam("ids", expanding=True))
-                rows = [
-                    dict(r)
-                    for r in c.execute(
-                        stmt, {"ids": list(providers), "lim": self.settings.supabase_tour_scan_limit + 1}
-                    ).mappings()
-                ]
+                rows, scan_pages = [], 0
+                budget = self.settings.supabase_tour_scan_limit + 1
+                while len(rows) < budget and providers:
+                    remaining = (instant(request.deadline_at) - now()).total_seconds()
+                    if remaining <= 0:
+                        raise AppError("JOB_DEADLINE_EXCEEDED", "Job đã quá thời hạn.", 504, retryable=True)
+                    c.execute(
+                        text("SELECT set_config('statement_timeout', :ms, true)"),
+                        {
+                            "ms": str(
+                                max(
+                                    1,
+                                    int(
+                                        min(remaining, self.settings.supabase_tour_query_timeout_seconds)
+                                        * 1000
+                                    ),
+                                )
+                            )
+                        },
+                    )
+                    page_size = min(250, budget - len(rows))
+                    page = [
+                        dict(r)
+                        for r in c.execute(
+                            stmt,
+                            {
+                                **priority_params,
+                                "ids": list(providers),
+                                "lim": page_size,
+                                "offset": len(rows),
+                            },
+                        ).mappings()
+                    ]
+                    scan_pages += 1
+                    rows.extend(page)
+                    if len(page) < page_size:
+                        break
+                for row in rows:
+                    row.pop("catalog_priority", None)
+                    row.pop("provider_order", None)
                 scan_truncated = len(rows) > self.settings.supabase_tour_scan_limit
                 rows = rows[: self.settings.supabase_tour_scan_limit]
+                scanned_count = len(rows)
                 valid_rows = []
                 for row in rows:
                     try:
@@ -400,8 +446,10 @@ class SupabaseRepository:
                         anchor = None
                     query = text(
                         "SELECT * FROM (SELECT offers.*,count(*) OVER (PARTITION BY tour_id) AS catalog_total,row_number() OVER (PARTITION BY tour_id "
-                        "ORDER BY CASE WHEN CAST(:anchor AS date) IS NULL THEN 0 ELSE abs(departure_date - CAST(:anchor AS date)) END, "
-                        "departure_date NULLS LAST,id) AS catalog_order FROM public.offers WHERE tour_id IN :ids) picked "
+                        "ORDER BY CASE WHEN " + offer_priority + " THEN 0 ELSE 1 END, "
+                        "CASE WHEN CAST(:anchor AS date) IS NULL THEN 0 ELSE abs(offers.departure_date - CAST(:anchor AS date)) END, "
+                        "offers.departure_date NULLS LAST,offers.id) AS catalog_order FROM public.offers "
+                        "JOIN public.tours AS tours ON tours.id=offers.tour_id WHERE offers.tour_id IN :ids) picked "
                         "ORDER BY catalog_order,tour_id LIMIT :lim"
                     ).bindparams(bindparam("ids", expanding=True))
                     offer_rows = [
@@ -409,6 +457,7 @@ class SupabaseRepository:
                         for r in c.execute(
                             query,
                             {
+                                **priority_params,
                                 "ids": list(retained),
                                 "anchor": anchor,
                                 "lim": self.settings.supabase_tour_max_offers + 1,
@@ -496,8 +545,10 @@ class SupabaseRepository:
                 adapter.payload["issues"] = adapter.payload["issues"][:1990]
                 adapter.payload["offer_coverage"] = {k: v for k, v in coverage.items() if k in kept}
                 adapter.payload["retrieval"] = dict(
-                    policy_version="what-if-acquisition-v1" if analysis else "structured-retrieval-v1",
-                    scanned_count=len(rows),
+                    policy_version="what-if-acquisition-v2" if analysis else "structured-retrieval-v2",
+                    scanned_count=scanned_count,
+                    scan_pages=scan_pages,
+                    priority_applied=not analysis,
                     static_rejected=static_rejected,
                     offer_rejected=offer_rejected,
                     retained_count=len(retained),

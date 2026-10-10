@@ -2,10 +2,12 @@
 
 import hashlib
 import json
+from datetime import date
+from zoneinfo import ZoneInfo
 
-from decision.engine import fold_tree, freshness
+from decision.engine import fold_tree, freshness, usable
 from decision.semantic import evaluate
-from domain.common import AppError
+from domain.common import AppError, instant
 
 
 def tour_identity(tour):
@@ -23,6 +25,22 @@ def assess_options(
 ):
     key = tour_identity(tour)
 
+    def departed(offer):
+        if (
+            offer is None
+            or getattr(r, "mode", None) not in {"discover", "hybrid"}
+            or getattr(r, "policy_version", "") != "requirements-v2.3-listed"
+        ):
+            return False
+        fact = offer.fields.get("departure_date")
+        ok, _ = usable(fact, "departure_date", source, at, synthetic)
+        if not ok or not isinstance(fact.value, str):
+            return False
+        try:
+            return date.fromisoformat(fact.value) < instant(at).astimezone(ZoneInfo(r.timezone)).date()
+        except ValueError:
+            return False
+
     def evaluations(offer, reason=None, *, per_offer=False):
         def cached(condition):
             # Cache lifetime is one immutable universe/time. Object identities include condition/party changes.
@@ -35,7 +53,7 @@ def assess_options(
                 )
             return evaluation_cache[cache_key]
 
-        return [
+        results = [
             dict(
                 cached(c),
                 id="eval_"
@@ -48,11 +66,18 @@ def assess_options(
             )
             for c in r.conditions
         ]
+        if departed(offer):
+            for result in results:
+                if result["field"] == "departure_date" and result["strength"] != "soft":
+                    result.update(status="fail", reason_code="DEPARTURE_ALREADY_PASSED")
+        return results
 
     assessed = []
     for option in sorted(options, key=lambda o: o.snapshot_id):
         es = evaluations(option, per_offer=True)
         status = hard_status(r, es)
+        if departed(option):
+            status = "fail"
         if status == "pass" and not r.readiness.can_evaluate_hard_constraints:
             status = "unknown"
         assessed.append({"offer_snapshot_id": option.snapshot_id, "hard_status": status, "evaluations": es})
@@ -71,6 +96,8 @@ def assess_options(
     reason = None if selected else "MULTIPLE_OFFERS_UNSELECTED" if options else "OFFER_MISSING"
     es = evaluations(selected, reason)
     status = hard_status(r, es)
+    if departed(selected):
+        status = "fail"
     if not selected and assessed and status != "fail":
         statuses = [a["hard_status"] for a in assessed]
         status = (

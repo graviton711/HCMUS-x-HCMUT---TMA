@@ -12,7 +12,7 @@ from data_access.supabase.policy import CATALOG_FIELDS, TEXT_FIELDS, receipt, tr
 from data_access.supabase.pricing import CatalogPricing
 from domain.common import instant, now
 from domain.crawl_v2 import CatalogFieldProof, CrawlResultV2
-from requirements.catalog import CATALOG_VERSION, expand_entities, resolve_entities
+from requirements.catalog import CATALOG_VERSION, expand_entities, resolve_entities, split_place_values
 from requirements.normalize import fold
 
 
@@ -83,7 +83,7 @@ def places(values):
 def destination_places(values, origin):
     """Ignore origin endpoints, preserve intermediate visits and unknown names."""
     places(values)  # Validate the complete raw declaration before deriving a view.
-    values = list(values)
+    values = split_place_values(values)
 
     def is_origin(value):
         return bool(origin and resolve_entities("departure_origin", [value]).members[0].entity_id == origin)
@@ -349,7 +349,8 @@ class CatalogAdapter:
             self.payload["suppliers"].append(
                 {"supplier_id": supplier_id(provider), "display_name": provider["display_name"]}
             )
-        origin = resolve_entities("departure_origin", [row.get("departure_city", "")]).members[0].entity_id
+        origins = resolve_entities("departure_origin", [row.get("departure_city", "")]).members
+        origin = origins[0].entity_id if len(origins) == 1 else None
         destinations, partial = destination_places(row.get("destinations", []), origin)
 
         def f(column, value, **kw):
@@ -464,7 +465,7 @@ class CatalogAdapter:
                 allow_proof=False,
                 reason="CATALOG_SUPPLEMENT_APPLICABILITY_UNKNOWN",
             )
-        quotes = []
+        quotes, listed = [], []
         charges, pricing_complete = [], None
         metadata = row.get("field_meta")
         pricing_requested = isinstance(metadata, dict) and "pricing" in metadata
@@ -481,6 +482,7 @@ class CatalogAdapter:
                     charges.append(f(f"field_meta.pricing.extra_charges.{i}", value))
                 pricing_complete = f("field_meta.pricing.complete", terms.complete)
             except (ValueError, TypeError, AttributeError, ArithmeticError):
+                quotes, charges, pricing_complete = [], [], None
                 self.issue(
                     "CATALOG_PRICING_METADATA_INVALID",
                     source_id(provider),
@@ -490,8 +492,34 @@ class CatalogAdapter:
                 )
         adult = prices.get("adult") if isinstance(prices, dict) else None
         if (
+            (not pricing_requested or pricing_complete is not None)
+            and adult is not None
+            and type(adult) is not bool
+            and tour_row.get("currency") == "VND"
+            and tour_row.get("price_type") in {"from", "exact"}
+        ):
+            amount = Decimal(str(adult))
+            if amount.is_finite() and 0 < amount <= 10**15 and amount == amount.to_integral_value():
+                value = {
+                    "quote_id": "catalog_lq_" + digest([snapshot, "adult"])[:32],
+                    "kind": tour_row["price_type"],
+                    "amount": int(amount),
+                    "currency": "VND",
+                    "basis": "per_adult",
+                    "coverage": "tour_price",
+                }
+                if pricing_requested:
+                    term = next((q for q in terms.quotes if q.basis == "per_adult"), None)
+                    if term:
+                        value["applicability"] = [a.model_dump() for a in term.applicability]
+                    else:
+                        value = None
+                if value:
+                    listed.append(f("price_by_age.adult", value, normalization="listed-adult-v1"))
+        if (
             not quotes
             and adult is not None
+            and type(adult) is not bool
             and tour_row.get("currency") == "VND"
             and tour_row.get("price_type") in {"from", "exact"}
         ):
@@ -499,7 +527,7 @@ class CatalogAdapter:
             if amount >= 0 and amount == amount.to_integral_value():
                 quotes.append(
                     f(
-                        "price_by_age.adult",
+                        "price_by_age.adult.preview",
                         {
                             "quote_id": "catalog_pq_" + digest([snapshot, "adult"])[:32],
                             "kind": tour_row["price_type"],
@@ -518,6 +546,7 @@ class CatalogAdapter:
             "tour_snapshot_id": tour["snapshot_id"],
             "fields": fields,
             "price_quotes": quotes,
+            "listed_price_quotes": listed,
             "extra_charges": charges,
             "pricing_complete": pricing_complete,
             "catalog_fields": previews,

@@ -11,6 +11,7 @@ CATALOG_FIELDS = {
     "duration_nights",
     "transport",
     "departure_date",
+    "price_by_age.adult",
     "route",
     "itinerary",
     "inclusions",

@@ -110,6 +110,7 @@ class TourSnapshotV2(TourSnapshot):
 
 
 class OfferSnapshotV2(OfferSnapshot):
+    listed_price_quotes: list[FactV2[PriceQuote]] = Field(default_factory=list, max_length=3)
     fields: dict[str, FactV2[JsonValue]] = Field(default_factory=dict, max_length=10)
     price_quotes: list[FactV2[PriceQuote]] = Field(default_factory=list, max_length=50)
     extra_charges: list[FactV2[ExtraCharge]] = Field(default_factory=list, max_length=50)
@@ -195,7 +196,16 @@ class CrawlResultV2(CrawlResult):
             if isinstance(snapshot, TourSnapshotV2):
                 facts += list(snapshot.policies.values())
             else:
-                facts += snapshot.price_quotes + snapshot.extra_charges
+                facts += snapshot.price_quotes + snapshot.extra_charges + snapshot.listed_price_quotes
+                for fact in snapshot.listed_price_quotes:
+                    if any(
+                        eid not in evidence or evidence[eid].snapshot_id != snapshot.snapshot_id
+                        for eid in fact.evidence_ids
+                    ):
+                        raise ValueError("Listed price/evidence snapshot mismatch")
+                expected_columns.update(
+                    {id(fact): "price_by_age.adult" for fact in snapshot.listed_price_quotes}
+                )
                 expected_columns.update(
                     {
                         id(fact): f"field_meta.pricing.quotes.{i}"

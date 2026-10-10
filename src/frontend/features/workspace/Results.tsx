@@ -74,6 +74,7 @@ const labels: Record<string, [string, string]> = {
   published_price: ['Giá tour công bố', 'Published tour price'],
   itinerary: ['Lịch trình công bố', 'Published itinerary'],
   price_quotes: ['Giá công bố', 'Published prices'],
+  listed_price_quotes: ['Giá tour niêm yết / người lớn', 'Listed tour price / adult'],
   extra_charges: ['Phụ thu', 'Extra charges'],
   pricing_complete: ['Độ đầy đủ giá', 'Pricing completeness'],
   unclassified_prices: [
@@ -359,6 +360,10 @@ function reasonLabel(code: string | null, t: Translate): string {
       'Dữ liệu đã quá thời hạn; cần cập nhật lại từ nguồn.',
       'Data has expired and needs refreshing from the source.',
     ],
+    DEPARTURE_ALREADY_PASSED: [
+      'Lịch này đã khởi hành, dù vẫn thuộc tháng bạn chọn.',
+      'This offer has already departed, even if it belongs to your selected month.',
+    ],
     FIELD_OBSERVATION_IN_FUTURE: [
       'Thời điểm thu thập dữ liệu không hợp lệ.',
       'The data observation time is invalid.',
@@ -370,6 +375,18 @@ function reasonLabel(code: string | null, t: Translate): string {
     PRICE_COVERAGE_UNCONFIRMED: [
       'Chưa xác nhận đầy đủ phạm vi giá và các điều kiện áp dụng.',
       'Price coverage and applicable terms are not fully confirmed.',
+    ],
+    LISTED_PRICE_MISSING_OR_AMBIGUOUS: [
+      'Chưa có giá tour niêm yết áp dụng rõ ràng.',
+      'Applicable listed tour price is missing or ambiguous.',
+    ],
+    LISTED_PRICE_BASIS_UNSUPPORTED: [
+      'Chưa có giá niêm yết cho đơn vị ngân sách này.',
+      'Listed pricing for this budget basis is unavailable.',
+    ],
+    DEPARTURE_WINDOW_PAST: [
+      'Lịch khởi hành đã qua. Chọn lại tháng/năm hoặc ngày.',
+      'Departure window has passed. Choose a new month/year or date.',
     ],
     PRICE_MISSING_OR_AMBIGUOUS: [
       'Chưa có bảng giá áp dụng rõ ràng cho thành viên trong đoàn.',
@@ -603,9 +620,9 @@ function DataCell({
 
 function offerLabel(offer: Offer, locale: Locale, t: Translate): string {
   const date = offer.fields.departure_date;
-  const price = offer.price_quotes.find(
-    (item) => item.data_state === 'present' && item.value !== null,
-  );
+  const price = (
+    offer.listed_price_quotes?.length ? offer.listed_price_quotes : offer.price_quotes
+  ).find((item) => item.data_state === 'present' && item.value !== null);
   return [
     date?.data_state === 'present'
       ? formatResultValue(date.value, locale)
@@ -692,13 +709,16 @@ function RecommendationCard({
 }) {
   const { locale, t } = usePreferences();
   const prices = result.rows
-    .filter((row) => ['price_quotes', 'published_price'].includes(row.field))
+    .filter((row) => ['listed_price_quotes', 'price_quotes', 'published_price'].includes(row.field))
     .map((row) => ({
       row,
       cell: result.cells.find((cell) => cell.column_id === column.id && cell.row_id === row.id),
     }))
     .filter((entry) => entry.cell?.data_state === 'present');
-  const price = prices.find((entry) => entry.row.field === 'price_quotes') ?? prices[0];
+  const price =
+    prices.find((entry) => entry.row.field === 'listed_price_quotes') ??
+    prices.find((entry) => entry.row.field === 'price_quotes') ??
+    prices[0];
   const publishedQuotes = Array.isArray(price?.cell?.value)
     ? price.cell.value
     : price?.cell
@@ -739,6 +759,14 @@ function RecommendationCard({
         </div>
         {price?.cell && (
           <>
+            {price.row.field === 'listed_price_quotes' && (
+              <p className="price-unit">
+                {t(
+                  'Giá tour niêm yết/người lớn. Phụ thu và tổng tiền thực trả cần xác nhận riêng với nhà cung cấp.',
+                  'Listed tour price/adult. Confirm surcharges and the final payable total separately with the provider.',
+                )}
+              </p>
+            )}
             <p className="price-unit">
               {label(price.cell.verification, locale)} ·{' '}
               {price.cell.freshness.state === 'unknown'

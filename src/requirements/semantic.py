@@ -18,6 +18,7 @@ from domain.semantic import (
     ENTITY_FIELDS,
     QUALITATIVE_FIELDS,
     SEMANTIC_POLICY,
+    BudgetV2,
     ConditionV2,
     EntitySetValue,
     QualitativeValue,
@@ -172,9 +173,28 @@ def normalize_v2(raw, message, timezone):
             value = UnresolvedValue(raw=raw.quote, reason=str(exc) if str(exc).isupper() else "INVALID_DATE")
     else:
         old = normalize(raw, message, timezone)
+        from domain.requirements import Budget
+
+        if isinstance(old.value, Budget):
+            payable = old.value.coverage == "trip_total" or bool(
+                re.search(
+                    r"\b(?:thuc tra|phai tra|bao gom (?:moi |cac )?phu thu|tong chi phi|toan bo chi phi)\b",
+                    fold(raw.quote),
+                )
+            )
+            value = BudgetV2(**old.value.model_dump(), measure="payable" if payable else "listed")
+            old = old.model_copy(update={"value": value})
+            old.sources.append(ground(message, raw.quote).model_copy(update={"rule": "budget-measure-v2"}))
         if raw.field in {"departure_date", "return_date"}:
             old = old.model_copy(update={"strength": strength, "sources": [*old.sources, *sources[1:]]})
-        return ConditionV2.model_validate({**old.model_dump(), "scope": scope, "trace": trace.model_dump()})
+        return ConditionV2.model_validate(
+            {
+                **old.model_dump(),
+                "value": old.value.model_dump(),
+                "scope": scope,
+                "trace": trace.model_dump(),
+            }
+        )
     return ConditionV2(
         id=raw.id,
         field=raw.field,
@@ -190,6 +210,8 @@ def normalize_v2(raw, message, timezone):
 def legacy_condition(c, *, query=False):
     """Preserve all IDs/trees; unsupported pushdown remains an explicit marker."""
     data = c.model_dump(exclude={"scope", "trace"})
+    if isinstance(c.value, BudgetV2):
+        data["value"].pop("measure")
     if c.field not in FIELDS:
         data.update(
             field="unsupported",
@@ -243,7 +265,18 @@ def finalize_v2(r):
         for c in r.conditions
     ]
     r = r.model_copy(update={"conditions": temporal_conditions})
-    core = finalize(legacy_requirement(r))
+    core_input = legacy_requirement(r)
+    # Preserve budget measures for contradiction checks; other v2 values use the legacy adapter.
+    original = {c.id: c for c in r.conditions}
+    core_input = core_input.model_copy(
+        update={
+            "conditions": [
+                original[c.id] if isinstance(original[c.id].value, BudgetV2) else c
+                for c in core_input.conditions
+            ]
+        }
+    )
+    core = finalize(core_input)
     by_id = {c.id: c for c in r.conditions}
     questions, issues = [], []
     for q in core.clarifications:
