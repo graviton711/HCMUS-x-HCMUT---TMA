@@ -1,5 +1,7 @@
 # Decision
 
+Explicit Profile Hub lower-listed-price preference uses a soft `estimated_cost prefer_low` predicate. `rank-v2.4-listed-preference` computes utility from the selected offer's usable listed price and the positive preference scale; unknown stays unscored and hard eligibility is unchanged. [Profile contract](../../docs/profile-hub.md).
+
 [Recovery policy](../../docs/recommendation-recovery-plan.md): decision-v2.5-listed kiểm listed budget riêng; không cần pricing_complete cho giá niêm yết đã xác nhận, không cộng phụ thu vào tiêu chí này. Payable estimator giữ bounds/completeness; kết quả listed có cảnh báo tổng thực trả chưa được xác nhận. What-if dùng cùng measure.
 
 [Sửa tìm tour](../../docs/search-correctness-repair.md): structured entity sets v2 dùng chung hierarchy; tách freshness missing-policy/stale/time-invalid; chọn offer unknown chỉ để đối chiếu, không nâng hard eligibility. Giữ v1 và bounds from/exact.
@@ -40,7 +42,7 @@ Input: requirement revision/QuerySpec, tour/offer snapshots, source issues, offe
 - Source thiếu lịch/giá/chỗ không chứng minh fail/pass; unsupported mandatory user requirement cũng không bị drop.
 - Với sets/itinerary chưa complete: đã thấy item có thể chứng minh contains; chưa thấy item không đủ chứng minh excludes hoặc contains fail. Các đại lượng “tất cả/minimum/maximum” cũng cần coverage đúng scope, không dùng một hotel/leg đại diện toàn tour.
 - Tour-only và multiple offers chưa chọn vẫn có static comparison; không ghép volatile cells thành offer giả.
-- V1 giữ eligibility/trade-offs, không xếp hạng tổng mặc định. V2 dùng `rank-v2.3-bounds`: score trên phần biết đi kèm coverage và khoảng điểm trên toàn bộ trọng số; sort lower/upper/coverage theo policy bảo thủ. Thiếu dữ liệu không làm tăng điểm tổng, khoảng điểm không là xác suất. Numeric utility dùng anchor cố định, không phụ thuộc pool. Sliders chỉ reweight metric đã hỗ trợ.
+- V1 giữ eligibility/trade-offs, không xếp hạng tổng mặc định. V2 dùng `rank-v2.4-listed-preference`: score trên phần biết đi kèm coverage và khoảng điểm trên toàn bộ trọng số; sort lower/upper/coverage theo policy bảo thủ. Thiếu dữ liệu không làm tăng điểm tổng, khoảng điểm không là xác suất. Numeric utility dùng anchor cố định, không phụ thuộc pool. Sliders chỉ reweight metric đã hỗ trợ.
 - Metric availability chỉ là computed khi có phép tính comparable; nêu lý do khi thiếu party, offer, exact price hoặc cùng currency/basis/coverage. Retrieval đã loại hết tour phải giữ lý do ALL_INELIGIBLE trong phạm vi đã quét, kèm truncation để tránh hiểu là toàn thị trường không có tour.
 
 Acceptance: bảng truth table ALL/ANY đúng; budget bounds không tạo false pass/fail; OR không bị biến AND; mandatory fail giữ visible ở URL flow; mỗi claim truy ra evaluation và evidence đúng snapshot.

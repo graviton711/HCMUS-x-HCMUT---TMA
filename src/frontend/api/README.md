@@ -1,5 +1,7 @@
 # API boundary
 
+Profile Hub adds an explicit lower-listed-price soft predicate alongside the hard listed budget. Its private form condition ID is kept separate during budget edits; importance sliders alone do not add it. Personal-data DTOs/validators live in `app/profile/contracts.ts`; [contract](../../../docs/profile-hub.md).
+
 DTO lấy từ `src/api/v2/models.py`, `routes.py`, `service.py` và domain BE; không import prototype/fixture. Client kiểm envelope và cấu trúc response trước khi trả typed data, dùng bearer và AbortSignal. `/health` có contract riêng. Mutation tạo một idempotency key cho một body, chỉ retry lỗi network/502/503/504 bằng đúng body/key; 409/422 không retry.
 
 `form.ts` serialize structured/text/URLs và tạo typed edits dựa requirement thật. ID của condition/child có sẵn được giữ; cập nhật condition không làm phẳng cây AND/OR hoặc xóa field không có control. Empty optional field chỉ xóa condition tương ứng. Giá/ranking/phân tích do BE cung cấp; FE chỉ định dạng.

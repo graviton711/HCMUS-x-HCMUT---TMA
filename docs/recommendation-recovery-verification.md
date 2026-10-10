@@ -48,7 +48,7 @@ Playwright dùng fixture server tạm ở 8001, FE ở 5175. Luồng structured 
 
 - Kiểm lại sau khi gộp tại checkout chính `backend`: **510 backend tests**, **84 frontend unit/integration tests** và **2 browser footer/help tests** đều passed. FE build/TypeScript, lint, BE Ruff và Git whitespace checks passed. Browser chạy trên FE local 5173, chặn auth/v2 để không tạo ticket hoặc gọi nguồn thật.
 - BE: `C:\Users\Admin\Desktop\HCMUS-x-HCMUT---TMA`, branch backend.
-- FE được implement/test tại `C:\Users\Admin\Desktop\HCMUS-x-HCMUT---TMA-frontend-recovery`, branch feature/minh-phu, baseline 4721773. Theo yêu cầu bàn giao gộp ngày 10/10, code FE recovery và footer/support đã được chuyển vào checkout `backend` cùng BE; worktree nguồn vẫn giữ bản làm việc.
+- FE được implement/test tại `C:\Users\Admin\Desktop\HCMUS-x-HCMUT---TMA-frontend-recovery`, branch feature/minh-phu, baseline 4721773. Theo yêu cầu bàn giao gộp ngày 10/10, code FE recovery và footer/support đã được chuyển vào checkout `backend` cùng BE. User sau đó yêu cầu gỡ worktree phụ và làm cả FE/BE trên `backend`: worktree đã gỡ khỏi Git/Desktop, bản dự phòng local ở `artifacts/worktree-backups/` (Git ignored); FE dev 5173 chạy từ checkout chính.
 - User đã yêu cầu commit và push một lần lên `origin/backend`. File untracked tên lệnh PowerShell không liên quan được giữ nguyên, ngoài commit. Không đưa `.env`, database hoặc artifacts vào Git.
 - Không cần migration Supabase cho listed measure/quotes: đây là contract API/snapshot mới. Không tạo scheduler khi crawler refresh contract chưa có.
 - Crawler handoff và các ca positive/negative: [hướng dẫn](../examples/backend-recommendation-recovery.md). Sau recrawl/restart, tạo phiên tìm mới; snapshot comparison cũ không tự thay đổi.

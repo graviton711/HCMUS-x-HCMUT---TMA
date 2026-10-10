@@ -53,6 +53,7 @@ def create_app(
     semantic_gateway=None,
     what_if_gateway=None,
     auth_transport=None,
+    profile_transport=None,
 ) -> FastAPI:
     settings = settings or Settings()
     store = Store(settings)
@@ -515,4 +516,7 @@ Các URL `.invalid` là dữ liệu mô phỏng, chỉ dùng với `DATA_PROVIDE
 
     app.include_router(auth_router(identity, limits))
     app.include_router(history_router(store, owner_v2))
+    from api.profile_hub.routes import router as profile_router
+
+    app.include_router(profile_router(identity, store, limits, profile_transport))
     return app

@@ -125,6 +125,9 @@ export function loadSessions(ownerId?: string): LocalSession[] {
           ...session,
           draft: {
             ...session.draft,
+            ...(Object.hasOwn(session.draft, 'preferLowerListedPrice')
+              ? {}
+              : { preferLowerListedPrice: false }),
             ...(Object.hasOwn(session.draft, 'departureMonths') ? {} : { departureMonths: [] }),
             ...(Object.hasOwn(session.draft, 'budgetMin') ? {} : { budgetMin: '' }),
           },

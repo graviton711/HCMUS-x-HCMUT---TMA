@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import httpx
 import uvicorn
+from test_profile_hub import PersonalStore
 from test_v2 import Nim
 
 from api.app import create_app
@@ -18,11 +19,30 @@ from domain.common import now
 def create_test_app(auth=False):
     user_id = str(uuid4())
     refreshes, issued, names = {}, {}, {user_id: "Browser tester"}
+    information, photos = {}, {}
     url = "https://browser-auth.example.test"
 
     def hosted(request):
-        body = json.loads(request.content) if request.content else {}
         path = request.url.path
+        body = (
+            json.loads(request.content)
+            if request.content and request.headers.get("content-type") != "image/jpeg"
+            else {}
+        )
+        if path.startswith("/storage/v1/"):
+            bearer = request.headers.get("Authorization", "").removeprefix("Bearer ")
+            uid = issued.get(bearer)
+            if not uid:
+                return httpx.Response(401, json={})
+            if path.startswith("/storage/v1/object/sign/"):
+                return httpx.Response(
+                    200, json={"signedURL": f"/object/sign/profile-avatars/{uid}/avatar.jpg?token=test"}
+                )
+            if request.method == "DELETE":
+                photos.pop(uid, None)
+            else:
+                photos[uid] = request.content
+            return httpx.Response(200, json={})
         if path.endswith("/settings"):
             return httpx.Response(200, json={"external": {"email": True, "google": False}})
         if path.endswith("/signup"):
@@ -59,12 +79,13 @@ def create_test_app(auth=False):
                 return httpx.Response(401, json={})
             if request.method == "PUT":
                 names[uid] = body.get("data", {}).get("name", names[uid])
+                information[uid] = body.get("data", {})
             return httpx.Response(
                 200,
                 json={
                     "id": uid,
                     "email": "browser@example.test",
-                    "user_metadata": {"name": names[uid]},
+                    "user_metadata": {**information.get(uid, {}), "name": names[uid]},
                     "app_metadata": {"providers": ["email"]},
                 },
             )
@@ -79,10 +100,11 @@ def create_test_app(auth=False):
             worker_enabled=True,
             supabase_auth_url=url if auth else None,
             supabase_auth_publishable_key="test-only" if auth else "",
-            cors_origins=["http://127.0.0.1:15173", "http://127.0.0.1:15174"],
+            cors_origins=["http://127.0.0.1:15173", "http://127.0.0.1:15174", "http://127.0.0.1:15501"],
         ),
         nim=Nim(),
         auth_transport=httpx.MockTransport(hosted),
+        profile_transport=httpx.MockTransport(PersonalStore("test-only").handle),
     )
 
 

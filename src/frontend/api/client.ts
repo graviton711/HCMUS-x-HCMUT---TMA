@@ -1,4 +1,10 @@
 import * as contracts from './contracts';
+import {
+  validateHub,
+  validateHubMutation,
+  type HubState,
+  type HubMutation,
+} from '../app/profile/contracts';
 import type {
   AcceptedComparison,
   AcceptedMessage,
@@ -57,6 +63,18 @@ const base = () => (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 
 
 /** One instance carries one anonymous session. Tokens never enter URLs or error text. */
 export class ApiClient {
+  profileHub(options: RequestOptions = {}) {
+    return this.request<HubState>('/v2/profile-hub', validateHub, options);
+  }
+  mutateHub(path: string, body: unknown, options: RequestOptions = {}) {
+    return this.request<HubMutation>(
+      `/v2/profile-hub/${path}`,
+      validateHubMutation,
+      options,
+      body,
+      'POST',
+    );
+  }
   private readonly baseUrl: string;
   constructor(
     private readonly token?: string,

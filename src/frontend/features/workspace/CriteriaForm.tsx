@@ -330,6 +330,18 @@ export function PreferenceSliders({
   return (
     <fieldset className="preference-sliders" disabled={disabled}>
       <legend>{t('Điều bạn ưu tiên', 'What matters to you')}</legend>
+      <label className="hub-check">
+        <input
+          type="checkbox"
+          checked={v.preferLowerListedPrice ?? false}
+          disabled={v.budgetMeasure !== 'listed' || v.budgetBasis !== 'per_adult'}
+          onChange={(e) => onChange({ ...v, preferLowerListedPrice: e.target.checked })}
+        />
+        {t(
+          'Ưu tiên giá niêm yết thấp hơn trong nhóm đạt điều kiện',
+          'Prefer lower listed prices among eligible tours',
+        )}
+      </label>
       {catalog.preference_dimensions.map((d) => (
         <label key={d.id} className="slider-field" htmlFor={`${prefix}-${d.id}`}>
           <span>

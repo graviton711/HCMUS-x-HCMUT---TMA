@@ -44,3 +44,6 @@ Account browser kiểm xác nhận email chưa login, login, hydrate ở context
 # Recommendation recovery
 
 Kiểm form mới listed và giữ payable khi sửa lịch sử; quá khứ theo timezone Việt Nam, tháng không liền nhau theo OR; card hiển thị giá niêm yết/from và phụ thu chưa xác nhận. Không gọi NIM/Supabase trong unit tests.
+# Account layout and personal profile
+
+`account-profile.test.tsx` checks single navigation/selected views, unsaved edits across views, failed-save recovery, immediate profile cache updates, read-only login email, image load fallback and bounded original uploads. E2E `Account profile:` uses only loopback Auth/Storage and test photos to exercise upload/remove/refresh/header avatar and 1440/390/320px VI/EN light/dark. `tests/test_account_profile.py` checks real routes, normalized JPEG/EXIF removal, validation, derived owner paths and storage failures. Hosted avatar setup is manual; these tests never upload to user Supabase.

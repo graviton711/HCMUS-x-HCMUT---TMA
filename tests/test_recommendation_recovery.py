@@ -269,6 +269,42 @@ def test_positive_recommendation_has_listed_and_separate_raw_cost_terms(trusted,
     assert disclosure["offers"][0]["payable_total_status"] == "not_calculated"
 
 
+def test_explicit_lower_listed_preference_is_scored_without_relaxing_cap(trusted, rows, config, client):
+    sources = fresh_sources(trusted)
+    crawl = catalog(rows, sources, config)
+    body = form(date=rows[2]["departure_date"].isoformat())
+    conditions = [c for c in body["input"]["form"]["conditions"] if c["field"] != "duration_days"]
+    conditions[3]["value"]["amount"] = 12_000_000
+    conditions.append(
+        dict(
+            id="condition_listed_price_preference",
+            field="estimated_cost",
+            operator="prefer_low",
+            strength="soft",
+            value=dict(
+                kind="budget",
+                measure="listed",
+                amount=12_000_000,
+                currency="VND",
+                basis="per_adult",
+                coverage="tour_price",
+            ),
+        )
+    )
+    body["input"]["form"]["conditions"] = conditions
+    body["input"]["form"]["party"]["adults"] = 1
+    r = RequirementV2.model_validate(data(client.post("/v2/requirements", json=body), 201))
+    result = build_comparison("comparison_profile_price", r, crawl, sources, now().isoformat())
+    assert len(result["recommendations"]["candidate_ids"]) == 1
+    item = result["recommendations"]["items"][0]
+    assert item["score_interval"]["lower"] is not None
+    contribution = next(
+        c for c in item["contributions"] if c["condition_id"] == "condition_listed_price_preference"
+    )
+    assert 0 < contribution["utility"] < 1 and contribution["dimension"] == "cost"
+    assert contribution["evidence_ids"]
+
+
 @pytest.mark.parametrize(
     "phrase,measure",
     [

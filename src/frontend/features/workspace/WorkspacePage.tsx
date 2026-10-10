@@ -143,10 +143,16 @@ export function WorkspacePage({
   session,
   workspace: w,
   onDraft,
+  onSaveTour,
+  onSaveTemplate,
+  personalBusy = false,
 }: {
   session: LocalSession;
   workspace: Workspace;
   onDraft: (v: LocalSession['draft']) => void;
+  onSaveTour?: (comparisonId: string, columnId: string, url: string) => Promise<void>;
+  onSaveTemplate?: () => void;
+  personalBusy?: boolean;
 }) {
   const { t, locale } = usePreferences();
   const { state: s, catalog } = w;
@@ -382,6 +388,22 @@ export function WorkspacePage({
                       <Icon name="edit" />
                     </button>
                   </div>
+                  {onSaveTemplate && (
+                    <button
+                      className="text-action"
+                      disabled={
+                        s.busy ||
+                        personalBusy ||
+                        !!s.proposal ||
+                        dirty ||
+                        outdated ||
+                        !s.requirement?.readiness.can_search
+                      }
+                      onClick={onSaveTemplate}
+                    >
+                      {t('Lưu mẫu nhu cầu', 'Save requirement template')}
+                    </button>
+                  )}
                   {editing ? (
                     <CriteriaForm
                       values={session.draft}
@@ -653,8 +675,9 @@ export function WorkspacePage({
               <div className="results-panel">
                 <Activity events={s.events} job={s.job} onCancel={() => void w.cancelJob()} />
                 <Results
+                  onSaveTour={onSaveTour}
                   comparison={s.comparison}
-                  busy={s.busy || !!s.proposal || dirty || outdated}
+                  busy={s.busy || personalBusy || !!s.proposal || dirty || outdated}
                   onOfferChange={(tourId, offerId) => void w.offerChange(tourId, offerId)}
                   onEvidence={(id) => void w.openEvidence(id)}
                 />

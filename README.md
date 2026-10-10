@@ -72,7 +72,9 @@ pnpm.cmd --dir src/frontend dev
 
 Mở **http://127.0.0.1:5173** → Tìm tour → Tiếp tục với phiên ẩn danh. Cần Node.js/pnpm và Python/uv; chạy mặc định không cần nhập API token vào frontend. Backend mặc định dùng dữ liệu mô phỏng, frontend chặn tìm kiếm nguồn này: để tìm tour thật, cấu hình provider theo [hướng dẫn Supabase](examples/backend-supabase-v2.md); NIM cho chat/phân tích cấu hình ở backend.
 
-Có chọn nhiều tháng/năm, khoảng ngân sách, thời lượng, form/chat/proposal, history cục bộ, comparison/evidence/activity, Việt/Anh và sáng/tối. Auth user/full history còn thiếu, xem [giới hạn tích hợp](src/frontend/BACKEND-GAPS.md) và [contract auth adapter](src/frontend/app/AUTH-ADAPTER.md).
+Có chọn nhiều tháng/năm, khoảng ngân sách, thời lượng, form/chat/proposal, lịch sử tài khoản và draft cục bộ, comparison/evidence/activity, Việt/Anh và sáng/tối. Supabase Auth đã nối; xem [giới hạn tích hợp](src/frontend/BACKEND-GAPS.md) và [contract auth adapter](src/frontend/app/AUTH-ADAPTER.md).
+
+Profile Hub lưu sở thích, tour đang cân nhắc, ghi chú/bộ sưu tập và mẫu nhu cầu trên Supabase Auth. Dùng mẫu/sở thích tạo phiên mới để review; lịch/giá tour lưu luôn là dữ liệu lịch sử. Cần chạy migration riêng theo [hướng dẫn bật Profile Hub](examples/profile-hub-supabase.md); [contract](docs/profile-hub.md) và [kiểm chứng](docs/profile-hub-verification.md).
 
 Preview chung dự kiến dùng **frontend Vercel nối backend riêng** để người xem chỉ mở link. [Cấu hình và phụ thuộc Vercel](docs/frontend-vercel-preview.md) mô tả phần cần chuẩn bị; repo chưa có link deploy được xác nhận.
 Frontend React + TypeScript + Vite nằm tại [src/frontend](src/frontend/README.md). Nếu terminal chưa nhận `pnpm` nhưng có Corepack, chạy từ repo root:

@@ -1,8 +1,9 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Request
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 
+from api.auth.avatar import BUCKET, normalize_image, path_for, public_profile, storage
 from domain.common import AppError, Model
 
 
@@ -35,6 +36,18 @@ class Refresh(Model):
 
 class ProfileEdit(Model):
     name: str = Field(min_length=1, max_length=80)
+    phone: str = Field(default="", max_length=25, pattern=r"^[0-9+().\s-]*$")
+    home_city: str = Field(default="", max_length=80)
+    bio: str = Field(default="", max_length=280)
+
+    @field_validator("name", "phone", "home_city", "bio", mode="before")
+    @classmethod
+    def trim(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
+class AvatarUpload(Model):
+    image: str = Field(min_length=1, max_length=60000)
 
 
 class GoogleStart(Model):
@@ -114,8 +127,9 @@ def router(identity, limits):
 
     @routes.get("/me")
     async def me(authorization: Annotated[str | None, Header()] = None):
-        user, _ = await identity.user(token(authorization))
-        return {"user": identity.profile(user)}
+        bearer = token(authorization)
+        user, _ = await identity.user(bearer)
+        return {"user": await public_profile(identity, user, bearer)}
 
     @routes.patch("/me")
     async def update(body: ProfileEdit, authorization: Annotated[str | None, Header()] = None):
@@ -125,10 +139,45 @@ def router(identity, limits):
             "PUT",
             "/user",
             token=bearer,
-            body={"data": {**(user.get("user_metadata") or {}), "name": body.name}},
+            body={"data": {**(user.get("user_metadata") or {}), **body.model_dump(exclude_unset=True)}},
         )
         user, _ = await identity.user(bearer)
-        return {"user": identity.profile(user)}
+        return {"user": await public_profile(identity, user, bearer)}
+
+    @routes.post("/me/avatar")
+    async def upload_avatar(
+        body: AvatarUpload, request: Request, authorization: Annotated[str | None, Header()] = None
+    ):
+        rate(request)
+        bearer = token(authorization)
+        user, _ = await identity.user(bearer)
+        photo = normalize_image(body.image)
+        await storage(identity, bearer, "POST", f"/object/{BUCKET}/{path_for(user)}", content=photo)
+        await identity.call(
+            "PUT",
+            "/user",
+            token=bearer,
+            body={"data": {**(user.get("user_metadata") or {}), "profile_avatar": "uploaded"}},
+        )
+        user, _ = await identity.user(bearer)
+        return {"user": await public_profile(identity, user, bearer)}
+
+    @routes.delete("/me/avatar")
+    async def remove_avatar(authorization: Annotated[str | None, Header()] = None):
+        bearer = token(authorization)
+        user, _ = await identity.user(bearer)
+        if (user.get("user_metadata") or {}).get("profile_avatar") == "uploaded":
+            await storage(
+                identity, bearer, "DELETE", f"/object/{BUCKET}", body={"prefixes": [path_for(user)]}
+            )
+        await identity.call(
+            "PUT",
+            "/user",
+            token=bearer,
+            body={"data": {**(user.get("user_metadata") or {}), "profile_avatar": "initials"}},
+        )
+        user, _ = await identity.user(bearer)
+        return {"user": await public_profile(identity, user, bearer)}
 
     @routes.post("/logout")
     async def logout(authorization: Annotated[str | None, Header()] = None):

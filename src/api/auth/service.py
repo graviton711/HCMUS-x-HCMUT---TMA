@@ -145,6 +145,10 @@ class Identity:
             email=email,
             has_password="email" in providers,
             google_email=email if "google" in providers else None,
+            **{
+                key: str(info.get(key) or "")[:limit]
+                for key, limit in (("phone", 25), ("home_city", 80), ("bio", 280))
+            },
         )
 
     async def session(self, data):
@@ -152,8 +156,13 @@ class Identity:
         if not isinstance(token, str) or not isinstance(refresh, str) or not refresh:
             raise AppError("AUTH_INVALID_RESPONSE", "Dịch vụ chưa cấp phiên hợp lệ.", 502)
         user, claims = await self.user(token)
+        from api.auth.avatar import public_profile
+
         return dict(
-            access_token=token, refresh_token=refresh, expires_at=claims["exp"], user=self.profile(user)
+            access_token=token,
+            refresh_token=refresh,
+            expires_at=claims["exp"],
+            user=await public_profile(self, user, token),
         )
 
     async def config(self):

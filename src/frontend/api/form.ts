@@ -35,6 +35,7 @@ export interface FormValues {
   budgetMin: string;
   budgetBasis: 'per_adult' | 'per_person' | 'group_total';
   budgetMeasure: 'listed' | 'payable';
+  preferLowerListedPrice?: boolean;
   durationDays: string;
   hotelStars: string;
   shopping: 'any' | 'few' | 'none';
@@ -60,6 +61,7 @@ export const emptyForm: FormValues = {
   budgetMin: '',
   budgetBasis: 'per_adult',
   budgetMeasure: 'listed',
+  preferLowerListedPrice: false,
   durationDays: '',
   hotelStars: '',
   shopping: 'any',
@@ -97,7 +99,17 @@ const date = (condition: Condition | undefined) =>
 
 export function formFromRequirement(requirement: Requirement): FormValues {
   const result = copy(emptyForm);
-  const field = (name: string) => requirement.conditions.find((c) => c.field === name);
+  const field = (name: string) =>
+    requirement.conditions.find(
+      (c) => c.field === name && c.id !== 'condition_listed_price_preference',
+    );
+  result.preferLowerListedPrice = requirement.conditions.some(
+    (c) =>
+      c.id === 'condition_listed_price_preference' &&
+      c.field === 'estimated_cost' &&
+      c.operator === 'prefer_low' &&
+      c.strength === 'soft',
+  );
   result.mode = requirement.input_kind;
   result.destinations = [...items(field('destinations'))];
   result.departureOrigin = items(field('departure_origin'))[0] ?? '';
@@ -137,7 +149,8 @@ export function formFromRequirement(requirement: Requirement): FormValues {
     if (level) result.preferenceOrigins[dimension] = level.origin;
   }
   for (const condition of requirement.conditions)
-    if (condition.strength !== 'unresolved') result.strengths[condition.field] = condition.strength;
+    if (condition.strength !== 'unresolved' && condition.id !== 'condition_listed_price_preference')
+      result.strengths[condition.field] = condition.strength;
   return result;
 }
 export const fromRequirement = formFromRequirement;
@@ -321,6 +334,27 @@ function conditions(values: FormValues): FormCondition[] {
       { kind: 'number', amount: Number(values.durationDays) },
       'soft',
     );
+  if (
+    values.preferLowerListedPrice &&
+    values.budget &&
+    values.budgetMeasure === 'listed' &&
+    values.budgetBasis === 'per_adult'
+  )
+    result.push({
+      id: 'condition_listed_price_preference',
+      field: 'estimated_cost',
+      operator: 'prefer_low',
+      strength: 'soft',
+      value: {
+        kind: 'budget',
+        measure: 'listed',
+        amount: Number(values.budget),
+        currency: 'VND',
+        basis: 'per_adult',
+        coverage: 'tour_price',
+        coverage_origin: 'explicit',
+      },
+    });
   if (values.hotelStars)
     add('hotel_stars_min', 'gte', { kind: 'number', amount: Number(values.hotelStars) }, 'soft');
   if (values.shopping !== 'any')
@@ -402,7 +436,8 @@ const controls: { field: string; keys: (keyof FormValues)[] }[] = [
 
 export function directBudgetReason(requirement: Requirement): string | null {
   const budgets = requirement.conditions.filter(
-    (condition) => condition.field === 'estimated_cost',
+    (condition) =>
+      condition.field === 'estimated_cost' && condition.id !== 'condition_listed_price_preference',
   );
   if (budgets.length > 1)
     return 'Ngân sách có nhiều nhánh. Sửa qua hội thoại để giữ đúng nhóm điều kiện.';
@@ -448,7 +483,9 @@ export function buildEdits(
       same(values.strengths[control.field], before.strengths[control.field])
     )
       continue;
-    const existing = requirement.conditions.filter((c) => c.field === control.field);
+    const existing = requirement.conditions.filter(
+      (c) => c.field === control.field && c.id !== 'condition_listed_price_preference',
+    );
     if (existing.length > 1)
       throw new FormValidationError({
         [control.keys[0]]:
@@ -510,6 +547,15 @@ export function buildEdits(
       throw new FormValidationError({
         departureMonths: 'Chọn tháng để sửa lịch, hoặc sửa ngày chính xác qua hội thoại.',
       });
+  }
+  if (
+    values.preferLowerListedPrice !== before.preferLowerListedPrice ||
+    values.budget !== before.budget
+  ) {
+    const old = requirement.conditions.find((c) => c.id === 'condition_listed_price_preference');
+    const next = desired.find((c) => c.id === 'condition_listed_price_preference');
+    if (next) edits.push({ op: 'upsert_condition', condition: next });
+    else if (old) edits.push({ op: 'remove_condition', condition_id: old.id });
   }
   if (!same(values.childAges, before.childAges) || values.adults !== before.adults)
     edits.push({ op: 'replace_party', party: party(values, requirement.party) });

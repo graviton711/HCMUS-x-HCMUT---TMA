@@ -13,6 +13,138 @@ import type { Comparison, Evidence, Requirement, WhatIf } from '../api/types';
 import type { LocalSession, SessionAccess } from '../app/storage';
 
 const screenshots = resolve(import.meta.dirname, '../../../artifacts/frontend');
+test('Account profile: personal edits, round avatar, photo upload/removal and responsive sections', async ({
+  page,
+}) => {
+  test.skip(process.env.E2E_AUTH_STUB !== '1', 'Uses isolated Auth/Storage only.');
+  const root = resolve(import.meta.dirname, '../../..');
+  const python = resolve(root, '.venv/Scripts/python.exe');
+  const image = execFileSync(python, [
+    '-c',
+    "from PIL import Image; import sys; Image.new('RGB',(320,240),(50,90,60)).save(sys.stdout.buffer,format='JPEG')",
+  ]);
+  await page.route('https://browser-auth.example.test/storage/**', (route) =>
+    route.fulfill({ status: 200, contentType: 'image/jpeg', body: image }),
+  );
+  await page.goto('/auth');
+  await page.getByLabel('Email', { exact: true }).fill('browser@example.test');
+  await page.getByLabel('Mật khẩu', { exact: true }).fill('test-password');
+  await page.locator('.auth-submit').click();
+  await expect(page).toHaveURL(/\/tours/);
+  await page.goto('/account');
+  await expect(page.locator('.account-nav')).toHaveCount(1);
+  await expect(page.locator('.account-avatar-link .profile-avatar')).toBeVisible();
+  await capture(page, 'account-new-overview-desktop');
+  await page.getByRole('button', { name: 'Hồ sơ', exact: true }).click();
+  await page.getByLabel('Tên hiển thị').fill('Nguyễn An');
+  await page.getByLabel('Số điện thoại').fill('+84 123456789');
+  await page.getByLabel('Thành phố bạn sống').fill('Hồ Chí Minh');
+  await page.getByLabel('Giới thiệu ngắn').fill('Thích đi chậm và gần thiên nhiên.');
+  await page.getByRole('button', { name: 'Lưu hồ sơ', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Đã lưu hồ sơ.');
+  await expect(page.locator('.account-avatar-link')).toHaveText('NA');
+  await page
+    .getByLabel('Chọn ảnh đại diện')
+    .setInputFiles({ name: 'portrait.jpg', mimeType: 'image/jpeg', buffer: image });
+  await expect(page.locator('.profile-photo-editor img')).toBeVisible();
+  await page.getByRole('button', { name: 'Lưu ảnh', exact: true }).click();
+  await expect(page.locator('.account-avatar-link img')).toBeVisible();
+  await expect(page.locator('.account-avatar-link img')).toHaveJSProperty('naturalWidth', 320);
+  await page.reload();
+  await expect(page.getByLabel('Thành phố bạn sống')).toHaveValue('Hồ Chí Minh');
+  await expect(page.locator('.account-avatar-link img')).toBeVisible();
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+    window.scrollTo(0, 0);
+  });
+  await capture(page, 'account-new-profile-desktop');
+  await noOverflow(page);
+  await page.getByRole('button', { name: 'Tour lưu', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Hồ sơ cá nhân' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Tour đã lưu 0' })).toBeVisible();
+  await page.getByRole('button', { name: 'Cài đặt', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Cài đặt tài khoản' })).toBeVisible();
+  await capture(page, 'account-new-settings-desktop');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Hồ sơ', exact: true }).click();
+  await capture(page, 'account-new-profile-mobile');
+  await noOverflow(page);
+  await page.setViewportSize({ width: 320, height: 780 });
+  await expect(page.locator('.account-avatar-link img')).toBeVisible();
+  await capture(page, 'account-new-profile-320');
+  await noOverflow(page);
+  await page.getByRole('button', { name: 'Chọn ngôn ngữ', exact: true }).first().click();
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await page.getByRole('button', { name: 'Switch to dark mode', exact: true }).first().click();
+  await expect(page.getByRole('heading', { name: 'Personal profile' })).toBeVisible();
+  await capture(page, 'account-new-profile-dark-en-320');
+  await noOverflow(page);
+  await page.getByRole('button', { name: 'Remove photo', exact: true }).click();
+  await expect(page.locator('.account-avatar-link img')).toHaveCount(0);
+  await expect(page.locator('.account-avatar-link')).toHaveText('NA');
+  await page.reload();
+  await expect(page.locator('.account-avatar-link')).toHaveText('NA');
+});
+test('Profile Hub saves preferences and explicitly starts a fresh draft on desktop/mobile', async ({
+  page,
+}) => {
+  test.skip(
+    process.env.E2E_AUTH_STUB !== '1',
+    'Uses loopback Auth and personal REST harness only.',
+  );
+  await page.goto('/auth');
+  await page.getByLabel('Email', { exact: true }).fill('browser@example.test');
+  await page.getByLabel('Mật khẩu', { exact: true }).fill('test-password');
+  await page.locator('.auth-submit').click();
+  await expect(page).toHaveURL(/\/tours/);
+  await page.goto('/account');
+  await page.getByRole('button', { name: 'Sở thích', exact: true }).click();
+  await expect(page.getByLabel('Khách sạn mong muốn')).toBeVisible();
+  await page.getByLabel('Khách sạn mong muốn').selectOption('4');
+  await page.getByLabel('Ưu tiên giá tour niêm yết thấp hơn trong nhóm đạt điều kiện').check();
+  await page.getByRole('button', { name: 'Lưu sở thích', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Lưu sở thích', exact: true })).toBeEnabled();
+  await page.reload();
+  await expect(page.getByLabel('Khách sạn mong muốn')).toHaveValue('4');
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await capture(page, 'profile-hub-desktop-vi');
+  await noOverflow(page);
+  await page.getByRole('button', { name: 'Dùng cho chuyến mới', exact: true }).click();
+  await expect(page).toHaveURL(/\/tours\?session=/);
+  await expect(page.getByText('Đã tạo bản nháp mới.', { exact: false })).toBeVisible();
+  const draft = await page.evaluate(() => {
+    const key = Object.keys(localStorage).find((k) => k.startsWith('di-cung:history:v1:user:'))!;
+    return JSON.parse(localStorage.getItem(key)!)[0].draft;
+  });
+  expect(draft.hotelStars).toBe('4');
+  expect(draft.adults).toBe(0);
+  expect(draft.budget).toBe('');
+  expect(draft.departureMonths).toEqual([]);
+  await page.goto('/account');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Sở thích', exact: true }).click();
+  await capture(page, 'profile-hub-mobile-vi');
+  await noOverflow(page);
+  await page.getByRole('button', { name: 'Chọn ngôn ngữ', exact: true }).first().click();
+  await page.getByRole('button', { name: 'English', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Travel preferences', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Switch to dark mode', exact: true }).first().click();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await capture(page, 'profile-hub-mobile-dark-en');
+  await noOverflow(page);
+  await page.getByRole('button', { name: 'Delete saved preferences', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByLabel('Desired hotel standard')).toHaveValue('');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page).toHaveURL(/\/auth/);
+  await page.goto('/account');
+  await expect(
+    page.getByRole('heading', { name: 'Take your plans with you', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Desired hotel standard')).toHaveCount(0);
+});
 // Public help checks are isolated from real tickets, auth accounts and tour sources.
 async function isolateHelp(page: Page) {
   await page.route('**/v2/**', (route) => route.abort());
@@ -803,8 +935,9 @@ test('hosted identity adapter: confirmation, cross-browser account history, prof
       await other.evaluate(() => JSON.parse(localStorage.getItem('di-cung:history:v1') ?? '[]')),
     ).toEqual([]);
     await other.goto('/account');
-    await other.getByLabel('Họ và tên', { exact: true }).fill('Updated browser tester');
-    await other.getByRole('button', { name: 'Lưu thay đổi', exact: true }).click();
+    await other.getByRole('button', { name: 'Hồ sơ', exact: true }).click();
+    await other.getByLabel('Tên hiển thị', { exact: true }).fill('Updated browser tester');
+    await other.getByRole('button', { name: 'Lưu hồ sơ', exact: true }).click();
     await expect(other.getByRole('status')).toContainText('Đã lưu');
     await noOverflow(other);
     await capture(other, 'account-auth-stub-desktop');

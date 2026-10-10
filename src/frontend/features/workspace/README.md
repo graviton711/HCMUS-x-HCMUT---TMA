@@ -1,5 +1,7 @@
 # Workspace
 
+Profile Hub can save owned source comparison columns as historical bookmarks; save actions only send comparison/column IDs. App handles account state and hub navigation. See [contract](../../../../docs/profile-hub.md).
+
 Theo [sửa tìm tour](../../../../docs/search-correctness-repair.md), Activity hiển thị sự kiện lịch sử bằng quá khứ; Results nêu blockers bắt buộc, số tour cần xác nhận và giới hạn dữ liệu từ DTO, không tự tạo eligibility. Đếm tour duy nhất cho mỗi field/reason, dùng đánh giá per-offer khi có.
 
 What-if: create/poll/read trên comparison hiện tại, kiểm binding/late-response; apply tạo proposal để review/confirm/search riêng. History account được hydrate từ refs server; anonymous flow giữ nguyên. [Integration contract](../../../../docs/account-history-what-if-integration.md).
