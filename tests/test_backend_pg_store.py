@@ -51,7 +51,32 @@ def test_postgres_store_matches_the_sqlite_contract():
         item = store.get_history_item(req.id, first["session_id"])
         assert item["kind"] == "requirement"
     finally:
+        _scrub(store, [first["session_id"], second["session_id"]])
         store.close()
+
+
+@needs_db
+def test_postgres_store_reconnects_after_idle_drop():
+    """Warm serverless instances outlive their DB connection; one retry, no 500."""
+    store = _store()
+    try:
+        owner = store.create_session(3600)["session_id"]
+        store._conn.close()
+        page, _ = store.list_history(owner, 100)
+        assert page == []
+    finally:
+        _scrub(store, [owner])
+        store.close()
+
+
+def _scrub(store, session_ids: list[str] | None = None) -> None:
+    store._conn.execute("DELETE FROM runtime_records WHERE id LIKE 'req_pg%'")
+    for sid in session_ids or []:
+        store._conn.execute("DELETE FROM runtime_sessions WHERE id = %s", (sid,))
+        store._conn.execute(
+            "DELETE FROM runtime_records WHERE owner_session_id = %s", (sid,)
+        )
+    store._conn.commit()
 
 
 def _requirement(rid: str):
