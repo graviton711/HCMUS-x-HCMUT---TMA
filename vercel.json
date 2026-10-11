@@ -13,7 +13,7 @@
       "root": ".",
       "framework": "fastapi",
       "functions": {
-        "src/backend/vercel_app.py": {
+        "vercel_backend.py": {
           "excludeFiles": "{src/frontend/**,node_modules/**,tests/**,artifacts/**,.local/**,data/**,dist/**,docs/**,examples/**,migrations/**,src/ingest/**,*.md}"
         }
       }

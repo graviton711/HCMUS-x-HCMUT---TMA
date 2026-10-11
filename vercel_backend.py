@@ -1,8 +1,9 @@
 """Vercel serverless entrypoint. Imported only by the Vercel Python runtime.
 
-Nothing else in the repo imports this module, so local dev, the CLI and the
-test suite never execute it. It exists solely to hand Vercel a top-level
-``app`` object without adding import-time side effects to ``backend.api``.
+Lives at the repo root (not under src/) because Vercel resolves the
+``tool.vercel.entrypoint`` module to a file path relative to the service root
+— dotted paths under ``src/`` do not resolve. Nothing else in the repo imports
+this module, so local dev, the CLI and the test suite never execute it.
 """
 
 from __future__ import annotations
@@ -11,9 +12,11 @@ import os
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parent
 _SRC = str(_REPO_ROOT / "src")
 if _SRC not in sys.path:
+    # Covers runtimes that do not pip-install the project (src/ layout).
+    # Harmless when the package is already installed.
     sys.path.insert(0, _SRC)
 
 from backend.api import create_app  # noqa: E402 — sys.path bootstrap above is load-bearing
