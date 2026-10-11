@@ -23,7 +23,7 @@ def _mock_nim(payload: dict) -> NimClient:
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(payload)}}]})
 
     return NimClient("key", "model", 9.0,
-                     prompt=PromptCfg(system="s", max_tokens=64, temperature=0),
+                     prompt=PromptCfg(system="s", max_tokens=64, temperature=0, timeout_s=5),
                      transport=httpx.MockTransport(handler))
 
 
@@ -66,7 +66,7 @@ def test_gateway_retries_malformed_json_once():
         return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
 
     nim = NimClient("key", "model", 9.0,
-                    prompt=PromptCfg(system="s", max_tokens=64, temperature=0),
+                    prompt=PromptCfg(system="s", max_tokens=64, temperature=0, timeout_s=5),
                     transport=httpx.MockTransport(handler))
     assert nim.complete_json(system="s", user="u", max_tokens=64, temperature=0) == {}
     assert len(calls) == 2
@@ -79,13 +79,61 @@ def test_gateway_raises_after_second_malformed():
         return httpx.Response(200, json={"choices": [{"message": {"content": "not json"}}]})
 
     nim = NimClient("key", "model", 9.0,
-                    prompt=PromptCfg(system="s", max_tokens=64, temperature=0),
+                    prompt=PromptCfg(system="s", max_tokens=64, temperature=0, timeout_s=5),
                     transport=httpx.MockTransport(handler))
     try:
         nim.complete_json(system="s", user="u", max_tokens=64, temperature=0)
         raise AssertionError("should have raised")
     except AppError as exc:
         assert exc.code == "LLM_INVALID_OUTPUT"
+
+
+def test_assess_degrades_when_gateway_unavailable(input_cfg, decide_cfg):
+    from backend.models import Condition
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, json={"error": {"message": "upstream down"}})
+
+    nim = NimClient("key", "model", 9.0,
+                    prompt=PromptCfg(system="s", max_tokens=64, temperature=0, timeout_s=5),
+                    transport=httpx.MockTransport(handler))
+    soft = [Condition(id="s1", field="preference", value="thích núi", strength="soft")]
+    assert assess_soft_llm(_snapshots(), soft, nim, prompt=nim.prompt, excerpt_chars=99,
+                           quote_chars=9, soft_fields=["itinerary"]) == {}
+
+
+def test_assess_degrades_when_gateway_times_out(input_cfg, decide_cfg):
+    from backend.models import Condition
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ReadTimeout("simulated timeout", request=request)
+
+    nim = NimClient("key", "model", 9.0,
+                    prompt=PromptCfg(system="s", max_tokens=64, temperature=0, timeout_s=5),
+                    transport=httpx.MockTransport(handler))
+    soft = [Condition(id="s1", field="preference", value="thích núi", strength="soft")]
+    assert assess_soft_llm(_snapshots(), soft, nim, prompt=nim.prompt, excerpt_chars=99,
+                           quote_chars=9, soft_fields=["itinerary"]) == {}
+
+
+def test_compare_still_ranks_when_soft_assess_degrades(input_cfg, decide_cfg):
+    from backend.models import Condition
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, json={})
+
+    nim = NimClient("key", "model", 9.0,
+                    prompt=PromptCfg(system="s", max_tokens=64, temperature=0, timeout_s=5),
+                    transport=httpx.MockTransport(handler))
+    req = build_requirement("", {"destinations": ["Đà Lạt"]}, cfg=input_cfg)
+    req.conditions.append(Condition(
+        id="s1", field="preference", value="thích núi", strength="soft"))
+    comp = compare(req, _snapshots(),
+                   lambda ts, soft: assess_soft_llm(ts, soft, nim, nim.prompt, 6000, 300,
+                                                    decide_cfg.soft_fields),
+                   decide_cfg)
+    assert comp.ranked
+    assert comp.candidates_considered == len(_snapshots())
 
 
 def test_compare_uses_soft_scores_in_rank(input_cfg, decide_cfg):

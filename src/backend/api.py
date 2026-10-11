@@ -7,6 +7,7 @@ import binascii
 import json
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -39,7 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     nim = NimClient(
         settings.nvidia_nim_api.get_secret_value(),
         settings.nvidia_nim_model,
-        settings.nim_timeout_seconds,
+        httpx.Timeout(settings.nim_timeout_seconds, connect=settings.nim_connect_timeout_s),
         prompt=tuning.extract,
     )
 

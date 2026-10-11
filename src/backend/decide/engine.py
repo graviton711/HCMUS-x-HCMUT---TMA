@@ -23,6 +23,14 @@ from backend.models import (
     uid,
 )
 from backend.settings import DecideCfg, PromptCfg
+from shared import get_logger
+
+log = get_logger("decide")
+
+# Transient LLM failures degrade to "soft unknown" instead of failing the
+# comparison: hard-filter results stay valid, soft scores just stay absent.
+_DEGRADED_REASONS = {"LLM_TIMEOUT", "LLM_UPSTREAM_ERROR", "LLM_INVALID_OUTPUT",
+                     "LLM_NOT_CONFIGURED"}
 
 
 def _contains(haystack: str, needle: str) -> bool:
@@ -217,9 +225,19 @@ def assess_soft_llm(
     user = json.dumps(
         {"criteria": [{"id": c.id, "text": str(c.value)} for c in soft], "tours": docs}, ensure_ascii=False
     )
-    scores = nim.complete_json(
-        system=prompt.system, user=user, max_tokens=prompt.max_tokens, temperature=prompt.temperature
-    ).get("scores", [])
+    try:
+        payload = nim.complete_json(
+            system=prompt.system, user=user,
+            max_tokens=prompt.max_tokens,
+            temperature=prompt.temperature,
+            timeout=prompt.timeout_s,
+        )
+    except AppError as exc:
+        if exc.code not in _DEGRADED_REASONS:
+            raise
+        log.warning("soft assess degraded (%s); soft criteria stay unknown", exc.code)
+        return {}
+    scores = payload.get("scores", [])
     out: dict[tuple[str, str], tuple[float, str]] = {}
     for s in scores:
         try:

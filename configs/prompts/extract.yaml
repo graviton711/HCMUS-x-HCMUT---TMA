@@ -1,6 +1,7 @@
 description: Extract Vietnamese tour requirements into hard/soft conditions
 max_tokens: 1024
 temperature: 0
+timeout_s: 30
 system: |
   Trích yêu cầu tour tiếng Việt thành JSON {hard: [{field, operator, value}], soft: [{text}], travelers: int}.
   Hard fields: destination, departure_city, date_from, date_to, budget_max, duration_days, transport, accommodation.

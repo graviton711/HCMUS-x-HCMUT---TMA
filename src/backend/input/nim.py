@@ -14,12 +14,13 @@ log = get_logger("nim")
 
 
 class NimClient:
-    def __init__(self, api_key: str, model: str, timeout: float,
+    def __init__(self, api_key: str, model: str,
+                 timeout: float | httpx.Timeout,
                  prompt: PromptCfg | None = None,
                  transport: httpx.BaseTransport | None = None):
         self._key = api_key
         self._model = model
-        self._timeout = timeout
+        self._timeout = timeout if isinstance(timeout, httpx.Timeout) else httpx.Timeout(timeout)
         self._prompt = prompt
         self._transport = transport
 
@@ -35,7 +36,7 @@ class NimClient:
         return self._model
 
     @property
-    def timeout(self) -> float:
+    def timeout(self) -> httpx.Timeout:
         return self._timeout
 
     @property
@@ -43,8 +44,10 @@ class NimClient:
         return self._prompt
 
     def complete_json(self, *, system: str, user: str,
-                      max_tokens: int, temperature: float) -> dict:
+                       max_tokens: int, temperature: float,
+                       timeout: float | None = None) -> dict:
         """Single NIM JSON gateway. All LLM calls go through here."""
+        effective = self._timeout if timeout is None else httpx.Timeout(timeout)
         body = {
             "model": self._model,
             "stream": False,
@@ -60,7 +63,7 @@ class NimClient:
         }
         for attempt in (1, 2):
             try:
-                with httpx.Client(timeout=self._timeout, transport=self._transport) as client:
+                with httpx.Client(timeout=effective, transport=self._transport) as client:
                     response = client.post(
                         "https://integrate.api.nvidia.com/v1/chat/completions",
                         json=body,
@@ -105,4 +108,5 @@ class NimClient:
                 user += f"\n{frame}"
         return self.complete_json(system=self._prompt.system, user=user,
                                    max_tokens=self._prompt.max_tokens,
-                                   temperature=self._prompt.temperature)
+                                   temperature=self._prompt.temperature,
+                                   timeout=self._prompt.timeout_s)
