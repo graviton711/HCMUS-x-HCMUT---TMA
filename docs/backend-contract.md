@@ -11,7 +11,7 @@ NIM extraction nhận ngày tham chiếu theo giờ Việt Nam. Ngày âm lịch
 - `GET /catalog` → `{destinations}` from the active read-only catalog provider; this is a basic lookup, not the richer frontend catalog contract.
 - `POST /requirements` — body `{text?, form?}` → `{requirement}` gồm điều kiện cứng/mềm. Slot thiếu trả về trong `missing`, không đoán.
 - `GET /requirements/{id}` → requirement đã lưu.
-- `POST /comparisons` — body `{requirement_id?, text?, form?, candidate_limit?}` → `{comparison}` gồm rank ứng viên, chấm từng offer, evidence, phân tích và snapshot candidate tự chứa để kết quả đã lưu vẫn render được.
+- `POST /comparisons` — body `{requirement_id?, text?, form?, candidate_limit?}` → `{comparison}` gồm rank ứng viên, chấm từng offer, evidence, phân tích và snapshot candidate tự chứa để kết quả đã lưu vẫn render được. `ranked` chỉ chứa offer qua hết điều kiện cứng; `near_miss` chứa offer fail không quá `near_miss_max_fails` điều kiện cứng (mặc định 2), xếp theo pass nhiều → fail ít → giá rẻ để UI render nhóm "Gần đạt" riêng. `unknown` không tính là fail.
 - `GET /comparisons/{id}` → comparison đã lưu.
 - `GET /history?limit=&cursor=` and `GET /history/{id}` → cursor pagination and owner-scoped requirement/comparison detail for guest sessions.
 

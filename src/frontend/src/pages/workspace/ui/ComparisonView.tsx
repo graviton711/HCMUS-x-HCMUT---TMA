@@ -1,8 +1,146 @@
 import { useMemo } from 'react';
-import type { CurrentComparison } from '../../../shared/api';
+import type {
+  CurrentComparison,
+  CurrentOffer,
+  CurrentTourSnapshot,
+} from '../../../shared/api';
 import { safeUrl } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
-import { conditionState, display, evaluationsForOffer } from '../lib/format';
+import { conditionState, display, evaluationsForOffer, failedDetailsForOffer } from '../lib/format';
+
+function TourCard({
+  comparison,
+  tour,
+  offer,
+  index,
+  nearMiss,
+}: {
+  comparison: CurrentComparison;
+  tour: CurrentTourSnapshot;
+  offer: CurrentOffer;
+  index: number;
+  nearMiss: boolean;
+}) {
+  const { t } = usePreferences();
+  const state = conditionState(comparison, offer.id);
+  const url = safeUrl(tour.url || tour.evidence.url);
+  const details = evaluationsForOffer(comparison, offer.id);
+  const failed = failedDetailsForOffer(comparison, offer.id);
+  return (
+    <article className="current-tour-card" key={`${tour.id}-${offer.id}`}>
+      <div className="current-tour-topline">
+        <span className={`current-state ${nearMiss ? 'unknown' : state}`}>
+          {nearMiss
+            ? t(`Gần đạt · thiếu ${failed.length}`, `Near miss · missing ${failed.length}`)
+            : t(
+                state === 'pass'
+                  ? 'Đã kiểm tra'
+                  : state === 'fail'
+                    ? 'Không đạt'
+                    : 'Cần xác minh',
+                state === 'pass'
+                  ? 'Checked'
+                  : state === 'fail'
+                    ? 'Does not match'
+                    : 'Needs verification',
+              )}
+        </span>
+        <span>#{index + 1}</span>
+      </div>
+      <h3>{tour.name || tour.id}</h3>
+      <p className="current-supplier">
+        {tour.supplier || t('Chưa rõ nhà cung cấp', 'Supplier not listed')}
+      </p>
+      {nearMiss && failed.length > 0 && (
+        <p className="current-missing">
+          {t('Chưa đạt:', 'Not met:')}{' '}
+          {failed
+            .map(({ evaluation, condition }) =>
+              condition ? condition.field.replaceAll('_', ' ') : evaluation.condition_id,
+            )
+            .join(', ')}
+        </p>
+      )}
+      <dl className="current-tour-facts">
+        <div>
+          <dt>{t('Điểm đến', 'Destinations')}</dt>
+          <dd>{tour.destinations.join(' · ') || t('Chưa có dữ kiện', 'Not available')}</dd>
+        </div>
+        <div>
+          <dt>{t('Khởi hành', 'Departure')}</dt>
+          <dd>
+            {offer.departure_date || t('Chưa có ngày', 'Date unavailable')} ·{' '}
+            {tour.departure_city || t('Chưa rõ nơi đi', 'City unavailable')}
+          </dd>
+        </div>
+        <div>
+          <dt>{t('Giá công bố', 'Published price')}</dt>
+          <dd>
+            {offer.price == null
+              ? t('Liên hệ / chưa có giá', 'Contact / price unavailable')
+              : `${offer.price.toLocaleString()} ${offer.currency} (${offer.price_basis})`}
+          </dd>
+        </div>
+        <div>
+          <dt>{t('Độ mới / tin cậy', 'Freshness / trust')}</dt>
+          <dd>
+            {offer.price_freshness} ·{' '}
+            {offer.price_trusted
+              ? t('đã xác thực metadata', 'metadata trusted')
+              : t('chưa xác thực', 'not trusted')}
+          </dd>
+        </div>
+      </dl>
+      {tour.exclusions && (
+        <p>
+          <strong>{t('Chưa gồm:', 'Exclusions:')}</strong> {tour.exclusions}
+        </p>
+      )}
+      {tour.inclusions && (
+        <p>
+          <strong>{t('Bao gồm:', 'Inclusions:')}</strong> {tour.inclusions}
+        </p>
+      )}
+      {tour.surcharges && (
+        <p>
+          <strong>{t('Phụ thu:', 'Surcharges:')}</strong> {tour.surcharges}
+        </p>
+      )}
+      {details.length > 0 && (
+        <details className="current-eval-details">
+          <summary>
+            {t('Vì sao xếp hạng này', 'Why this ranking')} ({details.length})
+          </summary>
+          <ul className="current-eval-list">
+            {details.map(({ evaluation, condition }) => (
+              <li key={`${evaluation.offer_id}-${evaluation.condition_id}`}>
+                <span className={`current-state ${evaluation.state}`}>
+                  {evaluation.state === 'pass'
+                    ? t('Đạt', 'Pass')
+                    : evaluation.state === 'fail'
+                      ? t('Không đạt', 'Fail')
+                      : t('Chưa rõ', 'Unknown')}
+                </span>
+                <span>
+                  {condition
+                    ? `${condition.field.replaceAll('_', ' ')} ${condition.operator} ${display(condition.value)}`
+                    : evaluation.condition_id}
+                </span>
+                {evaluation.quote && <q>{evaluation.quote}</q>}
+                {evaluation.reason_code && <code>{evaluation.reason_code}</code>}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {url && (
+        <a href={url} target="_blank" rel="noreferrer">
+          {t('Mở nguồn tour', 'Open tour source')}
+        </a>
+      )}
+    </article>
+  );
+}
 
 export function ComparisonView({ comparison }: { comparison: CurrentComparison }) {
   const { t } = usePreferences();
@@ -10,6 +148,32 @@ export function ComparisonView({ comparison }: { comparison: CurrentComparison }
     () => new Map((comparison?.tour_snapshots ?? []).map((tour) => [tour.id, tour])),
     [comparison],
   );
+  const nearMiss = comparison.near_miss ?? [];
+
+  function cards(
+    entries: { tour_id: string; offer_id: string }[],
+    isNearMiss: boolean,
+  ) {
+    return (
+      <div className="current-tour-list">
+        {entries.map((entry, index) => {
+          const tour = tourById.get(entry.tour_id);
+          const offer = tour?.offers.find((item) => item.id === entry.offer_id);
+          if (!tour || !offer) return null;
+          return (
+            <TourCard
+              key={`${tour.id}-${offer.id}`}
+              comparison={comparison}
+              tour={tour}
+              offer={offer}
+              index={index}
+              nearMiss={isNearMiss}
+            />
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <section className="current-results" aria-labelledby="current-results-title">
@@ -24,7 +188,7 @@ export function ComparisonView({ comparison }: { comparison: CurrentComparison }
           {comparison.candidates_considered} {t('tour đã xem', 'tours considered')}
         </small>
       </div>
-      {comparison.ranked.length === 0 ? (
+      {comparison.ranked.length === 0 && nearMiss.length === 0 ? (
         <p className="notice">
           {t(
             'Chưa có offer nào chứng minh đủ điều kiện. Đây không đồng nghĩa không có tour phù hợp; hãy kiểm tra dữ kiện thiếu hoặc chưa xác minh.',
@@ -32,120 +196,21 @@ export function ComparisonView({ comparison }: { comparison: CurrentComparison }
           )}
         </p>
       ) : (
-        <div className="current-tour-list">
-          {comparison.ranked.map((ranked, index) => {
-            const tour = tourById.get(ranked.tour_id);
-            const offer = tour?.offers.find((item) => item.id === ranked.offer_id);
-            if (!tour || !offer) return null;
-            const state = conditionState(comparison, offer.id);
-            const url = safeUrl(tour.url || tour.evidence.url);
-            const details = evaluationsForOffer(comparison, offer.id);
-            return (
-              <article className="current-tour-card" key={`${tour.id}-${offer.id}`}>
-                <div className="current-tour-topline">
-                  <span className={`current-state ${state}`}>
-                    {t(
-                      state === 'pass'
-                        ? 'Đã kiểm tra'
-                        : state === 'fail'
-                          ? 'Không đạt'
-                          : 'Cần xác minh',
-                      state === 'pass'
-                        ? 'Checked'
-                        : state === 'fail'
-                          ? 'Does not match'
-                          : 'Needs verification',
-                    )}
-                  </span>
-                  <span>#{index + 1}</span>
-                </div>
-                <h3>{tour.name || tour.id}</h3>
-                <p className="current-supplier">
-                  {tour.supplier || t('Chưa rõ nhà cung cấp', 'Supplier not listed')}
-                </p>
-                <dl className="current-tour-facts">
-                  <div>
-                    <dt>{t('Điểm đến', 'Destinations')}</dt>
-                    <dd>
-                      {tour.destinations.join(' · ') || t('Chưa có dữ kiện', 'Not available')}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t('Khởi hành', 'Departure')}</dt>
-                    <dd>
-                      {offer.departure_date || t('Chưa có ngày', 'Date unavailable')} ·{' '}
-                      {tour.departure_city || t('Chưa rõ nơi đi', 'City unavailable')}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t('Giá công bố', 'Published price')}</dt>
-                    <dd>
-                      {offer.price == null
-                        ? t('Liên hệ / chưa có giá', 'Contact / price unavailable')
-                        : `${offer.price.toLocaleString()} ${offer.currency} (${offer.price_basis})`}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt>{t('Độ mới / tin cậy', 'Freshness / trust')}</dt>
-                    <dd>
-                      {offer.price_freshness} ·{' '}
-                      {offer.price_trusted
-                        ? t('đã xác thực metadata', 'metadata trusted')
-                        : t('chưa xác thực', 'not trusted')}
-                    </dd>
-                  </div>
-                </dl>
-                {tour.exclusions && (
-                  <p>
-                    <strong>{t('Chưa gồm:', 'Exclusions:')}</strong> {tour.exclusions}
-                  </p>
-                )}
-                {tour.inclusions && (
-                  <p>
-                    <strong>{t('Bao gồm:', 'Inclusions:')}</strong> {tour.inclusions}
-                  </p>
-                )}
-                {tour.surcharges && (
-                  <p>
-                    <strong>{t('Phụ thu:', 'Surcharges:')}</strong> {tour.surcharges}
-                  </p>
-                )}
-                {details.length > 0 && (
-                  <details className="current-eval-details">
-                    <summary>
-                      {t('Vì sao xếp hạng này', 'Why this ranking')} ({details.length})
-                    </summary>
-                    <ul className="current-eval-list">
-                      {details.map(({ evaluation, condition }) => (
-                        <li key={`${evaluation.offer_id}-${evaluation.condition_id}`}>
-                          <span className={`current-state ${evaluation.state}`}>
-                            {evaluation.state === 'pass'
-                              ? t('Đạt', 'Pass')
-                              : evaluation.state === 'fail'
-                                ? t('Không đạt', 'Fail')
-                                : t('Chưa rõ', 'Unknown')}
-                          </span>
-                          <span>
-                            {condition
-                              ? `${condition.field.replaceAll('_', ' ')} ${condition.operator} ${display(condition.value)}`
-                              : evaluation.condition_id}
-                          </span>
-                          {evaluation.quote && <q>{evaluation.quote}</q>}
-                          {evaluation.reason_code && <code>{evaluation.reason_code}</code>}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-                {url && (
-                  <a href={url} target="_blank" rel="noreferrer">
-                    {t('Mở nguồn tour', 'Open tour source')}
-                  </a>
-                )}
-              </article>
-            );
-          })}
-        </div>
+        cards(comparison.ranked, false)
+      )}
+      {nearMiss.length > 0 && (
+        <section aria-labelledby="near-miss-title">
+          <h3 id="near-miss-title">
+            {t('Gần đạt — thiếu ít điều kiện', 'Near miss — missing a few conditions')}
+          </h3>
+          <p className="current-hint">
+            {t(
+              'Các tour này không vào nhóm đạt đủ, xếp theo số điều kiện đã đạt.',
+              'These tours did not fully qualify, ordered by conditions met.',
+            )}
+          </p>
+          {cards(nearMiss, true)}
+        </section>
       )}
       <div className="current-analysis">
         {comparison.analysis.conditions.length > 0 && (

@@ -6,11 +6,11 @@ Toàn bộ luồng compare: lọc cứng pool → LLM chấm trường mềm tr�
 
 ## Input/output
 
-Vào: `Requirement` + list `TourSnapshot` + hook LLM. Ra: `Comparison` gồm rank candidate ids, snapshot đầy đủ của candidates, chấm `pass`/`fail`/`unknown` từng offer kèm evidence, và `Analysis` chi phí/điều kiện/rủi ro/quyền lợi. Snapshots được lưu cùng comparison để detail/history render lại đúng dữ kiện đã chấm. Unknown không pass, không rank trên pass cứng.
+Vào: `Requirement` + list `TourSnapshot` + hook LLM. Ra: `Comparison` gồm rank candidate ids, `near_miss` cho offer fail không quá `near_miss_max_fails` điều kiện cứng (xếp pass nhiều → fail ít → giá rẻ, `unknown` không tính là fail), snapshot đầy đủ của candidates, chấm `pass`/`fail`/`unknown` từng offer kèm evidence, và `Analysis` chi phí/điều kiện/rủi ro/quyền lợi. Snapshots được lưu cùng comparison để detail/history render lại đúng dữ kiện đã chấm. Unknown không pass, không rank trên pass cứng. Nhóm đạt đủ không bao giờ lẫn offer fail.
 
 ## Workflow
 
-`hard_filter`: mọi điều kiện cứng đánh giá trên từng offer. Destination match bỏ origin endpoints; destination thiếu/partial là unknown. Giá chỉ so khi fresh, trusted, exact, cùng currency/basis; giá `from` chỉ fail nếu lower bound đã vượt trần, nếu không unknown. `any` khớp ít nhất một lựa chọn → chỉ các tour còn offer không fail vào `assess_soft`: một call LLM cho pool survivors (prompt ở `configs/prompts/assess.yaml`, excerpt/quote theo `backend.decide` trong `configs/settings.yaml`), chấm itinerary/inclusions/exclusions/child/cancellation kèm quote → `rank`: hard status trước, rồi điểm mềm, rồi giá → `analyze`: khui surcharges, điều kiện, rủi ro availability/verification và quyền lợi matched từ text snapshot.
+`hard_filter`: mọi điều kiện cứng đánh giá trên từng offer. Destination match bỏ origin endpoints; destination thiếu/partial là unknown. Giá chỉ so khi fresh, trusted, exact, cùng currency/basis; giá `from` chỉ fail nếu lower bound đã vượt trần, nếu không unknown. `any` khớp ít nhất một lựa chọn → chỉ các tour còn offer không fail vào `assess_soft`: một call LLM cho pool survivors (prompt ở `configs/prompts/assess.yaml`, excerpt/quote theo `backend.decide` trong `configs/settings.yaml`), chấm itinerary/inclusions/exclusions/child/cancellation kèm quote → `rank`: hard status trước, rồi điểm mềm, rồi giá → `near_miss`: offer bị loại nhưng fail ≤ `near_miss_max_fails` (mặc định 2, chỉnh trong `backend.decide`) được xếp riêng để UI render nhóm "Gần đạt" kèm lý do fail → `analyze`: khui surcharges, điều kiện, rủi ro availability/verification và quyền lợi matched từ text snapshot (chạy trên cả hai nhóm).
 
 ## Interface với module khác
 

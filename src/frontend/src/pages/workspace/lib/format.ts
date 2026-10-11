@@ -33,3 +33,13 @@ export function evaluationsForOffer(
       condition: conditions.get(evaluation.condition_id) ?? null,
     }));
 }
+
+/** Hard-failed evaluations for an offer, joined with their conditions. */
+export function failedDetailsForOffer(
+  comparison: CurrentComparison,
+  offerId: string,
+): OfferEvaluation[] {
+  return evaluationsForOffer(comparison, offerId).filter(
+    ({ evaluation }) => evaluation.state === 'fail',
+  );
+}

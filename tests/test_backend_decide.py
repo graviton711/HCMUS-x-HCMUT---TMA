@@ -250,3 +250,32 @@ def test_analysis_surfaces_costs_risks_benefits(input_cfg, decide_cfg):
     assert "Phụ thu" in text or "phụ thu" in text.lower()
     assert comp.analysis.benefits, "inclusions should surface as benefits"
     assert comp.candidates_considered == 3
+
+
+def test_near_miss_ranks_few_fail_offers_without_touching_ranked(decide_cfg):
+    def row(key, destinations, transport, duration):
+        return TourRow(
+            tour={"record_key": key, "departure_city": "TP.HCM",
+                  "destinations": destinations, "transport": transport,
+                  "duration_days": duration},
+            offers=[{"record_key": f"{key}-offer", "departure_date": "2027-02-01"}],
+        )
+
+    tours = rows_to_snapshots([
+        row("ok", ["Đà Lạt"], "bus", 3),
+        row("near1", ["Đà Lạt"], "flight", 3),
+        row("near2", ["Nha Trang"], "flight", 3),
+        row("out", ["Nha Trang"], "flight", 5),
+    ])
+    req = Requirement(id=uid("req"), conditions=[
+        Condition(id="h1", field="destination", operator="contains",
+                  value="Đà Lạt", strength="hard"),
+        Condition(id="h2", field="transport", operator="eq",
+                  value="bus", strength="hard"),
+        Condition(id="h3", field="duration_days", operator="eq",
+                  value=3, strength="hard")],
+        missing=[])
+    comp = compare(req, tours, None, decide_cfg)
+    assert [c.tour_id for c in comp.ranked] == ["ok"]
+    assert [c.tour_id for c in comp.near_miss] == ["near1", "near2"]
+    assert comp.near_miss[0].score > comp.near_miss[1].score

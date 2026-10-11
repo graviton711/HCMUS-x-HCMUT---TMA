@@ -88,6 +88,7 @@ export interface CurrentComparison {
   id: string;
   requirement: CurrentRequirement;
   ranked: { tour_id: string; offer_id: string; score: number }[];
+  near_miss: { tour_id: string; offer_id: string; score: number }[];
   tour_snapshots: CurrentTourSnapshot[];
   evaluations: CurrentEvaluation[];
   analysis: {

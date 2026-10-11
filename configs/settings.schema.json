@@ -147,7 +147,8 @@
             "risk_words": {"type": "array", "items": {"type": "string"}},
             "analysis_chars": {"type": "integer"},
             "analysis_items": {"type": "integer"},
-            "top_n": {"type": "integer"}
+            "top_n": {"type": "integer"},
+            "near_miss_max_fails": {"type": "integer"}
           },
           "additionalProperties": true
         }

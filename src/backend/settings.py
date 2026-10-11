@@ -46,6 +46,7 @@ class DecideCfg(BaseModel):
     analysis_chars: int
     analysis_items: int
     top_n: int
+    near_miss_max_fails: int = 2
 
 
 class DataCfg(BaseModel):

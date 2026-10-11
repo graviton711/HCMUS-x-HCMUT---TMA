@@ -250,6 +250,48 @@ def assess_soft_llm(
     return out
 
 
+def near_miss(
+    req: Requirement,
+    tours: list[TourSnapshot],
+    evals: list[Evaluation],
+    ranked_offer_ids: set[str],
+    max_fails: int,
+) -> list[RankedCandidate]:
+    """Eliminated offers that only fail a few hard conditions, best first.
+
+    Order: most passes, then fewest fails, then cheapest exact price.
+    `unknown` counts as neither, so missing data is never penalized.
+    """
+    hard_ids = {c.id for c in req.hard()}
+    if not hard_ids or max_fails < 0:
+        return []
+    fails: dict[str, int] = {}
+    passes: dict[str, int] = {}
+    for e in evals:
+        if e.condition_id not in hard_ids:
+            continue
+        if e.state == "fail":
+            fails[e.offer_id] = fails.get(e.offer_id, 0) + 1
+        elif e.state == "pass":
+            passes[e.offer_id] = passes.get(e.offer_id, 0) + 1
+    scored = []
+    for tour in tours:
+        for offer in tour.offers:
+            if offer.id in ranked_offer_ids:
+                continue
+            failed = fails.get(offer.id, 0)
+            if failed == 0 or failed > max_fails:
+                continue
+            passed = passes.get(offer.id, 0)
+            price_key = offer.price if (offer.price is not None and offer.price_basis == "exact") else 10**15
+            scored.append((passed, -failed, -price_key, tour.id, offer.id))
+    scored.sort(key=lambda r: (r[0], r[1], r[2]), reverse=True)
+    return [
+        RankedCandidate(tour_id=t, offer_id=o, score=float(p) - 0.5 * float(-f))
+        for p, f, _, t, o in scored
+    ]
+
+
 def rank(
     req: Requirement,
     surviving: list[tuple[TourSnapshot, str]],
@@ -317,12 +359,15 @@ def compare(
         for oid in offer_ids:
             evaluations.append(Evaluation(offer_id=oid, condition_id=cid, state="pass", quote=quote))
     ranked = rank(req, surviving, soft_scores)
+    near = near_miss(req, tours, evaluations, {c.offer_id for c in ranked}, cfg.near_miss_max_fails)
+    near = near[: cfg.top_n]
     return Comparison(
         id=uid("cmp"),
         requirement=req,
         ranked=ranked,
+        near_miss=near,
         tour_snapshots=tours,
         evaluations=evaluations,
-        analysis=analyze(tours, ranked, cfg),
+        analysis=analyze(tours, ranked + near, cfg),
         candidates_considered=len(tours),
     )

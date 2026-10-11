@@ -69,6 +69,7 @@ function makeBackend() {
             travelers: 1,
           },
           ranked: [{ tour_id: 'tour_guest', offer_id: 'offer_guest', score: 0 }],
+          near_miss: [{ tour_id: 'tour_near', offer_id: 'offer_near', score: 0.5 }],
           tour_snapshots: [
             {
               id: 'tour_guest',
@@ -121,6 +122,57 @@ function makeBackend() {
                 },
               ],
             },
+            {
+              id: 'tour_near',
+              supplier: 'Nearby Tours',
+              name: 'Đà Lạt tiết kiệm',
+              url: 'https://example.test/tours/da-lat-budget',
+              destinations: ['Đà Lạt'],
+              raw_destinations: ['Đà Lạt'],
+              route: [],
+              destination_countries: ['vn'],
+              destination_country_complete: true,
+              departure_city: 'TP.HCM',
+              duration_days: 3,
+              transport: 'bus',
+              accommodation: 'Hotel',
+              itinerary: '',
+              inclusions: '',
+              exclusions: '',
+              cancellation_policy: '',
+              surcharges: '',
+              child_policy: '',
+              evidence: {
+                url: 'https://example.test/tours/da-lat-budget',
+                method: 'database_record',
+                observed_at: '',
+                record_ref: '',
+              },
+              observed_at: '',
+              verification: 'provider_claimed',
+              offers: [
+                {
+                  id: 'offer_near',
+                  tour_id: 'tour_near',
+                  departure_date: '2026-12-01',
+                  price: 9000000,
+                  currency: 'VND',
+                  price_basis: 'exact',
+                  price_trusted: true,
+                  price_freshness: 'fresh',
+                  departure_freshness: 'fresh',
+                  pricing_metadata_state: 'validated',
+                  availability: 'unknown',
+                  conditions: '',
+                  evidence: {
+                    url: 'https://example.test/tours/da-lat-budget',
+                    method: 'database_record',
+                    observed_at: '',
+                    record_ref: '',
+                  },
+                },
+              ],
+            },
           ],
           evaluations: [
             {
@@ -131,11 +183,18 @@ function makeBackend() {
               reason_code: '',
             },
             {
-              offer_id: 'offer_guest',
-              condition_id: 'h2',
-              state: 'unknown',
+              offer_id: 'offer_near',
+              condition_id: 'h1',
+              state: 'pass',
               quote: '',
-              reason_code: 'PRICE_FROM_LOWER_BOUND',
+              reason_code: '',
+            },
+            {
+              offer_id: 'offer_near',
+              condition_id: 'h2',
+              state: 'fail',
+              quote: '',
+              reason_code: 'PRICE_OVER_BUDGET',
             },
           ],
           analysis: {
@@ -196,7 +255,9 @@ describe('CurrentWorkspace guest flow', () => {
     expect(screen.getByText(/5,000,000 VND/)).toBeTruthy();
     expect(screen.getByText('Đã gồm xe đưa đón')).toBeTruthy();
     expect(screen.getByText('Hủy miễn phí trước 7 ngày')).toBeTruthy();
-    expect(screen.getByText('PRICE_FROM_LOWER_BOUND')).toBeTruthy();
+    expect(screen.getByText('Gần đạt — thiếu ít điều kiện')).toBeTruthy();
+    expect(screen.getByText('Đà Lạt tiết kiệm')).toBeTruthy();
+    expect(screen.getByText('PRICE_OVER_BUDGET')).toBeTruthy();
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/comparisons', expect.anything()));
   });
 
