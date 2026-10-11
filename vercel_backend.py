@@ -21,10 +21,12 @@ if _SRC not in sys.path:
 
 from backend.api import create_app  # noqa: E402 — sys.path bootstrap above is load-bearing
 
-if os.getenv("VERCEL") and os.getenv("DATABASE_URL", "").startswith("sqlite"):
-    raise RuntimeError(
-        "DATABASE_URL must be postgres:// on Vercel: SQLite files are ephemeral "
-        "between serverless invocations and sessions would vanish randomly."
-    )
+if os.getenv("VERCEL"):
+    database_url = os.getenv("SUPABASE_TOUR_DB_URL", "")
+    if not database_url.startswith(("postgres://", "postgresql://")):
+        raise RuntimeError(
+            "SUPABASE_TOUR_DB_URL must use a postgres:// or postgresql:// URL on Vercel; "
+            "SQLite files are ephemeral between serverless invocations."
+        )
 
 app = create_app()

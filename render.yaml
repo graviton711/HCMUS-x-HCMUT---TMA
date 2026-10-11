@@ -10,10 +10,6 @@ services:
     startCommand: uv run tour-backend serve --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
-      - key: DATABASE_URL
-        sync: false
-      - key: DATA_PROVIDER
-        value: supabase
       - key: SUPABASE_TOUR_DB_URL
         sync: false
       - key: NVIDIA_NIM_API

@@ -32,7 +32,7 @@ Browser ──same origin──▶ Vercel routing ──┬── /health, /sess
 | File                            | Vai trò                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------- |
 | `vercel.json`                   | Hai services + toàn bộ public routing. Không binding (xem dưới).                          |
-| `vercel_backend.py` (repo root) | Adapter duy nhất Vercel import (`tool.vercel.entrypoint`); fail-loud nếu `DATABASE_URL` là sqlite trên Vercel. Module path dạng file ở root vì Vercel không resolve dotted path dưới `src/`. |
+| `vercel_backend.py` (repo root) | Adapter Vercel; yêu cầu `SUPABASE_TOUR_DB_URL` là PostgreSQL. Module path dạng file ở root vì Vercel không resolve dotted path dưới `src/`. |
 | `src/backend/data/sessions.py`  | Reconnect-and-retry 1 lần khi kết nối Postgres chết sau idle (warm instance serverless).  |
 | `migrations/004_runtime_store.sql` | Bảng Postgres `runtime_sessions`/`runtime_records` (ingest runner áp dụng).            |
 | `configs/settings.yaml`         | `cors_origins` (dev) và `cors_origin_regex` (truy cập trực tiếp, không qua rewrite).      |
@@ -48,8 +48,11 @@ chết. Nếu sau này có function server-side gọi service khác, khai báo l
 
 ## Env trên dashboard (người deploy điền, không commit)
 
-- Service `api`: `DATABASE_URL` (postgres Supabase), `DATA_PROVIDER=supabase`,
-  `SUPABASE_TOUR_DB_URL`, `NVIDIA_NIM_API`.
+- Service `api`: `SUPABASE_TOUR_DB_URL` dùng chung cho runtime store (ghi) và catalog
+  (đọc); `NVIDIA_NIM_API` và `NVIDIA_NIM_MODEL` cấu hình NIM.
+- Không cần `DATABASE_URL` hoặc `DATA_PROVIDER`: khi có `SUPABASE_TOUR_DB_URL`,
+  backend dùng Postgres đó cho runtime và tự chọn catalog Supabase.
+- `SUPABASE_TOUR_PUBLISHABLE_KEY` nằm trong `.env.example`, nhưng runtime hiện tại chưa đọc biến này.
 - Service `web`: không cần biến nào (`VITE_API_BASE_URL` cố tình để trống).
 - Preview dùng chung data Supabase với prod (ghi vào bảng `runtime_*`); chấp nhận
   được cho team test, tách DB sau nếu cần.

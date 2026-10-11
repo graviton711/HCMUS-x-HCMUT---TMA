@@ -10,7 +10,7 @@ Vào: requirement/comparison records cần lưu; truy vấn catalog (giới hạ
 
 ## Workflow
 
-`sessions.py`: token hash + expiry cho guest session; `save_*`/`get_*` buộc resource vào owner session khi có token; `list_history` dùng cursor theo `(created_at, id)` và trả page cùng `has_more`; `get_history_item` trả model đã validate. Migration thêm owner column, giữ nguyên records cũ ở trạng thái unowned. `catalog.py`: `FixtureCatalog.list_tours()` hoặc `SupabaseCatalog.list_tours()` → rows thô. `for_settings()` chọn provider theo `DATA_PROVIDER`; scan/provider limits, trust allowlist và freshness đọc từ `configs/settings.yaml` (`backend.data`), env thắng YAML.
+`sessions.py`: token hash + expiry cho guest session; `save_*`/`get_*` buộc resource vào owner session khi có token; `list_history` dùng cursor theo `(created_at, id)` và trả page cùng `has_more`; `get_history_item` trả model đã validate. Migration thêm owner column, giữ nguyên records cũ ở trạng thái unowned. `catalog.py`: `FixtureCatalog.list_tours()` hoặc `SupabaseCatalog.list_tours()` → rows thô. `for_settings()` dùng Supabase khi có `SUPABASE_TOUR_DB_URL` (trừ khi `DATA_PROVIDER` được đặt tường minh); scan/provider limits, trust allowlist và freshness đọc từ `configs/settings.yaml` (`backend.data`), env thắng YAML.
 
 ## Interface với module khác
 
@@ -18,7 +18,7 @@ Vào: requirement/comparison records cần lưu; truy vấn catalog (giới hạ
 
 ## Quyết định kỹ thuật
 
-- Runtime store (sessions/requirements/comparisons) chọn theo scheme của `DATABASE_URL`: `sqlite://` cho dev/test local (file hoặc `:memory:`), `postgres://` cho shared preview/production — đổi driver không đổi interface `SessionStore`.
+- Runtime store (sessions/requirements/comparisons) dùng `SUPABASE_TOUR_DB_URL` nếu có; nếu không, config local giữ SQLite. Một URL Supabase cấp cho cả runtime store và catalog.
 - Bảng runtime ở Postgres được tạo bởi `migrations/004_runtime_store.sql`; ingest đã có runner áp `migrations/*.sql` cho Supabase, backend không tự chạy DDL.
-- Fixture là explicit (`DATA_PROVIDER=fixture`), không phải fallback lén.
+- Catalog mặc định là fixture nếu URL Supabase chưa được cấu hình; `DATA_PROVIDER=fixture` vẫn có thể đặt tường minh cho dev/test.
 - Supabase đọc SQL thô qua `psycopg`, transaction chỉ đọc, `LIMIT` chặn trên.

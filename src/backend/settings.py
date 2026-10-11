@@ -169,10 +169,21 @@ class Settings(BaseSettings):
         from dotenv import dotenv_values
 
         try:
-            dotkeys = {k.lower() for k in dotenv_values(overrides.get("_env_file", ".env"))}
+            dot_values = {
+                key.lower(): value
+                for key, value in dotenv_values(overrides.get("_env_file", ".env")).items()
+                if value is not None
+            }
         except Exception:
-            dotkeys = set()
-        env = {k.lower() for k in os.environ} | dotkeys
+            dot_values = {}
+        process_values = {key.lower(): value for key, value in os.environ.items()}
+        env = set(process_values) | set(dot_values)
+        if "supabase_tour_db_url" in overrides:
+            supabase_tour_db_url = overrides["supabase_tour_db_url"]
+        elif "supabase_tour_db_url" in process_values:
+            supabase_tour_db_url = process_values["supabase_tour_db_url"]
+        else:
+            supabase_tour_db_url = dot_values.get("supabase_tour_db_url")
         tuning: dict[str, Any] = {
             name: {k: v for k, v in _read_prompt(path, name).items() if v is not None}
             for name in ("extract", "assess")
@@ -189,5 +200,10 @@ class Settings(BaseSettings):
                 value = backend.get(key)
             if value is not None and field.lower() not in env and field not in overrides:
                 init[field] = value
+        if supabase_tour_db_url:
+            if "database_url" not in overrides:
+                init["database_url"] = supabase_tour_db_url
+            if "data_provider" not in overrides and "data_provider" not in env:
+                init["data_provider"] = "supabase"
         init.update(overrides)
         return cls(**init)

@@ -8,4 +8,4 @@ Luồng: input người dùng → lọc cứng thu pool → LLM chấm mềm →
 - [`decide`](decide/README.md): lọc → chấm → rank → phân tích.
 - `api.py`: HTTP orchestration/routes. `models.py`: nguồn chuẩn duy nhất của mọi kiểu. `settings.py`: config env. `errors.py`: `AppError`.
 
-Frontend React nằm ở sibling module [`src/frontend`](../frontend/README.md). Guest search đã nối end-to-end với API hiện tại; account, proposals, jobs, evidence/messages và what-if vẫn chờ port. Hợp đồng và kế hoạch: [system-architecture](../../docs/system-architecture.md), [data-contract](../../docs/data-contract.md), [backend-contract](../../docs/backend-contract.md).
+Frontend React nằm ở sibling module [`src/frontend`](../frontend/README.md). Guest search đã nối end-to-end với API hiện tại; account, proposals, jobs, evidence/messages và what-if vẫn chờ port. `SUPABASE_TOUR_DB_URL` là URL duy nhất cho runtime store và catalog Supabase; nếu vắng mặt, local dùng SQLite và fixture theo YAML. Hợp đồng: [system-architecture](../../docs/system-architecture.md), [data-contract](../../docs/data-contract.md), [backend-contract](../../docs/backend-contract.md).

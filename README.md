@@ -26,7 +26,7 @@ uv sync
 uv run tour-backend serve
 ```
 
-API: <http://127.0.0.1:8000/docs>. Mặc định `DATA_PROVIDER=fixture`; catalog thật dùng `DATA_PROVIDER=supabase` và `SUPABASE_TOUR_DB_URL` (chỉ đọc). LLM dùng `NVIDIA_NIM_API`.
+API: <http://127.0.0.1:8000/docs>. Mặc định local dùng SQLite và catalog fixture. Khi có `SUPABASE_TOUR_DB_URL`, backend dùng cùng URL cho runtime store (đọc/ghi) và catalog Supabase (chỉ đọc catalog); không cần `DATABASE_URL` hay `DATA_PROVIDER`. LLM dùng `NVIDIA_NIM_API`.
 
 ## Frontend
 
