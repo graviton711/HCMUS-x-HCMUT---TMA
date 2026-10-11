@@ -217,7 +217,7 @@ def assess_soft_llm(
     if not soft or nim is None or not nim.configured():
         return {}
     if prompt is None or not prompt.system.strip():
-        raise AppError("PROMPT_NOT_CONFIGURED", "Thiếu prompt assess.", 500)
+        raise AppError("PROMPT_NOT_CONFIGURED", "Missing assess prompt.", 500)
     docs = []
     for tour in tours:
         blob = "\n".join(f"{f}: {getattr(tour, f, '')}" for f in soft_fields)[:excerpt_chars]

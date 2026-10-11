@@ -72,7 +72,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return None
         scheme, separator, token = header.partition(" ")
         if not separator or scheme.lower() != "bearer" or not token.strip():
-            raise AppError("SESSION_INVALID", "Phiên truy cập không hợp lệ.", 401)
+            raise AppError("SESSION_INVALID", "Invalid access session.", 401)
         return store.authenticate_session(token.strip())
 
     @app.post("/sessions", status_code=201)
@@ -148,7 +148,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     ) -> dict[str, Any]:
         owner_id = owner_session(request)
         if owner_id is None:
-            raise AppError("SESSION_REQUIRED", "Cần phiên truy cập để đọc lịch sử.", 401)
+            raise AppError("SESSION_REQUIRED", "A guest access session is required to read history.", 401)
         before = None
         if cursor:
             try:
@@ -163,7 +163,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     raise ValueError
                 before = (cursor_data[0], cursor_data[1])
             except (ValueError, UnicodeDecodeError, binascii.Error, json.JSONDecodeError):
-                raise AppError("CURSOR_INVALID", "Cursor lịch sử không hợp lệ.", 400) from None
+                raise AppError("CURSOR_INVALID", "Invalid history cursor.", 400) from None
 
         page_size = max(1, min(limit, 100))
         items, has_more = store.list_history(owner_id, page_size, before)
@@ -178,7 +178,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def get_history_item(item_id: str, request: Request) -> dict[str, Any]:
         owner_id = owner_session(request)
         if owner_id is None:
-            raise AppError("SESSION_REQUIRED", "Cần phiên truy cập để đọc lịch sử.", 401)
+            raise AppError("SESSION_REQUIRED", "A guest access session is required to read history.", 401)
         return store.get_history_item(item_id, owner_id)
 
     return app

@@ -28,8 +28,8 @@ export function RequirementForm({
       <h2>{t('Nhu cầu chuyến đi', 'Trip requirements')}</h2>
       <p className="current-hint">
         {t(
-          'Backend hiện hỗ trợ điểm đến, nơi/ngày khởi hành, ngân sách tối đa, thời lượng và số người lớn. Điều kiện khác sẽ bị chặn thay vì bỏ qua.',
-          'The backend currently supports destinations, departure city/date, maximum budget, duration and adult count. Other criteria are blocked instead of silently ignored.',
+          'Backend so sánh theo điểm đến, nơi/ngày đi/ngày về, ngân sách tối đa, thời lượng, phương tiện, lưu trú và số người lớn.',
+          'The backend compares destinations, departure city, departure/return dates, maximum budget, duration, transport, accommodation and adult count.',
         )}
       </p>
       <div className="current-grid">
@@ -78,6 +78,14 @@ export function RequirementForm({
           />
         </label>
         <label className="field">
+          {t('Ngày về', 'Return date')}
+          <input
+            type="date"
+            value={session.draft.returnDate}
+            onChange={(event) => writeDraft({ returnDate: event.target.value })}
+          />
+        </label>
+        <label className="field">
           {t('Ngân sách tối đa (VND/người lớn)', 'Maximum budget (VND/adult)')}
           <input
             inputMode="numeric"
@@ -101,6 +109,14 @@ export function RequirementForm({
             max={100}
             value={session.draft.adults}
             onChange={(event) => writeDraft({ adults: Number(event.target.value) })}
+          />
+        </label>
+        <label className="field">
+          {t('Lưu trú', 'Accommodation')}
+          <input
+            value={session.draft.accommodation}
+            onChange={(event) => writeDraft({ accommodation: event.target.value })}
+            placeholder={t('Ví dụ: khách sạn 3 sao', 'Example: 3-star hotel')}
           />
         </label>
       </div>

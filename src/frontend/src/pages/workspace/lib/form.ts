@@ -1,26 +1,22 @@
 import type { SearchDraft } from '../../../entities/search-draft';
 import type { CurrentCatalog } from '../../../shared/api';
 
-/** Maps a search draft onto the fields the current backend accepts. Throws on unsupported criteria. */
+const isoDate = /^\d{4}-\d{2}-\d{2}$/u;
+
+function checkDate(label: string, value: string) {
+  const parsed = new Date(`${value}T00:00:00Z`);
+  if (
+    !isoDate.test(value) ||
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== value
+  )
+    throw new Error(`${label} is invalid. Use YYYY-MM-DD.`);
+}
+
+/** Maps a search draft onto the fields the current backend accepts. */
 export function currentForm(draft: SearchDraft, catalog: CurrentCatalog): Record<string, unknown> {
-  const unsupported: string[] = [];
-  if (draft.mode === 'urls' || draft.referenceUrls.length) unsupported.push('URL tours');
-  if (draft.returnDate || draft.departureMonths.length)
-    unsupported.push('return dates/month ranges');
-  if (draft.budgetMin) unsupported.push('budget ranges');
-  if (draft.budget && draft.budgetBasis !== 'per_adult') unsupported.push('non-adult budget basis');
-  if (draft.childAges.length) unsupported.push('child-age pricing');
-  if (draft.hotelStars) unsupported.push('hotel rating');
-  if (draft.shopping !== 'any') unsupported.push('shopping preference');
-  if (draft.transport.length > 1) unsupported.push('multiple transport choices');
-  if (draft.includedServices.length) unsupported.push('included services');
-  if (draft.notes.trim()) unsupported.push('additional notes');
-  if (Object.values(draft.preferenceLevels).some((level) => level !== 3))
-    unsupported.push('soft ranking preferences');
-  if (unsupported.length)
-    throw new Error(
-      `These criteria are not supported by the current backend and were not sent: ${unsupported.join(', ')}.`,
-    );
+  if (draft.transport.length > 1)
+    throw new Error('The current backend compares a single transport choice; keep only one.');
 
   for (const [label, value] of [
     ['budget', draft.budget],
@@ -36,15 +32,10 @@ export function currentForm(draft: SearchDraft, catalog: CurrentCatalog): Record
     throw new Error('Budget is above the supported numeric range.');
   if (!validAdults(draft.adults))
     throw new Error('Adult count must be a whole number from 0 to 100.');
-  if (draft.departureDate) {
-    const parsed = new Date(`${draft.departureDate}T00:00:00Z`);
-    if (
-      !/^\d{4}-\d{2}-\d{2}$/u.test(draft.departureDate) ||
-      Number.isNaN(parsed.getTime()) ||
-      parsed.toISOString().slice(0, 10) !== draft.departureDate
-    )
-      throw new Error('Departure date is invalid.');
-  }
+  if (draft.departureDate) checkDate('Departure date', draft.departureDate);
+  if (draft.returnDate) checkDate('Return date', draft.returnDate);
+  if (draft.departureDate && draft.returnDate && draft.returnDate < draft.departureDate)
+    throw new Error('Return date must be on or after the departure date.');
 
   const destination = draft.destinations[0]?.trim();
   if (destination && !catalog.destinations.includes(destination))
@@ -53,9 +44,11 @@ export function currentForm(draft: SearchDraft, catalog: CurrentCatalog): Record
   if (draft.destinations.length) form.destinations = draft.destinations;
   if (draft.departureOrigin.trim()) form.departure_city = draft.departureOrigin.trim();
   if (draft.departureDate) form.date_from = draft.departureDate;
+  if (draft.returnDate) form.date_to = draft.returnDate;
   if (draft.budget) form.budget_max = Number(draft.budget);
   if (draft.durationDays) form.duration_days = Number(draft.durationDays);
   if (draft.transport.length === 1) form.transport = draft.transport[0];
+  if (draft.accommodation.trim()) form.accommodation = draft.accommodation.trim();
   if (draft.adults > 0) form.travelers = draft.adults;
   return form;
 }

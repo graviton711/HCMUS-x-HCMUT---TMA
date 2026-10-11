@@ -8,22 +8,22 @@ export function SupportPage({ onStart }: { onStart: () => void }) {
     [
       t('Sửa nhu cầu rồi xác nhận', 'Edit your needs, then confirm'),
       t(
-        'Chọn Sửa nhiều mục, sửa từng giá trị hoặc kéo thanh sở thích. Mọi thay đổi được gom chung để xác nhận một lần. Hủy tất cả khôi phục bản đã xác nhận gần nhất.',
-        'Choose Edit multiple fields, change individual values or adjust the preference sliders. Changes are grouped for a single confirmation. Cancel all restores the latest confirmed requirements.',
+        'Sửa mô tả chuyến đi và từng giá trị trong form. Mọi thay đổi cần diễn giải lại trước khi tìm tiếp.',
+        'Edit the trip description and each form value. Changes need to be interpreted again before searching further.',
       ),
     ],
     [
       t('Tìm kiếm khi bạn sẵn sàng', 'Search when you are ready'),
       t(
-        'Sau khi xác nhận, bấm Tìm kiếm hoặc yêu cầu tìm qua chat. Kết quả cũ còn xem được trong lúc xử lý và được ghi rõ nếu chưa theo nhu cầu mới.',
-        'After confirming, select Search or request a search in chat. Previous results remain available while processing, with a clear notice when they use earlier requirements.',
+        'Sau khi diễn giải, bấm Tìm kiếm. Kết quả cũ còn xem được trong lúc xử lý và được ghi rõ nếu chưa theo nhu cầu mới.',
+        'After interpreting, select Search. Previous results remain available while processing, with a clear notice when they use earlier requirements.',
       ),
     ],
     [
       t('Đối chiếu dữ kiện và phân tích', 'Compare facts and analysis'),
       t(
-        'Tab Dữ kiện so sánh đặt các tour cạnh nhau. Tab Phân tích AI giải thích đánh đổi và điều còn thiếu, kèm căn cứ để bạn kiểm tra.',
-        'The Comparison facts tab places tours side by side. AI analysis explains trade-offs and missing information, with supporting facts for you to check.',
+        'Mỗi kết quả liệt kê dữ kiện từng tour cạnh nhau, kèm phân tích đánh đổi và chi tiết vì sao xếp hạng này.',
+        'Each result lists tour facts side by side, with trade-off analysis and details on why each ranking was given.',
       ),
     ],
     [
@@ -36,8 +36,8 @@ export function SupportPage({ onStart }: { onStart: () => void }) {
     [
       t('Dữ liệu & quyền riêng tư', 'Data & privacy'),
       t(
-        'Trình duyệt lưu tên phiên, bản nháp và nội dung trao đổi đã nhận. Nhu cầu, tin nhắn và nội dung liên hệ được gửi đến backend để xử lý; một số yêu cầu dùng dịch vụ AI. Xóa lịch sử trong Tài khoản chỉ xóa bản lưu trên trình duyệt, không xóa dữ liệu ở dịch vụ.',
-        'This browser stores session names, drafts and received conversations. Requirements, messages and contact requests are sent to the backend; some requests use an AI service. Deleting history in Account removes this browser’s copy, not service records.',
+        'Trình duyệt lưu tên phiên và bản nháp. Nhu cầu được gửi đến backend để xử lý; một số yêu cầu dùng dịch vụ AI. Xóa lịch sử trong Tài khoản chỉ xóa bản lưu trên trình duyệt, không xóa dữ liệu ở dịch vụ.',
+        'This browser stores session names and drafts. Requirements are sent to the backend; some requests use an AI service. Deleting history in Account removes this browser’s copy, not service records.',
       ),
       'privacy',
     ],
@@ -91,8 +91,8 @@ export function SupportPage({ onStart }: { onStart: () => void }) {
           <h2>{t('Tiếp tục chuyến đi của bạn.', 'Continue your journey.')}</h2>
           <p>
             {t(
-              'Lượt tìm tour và phần trao đổi đều nằm trong mục Tìm tour.',
-              'Your tour searches and conversations are all in Find tours.',
+              'Các lượt tìm tour của bạn đều nằm trong mục Tìm tour.',
+              'Your tour searches are all in Find tours.',
             )}
           </p>
           <button className="btn btn-primary" onClick={onStart}>

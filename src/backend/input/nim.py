@@ -71,33 +71,33 @@ class NimClient:
                     )
                 if response.status_code != 200:
                     log.warning("nim upstream %s", response.status_code)
-                    raise AppError("LLM_UPSTREAM_ERROR", "NIM không trả lời được.",
+                    raise AppError("LLM_UPSTREAM_ERROR", "NIM did not return a usable response.",
                                    502, retryable=True)
                 parsed = json.loads(response.json()["choices"][0]["message"]["content"])
                 if not isinstance(parsed, dict):
-                    raise AppError("LLM_INVALID_OUTPUT", "NIM trả sai định dạng.", 502)
+                    raise AppError("LLM_INVALID_OUTPUT", "NIM returned an invalid format.", 502)
                 return parsed
             except AppError:
                 raise
             except httpx.TimeoutException as exc:
                 log.warning("nim timeout after %ss", self._timeout)
-                raise AppError("LLM_TIMEOUT", "NIM vượt thời hạn.", 504, retryable=True) from exc
+                raise AppError("LLM_TIMEOUT", "NIM timed out.", 504, retryable=True) from exc
             except httpx.HTTPError as exc:
                 log.warning("nim connection failed: %s", type(exc).__name__)
-                raise AppError("LLM_UPSTREAM_ERROR", "Không kết nối được NIM.", 502,
+                raise AppError("LLM_UPSTREAM_ERROR", "Could not reach NIM.", 502,
                                retryable=True) from exc
             except (ValueError, KeyError, TypeError, IndexError) as exc:
                 # Malformed JSON despite json_object mode is transient: retry once.
                 log.warning("nim invalid output (attempt %s): %s", attempt, type(exc).__name__)
                 if attempt == 2:
-                    raise AppError("LLM_INVALID_OUTPUT", "NIM trả sai định dạng.", 502) from exc
-        raise AppError("LLM_INVALID_OUTPUT", "NIM trả sai định dạng.", 502)
+                    raise AppError("LLM_INVALID_OUTPUT", "NIM returned an invalid format.", 502) from exc
+        raise AppError("LLM_INVALID_OUTPUT", "NIM returned an invalid format.", 502)
 
     def extract(self, text: str, ref_date: str = "") -> dict:
         if not self._key:
-            raise AppError("LLM_NOT_CONFIGURED", "Chưa cấu hình NVIDIA NIM.", 503)
+            raise AppError("LLM_NOT_CONFIGURED", "NVIDIA NIM is not configured.", 503)
         if self._prompt is None or not self._prompt.system.strip():
-            raise AppError("PROMPT_NOT_CONFIGURED", "Thiếu prompt extract.", 500)
+            raise AppError("PROMPT_NOT_CONFIGURED", "Missing extract prompt.", 500)
         from backend.input.lunar import tet_frame
 
         user = text

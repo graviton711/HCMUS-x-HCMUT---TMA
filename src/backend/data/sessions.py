@@ -1,10 +1,10 @@
 """Runtime store for requirements and comparisons.
 
-`DATABASE_URL` picks the driver without changing the SessionStore contract:
-`sqlite://…` (file or `:memory:`) for local dev/test, `postgres://…` for a
-shared/preview deployment. SQLite stays single-writer WAL; Postgres tables come
-from `migrations/004_runtime_store.sql` (the ingest migration runner applies
-them — the backend never runs DDL itself).
+Settings selects the driver without changing the SessionStore contract:
+`sqlite://…` (file or `:memory:`) from local YAML by default, or the shared
+Postgres URL from `SUPABASE_TOUR_DB_URL`. SQLite stays single-writer WAL;
+Postgres tables come from `migrations/004_runtime_store.sql` (the ingest
+migration runner applies them — the backend never runs DDL itself).
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ class BaseStore:
 
     def authenticate_session(self, token: str) -> str:
         if not token:
-            raise AppError("SESSION_INVALID", "Phiên truy cập không hợp lệ.", 401)
+            raise AppError("SESSION_INVALID", "Invalid access session.", 401)
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         rows = self._query(
             self._sql(
@@ -88,10 +88,10 @@ class BaseStore:
         )
         row = rows[0] if rows else None
         if row is None:
-            raise AppError("SESSION_INVALID", "Phiên truy cập không hợp lệ.", 401)
+            raise AppError("SESSION_INVALID", "Invalid access session.", 401)
         expires = _parse_dt(row[1])
         if expires.tzinfo is None or expires <= datetime.now(UTC):
-            raise AppError("SESSION_EXPIRED", "Phiên truy cập đã hết hạn.", 401)
+            raise AppError("SESSION_EXPIRED", "Access session has expired.", 401)
         return str(row[0])
 
     def save_requirement(self, req: Requirement, owner_session_id: str | None = None) -> None:
@@ -143,14 +143,14 @@ class BaseStore:
         )
         row = rows[0] if rows else None
         if row is None:
-            raise AppError("NOT_FOUND", f"Không tìm thấy history item {item_id}.", 404)
+            raise AppError("NOT_FOUND", f"History item {item_id} not found.", 404)
         kind, created_at, payload = row
         if kind == "requirement":
             resource = Requirement.model_validate_json(payload).model_dump()
         elif kind == "comparison":
             resource = Comparison.model_validate_json(payload).model_dump()
         else:
-            raise AppError("RECORD_INVALID", "Loại history item không hợp lệ.", 500)
+            raise AppError("RECORD_INVALID", "Invalid history item type.", 500)
         return {
             "id": item_id,
             "kind": kind,
@@ -172,7 +172,7 @@ class BaseStore:
             (rid, kind, payload, now_vn_iso(), owner_session_id),
         )
         if getattr(cursor, "rowcount", 1) != 1:
-            raise AppError("OWNER_CONFLICT", "Resource thuộc phiên khác.", 409)
+            raise AppError("OWNER_CONFLICT", "Resource belongs to a different session.", 409)
         self._commit()
 
     def _load(self, kind: str, rid: str, owner_session_id: str | None) -> str:
@@ -188,7 +188,7 @@ class BaseStore:
         )
         row = rows[0] if rows else None
         if row is None:
-            raise AppError("NOT_FOUND", f"Không tìm thấy {kind} {rid}.", 404)
+            raise AppError("NOT_FOUND", f"{kind} {rid} not found.", 404)
         return str(row[0])
 
     def _sql(self, sql: str) -> str:
@@ -253,7 +253,7 @@ class _PostgresStore(BaseStore):
             import psycopg
             from psycopg import OperationalError as pg_operational_error
         except ImportError as exc:  # pragma: no cover - dependency is declared
-            raise AppError("STORE_DRIVER_MISSING", "Thiếu psycopg.", 500) from exc
+            raise AppError("STORE_DRIVER_MISSING", "Missing psycopg driver.", 500) from exc
         self._pg_operational_error = pg_operational_error
         self._database_url = database_url
         self._conn = psycopg.connect(database_url, connect_timeout=8, autocommit=True)
@@ -307,7 +307,7 @@ def _parse_dt(value: object) -> datetime:
 
 
 def SessionStore(database_url: str) -> BaseStore:
-    """Store factory. Same behavior, driver chosen by DATABASE_URL scheme."""
+    """Store factory. Driver is chosen by the configured database URL scheme."""
     if database_url.startswith("postgres"):
         return _PostgresStore(database_url)
     return _SqliteStore(database_url)

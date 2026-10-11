@@ -159,3 +159,20 @@ def test_history_cursor_and_detail_are_owner_scoped(tmp_path):
     invalid = client.get("/history?cursor=not-a-cursor", headers=headers)
     assert invalid.status_code == 400
     assert invalid.json()["error"]["code"] == "CURSOR_INVALID"
+
+
+def test_error_messages_are_ascii_english(tmp_path):
+    """Error envelopes stay ASCII so no mojibake can ship; codes stay stable."""
+    client = _client(tmp_path)
+    session = client.post("/sessions").json()
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    bodies = [
+        client.get("/history").json(),
+        client.get("/history", headers={"Authorization": "Bearer invalid"}).json(),
+        client.get("/history?cursor=not-a-cursor", headers=headers).json(),
+        client.post("/comparisons", json={"requirement_id": "req_nope"}).json(),
+    ]
+    assert bodies
+    for body in bodies:
+        message = body["error"]["message"]
+        assert message and message.isascii(), message

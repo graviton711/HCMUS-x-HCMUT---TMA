@@ -28,7 +28,7 @@ Guest frontend vertical slice supports destination, departure city/date, maximum
 - `POST /comparisons/{id}/what-if`, `GET /what-if/{id}`, `POST /what-if/{id}/scenarios/{scenario}/proposals` → phân tích bound với comparison, apply chỉ tạo proposal; cần confirm trước lần tìm kế tiếp.
 - `/evidence/*`, `/requirements/{id}/messages/*`, `/contacts` → evidence lookup, conversation follow-up và contact ticket.
 
-Lỗi dùng `{error: {code, message}}`. Thiếu là `unknown`, không tính là đạt. Destination chỉ gồm nơi tham quan đã bỏ origin endpoint; route/raw vẫn được giữ. Giá hard chỉ so khi fresh, trusted, exact, cùng currency/basis; giá `from` dưới trần là unknown, lower bound đã vượt trần có thể fail. LLM chấm soft chỉ nhận tour còn offer qua hard filter.
+Lỗi dùng `{error: {code, message}}`. `code` ổn định để consumer map ngôn ngữ hiển thị; `message` là tiếng Anh. Thiếu là `unknown`, không tính là đạt. Destination chỉ gồm nơi tham quan đã bỏ origin endpoint; route/raw vẫn được giữ. Giá hard chỉ so khi fresh, trusted, exact, cùng currency/basis; giá `from` dưới trần là unknown, lower bound đã vượt trần có thể fail. LLM chấm soft chỉ nhận tour còn offer qua hard filter.
 
 ## Pipeline
 
@@ -41,4 +41,4 @@ uv sync
 uv run tour-backend serve
 ```
 
-Mặc định `DATA_PROVIDER=fixture` (catalog mẫu, không cần credentials). Đọc catalog thật bằng `DATA_PROVIDER=supabase` + `SUPABASE_TOUR_DB_URL` (chỉ đọc, không ghi). Parse LLM thật cần `NVIDIA_NIM_API`; không có thì text fallback keyword và trường mềm ở `unknown`. Trang chào: `http://127.0.0.1:8000/`, docs tương tác: `http://127.0.0.1:8000/docs`.
+Mặc định local dùng SQLite và catalog fixture. Khi có `SUPABASE_TOUR_DB_URL`, backend dùng URL đó cho runtime store (đọc/ghi phiên và kết quả) lẫn catalog Supabase (chỉ đọc catalog); không cần `DATABASE_URL` hoặc `DATA_PROVIDER`. Migration `migrations/004_runtime_store.sql` phải được áp dụng trước. Parse LLM thật cần `NVIDIA_NIM_API`; nếu thiếu, text dùng keyword fallback và trường mềm ở `unknown`. Trang chào: `http://127.0.0.1:8000/`, docs tương tác: `http://127.0.0.1:8000/docs`.

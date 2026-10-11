@@ -16,12 +16,12 @@ def _resolve_fixture(path: str | Path | None) -> Path:
         candidate = Path(path)
         if candidate.is_file():
             return candidate
-        raise AppError("FIXTURE_NOT_FOUND", f"KhÃ´ng tháº¥y fixture catalog: {path}.", 500)
+        raise AppError("FIXTURE_NOT_FOUND", f"Catalog fixture not found: {path}.", 500)
     for candidate in (Path(__file__).resolve().parents[2] / "configs" / "fixture-catalog.yaml",
                       Path.cwd() / "configs" / "fixture-catalog.yaml"):
         if candidate.is_file():
             return candidate
-    raise AppError("FIXTURE_NOT_FOUND", "Thiáº¿u configs/fixture-catalog.yaml.", 500)
+    raise AppError("FIXTURE_NOT_FOUND", "Missing configs/fixture-catalog.yaml.", 500)
 
 
 def _fixture_rows(path: str | Path | None = None) -> list[TourRow]:
@@ -29,12 +29,12 @@ def _fixture_rows(path: str | Path | None = None) -> list[TourRow]:
 
     data = yaml.safe_load(_resolve_fixture(path).read_text(encoding="utf-8")) or []
     if not isinstance(data, list):
-        raise AppError("FIXTURE_INVALID", "Fixture catalog pháº£i lÃ  list.", 500)
+        raise AppError("FIXTURE_INVALID", "Fixture catalog must be a list.", 500)
     now = now_vn_iso()
     rows: list[TourRow] = []
     for entry in data:
         if not isinstance(entry, dict):
-            raise AppError("FIXTURE_INVALID", "Má»—i fixture pháº£i lÃ  mapping.", 500)
+            raise AppError("FIXTURE_INVALID", "Each fixture entry must be a mapping.", 500)
         tour = dict(entry.get("tour", {}))
         tour.setdefault("observed_at", now)
         offers = []
@@ -70,7 +70,7 @@ class SupabaseCatalog:
     def __init__(self, db_url: str, scan_limit: int,
                  providers_limit: int, connect_timeout_s: int):
         if not db_url:
-            raise AppError("CATALOG_NOT_CONFIGURED", "ChÆ°a cáº¥u hÃ¬nh SUPABASE_TOUR_DB_URL.", 503)
+            raise AppError("CATALOG_NOT_CONFIGURED", "SUPABASE_TOUR_DB_URL is not configured.", 503)
         self._db_url = db_url
         self._scan_limit = scan_limit
         self._providers_limit = providers_limit
@@ -80,7 +80,7 @@ class SupabaseCatalog:
         try:
             import psycopg
         except ImportError as exc:
-            raise AppError("CATALOG_DRIVER_MISSING", "Thiáº¿u psycopg.", 500) from exc
+            raise AppError("CATALOG_DRIVER_MISSING", "Missing psycopg driver.", 500) from exc
         try:
             with psycopg.connect(self._db_url, connect_timeout=self._timeout, autocommit=True) as conn:
                 with conn.cursor() as cur:
@@ -94,13 +94,13 @@ class SupabaseCatalog:
             raise
         except Exception as exc:
             log.warning("catalog unavailable: %s", exc)
-            raise AppError("CATALOG_UNAVAILABLE", "Không đọc được catalog.", 502, retryable=True) from exc
+            raise AppError("CATALOG_UNAVAILABLE", "Catalog is unavailable.", 502, retryable=True) from exc
 
     def list_tours(self, limit: int) -> list[TourRow]:
         try:
             import psycopg
         except ImportError as exc:
-            raise AppError("CATALOG_DRIVER_MISSING", "Thiáº¿u psycopg.", 500) from exc
+            raise AppError("CATALOG_DRIVER_MISSING", "Missing psycopg driver.", 500) from exc
         bound = min(limit, self._scan_limit)
         try:
             with psycopg.connect(self._db_url, connect_timeout=self._timeout, autocommit=True) as conn:
@@ -143,7 +143,7 @@ class SupabaseCatalog:
             raise
         except Exception as exc:
             log.warning("catalog unavailable: %s", exc)
-            raise AppError("CATALOG_UNAVAILABLE", "Không đọc được catalog.", 502, retryable=True) from exc
+            raise AppError("CATALOG_UNAVAILABLE", "Catalog is unavailable.", 502, retryable=True) from exc
         out: list[TourRow] = []
         for t in tours:
             tid = t.pop("id")

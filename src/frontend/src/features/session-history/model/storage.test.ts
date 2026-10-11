@@ -12,22 +12,45 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('browser history privacy', () => {
-  it('migrates old drafts without losing saved dates, price caps or sessions', () => {
+  it('strips legacy draft and session keys without losing saved criteria or sessions', () => {
     const original = newSession();
-    const draft = { ...original.draft, departureDate: '2026-11-10', budget: '35000000' };
-    const { departureMonths: _months, budgetMin: _min, ...legacy } = draft;
-    void _months;
-    void _min;
-    localStorage.setItem('di-cung:history:v1', JSON.stringify([{ ...original, draft: legacy }]));
-    expect(loadSessions()[0]).toMatchObject({
+    const legacyDraft = {
+      ...original.draft,
+      departureDate: '2026-11-10',
+      budget: '35000000',
+      mode: 'urls',
+      departureMonths: ['2026-11'],
+      budgetMin: '1000000',
+      childAges: [8],
+      referenceUrls: ['https://example.test/tour'],
+      notes: 'legacy note',
+      preferenceLevels: { cost: 1, comfort: 5, pace: 5, culture: 1 },
+    };
+    const legacySession = {
+      ...original,
+      draft: legacyDraft,
+      proposalId: 'prop_legacy',
+      jobId: 'job_legacy',
+      runs: [{ id: 'cmp_legacy', revision: 1, createdAt: '2026-10-01T00:00:00Z' }],
+      chat: [{ id: 'm1', role: 'user', text: 'hello' }],
+    };
+    localStorage.setItem('di-cung:history:v1', JSON.stringify([legacySession]));
+    const restored = loadSessions();
+    expect(restored).toHaveLength(1);
+    expect(restored[0]).toMatchObject({
       id: original.id,
+      requirementId: null,
+      comparisonId: null,
       draft: {
-        departureMonths: [],
+        mode: 'structured',
         departureDate: '2026-11-10',
         budget: '35000000',
-        budgetMin: '',
       },
     });
+    expect(restored[0].draft).toEqual({ ...original.draft, departureDate: '2026-11-10', budget: '35000000' });
+    expect(restored[0]).not.toHaveProperty('proposalId');
+    expect(restored[0]).not.toHaveProperty('runs');
+    expect(restored[0]).not.toHaveProperty('chat');
   });
   it('keeps anonymous and each account history separate without fallback to another owner', () => {
     const anonymous = { ...newSession(), title: 'Chuyến đi chưa đăng nhập' };
@@ -76,19 +99,7 @@ describe('corrupt saved draft recovery', () => {
   const malformedDrafts: [string, Record<string, unknown>][] = [
     ['destination objects in place of IDs', { destinations: [{ id: 'place-test' }] }],
     ['transport values with a nested object', { transport: ['air', { id: 'bus' }] }],
-    [
-      'reference URL objects in place of strings',
-      { referenceUrls: [{ url: 'https://example.test/tour' }] },
-    ],
-    ['child ages restored as strings', { childAges: ['8'] }],
-    ['child age outside the supported range', { childAges: [18] }],
-    [
-      'fractional preference level',
-      { preferenceLevels: { cost: 3.5, comfort: 3, pace: 3, culture: 3 } },
-    ],
-    ['missing nested preference dimension', { preferenceLevels: { cost: 3, comfort: 3, pace: 3 } }],
-    ['invalid condition strength', { strengths: { duration_days: 'unresolved' } }],
-    ['invalid price basis', { budgetBasis: 'per_room' }],
+    ['non-string accommodation', { accommodation: { stars: 5 } }],
   ];
   it.each(malformedDrafts)('rejects %s while preserving healthy sessions', (_name, patch) => {
     const healthy = { ...newSession(), title: 'Draft hợp lệ vẫn được giữ' };

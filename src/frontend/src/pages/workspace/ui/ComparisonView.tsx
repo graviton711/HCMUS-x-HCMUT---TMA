@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { CurrentComparison } from '../../../shared/api';
 import { safeUrl } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
-import { conditionState } from '../lib/format';
+import { conditionState, display, evaluationsForOffer } from '../lib/format';
 
 export function ComparisonView({ comparison }: { comparison: CurrentComparison }) {
   const { t } = usePreferences();
@@ -39,6 +39,7 @@ export function ComparisonView({ comparison }: { comparison: CurrentComparison }
             if (!tour || !offer) return null;
             const state = conditionState(comparison, offer.id);
             const url = safeUrl(tour.url || tour.evidence.url);
+            const details = evaluationsForOffer(comparison, offer.id);
             return (
               <article className="current-tour-card" key={`${tour.id}-${offer.id}`}>
                 <div className="current-tour-topline">
@@ -109,6 +110,33 @@ export function ComparisonView({ comparison }: { comparison: CurrentComparison }
                     <strong>{t('Phụ thu:', 'Surcharges:')}</strong> {tour.surcharges}
                   </p>
                 )}
+                {details.length > 0 && (
+                  <details className="current-eval-details">
+                    <summary>
+                      {t('Vì sao xếp hạng này', 'Why this ranking')} ({details.length})
+                    </summary>
+                    <ul className="current-eval-list">
+                      {details.map(({ evaluation, condition }) => (
+                        <li key={`${evaluation.offer_id}-${evaluation.condition_id}`}>
+                          <span className={`current-state ${evaluation.state}`}>
+                            {evaluation.state === 'pass'
+                              ? t('Đạt', 'Pass')
+                              : evaluation.state === 'fail'
+                                ? t('Không đạt', 'Fail')
+                                : t('Chưa rõ', 'Unknown')}
+                          </span>
+                          <span>
+                            {condition
+                              ? `${condition.field.replaceAll('_', ' ')} ${condition.operator} ${display(condition.value)}`
+                              : evaluation.condition_id}
+                          </span>
+                          {evaluation.quote && <q>{evaluation.quote}</q>}
+                          {evaluation.reason_code && <code>{evaluation.reason_code}</code>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
                 {url && (
                   <a href={url} target="_blank" rel="noreferrer">
                     {t('Mở nguồn tour', 'Open tour source')}
@@ -120,6 +148,26 @@ export function ComparisonView({ comparison }: { comparison: CurrentComparison }
         </div>
       )}
       <div className="current-analysis">
+        {comparison.analysis.conditions.length > 0 && (
+          <div>
+            <h3>{t('Điều kiện áp dụng', 'Applicable conditions')}</h3>
+            <ul>
+              {comparison.analysis.conditions.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {comparison.analysis.benefits.length > 0 && (
+          <div>
+            <h3>{t('Điểm đáng giá', 'Notable benefits')}</h3>
+            <ul>
+              {comparison.analysis.benefits.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {comparison.analysis.risks.length > 0 && (
           <div>
             <h3>{t('Điểm cần lưu ý', 'Risks to review')}</h3>

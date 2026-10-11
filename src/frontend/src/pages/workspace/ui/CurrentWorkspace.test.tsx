@@ -43,6 +43,14 @@ function makeBackend() {
               strength: 'hard',
               quote: '',
             },
+            {
+              id: 'h2',
+              field: 'budget_max',
+              operator: 'lte',
+              value: 8000000,
+              strength: 'hard',
+              quote: '',
+            },
           ],
           missing: [],
           raw_text: 'Đà Lạt',
@@ -119,11 +127,23 @@ function makeBackend() {
               offer_id: 'offer_guest',
               condition_id: 'h1',
               state: 'pass',
-              quote: '',
+              quote: 'Đà Lạt 3 ngày 2 đêm',
               reason_code: '',
             },
+            {
+              offer_id: 'offer_guest',
+              condition_id: 'h2',
+              state: 'unknown',
+              quote: '',
+              reason_code: 'PRICE_FROM_LOWER_BOUND',
+            },
           ],
-          analysis: { hidden_costs: [], conditions: [], risks: [], benefits: [] },
+          analysis: {
+            hidden_costs: ['Phụ thu phòng đơn 500.000 VND'],
+            conditions: ['Hủy miễn phí trước 7 ngày'],
+            risks: ['Giá có thể đổi khi lễ'],
+            benefits: ['Đã gồm xe đưa đón'],
+          },
           candidates_considered: 1,
         },
       });
@@ -174,19 +194,35 @@ describe('CurrentWorkspace guest flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tìm và so sánh tour' }));
     expect(await screen.findByText('Đà Lạt cuối tuần')).toBeTruthy();
     expect(screen.getByText(/5,000,000 VND/)).toBeTruthy();
+    expect(screen.getByText('Đã gồm xe đưa đón')).toBeTruthy();
+    expect(screen.getByText('Hủy miễn phí trước 7 ngày')).toBeTruthy();
+    expect(screen.getByText('PRICE_FROM_LOWER_BOUND')).toBeTruthy();
     await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/comparisons', expect.anything()));
   });
 
-  it('blocks unsupported draft criteria instead of silently dropping them', async () => {
+  it('ignores legacy draft keys instead of blocking the search', async () => {
     const fetcher = makeBackend();
     vi.stubGlobal('fetch', fetcher);
     const initial = newSession();
     initial.draft.text = 'Đà Lạt';
-    initial.draft.budgetMin = '3000000';
+    initial.draft = { ...initial.draft, budgetMin: '3000000' } as typeof initial.draft;
     render(<Harness initial={initial} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Diễn giải nhu cầu' }));
-    expect((await screen.findByRole('alert')).textContent).toContain('budget ranges');
+    expect(await screen.findByText('destination')).toBeTruthy();
+    expect(fetcher).toHaveBeenCalledWith('/requirements', expect.anything());
+  });
+
+  it('blocks multiple transport choices instead of silently dropping them', async () => {
+    const fetcher = makeBackend();
+    vi.stubGlobal('fetch', fetcher);
+    const initial = newSession();
+    initial.draft.text = 'Đà Lạt';
+    initial.draft.transport = ['bus', 'flight'];
+    render(<Harness initial={initial} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Diễn giải nhu cầu' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('single transport');
     expect(fetcher).not.toHaveBeenCalledWith('/requirements', expect.anything());
   });
 });

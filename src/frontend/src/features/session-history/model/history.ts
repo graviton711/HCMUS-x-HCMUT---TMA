@@ -12,23 +12,29 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Strip keys outside the current shape so legacy saves load instead of being dropped. */
+function migrateSession(session: unknown): unknown {
+  if (!record(session) || !record(session.draft)) return session;
+  const draft: Record<string, unknown> = {};
+  for (const key of Object.keys(emptySearchDraft)) draft[key] = session.draft[key];
+  if (draft.mode !== 'structured' && draft.mode !== 'text') draft.mode = 'structured';
+  return {
+    id: session.id,
+    title: session.title,
+    pinned: session.pinned,
+    createdAt: session.createdAt,
+    updatedAt: session.updatedAt,
+    draft,
+    requirementId: session.requirementId ?? null,
+    comparisonId: session.comparisonId ?? null,
+  };
+}
+
 export function loadSessions(ownerId?: string): LocalSession[] {
   try {
     const data: unknown = JSON.parse(localStorage.getItem(scopedHistoryKey(ownerId)) || '[]');
     if (!Array.isArray(data)) return [];
-    return data
-      .map((session: unknown) => {
-        if (!record(session) || !record(session.draft)) return session;
-        return {
-          ...session,
-          draft: {
-            ...session.draft,
-            ...(Object.hasOwn(session.draft, 'departureMonths') ? {} : { departureMonths: [] }),
-            ...(Object.hasOwn(session.draft, 'budgetMin') ? {} : { budgetMin: '' }),
-          },
-        };
-      })
-      .filter(validSession);
+    return data.map(migrateSession).filter(validSession);
   } catch {
     return [];
   }
@@ -53,12 +59,6 @@ export function newSession(): LocalSession {
     updatedAt: time,
     draft: structuredClone(emptySearchDraft),
     requirementId: null,
-    proposalId: null,
     comparisonId: null,
-    pendingComparisonId: null,
-    jobId: null,
-    pendingMessageId: null,
-    runs: [],
-    chat: [],
   };
 }

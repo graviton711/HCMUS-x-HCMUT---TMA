@@ -9,9 +9,7 @@ export {
   saveSessions,
   useLocalSessions,
   type AuthProfile,
-  type ChatLine,
   type LocalSession,
-  type SavedRun,
   type SessionAccess,
 } from './model';
 export { SessionHistoryPanel } from './ui/SessionHistoryPanel';

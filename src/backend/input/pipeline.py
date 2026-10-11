@@ -58,7 +58,7 @@ def keyword_extract(text: str, cfg: InputCfg | None = None,
     Place names come from the catalog being searched, not from configs.
     """
     if cfg is None:
-        raise AppError("CONFIG_MISSING", "Thiếu InputCfg.", 500)
+        raise AppError("CONFIG_MISSING", "Missing InputCfg.", 500)
     low = _strip_vi(text)
     hard: list[dict[str, Any]] = []
     for place in known_places or []:
@@ -135,7 +135,7 @@ def build_requirement(text: str = "", form: dict[str, Any] | None = None,
                       known_places: list[str] | None = None, ref_date: str = "") -> Requirement:
     form = form or {}
     if cfg is None:
-        raise AppError("CONFIG_MISSING", "Thiếu InputCfg.", 500)
+        raise AppError("CONFIG_MISSING", "Missing InputCfg.", 500)
     conditions: list[Condition] = []
     seen = set()
 

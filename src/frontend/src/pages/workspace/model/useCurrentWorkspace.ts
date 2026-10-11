@@ -74,9 +74,6 @@ export function useCurrentWorkspace(
         ? {
             requirementId: null,
             comparisonId: null,
-            pendingComparisonId: null,
-            jobId: null,
-            analysisId: null,
           }
         : {}),
     });
@@ -116,14 +113,7 @@ export function useCurrentWorkspace(
     try {
       const result = await client.createComparison(requirement.id);
       setComparison(result.comparison);
-      onChangeSession({
-        comparisonId: result.comparison.id,
-        pendingComparisonId: null,
-        runs: [
-          ...session.runs.filter((run) => run.id !== result.comparison.id),
-          { id: result.comparison.id, revision: 1, createdAt: new Date().toISOString() },
-        ],
-      });
+      onChangeSession({ comparisonId: result.comparison.id });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not compare tours.');
     } finally {

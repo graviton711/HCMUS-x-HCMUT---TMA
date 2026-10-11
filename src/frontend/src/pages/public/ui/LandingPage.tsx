@@ -174,8 +174,8 @@ export function LandingPage({ onStart }: { onStart: () => void }) {
                 <h3>{t('Kể điều bạn cần', 'Tell us what you need')}</h3>
                 <p>
                   {t(
-                    'Điền thông tin chuyến đi, thêm URL tour hoặc ghi chú riêng nếu có.',
-                    'Enter your trip details and add a tour URL or personal notes if you have them.',
+                    'Điền điểm đến, ngày đi/về, ngân sách và các thông tin chuyến đi khác.',
+                    'Enter destinations, departure/return dates, budget and other trip details.',
                   )}
                 </p>
               </div>
