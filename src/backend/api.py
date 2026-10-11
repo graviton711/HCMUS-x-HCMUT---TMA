@@ -83,16 +83,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def get_catalog() -> dict[str, list[str]]:
         return {"destinations": catalog.list_destinations()}
 
-    def parse_user(text: str, form: dict[str, Any] | None):
+    def parse_user(text: str, form: dict[str, Any] | None, drop: Any = None):
         places = catalog.list_destinations()
         ref_date = now_vn_iso()[:10]
-        return build_requirement(text, form, nim, cfg=tuning.input, known_places=places, ref_date=ref_date)
+        drop_fields = [str(f) for f in drop] if isinstance(drop, list) else None
+        return build_requirement(text, form, nim, cfg=tuning.input, known_places=places,
+                                 ref_date=ref_date, drop_fields=drop_fields)
 
     @app.post("/requirements")
     async def create_requirement(body: dict[str, Any], request: Request) -> dict[str, Any]:
         owner_id = owner_session(request)
         req = parse_user(
-            str(body.get("text", "")), body.get("form") if isinstance(body.get("form"), dict) else None
+            str(body.get("text", "")), body.get("form") if isinstance(body.get("form"), dict) else None,
+            body.get("drop_fields"),
         )
         store.save_requirement(req, owner_id)
         return {"requirement": req.model_dump()}
@@ -108,7 +111,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             req = store.get_requirement(str(body["requirement_id"]), owner_id)
         else:
             req = parse_user(
-                str(body.get("text", "")), body.get("form") if isinstance(body.get("form"), dict) else None
+                str(body.get("text", "")), body.get("form") if isinstance(body.get("form"), dict) else None,
+                body.get("drop_fields"),
             )
             store.save_requirement(req, owner_id)
         lo, hi = tuning.api.candidate_min, tuning.api.candidate_max

@@ -9,7 +9,7 @@ NIM extraction nhận ngày tham chiếu theo giờ Việt Nam. Ngày âm lịch
 - `GET /health` → `{status, version}`.
 - `POST /sessions` → guest session Bearer token with expiry. Only a SHA-256 token hash is persisted.
 - `GET /catalog` → `{destinations}` from the active read-only catalog provider; this is a basic lookup, not the richer frontend catalog contract.
-- `POST /requirements` — body `{text?, form?}` → `{requirement}` gồm điều kiện cứng/mềm. Slot thiếu trả về trong `missing`, không đoán.
+- `POST /requirements` — body `{text?, form?}` → `{requirement}` gồm điều kiện cứng/mềm. Slot thiếu trả về trong `missing`, không đoán. Body thêm `drop_fields?: string[]` để nới điều kiện (bỏ field cứng khỏi cả form lẫn text, kể cả `missing`); field lạ bị bỏ qua.
 - `GET /requirements/{id}` → requirement đã lưu.
 - `POST /comparisons` — body `{requirement_id?, text?, form?, candidate_limit?}` → `{comparison}` gồm rank ứng viên, chấm từng offer, evidence, phân tích và snapshot candidate tự chứa để kết quả đã lưu vẫn render được. `ranked` chỉ chứa offer qua hết điều kiện cứng; `near_miss` chứa offer fail không quá `near_miss_max_fails` điều kiện cứng (mặc định 2), xếp theo pass nhiều → fail ít → giá rẻ để UI render nhóm "Gần đạt" riêng. `unknown` không tính là fail.
 - `GET /comparisons/{id}` → comparison đã lưu.

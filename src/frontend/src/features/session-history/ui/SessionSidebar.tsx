@@ -1,131 +1,126 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { displaySessionTitle } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import { Icon } from '../../../shared/ui';
+import { sidebarMetrics } from '../model/sidebarLayout';
 import styles from './SessionSidebar.module.css';
 
-const key = 'di-cung:sidebar:v1';
-const clamp = (width: number) =>
-  Math.min(Math.min(520, Math.max(240, window.innerWidth - 680)), Math.max(240, width));
-function storedLayout() {
-  try {
-    const saved: unknown = JSON.parse(localStorage.getItem(key) || '{}');
-    if (
-      saved &&
-      typeof saved === 'object' &&
-      'width' in saved &&
-      typeof saved.width === 'number' &&
-      Number.isFinite(saved.width)
-    )
-      return {
-        width:
-          window.innerWidth > 1000 ? clamp(saved.width) : Math.min(520, Math.max(240, saved.width)),
-        collapsed: 'collapsed' in saved && saved.collapsed === true,
-      };
-  } catch {
-    /* use the default layout when browser storage is unavailable */
-  }
-  return { width: window.innerWidth > 1000 ? clamp(300) : 300, collapsed: false };
-}
-export function SessionSidebar({ children }: { children: ReactNode }) {
+/**
+ * Presentational sidebar. Width/collapse state lives in the app shell so the
+ * canvas header owns the single sidebar control.
+ */
+export function SessionSidebar({
+  collapsed,
+  width,
+  onWidthChange,
+  onToggle,
+  children,
+  footer,
+  railFooter,
+}: {
+  collapsed: boolean;
+  width: number;
+  onWidthChange: (width: number) => void;
+  onToggle: () => void;
+  children: ReactNode;
+  footer?: ReactNode;
+  railFooter?: ReactNode;
+}) {
   const { t } = usePreferences();
-  const [layout, setLayout] = useState(storedLayout);
   const aside = useRef<HTMLElement>(null);
   const pointer = useRef<number | null>(null);
-  useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(layout));
-    } catch {
-      /* layout still works */
-    }
-  }, [layout]);
-  useEffect(() => {
-    const resize = () => {
-      if (window.innerWidth > 1000) setLayout((old) => ({ ...old, width: clamp(old.width) }));
-    };
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, []);
+  const [dragging, setDragging] = useState(false);
+  const label = displaySessionTitle(null, t('Các phiên tìm tour', 'Tour sessions'));
+
   return (
     <aside
       ref={aside}
-      className={`${styles.root} ${layout.collapsed ? styles.minimized : ''}`}
-      aria-label={t('Các phiên tìm tour', 'Tour sessions')}
-      style={{ width: layout.collapsed ? 64 : layout.width }}
+      className={styles.root}
+      data-collapsed={collapsed}
+      aria-label={label}
+      style={collapsed ? undefined : { width }}
     >
-      {layout.collapsed ? (
-        <button
-          className="sidebar-rail"
-          type="button"
-          aria-expanded={false}
-          aria-label={t('Mở lịch sử phiên', 'Expand session history')}
-          title={t('Mở lịch sử phiên', 'Expand session history')}
-          onClick={() => setLayout((old) => ({ ...old, collapsed: false }))}
-        >
-          <span className="rail-mark">
-            <img src="/assets/mark.svg" alt="" width={22} height={22} />
+      {collapsed ? (
+        <div className={styles.rail}>
+          <span className={styles['rail-mark']}>
+            <img src="/assets/mark.svg" alt="" width={30} height={30} />
           </span>
-          <Icon name="edit" size={23} />
-          <Icon name="search" size={23} />
-          <Icon name="history" size={23} />
-          <span className="rail-spacer" />
-          <span className="rail-account">
-            <Icon name="user" size={23} />
-          </span>
-        </button>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={t('Mở lịch sử phiên', 'Expand session history')}
+            title={t('Mở lịch sử phiên', 'Expand session history')}
+            onClick={onToggle}
+          >
+            <Icon name="panel" />
+          </button>
+          <span className={styles['rail-spacer']} />
+          {railFooter && <div className={styles['rail-foot']}>{railFooter}</div>}
+        </div>
       ) : (
         <>
-          <div className="sidebar-topbar">
-            <span>{t('Chuyến đi của bạn', 'Your trips')}</span>
-            <button
-              type="button"
-              className="icon-button"
-              aria-expanded={true}
-              aria-label={t('Thu gọn lịch sử phiên', 'Collapse session history')}
-              onClick={() => setLayout((old) => ({ ...old, collapsed: true }))}
-            >
-              <Icon name="menu" />
-            </button>
-          </div>
-          {children}
+          <div className={styles.body}>{children}</div>
+          {footer && <div className={styles.foot}>{footer}</div>}
           <div
-            className="sidebar-resize"
+            className={styles.resize}
             role="separator"
             tabIndex={0}
             aria-orientation="vertical"
             aria-label={t('Độ rộng lịch sử phiên', 'Session history width')}
-            aria-valuemin={240}
-            aria-valuemax={Math.min(520, Math.max(240, window.innerWidth - 680))}
-            aria-valuenow={layout.width}
-            onDoubleClick={() => setLayout((old) => ({ ...old, width: clamp(300) }))}
+            aria-valuemin={sidebarMetrics.minWidth}
+            aria-valuemax={Math.min(
+              sidebarMetrics.maxWidth,
+              Math.max(sidebarMetrics.minWidth, window.innerWidth - 680),
+            )}
+            aria-valuenow={width}
+            aria-valuetext={`${width}px`}
+            onDoubleClick={() => onWidthChange(sidebarMetrics.defaultWidth)}
             onKeyDown={(event) => {
-              const widths: Record<string, number> = {
-                ArrowLeft: layout.width - 16,
-                ArrowRight: layout.width + 16,
-                Home: 240,
-                End: 520,
+              const steps: Record<string, number> = {
+                ArrowLeft: width - 16,
+                ArrowRight: width + 16,
+                Home: sidebarMetrics.minWidth,
+                End: sidebarMetrics.maxWidth,
               };
-              if (!(event.key in widths)) return;
+              if (!(event.key in steps)) return;
               event.preventDefault();
-              setLayout((old) => ({ ...old, width: clamp(widths[event.key]) }));
+              onWidthChange(
+                Math.min(
+                  Math.max(steps[event.key], sidebarMetrics.minWidth),
+                  sidebarMetrics.maxWidth,
+                ),
+              );
             }}
             onPointerDown={(event) => {
-              if (event.button !== 0) return;
+              if (event.button !== 0 || !aside.current) return;
               event.preventDefault();
               pointer.current = event.pointerId;
+              setDragging(true);
               event.currentTarget.setPointerCapture(event.pointerId);
             }}
             onPointerMove={(event) => {
               if (pointer.current !== event.pointerId || !aside.current) return;
-              const width = clamp(event.clientX - aside.current.getBoundingClientRect().left);
-              setLayout((old) => ({ ...old, width }));
+              const next = event.clientX - aside.current.getBoundingClientRect().left;
+              onWidthChange(
+                Math.min(
+                  Math.max(next, sidebarMetrics.minWidth),
+                  Math.min(
+                    sidebarMetrics.maxWidth,
+                    Math.max(sidebarMetrics.minWidth, window.innerWidth - 680),
+                  ),
+                ),
+              );
             }}
             onPointerUp={(event) => {
               pointer.current = null;
+              setDragging(false);
               event.currentTarget.releasePointerCapture(event.pointerId);
             }}
             onLostPointerCapture={() => {
               pointer.current = null;
+              setDragging(false);
             }}
+            data-dragging={dragging}
           />
         </>
       )}

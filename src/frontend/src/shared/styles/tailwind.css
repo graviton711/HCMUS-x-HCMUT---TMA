@@ -1,0 +1,25 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-tint: var(--tint);
+  --color-sidebar: var(--sidebar);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --font-sans: 'Manrope', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', 'Manrope', sans-serif;
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+}

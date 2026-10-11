@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { SearchDraft } from '../../../entities/search-draft';
+import { currentForm, type SearchDraft } from '../../../entities/search-draft';
 import type { LocalSession } from '../../../features/session-history';
 import {
   CurrentBackendClient,
@@ -7,20 +7,20 @@ import {
   type CurrentComparison,
   type CurrentRequirement,
 } from '../../../shared/api';
-import { usePreferences } from '../../../shared/preferences';
-import { accessFor } from '../lib/access';
-import { currentForm } from '../lib/form';
+import { accessFor, isSessionExpired } from '../../../features/session-history';
+import { sessionTitle } from '../../../shared/lib';
+
 export function useCurrentWorkspace(
   session: LocalSession,
   onChangeSession: (changes: Partial<LocalSession>) => void,
 ) {
-  const { t } = usePreferences();
   const [client, setClient] = useState<CurrentBackendClient | null>(null);
   const [catalog, setCatalog] = useState<CurrentCatalog | null>(null);
   const [requirement, setRequirement] = useState<CurrentRequirement | null>(null);
   const [comparison, setComparison] = useState<CurrentComparison | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
+  const [expired, setExpired] = useState(false);
   const [stale, setStale] = useState(false);
   const [reload, setReload] = useState(0);
   const sessionRef = useRef(session);
@@ -35,6 +35,7 @@ export function useCurrentWorkspace(
     setComparison(null);
     setBusy(true);
     setError('');
+    setExpired(false);
     setStale(false);
     void (async () => {
       try {
@@ -56,8 +57,10 @@ export function useCurrentWorkspace(
           }
         }
       } catch (cause) {
-        if (active)
+        if (active) {
           setError(cause instanceof Error ? cause.message : 'Could not connect to backend.');
+          setExpired(isSessionExpired(cause));
+        }
       } finally {
         if (active) setBusy(false);
       }
@@ -70,12 +73,7 @@ export function useCurrentWorkspace(
   const writeDraft = (changes: Partial<SearchDraft>) => {
     onChangeSession({
       draft: { ...session.draft, ...changes },
-      ...(requirement
-        ? {
-            requirementId: null,
-            comparisonId: null,
-          }
-        : {}),
+      ...(requirement ? { requirementId: null, comparisonId: null } : {}),
     });
     if (requirement) {
       setRequirement(null);
@@ -94,11 +92,11 @@ export function useCurrentWorkspace(
       const result = await client.createRequirement(session.draft.text.trim(), form);
       setRequirement(result.requirement);
       setComparison(null);
-      const title =
-        session.draft.destinations[0] ||
-        session.draft.text.trim().slice(0, 48) ||
-        t('Nhu cầu mới', 'New trip');
-      onChangeSession({ requirementId: result.requirement.id, comparisonId: null, title });
+      onChangeSession({
+        requirementId: result.requirement.id,
+        comparisonId: null,
+        title: sessionTitle(result.requirement, session.draft.text),
+      });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not interpret this trip.');
     } finally {
@@ -127,6 +125,7 @@ export function useCurrentWorkspace(
     comparison,
     busy,
     error,
+    expired,
     stale,
     retry: () => setReload((value) => value + 1),
     writeDraft,

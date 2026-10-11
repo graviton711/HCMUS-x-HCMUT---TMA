@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -11,7 +12,7 @@ export default defineConfig({
       'tests/**/*.test.{ts,tsx}',
     ],
   },
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
     proxy: Object.fromEntries(

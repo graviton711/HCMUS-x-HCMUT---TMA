@@ -1,5 +1,6 @@
-import { useId, useState, type MouseEvent } from 'react';
+import { useId, useState, type MouseEvent, type ReactNode } from 'react';
 import { usePreferences } from '../../../shared/preferences';
+import { displaySessionTitle } from '../../../shared/lib';
 import { Dialog } from '../../../shared/ui';
 import type { AuthProfile, LocalSession } from '../model';
 import { SessionHistory } from './SessionHistory';
@@ -14,10 +15,15 @@ export function SessionHistoryPanel({
   profile,
   mobileOpen,
   onMobileClose,
-  onStart,
+  sidebarCollapsed,
+  sidebarWidth,
+  onSidebarWidthChange,
+  onSidebarToggle,
   onLink,
   onUpdate,
   onRemove,
+  controls,
+  railControls,
 }: {
   sessions: LocalSession[];
   currentId?: string;
@@ -25,10 +31,16 @@ export function SessionHistoryPanel({
   profile: AuthProfile | null;
   mobileOpen: boolean;
   onMobileClose: () => void;
-  onStart: () => void;
+  sidebarCollapsed: boolean;
+  sidebarWidth: number;
+  onSidebarWidthChange: (width: number) => void;
+  onSidebarToggle: () => void;
   onLink: AppLink;
   onUpdate: (id: string, changes: Partial<LocalSession>) => void;
   onRemove: (session: LocalSession) => void;
+  /** Locale/theme controls owned by the shell; the panel only positions them. */
+  controls: ReactNode;
+  railControls: ReactNode;
 }) {
   const [filter, setFilter] = useState('');
   const [rename, setRename] = useState<LocalSession | null>(null);
@@ -37,6 +49,8 @@ export function SessionHistoryPanel({
   const searchId = useId();
   const { t } = usePreferences();
   const closeLabel = t('Đóng hộp thoại', 'Close dialog');
+  const fallbackName = t('Chuyến đi mới', 'New trip');
+  const showHistory = routePath === '/' || routePath === '/tours';
 
   function history(suffix: string) {
     return (
@@ -44,34 +58,57 @@ export function SessionHistoryPanel({
         sessions={sessions}
         currentId={currentId}
         routePath={routePath}
-        profile={profile}
         filter={filter}
         suffix={suffix}
         searchId={searchId}
         onFilterChange={setFilter}
-        onStart={onStart}
         onLink={onLink}
         onPin={(session) => onUpdate(session.id, { pinned: !session.pinned })}
         onRename={(session) => {
           setRename(session);
           setRenameValue(session.title);
         }}
-        onRemove={setRemove}
       />
+    );
+  }
+
+  function account() {
+    return (
+      <>
+        <span className="sidebar-account">
+          <span className="sidebar-account-text">
+            <strong>{profile?.name || t('Phiên ẩn danh', 'Anonymous session')}</strong>
+            <small>{t('Lịch sử trên trình duyệt này', 'History on this browser')}</small>
+          </span>
+        </span>
+        {controls}
+      </>
     );
   }
 
   return (
     <>
-      {routePath === '/tours' && <SessionSidebar>{history('desktop')}</SessionSidebar>}
+      {showHistory && (
+        <SessionSidebar
+          collapsed={sidebarCollapsed}
+          width={sidebarWidth}
+          onWidthChange={onSidebarWidthChange}
+          onToggle={onSidebarToggle}
+          footer={account()}
+          railFooter={railControls}
+        >
+          {history('desktop')}
+        </SessionSidebar>
+      )}
       <Dialog
-        open={mobileOpen}
+        open={mobileOpen && showHistory}
         onClose={onMobileClose}
         title={t('Lịch sử phiên', 'Session history')}
         closeLabel={closeLabel}
         variant="sidebar"
       >
         {history('mobile')}
+        <div className="dialog-foot">{account()}</div>
       </Dialog>
       <Dialog
         open={!!rename}
@@ -96,7 +133,26 @@ export function SessionHistoryPanel({
               onChange={(event) => setRenameValue(event.target.value)}
             />
           </label>
-          <button className="btn btn-primary">{t('Lưu tên', 'Save name')}</button>
+          <div className="dialog-actions">
+            <button className="btn" type="button" onClick={() => setRename(null)}>
+              {t('Huỷ', 'Cancel')}
+            </button>
+            <button className="btn btn-primary" type="submit">
+              {t('Lưu tên', 'Save name')}
+            </button>
+            {rename && (
+              <button
+                className="text-action danger-action"
+                type="button"
+                onClick={() => {
+                  setRemove(rename);
+                  setRename(null);
+                }}
+              >
+                {t('Xóa khỏi lịch sử', 'Remove from history')}
+              </button>
+            )}
+          </div>
         </form>
       </Dialog>
       <Dialog
@@ -106,8 +162,8 @@ export function SessionHistoryPanel({
         closeLabel={closeLabel}
       >
         <p>
-          {t('Xóa bản lưu trên trình duyệt của phiên', 'Remove this browser’s saved session')} “
-          {remove?.title || t('Chuyến đi mới', 'New trip')}”.{' '}
+          {t('Xóa bản lưu trên trình duyệt của phiên', 'Remove this browser’s saved session')}{' '}
+          <strong>{displaySessionTitle(remove?.title, fallbackName)}</strong>.{' '}
           {t(
             'Tác vụ đang xử lý trên dịch vụ không bị hủy.',
             'Running service tasks will continue.',

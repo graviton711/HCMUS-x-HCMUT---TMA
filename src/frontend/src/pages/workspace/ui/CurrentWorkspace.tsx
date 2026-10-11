@@ -8,9 +8,11 @@ import styles from './CurrentWorkspace.module.css';
 
 export function CurrentWorkspace({
   session,
+  onStart,
   onChangeSession,
 }: {
   session: LocalSession;
+  onStart?: (initialText?: string) => void;
   onChangeSession: (changes: Partial<LocalSession>) => void;
 }) {
   const { t } = usePreferences();
@@ -20,6 +22,7 @@ export function CurrentWorkspace({
     comparison,
     busy,
     error,
+    expired,
     stale,
     retry,
     writeDraft,
@@ -31,33 +34,42 @@ export function CurrentWorkspace({
   return (
     <section className={styles.root} aria-labelledby="current-workspace-title">
       <header className="current-heading">
-        <span className="eyebrow">{t('BACKEND HIỆN TẠI', 'CURRENT BACKEND')}</span>
+        <span className="eyebrow">{t('Soi tour bằng dữ kiện', 'Evidence-based comparison')}</span>
         <h1 id="current-workspace-title">
           {t(
             'Chọn điều quan trọng. Đối chiếu bằng dữ kiện.',
-            'Compare tours using the facts available.',
+            'Pick what matters. Compare with facts.',
           )}
         </h1>
-        <p>
+        <p className="measure">
           {t(
-            'Mỗi lần tìm được diễn giải riêng. Dữ kiện thiếu, cũ hoặc chưa xác minh sẽ không được xem là đạt.',
-            'Each search is interpreted independently. Missing, stale or unverified facts are not treated as a pass.',
+            'Mỗi lần tìm được diễn giải riêng. Dữ kiện thiếu, cũ hoặc chưa xác minh được ghi rõ là "chưa rõ" và không được tính là đạt.',
+            'Each search is interpreted independently. Missing, stale or unverified facts are marked unknown and never counted as a pass.',
           )}
         </p>
       </header>
 
       {error && (
-        <div className="notice error" role="alert">
-          <p>{error}</p>
-          {!catalog && (
+        <div className="notice notice-error" role="alert">
+          <span>{error}</span>
+          <span className="row">
+            {expired && session.draft.text.trim() && onStart ? (
+              <button
+                className="btn btn-primary"
+                disabled={busy}
+                onClick={() => onStart(session.draft.text.trim())}
+              >
+                {t('Tạo phiên mới và tiếp tục', 'Start a new session and continue')}
+              </button>
+            ) : null}
             <button className="btn" disabled={busy} onClick={retry}>
-              {t('Thử kết nối lại', 'Try connecting again')}
+              {t('Thử lại', 'Retry')}
             </button>
-          )}
+          </span>
         </div>
       )}
       {stale && (
-        <p className="notice" role="status">
+        <p className="notice notice-warning" role="status">
           {t(
             'Nhu cầu đã đổi; hãy diễn giải lại trước khi tìm.',
             'Your criteria changed; interpret them again before searching.',

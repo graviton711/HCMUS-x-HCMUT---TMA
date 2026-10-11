@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 export type IconName =
   | 'arrow'
   | 'close'
-  | 'menu'
   | 'search'
   | 'plus'
   | 'chevron'
@@ -13,19 +12,12 @@ export type IconName =
   | 'check'
   | 'sun'
   | 'moon'
-  | 'user'
-  | 'route'
-  | 'history';
+  | 'panel'
+  | 'route';
 
 const shapes: Record<IconName, ReactNode> = {
   arrow: <path d="M4 12h15m-6-6 6 6-6 6" />,
   close: <path d="m6 6 12 12M18 6 6 18" />,
-  menu: (
-    <>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M9 4v16" />
-    </>
-  ),
   search: (
     <>
       <circle cx="10" cy="10" r="6" />
@@ -45,12 +37,6 @@ const shapes: Record<IconName, ReactNode> = {
     </>
   ),
   moon: <path d="M20.5 14A9 9 0 0 1 10 3.5 9 9 0 1 0 20.5 14Z" />,
-  user: (
-    <>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
-    </>
-  ),
   route: (
     <>
       <circle cx="5" cy="5" r="2" />
@@ -58,9 +44,10 @@ const shapes: Record<IconName, ReactNode> = {
       <path d="M7 5h10a4 4 0 0 1 0 8H7a3 3 0 0 0 0 6h10" />
     </>
   ),
-  history: (
+  panel: (
     <>
-      <path d="M3 11a9 9 0 1 1 3 7M3 4v7h7m2-4v5l3 2" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9.5 4v16" />
     </>
   ),
 };

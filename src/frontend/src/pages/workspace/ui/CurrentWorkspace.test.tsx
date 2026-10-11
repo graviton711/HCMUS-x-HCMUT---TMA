@@ -242,7 +242,7 @@ describe('CurrentWorkspace guest flow', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Diễn giải nhu cầu' }));
 
-    expect(await screen.findByText('destination')).toBeTruthy();
+    expect(await screen.findByText('điểm đến')).toBeTruthy();
     expect(fetcher).toHaveBeenCalledWith(
       '/requirements',
       expect.objectContaining({
@@ -252,7 +252,7 @@ describe('CurrentWorkspace guest flow', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Tìm và so sánh tour' }));
     expect(await screen.findByText('Đà Lạt cuối tuần')).toBeTruthy();
-    expect(screen.getByText(/5,000,000 VND/)).toBeTruthy();
+    expect(screen.getByText(/5\.000\.000 VND/)).toBeTruthy();
     expect(screen.getByText('Đã gồm xe đưa đón')).toBeTruthy();
     expect(screen.getByText('Hủy miễn phí trước 7 ngày')).toBeTruthy();
     expect(screen.getByText('Gần đạt — thiếu ít điều kiện')).toBeTruthy();
@@ -270,7 +270,7 @@ describe('CurrentWorkspace guest flow', () => {
     render(<Harness initial={initial} />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Diễn giải nhu cầu' }));
-    expect(await screen.findByText('destination')).toBeTruthy();
+    expect(await screen.findByText('điểm đến')).toBeTruthy();
     expect(fetcher).toHaveBeenCalledWith('/requirements', expect.anything());
   });
 

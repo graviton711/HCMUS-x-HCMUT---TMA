@@ -6,7 +6,7 @@ Biến một lượt nhập của user (text tự do và/hoặc form) thành `Re
 
 ## Input/output
 
-Vào: `{text?, form?}` với form (điểm đến, nơi khởi hành, ngày đi/về, ngân sách max, số khách, phương tiện, lưu trú). Ra: `Requirement` kèm quote; cái nào không parse được vào `missing`, không đoán.
+Vào: `{text?, form?, drop_fields?}` với form (điểm đến, nơi khởi hành, ngày đi/về, ngân sách max, số khách, phương tiện, lưu trú). Ra: `Requirement` kèm quote; cái nào không parse được vào `missing`, không đoán. `drop_fields` loại field cứng khỏi form, text và `missing` (dùng cho nới điều kiện).
 
 ## Workflow
 

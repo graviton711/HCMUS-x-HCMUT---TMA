@@ -52,8 +52,8 @@ export function SupportPage({ onStart }: { onStart: () => void }) {
     [
       t('Phạm vi sử dụng', 'Scope of use'),
       t(
-        'Đi cùng hỗ trợ đối chiếu tour và nguồn thông tin; bạn tự quyết định. Sản phẩm chưa đặt tour, thanh toán hoặc xác nhận chỗ. Dữ kiện thiếu hoặc chưa xác minh được ghi rõ; cần kiểm tra lại với nhà cung cấp trước khi đặt.',
-        'Đi cùng helps compare tours and sources; you make the decision. The product does not book tours, process payments or confirm availability. Missing or unverified facts are marked; check with the supplier before booking.',
+        'TourLens hỗ trợ đối chiếu tour và nguồn thông tin; bạn tự quyết định. Sản phẩm chưa đặt tour, thanh toán hoặc xác nhận chỗ. Dữ kiện thiếu hoặc chưa xác minh được ghi rõ; cần kiểm tra lại với nhà cung cấp trước khi đặt.',
+        'TourLens helps compare tours and sources; you make the decision. The product does not book tours, process payments or confirm availability. Missing or unverified facts are marked; check with the supplier before booking.',
       ),
       'scope',
     ],

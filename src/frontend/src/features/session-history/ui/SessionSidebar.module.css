@@ -1,17 +1,43 @@
-/* Styles scoped to SessionSidebar. */
+/* Styles scoped to SessionSidebar and the history list it hosts. */
 
 .root {
-  display: flex;
-  flex-direction: column;
   position: sticky;
   top: var(--header-height);
+  z-index: var(--z-sidebar);
+  display: flex;
+  flex-direction: column;
   height: calc(100dvh - var(--header-height));
-  border-right: 1px solid var(--line);
   background: var(--sidebar);
-  align-self: start;
+  box-shadow: inset -1px 0 0 var(--line);
   overflow: hidden;
-  padding: 18px 12px 12px;
 }
+
+.root[data-collapsed='false'] {
+  width: var(--sidebar-width);
+}
+
+.root[data-collapsed='true'] {
+  width: var(--sidebar-rail);
+  padding: 12px 0;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  padding: 10px 10px 8px;
+}
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px;
+}
+
+/* One rhythm: every row is 38px with the same left inset. */
 .root :global(.sidebar-content) {
   display: flex;
   flex-direction: column;
@@ -19,171 +45,212 @@
   flex: 1;
   min-height: 0;
 }
-.root :global(.sidebar-content) :global(.sidebar-heading) {
-  display: block;
-}
-.root :global(.sidebar-content) :global(.sidebar-heading) :global(.eyebrow) {
-  margin-bottom: 12px;
-  font-size: 10px;
-}
-.root :global(.sidebar-content) :global(.sidebar-heading) :global(.btn) {
-  width: 100%;
-}
-.root :global(.session-item) {
-  position: relative;
-  padding: 4px;
-  min-height: 86px;
-  border-radius: 6px;
-}
-.root :global(.session-item):global(.selected) {
-  background: var(--tint);
-}
-.root :global(.session-item) > a {
-  display: block;
-  min-width: 0;
-  padding: 8px 7px 9px;
-  text-decoration: none;
-}
-.root :global(.session-item) > a:hover {
-  background: color-mix(in srgb, var(--tint), transparent 40%);
-  border-radius: 5px;
-}
-.root :global(.session-item) > a > span {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  line-height: 1.6;
-}
-.root :global(.session-item) > a small {
-  display: block;
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 10px;
-}
-.root :global(.session-actions) {
-  position: absolute;
-  right: 7px;
-  bottom: 9px;
-  display: flex;
-  gap: 2px;
-}
-.root :global(.session-actions) :global(.icon-button) {
-  width: 29px;
-  height: 30px;
-  border: 0;
-  background: none;
-  color: var(--muted);
-}
-.root :global(.session-actions) :global(.icon-button):hover,
-.root :global(.session-actions) :global(.icon-button)[aria-pressed='true'] {
-  color: var(--accent);
-  background: var(--paper);
-}
-.root :global(.sidebar-content) :global(.sidebar-foot) {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.root :global(.sidebar-content) :global(.sidebar-foot) > div {
-  flex: 1;
-  min-width: 0;
-}
-.root :global(.sidebar-content) :global(.sidebar-foot) strong {
-  font-size: 12px;
-  font-weight: 500;
-}
-.root :global(.sidebar-content) :global(.sidebar-foot) p {
-  font-size: 10px;
-}
-.root :global(.sidebar-content) :global(.sidebar-foot) :global(.icon-button) {
-  background: none;
-  border: 0;
-}
-.root :global(.sidebar-topbar) {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 14px;
-  font-size: 13px;
-  font-weight: 500;
-}
-.root.minimized {
-  padding: 0;
-}
-.root :global(.sidebar-rail) {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 28px;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  border-radius: 0;
-  padding: 20px 0;
-  background: var(--sidebar);
-  color: var(--ink);
-  cursor: pointer;
-}
-.root :global(.sidebar-rail):hover {
-  background: var(--tint);
-}
-.root :global(.sidebar-rail):focus-visible {
-  outline-offset: -4px;
-}
-.root :global(.sidebar-resize) {
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 7px;
-  height: 100%;
-  cursor: col-resize;
-  touch-action: none;
-  user-select: none;
-}
-.root :global(.sidebar-resize):hover,
-.root :global(.sidebar-resize):focus-visible {
-  background: var(--tint);
-  border-right: 2px solid var(--accent);
-  outline-offset: -3px;
-}
+
 .root :global(.sidebar-search) {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 16px 6px 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--muted);
 }
+
+.root :global(.sidebar-search):focus-within {
+  border-color: var(--focus);
+}
+
 .root :global(.sidebar-search) input {
-  padding: 4px 0;
-  min-height: 30px;
+  padding: 0;
+  min-height: 0;
   border: 0;
   border-radius: 0;
   background: none;
   font-size: 13px;
 }
+
+.root :global(.sidebar-search) input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Group heading is navigation text, not a tracked-out ribbon. */
+.root :global(.session-group-label) {
+  padding: 16px 10px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
 .root :global(.session-list) {
   flex: 1;
+  min-height: 0;
   overflow: auto;
-  padding-bottom: 16px;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
+  padding-bottom: 8px;
 }
-.root :global(.session-group-label) {
-  padding: 16px 10px 7px;
-  font-size: 11px;
+
+.root :global(.session-item) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 38px;
+  padding: 0 6px 0 0;
+  border-radius: var(--radius-sm);
+}
+
+.root :global(.session-item):hover {
+  background: color-mix(in srgb, var(--surface), transparent 55%);
+}
+
+.root :global(.session-item):global(.selected) {
+  background: var(--surface);
+}
+
+.root :global(.session-item) > a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  text-decoration: none;
+}
+
+.root :global(.session-name) {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 38px;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.root :global(.sidebar-foot) {
-  padding: 14px 8px 4px;
-  border-top: 1px solid var(--line);
+
+.root :global(.session-name) .icon {
+  flex: 0 0 auto;
+  color: var(--subtle);
+}
+
+.root :global(.session-item):global(.selected) :global(.session-name) {
+  color: var(--ink);
+  font-weight: 550;
+}
+
+.root :global(.session-date) {
+  flex: 0 0 auto;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--subtle);
 }
+
+/* Actions live in flow, so they never sit on top of the title. */
+.root :global(.session-actions) {
+  display: flex;
+  gap: 1px;
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.root :global(.session-item):hover :global(.session-actions),
+.root :global(.session-item):focus-within :global(.session-actions) {
+  opacity: 1;
+}
+
+.root :global(.session-actions) :global(.icon-button) {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  border-radius: var(--radius-sm);
+}
+
+.root :global(.session-actions) :global(.icon-button):hover {
+  background: var(--sidebar);
+  color: var(--ink);
+}
+
+/* Collapsed rail */
+.rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  height: 100%;
+}
+
+.rail-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 6px;
+}
+
+.rail-spacer {
+  flex: 1;
+}
+
+.rail-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  background: none;
+  border: 0;
+}
+
+.resize:hover,
+.resize:focus-visible {
+  background: var(--surface);
+}
+
+.root :global(.sidebar-account) {
+  min-width: 0;
+}
+
+.root :global(.sidebar-account-text) {
+  display: block;
+  min-width: 0;
+}
+
+.root :global(.sidebar-account-text) strong {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.sidebar-account-text) small {
+  display: block;
+  font-size: 11px;
+  color: var(--subtle);
+}
+
 @media (max-width: 1000px) {
   .root {
     display: none;

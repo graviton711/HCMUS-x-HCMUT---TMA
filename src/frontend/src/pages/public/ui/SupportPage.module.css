@@ -65,8 +65,8 @@
 }
 
 .supportRoot :global(.support-articles) article > span {
-  color: var(--clay);
-  font: 400 29px/1.2 var(--heading);
+  color: var(--accent);
+  font: 500 29px/1.2 var(--heading);
 }
 
 .supportRoot :global(.support-articles) h2 {

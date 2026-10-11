@@ -1,6 +1,6 @@
 import type { CurrentRequirement } from '../../../shared/api';
 import { usePreferences } from '../../../shared/preferences';
-import { display } from '../lib/format';
+import { conditionText, fieldLabel } from '../../../features/chat';
 
 export function RequirementView({ requirement }: { requirement: CurrentRequirement }) {
   const { t } = usePreferences();
@@ -17,9 +17,9 @@ export function RequirementView({ requirement }: { requirement: CurrentRequireme
         <ul className="current-condition-list">
           {requirement.conditions.map((condition) => (
             <li key={condition.id}>
-              <span>{condition.field.replaceAll('_', ' ')}</span>
+              <span>{fieldLabel(condition.field, t)}</span>
               <code>
-                {condition.operator} {display(condition.value)}
+                {conditionText(condition.operator, condition.value, t)}
               </code>
               <small>{condition.strength}</small>
             </li>

@@ -101,6 +101,19 @@ def test_form_only_requirement(input_cfg):
     assert "budget_max" not in req.missing
 
 
+def test_drop_fields_relaxes_form_text_and_missing(input_cfg):
+    req = build_requirement("Da Lat 3 ngay, di tu Sai Gon, toi da 8 trieu/nguoi",
+                            {"budget_max": 8_000_000},
+                            cfg=input_cfg, known_places=["Đà Lạt", "Sài Gòn"],
+                            drop_fields=["departure_city", "budget_max", "not_a_field"])
+    fields = {c.field for c in req.conditions}
+    assert "departure_city" not in fields
+    assert "budget_max" not in fields
+    assert "destination" in fields
+    assert "departure_city" not in req.missing
+    assert "budget_max" not in req.missing
+
+
 def test_structured_destination_options_are_or(input_cfg):
     req = build_requirement("", {"destinations": ["Đà Nẵng", "Đà Lạt"]}, cfg=input_cfg)
     destinations = [condition for condition in req.conditions if condition.field == "destination"]

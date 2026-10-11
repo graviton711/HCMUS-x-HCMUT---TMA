@@ -1,121 +1,128 @@
-/* Styles scoped to preferences. */
+/* Styles scoped to PreferencesControl. Floating layer: shadow allowed, blur is not. */
 
 .root {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
+  gap: 6px;
 }
-.root :global(.language-picker) {
+
+.language-picker {
   position: relative;
 }
-.root :global(.preferences-trigger),
-.root :global(.theme-toggle) {
-  display: flex;
+
+.preferences-trigger,
+.theme-toggle {
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 7px;
-  padding: 8px 10px;
-  min-height: 44px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface);
+  gap: 5px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--muted);
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.02em;
   transition:
-    background-color 150ms,
-    border-color 150ms;
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
 }
-.root :global(.theme-toggle) {
-  width: 44px;
-  flex: 0 0 44px;
-  padding: 0;
-  color: var(--muted);
-}
-.root :global(.preferences-trigger):hover,
-.root :global(.preferences-trigger)[aria-expanded='true'],
-.root :global(.theme-toggle):hover {
-  background: var(--tint);
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent), var(--line) 65%);
-}
-.root :global(.preferences-trigger) > :global(.icon) {
-  transition: transform 150ms;
-}
-.root :global(.preferences-trigger)[aria-expanded='true'] > :global(.icon) {
-  transform: rotate(180deg);
-}
-.root :global(.preferences-panel) {
-  position: absolute;
-  top: calc(100% + 9px);
-  right: 0;
-  z-index: var(--z-overlay);
-  width: 216px;
-  max-width: calc(100vw - 32px);
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+
+.preferences-trigger:hover,
+.theme-toggle:hover {
   background: var(--surface);
-  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink), transparent 90%);
+  color: var(--ink);
 }
-.root :global(.preferences-panel) h2 {
-  margin: 3px 8px 8px;
+
+.root[data-layout='column'] {
+  flex-direction: column;
+  align-items: center;
+}
+
+.locale-cycle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
   color: var(--muted);
-  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.locale-cycle:hover {
+  background: var(--tint);
+  color: var(--ink);
+}
+
+.preferences-panel {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: var(--z-overlay);
+  min-width: 200px;
+  max-width: min(240px, calc(100vw - 32px));
+  padding: 14px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-overlay);
+}
+
+.preferences-panel h2 {
+  margin-bottom: 10px;
   font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--subtle);
 }
-.root :global(.preferences-choices) {
+
+.preferences-choices {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
-.root :global(.preferences-choices) button {
+
+.preferences-choices button {
   display: flex;
-  text-align: left;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
-  padding: 8px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  font-size: 13px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink);
+  font-size: 13.5px;
+  text-align: left;
 }
-.root :global(.preferences-choices) button:hover {
+
+.preferences-choices button:hover {
   background: var(--tint);
 }
-.root :global(.preferences-choices) :global(.language-code) {
-  width: 34px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--muted);
-}
-.root :global(.preferences-choices) :global(.icon) {
-  margin-left: auto;
-}
-.root :global(.preferences-choices) button[aria-pressed='true'] {
+
+.preferences-choices button[aria-pressed='true'] {
   background: var(--tint);
   color: var(--accent);
+  font-weight: 600;
 }
-@media (max-width: 760px) {
-  .root :global(.preferences-trigger) {
-    padding: 7px;
-    gap: 5px;
-    min-height: 44px;
-  }
-  .root {
-    gap: 6px;
-  }
-  .root :global(.preferences-panel) {
-    position: fixed;
-    top: calc(var(--header-height) + 9px);
-    right: 16px;
-    max-width: calc(100vw - 32px);
-  }
+
+.language-code {
+  min-width: 30px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
 }
-@media (max-width: 420px) {
-  .root :global(.preferences-trigger) {
-    font-size: 11px;
-  }
+
+.preferences-choices button[aria-pressed='true'] .language-code {
+  color: var(--accent);
+}
+
+.preferences-choices button > span:nth-child(2) {
+  flex: 1;
 }

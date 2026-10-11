@@ -79,10 +79,11 @@ export class CurrentBackendClient {
     return this.request<CurrentCatalog>('/catalog');
   }
 
-  createRequirement(text: string, form?: Record<string, unknown>) {
+  createRequirement(text: string, form?: Record<string, unknown>, dropFields?: string[]) {
     return this.request<{ requirement: CurrentRequirement }>('/requirements', 'POST', {
       text,
       ...(form ? { form } : {}),
+      ...(dropFields?.length ? { drop_fields: dropFields } : {}),
     });
   }
 

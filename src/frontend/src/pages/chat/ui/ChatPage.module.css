@@ -1,0 +1,135 @@
+/* Styles scoped to the chat page. */
+
+.workspace {
+  display: grid;
+  gap: 18px;
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.workspace-wide {
+  max-width: 1140px;
+}
+
+/* ---------- Entry ---------- */
+
+.entry {
+  display: grid;
+  gap: 28px;
+  padding-block: clamp(24px, 6vh, 64px);
+}
+
+.entry-hero {
+  display: grid;
+  gap: 12px;
+  max-width: 62ch;
+}
+
+.entry-hero :global(.eyebrow) {
+  margin-bottom: 0;
+}
+
+.entry-hero p {
+  color: var(--muted);
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+.entry-facts {
+  display: grid;
+  gap: 10px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  margin-top: 2px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.entry-facts dt {
+  color: var(--subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.entry-facts dd {
+  margin-top: 3px;
+  font-size: 13.5px;
+}
+
+.examples-title {
+  color: var(--subtle);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.examples {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.example {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  text-align: left;
+  box-shadow: 0 0 0 1px var(--line);
+  transition:
+    box-shadow var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.example:hover {
+  background: var(--surface-2);
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+
+.example span:last-child {
+  color: var(--subtle);
+  flex: 0 0 auto;
+}
+
+/* ---------- Active ---------- */
+
+.slot {
+  max-width: 640px;
+  padding: 16px 18px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.composer-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, var(--paper) 62%, transparent);
+}
+
+.recovery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.recovery-note {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+@media (min-width: 760px) {
+  .examples {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

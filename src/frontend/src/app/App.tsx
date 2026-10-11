@@ -3,17 +3,34 @@ import {
   readAuthProfile,
   SessionHistoryPanel,
   useLocalSessions,
+  useSidebarLayout,
   type AuthProfile,
   type LocalSession,
 } from '../features/session-history';
-import { LandingPage, SupportPage, UnavailablePage } from '../pages/public';
+import { PreferencesControl } from '../features/preferences';
+import { SupportPage, UnavailablePage } from '../pages/public';
 import { WorkspacePage } from '../pages/workspace';
+import { ChatPage } from '../pages/chat';
 import { usePreferences } from '../shared/preferences';
 import { useNavigation } from './routing';
-import { AppFooter, AppHeader } from './shell';
+import { AppFooter, AppHeader, SessionBar } from './shell';
+import { displaySessionTitle } from '../shared/lib';
 import styles from './shell/AppShell.module.css';
 
 const knownRoutes = new Set(['/', '/tours', '/auth', '/account', '/contact', '/support']);
+
+function useIsDesktop() {
+  const [desktop, setDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1001px)').matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1001px)');
+    const onChange = () => setDesktop(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+  return desktop;
+}
 
 export function App() {
   const { t } = usePreferences();
@@ -22,15 +39,26 @@ export function App() {
   const { sessions, storageError, createSession, updateSession, removeSession } = useLocalSessions(
     profile?.id,
   );
-  const [historyOpen, setHistoryOpen] = useState(false);
+  const sidebar = useSidebarLayout();
+  const isDesktop = useIsDesktop();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const current =
     sessions.find((session) => session.id === route.session) ||
-    (route.path === '/tours' ? sessions[0] || null : null);
+    (route.path === '/' ? sessions[0] || null : null);
+  const isWorkspace = route.path === '/' || route.path === '/tours';
 
-  useEffect(() => setHistoryOpen(false), [route.path, route.session, route.hash]);
+  useEffect(() => setDrawerOpen(false), [route.path, route.session, route.hash]);
 
   useEffect(() => {
-    document.title = `${route.path === '/tours' ? t('Tìm tour', 'Find tours') : route.path === '/auth' ? t('Tài khoản', 'Account') : 'Đi cùng'} · Đi cùng`;
+    const label =
+      route.path === '/' || route.path === '/tours'
+        ? t('Tìm tour', 'Find tours')
+        : route.path === '/support'
+          ? t('Hỗ trợ', 'Help')
+          : route.path === '/auth' || route.path === '/account' || route.path === '/contact'
+            ? t('Tài khoản & liên hệ', 'Account & contact')
+            : t('Không tìm thấy', 'Not found');
+    document.title = `${label} · TourLens`;
   }, [route.path, t]);
 
   useEffect(() => {
@@ -40,35 +68,46 @@ export function App() {
         ?.scrollIntoView({ block: 'start', behavior: 'instant' });
   }, [route.path, route.hash]);
 
-  function startSession() {
+  function startSession(initialText?: string) {
     const next = createSession();
-    navigate(`/tours?session=${next.id}`);
+    if (initialText) updateSession(next.id, { draft: { ...next.draft, text: initialText } });
+    navigate(`/?session=${next.id}`);
   }
 
   function continueTours() {
-    if (sessions.length) navigate(`/tours?session=${sessions[0].id}`);
+    if (sessions.length) navigate(`/?session=${sessions[0].id}`);
     else startSession();
   }
 
   function removeSavedSession(session: LocalSession) {
     removeSession(session);
-    if (current?.id === session.id) navigate('/tours');
+    if (current?.id !== session.id) return;
+    const remaining = sessions.filter((item) => item.id !== session.id);
+    navigate(remaining.length ? `/?session=${remaining[0].id}` : '/');
   }
+
+  /** One control point: collapse the sidebar on desktop, open the drawer on small screens. */
+  function toggleSidebar() {
+    if (isDesktop) sidebar.toggle();
+    else setDrawerOpen((open) => !open);
+  }
+
+  const sessionBar = (
+    <SessionBar
+      title={displaySessionTitle(current?.title, t('Tìm tour mới', 'New search'))}
+      sidebarOpen={isDesktop ? !sidebar.collapsed : drawerOpen}
+      onToggleSidebar={toggleSidebar}
+      onStart={() => startSession()}
+    />
+  );
 
   const page =
     route.path === '/' ? (
-      <LandingPage onStart={continueTours} />
+      <ChatPage session={current} onStart={startSession} onChangeSession={updateSession} />
     ) : route.path === '/support' ? (
       <SupportPage onStart={continueTours} />
     ) : route.path === '/tours' ? (
-      <WorkspacePage
-        session={current}
-        profile={profile}
-        onStart={startSession}
-        onChangeSession={updateSession}
-        onOpenHistory={() => setHistoryOpen(true)}
-        historyOpen={historyOpen}
-      />
+      <WorkspacePage session={current} onStart={startSession} onChangeSession={updateSession} />
     ) : route.path === '/auth' || route.path === '/account' || route.path === '/contact' ? (
       <UnavailablePage
         route={route.path.slice(1) as 'auth' | 'account' | 'contact'}
@@ -84,42 +123,45 @@ export function App() {
       <a className="skip-link" href="#main-content">
         {t('Đến nội dung chính', 'Skip to main content')}
       </a>
-      <AppHeader
-        routePath={route.path}
-        profile={profile}
-        onContinueTours={continueTours}
-        onLink={link}
-      />
-      <div className={`app-shell ${route.path === '/tours' ? 'workspace-open' : ''}`}>
+      <AppHeader onLink={link} />
+      <div className={`app-shell ${isWorkspace ? 'workspace-open' : ''}`}>
         <SessionHistoryPanel
           sessions={sessions}
           currentId={current?.id}
           routePath={route.path}
           profile={profile}
-          mobileOpen={historyOpen}
-          onMobileClose={() => setHistoryOpen(false)}
-          onStart={startSession}
+          mobileOpen={drawerOpen}
+          onMobileClose={() => setDrawerOpen(false)}
+          sidebarCollapsed={sidebar.collapsed}
+          sidebarWidth={sidebar.width}
+          onSidebarWidthChange={sidebar.setWidth}
+          onSidebarToggle={sidebar.toggle}
           onLink={link}
           onUpdate={updateSession}
           onRemove={removeSavedSession}
+          controls={<PreferencesControl />}
+          railControls={<PreferencesControl layout="column" localeMode="cycle" />}
         />
-        <main
-          id="main-content"
-          className={route.path === '/tours' ? 'workspace-content' : 'page-content'}
-          tabIndex={-1}
-        >
+        <main id="main-content" className="canvas" tabIndex={-1}>
           {storageError && (
-            <p className="notice" role="status">
+            <p className="notice notice-warning" role="status">
               {t(
                 'Trình duyệt chưa lưu được lịch sử. Giữ tab này mở để tiếp tục phiên.',
                 'History could not be saved. Keep this tab open to continue.',
               )}
             </p>
           )}
-          {page}
+          {isWorkspace ? (
+            <>
+              {sessionBar}
+              <div className="canvas-content">{page}</div>
+            </>
+          ) : (
+            page
+          )}
         </main>
       </div>
-      <AppFooter onLink={link} />
+      {!isWorkspace && <AppFooter onLink={link} />}
     </div>
   );
 }

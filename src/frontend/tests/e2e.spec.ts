@@ -1,26 +1,21 @@
 import { expect, test, type Page } from '@playwright/test';
 
-async function startGuestSearch(page: Page) {
-  await page.goto('/tours');
-  await page.getByRole('main').getByRole('button', { name: 'Phiên mới', exact: true }).click();
-  await expect(page.getByLabel('Mô tả chuyến đi')).toBeVisible();
+async function startChat(page: Page) {
+  await page.goto('/');
+  await expect(page.getByLabel('Nhắn cho TourLens')).toBeVisible();
 }
 
-test('guest interprets, compares, and restores the persisted current-backend result', async ({
-  page,
-}) => {
+test('guest chats, compares, and restores the persisted result', async ({ page }) => {
   const legacyRequests: string[] = [];
   page.on('request', (request) => {
     if (new URL(request.url()).pathname.startsWith('/v2/')) legacyRequests.push(request.url());
   });
-  await startGuestSearch(page);
-  await page.getByLabel('Mô tả chuyến đi').fill('Đà Lạt 3 ngày, tối đa 8 triệu/người');
-  await page.getByLabel('Điểm đến trong catalog').fill('Đà Lạt');
-  await page.getByRole('button', { name: 'Diễn giải nhu cầu', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Backend đã hiểu' })).toBeVisible();
+  await startChat(page);
+  await page.getByLabel('Nhắn cho TourLens').fill('Đà Lạt 3 ngày, tối đa 8 triệu/người');
+  await page.getByRole('button', { name: 'Gửi', exact: true }).click();
+  await expect(page.getByText('Đã hiểu như sau')).toBeVisible();
   await page.getByRole('button', { name: 'Tìm và so sánh tour', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Các tour có thể đối chiếu' })).toBeVisible();
-  await expect(page.locator('.current-tour-card').first()).toBeVisible();
+  await expect(page.getByText(/tour đạt đủ/)).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -36,8 +31,8 @@ test('guest interprets, compares, and restores the persisted current-backend res
 
   expect(legacyRequests).toEqual([]);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Các tour có thể đối chiếu' })).toBeVisible();
-  await expect(page.locator('.current-tour-card').first()).toBeVisible();
+  await expect(page.getByText('Đã hiểu như sau')).toBeVisible();
+  await expect(page.getByText(/tour đạt đủ/)).toBeVisible();
 });
 
 test('account and contact routes clearly report that their backend features are not ported', async ({
@@ -46,15 +41,15 @@ test('account and contact routes clearly report that their backend features are 
   await page.goto('/account');
   await expect(page.getByRole('heading', { name: 'Tài khoản chưa khả dụng.' })).toBeVisible();
   await page.getByRole('button', { name: 'Tiếp tục với guest' }).click();
-  await expect(page.getByLabel('Mô tả chuyến đi')).toBeVisible();
+  await expect(page.getByLabel('Nhắn cho TourLens')).toBeVisible();
 
   await page.goto('/contact');
   await expect(page.getByRole('heading', { name: 'Liên hệ chưa khả dụng.' })).toBeVisible();
 });
 
-test('guest workspace fits a narrow mobile viewport', async ({ page }) => {
+test('guest chat fits a narrow mobile viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await startGuestSearch(page);
+  await startChat(page);
   const sizes = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth,

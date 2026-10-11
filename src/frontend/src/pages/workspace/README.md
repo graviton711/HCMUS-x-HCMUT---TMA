@@ -1,9 +1,9 @@
-# pages/workspace
+# pages/workspace (legacy)
 
-Màn hình tìm kiếm/so sánh tour của guest và vòng đời request riêng của page.
+Màn hình form/so sánh cũ, route `/tours` ẩn khỏi nav, giữ cho tới agent phase. Mọi flow mới ở `pages/chat`; không thêm tính năng tại đây.
 
-- Input: `LocalSession` đang active, profile, các callback session từ `app`.
-- Output: toolbar workspace + empty state hoặc `CurrentWorkspace`.
-- Workflow: `WorkspacePage` (shell) → `CurrentWorkspace` (lắp ghép) → `RequirementForm` / `RequirementView` / `ComparisonView`; state lấy từ `model/useCurrentWorkspace`. `ComparisonView` render nhóm đạt đủ rồi nhóm "Gần đạt" (offer fail ≤2 điều kiện cứng, kèm lý do thiếu) cùng đủ 4 nhóm analysis và chi tiết evaluation từng offer trong `<details>`. Style toolbar/content/empty-state nằm ở `ui/WorkspacePage.module.css`.
-- Interface: `src/pages/workspace` export `WorkspacePage`, `CurrentWorkspace`. `model/` và `lib/` là nội bộ (`lib/form` map draft sang field backend: `destinations/departure_city/date_from/date_to/budget_max/duration_days/transport/accommodation/travelers`; `lib/access` resolve bearer access).
-- Quyết định kỹ thuật: mapping field backend nằm ở `lib/`, không bao giờ nằm trong UI component.
+- Input: `LocalSession` đang active, các callback session từ `app`.
+- Output: empty state hoặc `CurrentWorkspace` (heading, form, requirement, comparison, expired-recovery).
+- Workflow: `WorkspacePage` (shell) → `CurrentWorkspace` (lắp ghép) → `RequirementForm` / `RequirementView` / `ComparisonView`; state lấy từ `model/useCurrentWorkspace`. Mapping draft→form dùng chung ở `entities/search-draft`.
+- Interface: `src/pages/workspace` export `WorkspacePage`, `CurrentWorkspace`. `model/` nội bộ; không giữ bản copy `access`/`title`/`format` per-page — dùng chung từ `features/session-history`, `shared/lib`, `features/chat`.
+- Quyết định kỹ thuật: session bar và sidebar toggle do `app` sở hữu; page không render toolbar riêng. Title dùng `sessionTitle` cùng fallback chuẩn, không slice thô theo UTF-16 code unit.

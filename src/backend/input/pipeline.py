@@ -132,14 +132,18 @@ def _clean_hard(items: list[dict[str, Any]], quote: str, cfg: InputCfg) -> list[
 
 def build_requirement(text: str = "", form: dict[str, Any] | None = None,
                       nim: NimClient | None = None, cfg: InputCfg | None = None,
-                      known_places: list[str] | None = None, ref_date: str = "") -> Requirement:
+                      known_places: list[str] | None = None, ref_date: str = "",
+                      drop_fields: list[str] | None = None) -> Requirement:
     form = form or {}
+    dropped = {f for f in (drop_fields or []) if f in _HARD_FIELDS}
     if cfg is None:
         raise AppError("CONFIG_MISSING", "Missing InputCfg.", 500)
     conditions: list[Condition] = []
     seen = set()
 
     for form_key, field in _FORM_MAP.items():
+        if field in dropped:
+            continue
         value = form.get(form_key)
         if value is None or value == "" or value == []:
             continue
@@ -167,7 +171,8 @@ def build_requirement(text: str = "", form: dict[str, Any] | None = None,
         else:
             parsed = keyword_extract(text, cfg, known_places)
         items = [item for item in parsed.get("hard", [])
-                 if isinstance(item, dict) and item.get("field") not in seen]
+                 if isinstance(item, dict) and item.get("field") not in seen
+                 and item.get("field") not in dropped]
         # Budgets must be grounded in an explicit number in the text.
         # Form budgets bypass this (explicit user data, trusted).
         if nim is not None and nim.configured() and not re.search(r"\d", text):
@@ -186,6 +191,6 @@ def build_requirement(text: str = "", form: dict[str, Any] | None = None,
 
     conditions.extend(soft)
     have = {c.field for c in conditions if c.strength == "hard"}
-    missing = [f for f in cfg.required_slots if f not in have]
+    missing = [f for f in cfg.required_slots if f not in have and f not in dropped]
     return Requirement(id=uid("req"), conditions=conditions, missing=missing,
                        raw_text=text, travelers=travelers)

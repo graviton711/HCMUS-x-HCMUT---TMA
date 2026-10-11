@@ -6,7 +6,13 @@ import type {
 } from '../../../shared/api';
 import { safeUrl } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
-import { conditionState, display, evaluationsForOffer, failedDetailsForOffer } from '../lib/format';
+import {
+  conditionState,
+  conditionText,
+  evaluationsForOffer,
+  failedDetailsForOffer,
+  fieldLabel,
+} from '../../../features/chat';
 
 function TourCard({
   comparison,
@@ -56,7 +62,7 @@ function TourCard({
           {t('Chưa đạt:', 'Not met:')}{' '}
           {failed
             .map(({ evaluation, condition }) =>
-              condition ? condition.field.replaceAll('_', ' ') : evaluation.condition_id,
+              condition ? fieldLabel(condition.field, t) : evaluation.condition_id,
             )
             .join(', ')}
         </p>
@@ -78,7 +84,7 @@ function TourCard({
           <dd>
             {offer.price == null
               ? t('Liên hệ / chưa có giá', 'Contact / price unavailable')
-              : `${offer.price.toLocaleString()} ${offer.currency} (${offer.price_basis})`}
+              : `${offer.price.toLocaleString('vi-VN')} ${offer.currency} (${offer.price_basis})`}
           </dd>
         </div>
         <div>
@@ -123,10 +129,10 @@ function TourCard({
                 </span>
                 <span>
                   {condition
-                    ? `${condition.field.replaceAll('_', ' ')} ${condition.operator} ${display(condition.value)}`
+                    ? `${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`
                     : evaluation.condition_id}
                 </span>
-                {evaluation.quote && <q>{evaluation.quote}</q>}
+                {evaluation.quote && <q cite={url ?? undefined}>{evaluation.quote}</q>}
                 {evaluation.reason_code && <code>{evaluation.reason_code}</code>}
               </li>
             ))}

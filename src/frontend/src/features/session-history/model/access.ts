@@ -1,4 +1,5 @@
-import type { SessionAccess } from './types';
+import type { LocalSession, SessionAccess } from './types';
+import { CurrentBackendClient } from '../../../shared/api';
 
 const accessKey = 'di-cung:access:v1';
 
@@ -43,4 +44,43 @@ export function removeAccess(id: string) {
   } catch {
     /* no access to remove */
   }
+}
+
+export const EXPIRED_SESSION_MESSAGE =
+  'Guest session expired. The draft is still here — start a new session to keep searching.';
+
+/** The stored token no longer grants access; only a new session can continue. */
+export class SessionExpiredError extends Error {
+  constructor(message = EXPIRED_SESSION_MESSAGE) {
+    super(message);
+    this.name = 'SessionExpiredError';
+  }
+}
+
+export function isSessionExpired(cause: unknown): boolean {
+  return cause instanceof SessionExpiredError;
+}
+
+const accessFlights = new Map<string, Promise<SessionAccess>>();
+
+export async function accessFor(session: LocalSession): Promise<SessionAccess> {
+  const saved = getAccess(session.id);
+  if (saved) return saved;
+  if (session.requirementId) throw new SessionExpiredError();
+  const pending = accessFlights.get(session.id);
+  if (pending) return pending;
+  const request = new CurrentBackendClient()
+    .createSession()
+    .then((created) => {
+      const access = {
+        token: created.token,
+        expiresAt: created.expires_at,
+        backendId: created.session_id || created.id,
+      };
+      putAccess(session.id, access);
+      return access;
+    })
+    .finally(() => accessFlights.delete(session.id));
+  accessFlights.set(session.id, request);
+  return request;
 }

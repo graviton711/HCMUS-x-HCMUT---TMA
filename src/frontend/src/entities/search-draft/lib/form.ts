@@ -1,5 +1,5 @@
-import type { SearchDraft } from '../../../entities/search-draft';
 import type { CurrentCatalog } from '../../../shared/api';
+import type { SearchDraft } from '../model/types';
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/u;
 

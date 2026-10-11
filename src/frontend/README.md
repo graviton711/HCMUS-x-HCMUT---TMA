@@ -2,6 +2,8 @@
 
 UI React + TypeScript + Vite cho `src/backend`. Backend contract là nguồn chuẩn duy nhất cho data, eligibility, persistence và identity.
 
+Kế hoạch thiết kế lại và ranh giới implementation: [docs/frontend-redesign-plan.md](../../docs/frontend-redesign-plan.md).
+
 ## Kiến trúc
 
 Dùng cấu trúc feature-sliced gọn. Dependency source chỉ chảy xuống: `app → pages → features → entities → shared`; một layer được bỏ qua nhưng không được import từ layer cao hơn hay slice ngang hàng. Chỉ giữ layer nào có trách nhiệm thật trong app này.
@@ -13,8 +15,9 @@ src/frontend/
 ├── src/
 │   ├── app/                 # App.tsx, main.tsx; providers/, routing/, runtime/, shell/
 │   ├── pages/
-│   │   ├── public/          # LandingPage, SupportPage, UnavailablePage (ui/ + barrel)
-│   │   └── workspace/       # WorkspacePage; ui/, model/, lib/ (form/access/format)
+│   │   ├── chat/              # ChatPage + useChat (route `/`); ui/, model/, lib/
+│   │   ├── public/          # SupportPage, UnavailablePage (ui/ + barrel)
+│   │   └── workspace/       # Legacy WorkspacePage (route `/tours` ẩn); ui/, model/, lib/
 │   ├── features/
 │   │   ├── preferences/     # Control ngôn ngữ/theme (ui/; state qua shared/preferences)
 │   │   └── session-history/ # Session trình duyệt (model/, ui/, lib/ + barrel)
@@ -35,13 +38,15 @@ ESLint enforce chiều layer, cấm import chéo slice và bắt buộc public e
 
 | Module                     | Trách nhiệm và interface                                                                                                                                                                                                         |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app`                      | Bootstrap trình duyệt, providers, navigation và lắp ghép shell. Nhận browser state rồi compose pages/features; không sở hữu business rule session hay tìm kiếm.                                                                  |
-| `pages/public`             | Màn hình landing/hỗ trợ. Dùng shared UI và preferences; render nội dung public và link điều hướng.                                                                                                                               |
-| `pages/workspace`          | Màn hình tìm kiếm/so sánh của guest và vòng đời request riêng của page. Dùng feature session-history, entity search-draft, preferences và current API; render workspace đang active, đủ 4 nhóm analysis và chi tiết evaluation từng offer.                                             |
-| `features/session-history` | Tạo, đọc, sửa, xóa session lưu trên trình duyệt; export type/action session và `SessionHistoryPanel` cho `app` (`SessionHistory`/`SessionSidebar` là nội bộ của panel). Giữ nguyên storage keys và behavior phân scope identity; bản lưu cũ có key thừa được strip khi load. |
-| `features/preferences`     | Control ngôn ngữ và theme; đọc/ghi qua interface shared preferences.                                                                                                                                                             |
+| `app`                      | Bootstrap trình duyệt, providers, navigation và lắp ghép shell. Sở hữu session bar (điểm điều khiển sidebar duy nhất) và instance layout sidebar; không sở hữu business rule session hay tìm kiếm.                                  |
+| `pages/chat`               | Màn hình search-first (`/`) và orchestration hội thoại: entry, composer, hỏi từng slot thiếu, so sánh 2 nhóm, nới điều kiện, hoàn tác, title từ destination, recovery hết hạn phiên. Dùng feature chat/session-history, entity search-draft và current API. |
+| `pages/public`             | Màn hình hỗ trợ và fallback. Dùng shared UI và preferences; render nội dung public và link điều hướng.                                                                                                                           |
+| `pages/workspace`          | Legacy: màn hình form/so sánh cũ (route `/tours` ẩn khỏi nav, giữ cho tới agent phase). Dùng feature session-history, entity search-draft, preferences và current API.                                                             |
+| `features/session-history` | Tạo, đọc, sửa, xóa session lưu trên trình duyệt; export type/action session, `useSidebarLayout` và `SessionHistoryPanel` cho `app` (`SessionHistory`/`SessionSidebar` là nội bộ của panel). Giữ nguyên storage keys và behavior phân scope identity; bản lưu cũ có key thừa được strip khi load. |
+| `features/chat`            | Primitive hội thoại (types message, Thread/Composer/ToolStatus/QuickReplies/ResultCards, helper format). Không gọi API, không đọc session; orchestration nằm ở `pages/chat`.                                                         |
+| `features/preferences`     | Control ngôn ngữ và theme (`compact` cho rail/drawer); đọc/ghi qua interface shared preferences. Render duy nhất từ `app`.                                                                                                       |
 | `entities/search-draft`    | Type và giá trị mặc định của search draft, khớp đúng field backend hỗ trợ. Không UI, không gọi backend.                                                                                                                          |
-| `shared`                   | HTTP client backend, context/persistence preference toàn app, UI generic và global styles. Không được import product pages/features.                                                                                             |
+| `shared`                   | HTTP client backend, context/persistence preference toàn app, UI generic, global styles và token Calm Density, helper thuần (`safeUrl`, `displaySessionTitle`). Không được import product pages/features.                           |
 
 ## Ranh giới runtime
 
@@ -75,10 +80,7 @@ uv run tour-backend serve
 
 ## Ghi nguồn asset
 
-| Asset                             | Nguồn / license                                                                                                                           |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `fuji.jpg`                        | [David Edelstein / Unsplash](https://unsplash.com/photos/mount-fuji-japan-N4DbvTUDikw/); [Unsplash license](https://unsplash.com/license) |
-| `tokyo.jpg`                       | [Jezael Melgoza / Unsplash](https://unsplash.com/photos/two-women-walking-between-buildings-zFhNA1tKmKs); Unsplash license                |
-| `kyoto.jpg`                       | [Sugarman Joe / Unsplash](https://unsplash.com/photos/red-and-black-tori-gate-under-blue-sky-wOWIO972WTA); Unsplash license               |
-| Font Be Vietnam Pro và Newsreader | [Google Fonts](https://github.com/google/fonts); văn bản SIL OFL 1.1 nằm cạnh file font                                                   |
-| `mark.svg`                        | Artwork gốc của repo                                                                                                                      |
+| Asset                          | Nguồn / license                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------------------- |
+| Font Manrope và Space Grotesk  | [Google Fonts](https://github.com/google/fonts); văn bản SIL OFL 1.1 nằm cạnh file font  |
+| `mark.svg`                     | Artwork gốc của repo (lens + check TourLens)                                             |
