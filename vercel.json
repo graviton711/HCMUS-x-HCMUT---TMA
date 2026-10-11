@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "web": {
+      "root": "src/frontend",
+      "framework": "vite",
+      "buildCommand": "pnpm build",
+      "installCommand": "pnpm install --frozen-lockfile",
+      "outputDirectory": "dist",
+      "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+    },
+    "api": {
+      "root": ".",
+      "framework": "fastapi",
+      "functions": {
+        "src/backend/vercel_app.py": {
+          "excludeFiles": "{src/frontend/**,node_modules/**,tests/**,artifacts/**,.local/**,data/**,dist/**,docs/**,examples/**,migrations/**,src/ingest/**,*.md}"
+        }
+      }
+    }
+  },
+  "rewrites": [
+    { "source": "/health", "destination": { "service": "api" } },
+    { "source": "/sessions", "destination": { "service": "api" } },
+    { "source": "/catalog", "destination": { "service": "api" } },
+    { "source": "/requirements", "destination": { "service": "api" } },
+    { "source": "/requirements/:rid", "destination": { "service": "api" } },
+    { "source": "/comparisons", "destination": { "service": "api" } },
+    { "source": "/comparisons/:cid", "destination": { "service": "api" } },
+    { "source": "/history", "destination": { "service": "api" } },
+    { "source": "/history/:item", "destination": { "service": "api" } },
+    { "source": "/docs", "destination": { "service": "api" } },
+    { "source": "/openapi.json", "destination": { "service": "api" } },
+    { "source": "/(.*)", "destination": { "service": "web" } }
+  ]
+}

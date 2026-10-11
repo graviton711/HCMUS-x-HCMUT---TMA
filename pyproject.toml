@@ -25,6 +25,9 @@ browser = ["playwright>=1.52"]
 tour-backend = "backend.cli:main"
 tour-crawl = "ingest.pipeline:main"
 
+[tool.vercel]
+entrypoint = "backend.vercel_app:app"
+
 [dependency-groups]
 dev = [
     "basedpyright>=1.40.2",
