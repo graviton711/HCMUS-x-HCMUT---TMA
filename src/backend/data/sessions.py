@@ -250,44 +250,60 @@ class _PostgresStore(BaseStore):
 
     def __init__(self, database_url: str):
         try:
-            import psycopg
+            import psycopg  # noqa: F401 - import checked here, used lazily in _connect
             from psycopg import OperationalError as pg_operational_error
         except ImportError as exc:  # pragma: no cover - dependency is declared
             raise AppError("STORE_DRIVER_MISSING", "Missing psycopg driver.", 500) from exc
         self._pg_operational_error = pg_operational_error
         self._database_url = database_url
-        self._conn = psycopg.connect(database_url, connect_timeout=8, autocommit=True)
+        # Lazy connection: serverless imports must never dial the database.
+        # The first query connects; failures surface as a 503 AppError.
+        self._conn = None
+
+    def _connected(self):
+        if self._conn is None:
+            self._connect()
+        return self._conn
+
+    def _connect(self) -> None:
+        import psycopg
+
+        try:
+            self._conn = psycopg.connect(self._database_url, connect_timeout=8, autocommit=True)
+        except self._pg_operational_error as exc:
+            raise AppError(
+                "STORE_UNAVAILABLE", "Runtime store is unavailable.", 503, retryable=True
+            ) from exc
 
     def _reconnect(self) -> None:
         try:
-            self._conn.close()
+            if self._conn is not None:
+                self._conn.close()
         except Exception:
             pass
-        import psycopg
-
-        self._conn = psycopg.connect(self._database_url, connect_timeout=8, autocommit=True)
+        self._connect()
 
     def _execute(self, sql: str, params: tuple) -> object:
         try:
-            cursor = self._conn.cursor()
+            cursor = self._connected().cursor()
             cursor.execute(sql, params)
             return cursor
         except self._pg_operational_error:
             # Warm serverless instances outlive their DB connection; one
             # reconnect-and-retry beats a 500 on the first request after idle.
             self._reconnect()
-            cursor = self._conn.cursor()
+            cursor = self._connected().cursor()
             cursor.execute(sql, params)
             return cursor
 
     def _query(self, sql: str, params: tuple) -> list[tuple]:
         try:
-            with self._conn.cursor() as cursor:
+            with self._connected().cursor() as cursor:
                 cursor.execute(sql, params)
                 return cursor.fetchall()
         except self._pg_operational_error:
             self._reconnect()
-            with self._conn.cursor() as cursor:
+            with self._connected().cursor() as cursor:
                 cursor.execute(sql, params)
                 return cursor.fetchall()
 
@@ -295,7 +311,8 @@ class _PostgresStore(BaseStore):
         return None
 
     def close(self) -> None:
-        self._conn.close()
+        if self._conn is not None:
+            self._conn.close()
 
 
 def _parse_dt(value: object) -> datetime:

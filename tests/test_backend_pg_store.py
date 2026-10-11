@@ -69,6 +69,18 @@ def test_postgres_store_reconnects_after_idle_drop():
         store.close()
 
 
+def test_postgres_store_connects_lazily_and_fails_as_503():
+    """Serverless imports must never dial the DB; dead DBs fail as JSON 503."""
+    store = SessionStore("postgresql://127.0.0.1:1/db")
+    try:
+        with pytest.raises(AppError) as exc:
+            store.list_history("ses_never", 10)
+        assert exc.value.code == "STORE_UNAVAILABLE"
+        assert exc.value.status == 503
+    finally:
+        store.close()
+
+
 def _scrub(store, session_ids: list[str] | None = None) -> None:
     store._conn.execute("DELETE FROM runtime_records WHERE id LIKE 'req_pg%'")
     for sid in session_ids or []:
