@@ -26,7 +26,7 @@ tour-backend = "backend.cli:main"
 tour-crawl = "ingest.pipeline:main"
 
 [tool.vercel]
-entrypoint = "backend.vercel_app:app"
+entrypoint = "vercel_backend:app"
 
 [dependency-groups]
 dev = [

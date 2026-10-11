@@ -32,7 +32,7 @@ Browser ──same origin──▶ Vercel routing ──┬── /health, /sess
 | File                            | Vai trò                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------- |
 | `vercel.json`                   | Hai services + toàn bộ public routing. Không binding (xem dưới).                          |
-| `src/backend/vercel_app.py`     | Adapter duy nhất Vercel import (`tool.vercel.entrypoint`); fail-loud nếu `DATABASE_URL` là sqlite trên Vercel. |
+| `vercel_backend.py` (repo root) | Adapter duy nhất Vercel import (`tool.vercel.entrypoint`); fail-loud nếu `DATABASE_URL` là sqlite trên Vercel. Module path dạng file ở root vì Vercel không resolve dotted path dưới `src/`. |
 | `src/backend/data/sessions.py`  | Reconnect-and-retry 1 lần khi kết nối Postgres chết sau idle (warm instance serverless).  |
 | `migrations/004_runtime_store.sql` | Bảng Postgres `runtime_sessions`/`runtime_records` (ingest runner áp dụng).            |
 | `configs/settings.yaml`         | `cors_origins` (dev) và `cors_origin_regex` (truy cập trực tiếp, không qua rewrite).      |
