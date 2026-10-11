@@ -94,6 +94,41 @@ def test_history_requires_valid_guest_session_and_catalog_is_read_only(tmp_path)
     assert catalog.json()["destinations"]
 
 
+def _cors_client(tmp_path):
+    from backend.settings import Settings
+
+    settings = Settings.load(
+        database_url=f"sqlite:///{tmp_path / 'cors.db'}",
+        cors_origins=["https://app.example.test"],
+        cors_origin_regex=r"https://[a-z0-9-]+\.vercel\.app",
+    )
+    return TestClient(create_app(settings))
+
+
+def test_cors_allows_configured_origin_and_vercel_previews(tmp_path):
+    client = _cors_client(tmp_path)
+    preflight = client.options(
+        "/requirements",
+        headers={
+            "Origin": "https://app.example.test",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == "https://app.example.test"
+
+    preview = client.get("/health", headers={"Origin": "https://preview-42.vercel.app"})
+    assert preview.headers["access-control-allow-origin"] == "https://preview-42.vercel.app"
+
+
+def test_cors_rejects_unknown_origin(tmp_path):
+    client = _cors_client(tmp_path)
+    response = client.get("/health", headers={"Origin": "https://evil.example.test"})
+    assert response.status_code == 200
+    assert "access-control-allow-origin" not in response.headers
+
+
 def test_history_cursor_and_detail_are_owner_scoped(tmp_path):
     client = _client(tmp_path)
     session = client.post("/sessions").json()

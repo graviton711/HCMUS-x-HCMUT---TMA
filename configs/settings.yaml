@@ -43,6 +43,8 @@ quality:
 backend:
   data_provider: fixture
   database_url: sqlite:///data/backend.db
+  cors_origins: ["http://127.0.0.1:5173", "http://localhost:5173"]
+  cors_origin_regex: "https://[a-z0-9-]+\\.vercel\\.app"
   api:
     host: "127.0.0.1"
     port: 8000

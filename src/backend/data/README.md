@@ -2,7 +2,7 @@
 
 ## Trách nhiệm
 
-Giữ I/O và persistence hiện có: SQLite guest sessions, owner-scoped requirement/comparison records và history, cùng đọc catalog (fixture mẫu cho dev/test, Supabase cho live). Không rank hoặc gọi LLM. Account/Auth và metadata/archive history vẫn là phần tích hợp tiếp theo.
+Giữ I/O và persistence hiện có: guest sessions, owner-scoped requirement/comparison records và history, cùng đọc catalog (fixture mẫu cho dev/test, Supabase cho live). Không rank hoặc gọi LLM. Account/Auth và metadata/archive history vẫn là phần tích hợp tiếp theo.
 
 ## Input/output
 
@@ -18,6 +18,7 @@ Vào: requirement/comparison records cần lưu; truy vấn catalog (giới hạ
 
 ## Quyết định kỹ thuật
 
-- SQLite là store cho requirement/comparison records hiện tại.
+- Runtime store (sessions/requirements/comparisons) chọn theo scheme của `DATABASE_URL`: `sqlite://` cho dev/test local (file hoặc `:memory:`), `postgres://` cho shared preview/production — đổi driver không đổi interface `SessionStore`.
+- Bảng runtime ở Postgres được tạo bởi `migrations/004_runtime_store.sql`; ingest đã có runner áp `migrations/*.sql` cho Supabase, backend không tự chạy DDL.
 - Fixture là explicit (`DATA_PROVIDER=fixture`), không phải fallback lén.
 - Supabase đọc SQL thô qua `psycopg`, transaction chỉ đọc, `LIMIT` chặn trên.

@@ -130,6 +130,8 @@ _FLAT_MAP = {
     ("nim", "model"): "nvidia_nim_model",
     ("nim", "timeout_s"): "nim_timeout_seconds",
     ("nim", "connect_timeout_s"): "nim_connect_timeout_s",
+    "cors_origins": "cors_origins",
+    "cors_origin_regex": "cors_origin_regex",
 }
 
 
@@ -151,6 +153,8 @@ class Settings(BaseSettings):
     nvidia_nim_model: str
     nim_timeout_seconds: float
     nim_connect_timeout_s: float
+    cors_origins: list[str] = Field(default_factory=list)
+    cors_origin_regex: str = ""
 
     tuning: Tuning
 

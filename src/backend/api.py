@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from backend.data.catalog import for_settings
@@ -44,6 +45,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app = FastAPI(title="Tour Decision Backend", version=_version())
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_origin_regex=settings.cors_origin_regex or None,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "Accept"],
+    )
 
     @app.exception_handler(AppError)
     async def app_error(_: Request, exc: AppError) -> JSONResponse:
