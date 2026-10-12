@@ -13,7 +13,8 @@ contract tests xanh (`src/frontend/tests/backend-contract`). Deploy preview là
 ```text
 Browser ──same origin──▶ Vercel routing ──┬── /health, /sessions, /catalog,
                                            │    /requirements*, /comparisons*,
-                                           │    /history*, /docs, /openapi.json
+                                           │    /history*, /agent/sessions*,
+                                           │    /docs, /openapi.json
                                            │    → service api (FastAPI)
                                            └── còn lại → service web (Vite SPA)
 ```
@@ -43,13 +44,14 @@ Cuộc gọi duy nhất giữa hai services là browser → backend, mà binding
 vào function lúc runtime (không tồn tại lúc build static, browser cũng không đọc
 được). Same-origin rewrite thay thế hoàn toàn: không hostname cố định, preview
 nào gọi đúng backend của preview đó, không cần CORS tạm. Backend gọi Supabase và
-NIM trực tiếp bằng env, không qua service Vercel nào — thêm binding sẽ là config
-chết. Nếu sau này có function server-side gọi service khác, khai báo lúc đó.
+catalog trực tiếp bằng env, không qua service Vercel nào — thêm binding sẽ là config
+chết. OpenCode agent chưa được bật trên Vercel; production cần endpoint OpenCode riêng
+trước khi chat hoạt động.
 
 ## Env trên dashboard (người deploy điền, không commit)
 
 - Service `api`: `SUPABASE_TOUR_DB_URL` dùng chung cho runtime store (ghi) và catalog
-  (đọc); `NVIDIA_NIM_API` và `NVIDIA_NIM_MODEL` cấu hình NIM.
+  (đọc). OpenCode chưa được cấu hình cho preview.
 - `SUPABASE_TOUR_DB_URL` trên Vercel bắt buộc là **pooler URL**
   (`*.pooler.supabase.com`, IPv4). Direct URL (`db.*.supabase.co:5432`, IPv6)
   không route được từ serverless và làm function crash lúc import.
@@ -65,13 +67,13 @@ chết. Nếu sau này có function server-side gọi service khác, khai báo l
 
 1. **Migration (một lần):** `uv run python -c "from ingest.pipeline import migrate_db; migrate_db()"` với `.env` có `SUPABASE_TOUR_DB_URL`.
 2. **Vercel:** import repo, preset Services (Root Directory `.`). Kiểm tra preview build log: service `web` build Vite, service `api` bundle Python (không có `node_modules`, `tests`, `artifacts` — xem `excludeFiles`).
-3. **Kiểm sau deploy:** `/health` trả `{status: ok}`; `/tours` deep-link mở SPA (không 404); trên URL preview tạo phiên guest → diễn giải → so sánh; network tab không còn request `/v2`, không lỗi CORS; `/docs` mở được.
+3. **Kiểm sau deploy:** `/health` trả `{status: ok}`; `/tours` deep-link mở SPA (không 404); network tab không còn request `/v2`, không lỗi CORS; `/docs` mở được. Chat chờ OpenCode service riêng.
 4. **E2E lên preview:** `E2E_BASE_URL=https://<preview>.vercel.app` rồi chạy `test:e2e` (cần backend thật + Chrome, không dùng production data).
 
 ## Ranh giới
 
 - Auth/account chưa runtime → trang account/auth hiện là trang "chưa khả dụng", không kỳ vọng đăng nhập trên preview.
 - Bảng runtime nằm cùng project Supabase với catalog (tên `runtime_*`, ingest không chạm đến); nếu team muốn tách biệt tuyệt đối thì chuyển sang schema riêng và cập nhật migration.
-- Hobby tối đa 300s/invocation: luồng comparison (extract ≤30s + assess ≤60s) vừa thoải mái; timeout phía backend degrade về soft-unknown thay vì fail.
+- Hobby tối đa 300s/invocation: agent turn timeout cần được kiểm tra cùng giới hạn nền tảng trước khi bật chat trên preview.
 - `render.yaml` còn lại cho đường deploy Render cũ; xóa khi team chốt chỉ dùng Vercel services để tránh hai đường drift nhau.
 - Không tự deploy thêm service cloud khác trước khi smoke test trên backend chuẩn pass.

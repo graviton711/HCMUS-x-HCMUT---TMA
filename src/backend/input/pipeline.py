@@ -1,196 +1,165 @@
-"""Form/text → Requirement. Form wins conflicts; the rest is `missing`."""
+"""Validate structured requirements. Free text belongs to the travel agent."""
 
 from __future__ import annotations
 
-import re
-import unicodedata
+from datetime import date
 from typing import Any
 
+from pydantic import ValidationError
+
 from backend.errors import AppError
-from backend.input.lunar import resolve_lunar as _resolve_lunar
-from backend.input.nim import NimClient
 from backend.models import Condition, Requirement, uid
-from backend.settings import InputCfg
 
 _HARD_FIELDS = {
-    "destination", "departure_city", "date_from", "date_to",
-    "budget_max", "duration_days", "transport", "accommodation",
+    "destination",
+    "departure_city",
+    "date_from",
+    "date_to",
+    "budget_max",
+    "duration_days",
+    "transport",
+    "accommodation",
 }
-_FORM_MAP = {
-    "destinations": "destination",
-    "departure_city": "departure_city",
-    "date_from": "date_from",
-    "date_to": "date_to",
-    "budget_max": "budget_max",
-    "duration_days": "duration_days",
-    "transport": "transport",
-    "accommodation": "accommodation",
-}
-
-def _strip_vi(text: str) -> str:
-    """De-accent Vietnamese so undiacritized input still matches."""
-    text = text.replace("đ", "d").replace("Đ", "D")
-    return "".join(c for c in unicodedata.normalize("NFD", text)
-                   if unicodedata.category(c) != "Mn").lower()
+_TRANSPORTS = {"flight", "bus", "train", "cruise", "mixed"}
 
 
-def _money_pattern(units: dict[str, int]) -> re.Pattern[str]:
-    alts = sorted({_strip_vi(k) for k in units}, key=len, reverse=True)
-    return re.compile(r"(\d[\d.,]*)\s*(" + "|".join(alts) + r")?", re.IGNORECASE)
+def _invalid(message: str) -> AppError:
+    return AppError("REQUIREMENT_INVALID", message, 422)
 
 
-def _money_to_vnd(raw: str, units: dict[str, int]) -> int | None:
-    match = _money_pattern(units).search(raw)
-    if not match:
-        return None
-    num_raw, unit = match.group(1), _strip_vi(match.group(2) or "")
-    table = {_strip_vi(k): v for k, v in units.items()}
-    if unit in table:
-        return int(float(num_raw.replace(",", ".")) * table[unit])
-    digits = re.sub(r"\D", "", num_raw)
-    return int(digits) if digits else None
+def validate_requirement(
+    raw_text: str,
+    conditions: Any,
+    travelers: Any = 1,
+    requirement_id: str | None = None,
+) -> Requirement:
+    """Validate agent-produced conditions without guessing or coercing values."""
+    if not isinstance(raw_text, str) or not raw_text.strip() or len(raw_text) > 8000:
+        raise _invalid("Requirement context is empty or too long.")
+    if not isinstance(conditions, list):
+        raise _invalid("Conditions must be a list.")
+    if not isinstance(travelers, int) or isinstance(travelers, bool) or travelers < 1:
+        raise _invalid("Travelers must be a positive integer.")
 
-
-def keyword_extract(text: str, cfg: InputCfg | None = None,
-                    known_places: list[str] | None = None) -> dict[str, Any]:
-    """Offline fallback: destinations + budget only. Everything else is missing.
-
-    Place names come from the catalog being searched, not from configs.
-    """
-    if cfg is None:
-        raise AppError("CONFIG_MISSING", "Missing InputCfg.", 500)
-    low = _strip_vi(text)
-    hard: list[dict[str, Any]] = []
-    for place in known_places or []:
-        key = _strip_vi(place)
-        if key not in low:
-            continue
-        before = low.split(key)[0][-cfg.window_before:]
-        words = before.split()
-        markers = [_strip_vi(m) for m in cfg.departure_markers]
-        # Single-syllable markers match whole words only ("tu" must not hit "tuoi"/"tour");
-        # multi-word markers match substrings.
-        hit = any((m in words) if " " not in m else (m in before) for m in markers)
-        field = "departure_city" if hit else "destination"
-        hard.append({"field": field, "operator": "contains", "value": place})
-    budget_at = -1
-    for w in [_strip_vi(b) for b in cfg.budget_words]:
-        at = low.find(w)
-        if at != -1 and (budget_at == -1 or at < budget_at):
-            budget_at = at
-    if budget_at != -1:
-        amount = _money_to_vnd(low[budget_at:budget_at + cfg.window_budget], cfg.money_units)
-        if amount is not None:
-            hard.append({"field": "budget_max", "operator": "lte", "value": amount})
-    return {"hard": hard, "soft": [], "travelers": 1}
-
-
-def _clean_hard(items: list[dict[str, Any]], quote: str, cfg: InputCfg) -> list[Condition]:
-    out: list[Condition] = []
-    for i, item in enumerate(items):
+    cleaned: list[Condition] = []
+    seen_ids: set[str] = set()
+    for item in conditions:
         if not isinstance(item, dict):
-            continue
-        field = str(item.get("field", ""))
-        if field not in _HARD_FIELDS:
-            continue
-        value = item.get("value")
-        if field == "budget_max":
-            value = value if isinstance(value, int) else _money_to_vnd(str(value or ""), cfg.money_units)
-            if value is None:
-                continue
-        if field in ("date_from", "date_to") and isinstance(value, dict):
-            if value.get("calendar") != "lunar":
-                continue
-            value = _resolve_lunar(value)
-            if value is None:
-                continue
-        if value is None or value == "":
-            continue
-        operator = str(item.get("operator", "eq"))
-        if operator == "contains" and isinstance(value, list):
-            # Shape normalization: single-element lists unwrap, multi becomes any.
-            if len(value) == 1:
-                value = value[0]
-            elif value:
-                operator = "any"
-            else:
-                continue
-        if operator == "any":
-            vals = [v for v in (value if isinstance(value, list) else [value])
-                    if v not in (None, "")]
-            if not vals:
-                continue
-            if len(vals) == 1:
-                operator, value = "contains", vals[0]
-            else:
-                value = vals
-        out.append(Condition(id=f"h{i+1}", field=field,
-                             operator=operator,
-                             value=value, strength="hard", quote=quote[:cfg.quote_chars]))
-    return out
+            raise _invalid("Each condition must be an object.")
+        try:
+            condition = Condition.model_validate(item)
+        except ValidationError as exc:
+            raise _invalid("A condition has an invalid shape.") from exc
+        if condition.id in seen_ids:
+            raise _invalid("Condition IDs must be unique.")
+        seen_ids.add(condition.id)
+        if not condition.quote or condition.quote not in raw_text:
+            raise _invalid("Every condition needs an exact quote from the conversation.")
+
+        if condition.strength == "soft":
+            if condition.field != "preference" or condition.operator != "contains":
+                raise _invalid("Soft conditions must use the preference field.")
+            if not isinstance(condition.value, str) or not condition.value.strip():
+                raise _invalid("A soft preference must be non-empty text.")
+        else:
+            _validate_hard(condition)
+        cleaned.append(condition)
+
+    return Requirement(
+        id=requirement_id or uid("req"),
+        conditions=cleaned,
+        missing=[],
+        raw_text=raw_text,
+        travelers=travelers,
+    )
 
 
-def build_requirement(text: str = "", form: dict[str, Any] | None = None,
-                      nim: NimClient | None = None, cfg: InputCfg | None = None,
-                      known_places: list[str] | None = None, ref_date: str = "",
-                      drop_fields: list[str] | None = None) -> Requirement:
-    form = form or {}
-    dropped = {f for f in (drop_fields or []) if f in _HARD_FIELDS}
-    if cfg is None:
-        raise AppError("CONFIG_MISSING", "Missing InputCfg.", 500)
-    conditions: list[Condition] = []
-    seen = set()
-
-    for form_key, field in _FORM_MAP.items():
-        if field in dropped:
-            continue
+def requirement_from_form(form: Any) -> Requirement:
+    """Build conditions only from explicit UI fields; never inspect the text draft."""
+    if not isinstance(form, dict):
+        raise _invalid("A structured form is required.")
+    mapping = (
+        ("destinations", "destination"),
+        ("departure_city", "departure_city"),
+        ("date_from", "date_from"),
+        ("date_to", "date_to"),
+        ("budget_max", "budget_max"),
+        ("duration_days", "duration_days"),
+        ("transport", "transport"),
+        ("accommodation", "accommodation"),
+    )
+    raw_parts: list[str] = []
+    conditions: list[dict[str, Any]] = []
+    for form_key, field in mapping:
         value = form.get(form_key)
         if value is None or value == "" or value == []:
             continue
         if field == "destination" and isinstance(value, list):
-            places = list(dict.fromkeys(str(place) for place in value if str(place).strip()))
-            if places:
-                conditions.append(Condition(
-                    id=f"h{len(conditions)+1}", field=field,
-                    operator="contains" if len(places) == 1 else "any",
-                    value=places[0] if len(places) == 1 else places,
-                    strength="hard",
-                ))
+            values = list(dict.fromkeys(str(part).strip() for part in value if str(part).strip()))
+            if not values:
+                continue
+            condition_value = values[0] if len(values) == 1 else values
+            operator = "contains" if len(values) == 1 else "any"
+            quote = " or ".join(values)
         else:
-            conditions.append(Condition(id=f"h{len(conditions)+1}", field=field,
-                                        operator="eq", value=value, strength="hard"))
-        seen.add(field)
+            condition_value = value
+            operator = (
+                "lte" if field == "budget_max" else
+                "contains" if field in {"departure_city", "accommodation"} else "eq"
+            )
+            quote = str(value)
+        raw_parts.append(quote)
+        conditions.append({
+            "id": f"h{len(conditions) + 1}",
+            "field": field,
+            "operator": operator,
+            "value": condition_value,
+            "strength": "hard",
+            "quote": quote,
+        })
+    raw_text = " · ".join(raw_parts) or "Structured travel request"
+    return validate_requirement(raw_text, conditions, form.get("travelers", 1))
 
-    travelers = form.get("travelers", 1)
-    travelers = travelers if isinstance(travelers, int) and travelers > 0 else 1
 
-    soft: list[Condition] = []
-    if text.strip():
-        if nim is not None and nim.configured():
-            parsed = nim.extract(text, ref_date)
-        else:
-            parsed = keyword_extract(text, cfg, known_places)
-        items = [item for item in parsed.get("hard", [])
-                 if isinstance(item, dict) and item.get("field") not in seen
-                 and item.get("field") not in dropped]
-        # Budgets must be grounded in an explicit number in the text.
-        # Form budgets bypass this (explicit user data, trusted).
-        if nim is not None and nim.configured() and not re.search(r"\d", text):
-            items = [it for it in items if it.get("field") != "budget_max"]
-        conditions.extend(_clean_hard(items, text, cfg))
-        raw_soft = parsed.get("soft", [])
-        if isinstance(raw_soft, list):
-            for i, s in enumerate(raw_soft):
-                pref = s.get("text") if isinstance(s, dict) else s
-                if isinstance(pref, str) and pref.strip():
-                    soft.append(Condition(id=f"s{i+1}", field="preference",
-                                          operator="contains", value=pref.strip(),
-                                          strength="soft", quote=pref[:cfg.quote_chars]))
-        if isinstance(parsed.get("travelers"), int) and parsed["travelers"] > 0 and "travelers" not in form:
-            travelers = parsed["travelers"]
+def _validate_hard(condition: Condition) -> None:
+    field, operator, value = condition.field, condition.operator, condition.value
+    if field not in _HARD_FIELDS:
+        raise _invalid("Unsupported hard condition field.")
 
-    conditions.extend(soft)
-    have = {c.field for c in conditions if c.strength == "hard"}
-    missing = [f for f in cfg.required_slots if f not in have and f not in dropped]
-    return Requirement(id=uid("req"), conditions=conditions, missing=missing,
-                       raw_text=text, travelers=travelers)
+    if field == "budget_max":
+        if operator != "lte" or not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise _invalid("Budget must be a positive integer in VND.")
+        return
+    if field in {"date_from", "date_to"}:
+        if operator != "eq" or not isinstance(value, str):
+            raise _invalid("Travel dates must be ISO dates.")
+        try:
+            date.fromisoformat(value)
+        except ValueError as exc:
+            raise _invalid("Travel dates must be valid ISO dates.") from exc
+        return
+    if field == "duration_days":
+        if operator != "eq" or not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise _invalid("Duration must be a positive integer in days.")
+        return
+    if field == "destination":
+        values = value if operator == "any" else [value]
+        if operator not in {"contains", "any"} or not isinstance(values, list):
+            raise _invalid("Destination must be text or a list of choices.")
+        if not values or any(not isinstance(part, str) or not part.strip() for part in values):
+            raise _invalid("Destination values must be non-empty text.")
+        if operator == "any" and len(values) < 2:
+            raise _invalid("Use a single destination with the contains operator.")
+        return
+    if field == "departure_city":
+        if operator != "contains" or not isinstance(value, str) or not value.strip():
+            raise _invalid("Departure city must be non-empty text.")
+        return
+    if field == "transport":
+        if operator != "eq" or not isinstance(value, str) or value not in _TRANSPORTS:
+            raise _invalid("Transport must use a supported transport value.")
+        return
+    if field == "accommodation" and (
+        operator != "contains" or not isinstance(value, str) or not value.strip()
+    ):
+        raise _invalid("Accommodation must be non-empty text.")

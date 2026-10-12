@@ -1,80 +1,55 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import type { CurrentRequirement } from '../../../shared/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { usePreferences } from '../../../shared/preferences';
-import { conditionText, fieldLabel } from '../lib/format';
 import type { ChatMsg } from '../model/types';
+import { QuickReplies } from './QuickReplies';
 import { rise } from './motion';
 import { ResultCards } from './ResultCards';
 import styles from './chat.module.css';
 
-function CriteriaPanel({
-  requirement,
-  busy,
-  onCompare,
-  compareLabel,
-}: {
-  requirement: CurrentRequirement;
-  busy: boolean;
-  onCompare: () => void;
-  compareLabel: string;
-}) {
-  const { t } = usePreferences();
-  return (
-    <motion.section
-      {...rise}
-      className={styles.criteria}
-      aria-label={t('Điều kiện đã hiểu', 'Understood criteria')}
-    >
-      <div className={styles['criteria-head']}>
-        <h2>{t('Đã hiểu như sau', 'Understood as')}</h2>
-      </div>
-      {requirement.missing.length > 0 && (
-        <p className={styles['criteria-missing']}>
-          {t('Còn thiếu:', 'Still missing:')} {requirement.missing.join(', ')}
-        </p>
-      )}
-      {requirement.conditions.length > 0 ? (
-        <dl className={styles['criteria-list']}>
-          {requirement.conditions.map((condition) => (
-            <div className={styles['criteria-row']} key={condition.id}>
-              <dt className={styles['criteria-field']}>{fieldLabel(condition.field, t)}</dt>
-              <dd className={styles['criteria-value']}>
-                {conditionText(condition.operator, condition.value, t)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
-        <p className="muted" style={{ marginTop: 10 }}>
-          {t('Chưa trích xuất được điều kiện.', 'No criteria extracted yet.')}
-        </p>
-      )}
-      <div className={styles['criteria-actions']}>
-        <button type="button" className="btn btn-primary" disabled={busy} onClick={onCompare}>
-          {compareLabel}
-        </button>
-      </div>
-    </motion.section>
-  );
+const TOOL_LABEL: Record<string, [string, string]> = {
+  ask_choice: ['Làm rõ lựa chọn', 'Clarify a choice'],
+  catalog_facets: ['Kiểm tra lựa chọn có trong dữ liệu', 'Check catalog options'],
+  query_tours: ['Đối chiếu tour theo điều kiện', 'Filter tours by requirements'],
+  tour_detail: ['Đọc chi tiết và nguồn dữ kiện', 'Read tour details and evidence'],
+  score_soft: ['Đánh giá mức độ phù hợp', 'Assess preference fit'],
+  relax_criterion: ['Nới điều kiện và tìm lại', 'Relax a requirement and search again'],
+  clarify_date: ['Kiểm tra ngày âm lịch', 'Resolve lunar date'],
+};
+
+type ToolStep = Extract<ChatMsg, { kind: 'tool_activity' }>['tools'][number];
+
+function groupToolSteps(tools: ToolStep[]) {
+  const groups = new Map<string, { tool: ToolStep; count: number; status: ToolStep['status'] }>();
+  for (const tool of tools) {
+    const message = tool.message?.trim() ?? '';
+    const key = `${tool.name}\u0000${message}`;
+    const current = groups.get(key);
+    if (!current) {
+      groups.set(key, { tool, count: 1, status: tool.status });
+      continue;
+    }
+    current.count += 1;
+    if (tool.status === 'running' || (tool.status === 'error' && current.status === 'completed')) {
+      current.status = tool.status;
+    }
+  }
+  return [...groups.values()];
 }
 
 export function Thread({
   messages,
   busy,
-  onCompare,
+  onSend,
   onRelax,
-  onUndo,
-  canUndo,
-  compareLabel,
 }: {
   messages: ChatMsg[];
   busy: boolean;
-  onCompare: () => void;
+  onSend: (text: string) => void;
   onRelax: (field: string) => void;
-  onUndo: () => void;
-  canUndo: boolean;
-  compareLabel: string;
 }) {
+  const { t } = usePreferences();
   return (
     <div className={styles.thread} aria-live="polite">
       <AnimatePresence initial={false}>
@@ -88,32 +63,93 @@ export function Thread({
               );
             case 'assistant':
               return (
-                <motion.p key={message.id} {...rise} className={styles['msg-assistant']}>
-                  {message.text}
-                </motion.p>
-              );
-            case 'interpretation':
-              return (
-                <motion.div key={message.id} {...rise}>
-                  <CriteriaPanel
-                    requirement={message.requirement}
-                    busy={busy}
-                    onCompare={onCompare}
-                    compareLabel={compareLabel}
-                  />
+                <motion.div key={message.id} {...rise} className={styles['msg-assistant']}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    skipHtml
+                    components={{
+                      a: ({ href, children }) =>
+                        href ? (
+                          <a href={href} target="_blank" rel="noopener noreferrer">
+                            {children}
+                          </a>
+                        ) : (
+                          <span>{children}</span>
+                        ),
+                    }}
+                  >
+                    {message.text}
+                  </ReactMarkdown>
                 </motion.div>
+              );
+            case 'choice':
+              return (
+                <motion.section key={message.id} {...rise} className={styles.choice}>
+                  <p className={styles['choice-question']}>{message.choice.question}</p>
+                  <QuickReplies options={message.choice.options} onPick={onSend} disabled={busy} />
+                  {message.choice.allow_custom && (
+                    <p className={styles['choice-hint']}>
+                      {t('Hoặc nhập lựa chọn khác bên dưới.', 'Or type a different answer below.')}
+                    </p>
+                  )}
+                </motion.section>
+              );
+            case 'tool_activity':
+              return (
+                <motion.ul
+                  key={message.id}
+                  {...rise}
+                  className={styles['tool-steps']}
+                  aria-live="polite"
+                  aria-relevant="additions text"
+                >
+                  {groupToolSteps(message.tools).map(({ tool, count, status }) => (
+                    <li key={`${tool.name}:${tool.message ?? ''}`} data-state={status}>
+                      <span
+                        className={`${styles.dot} ${
+                          status === 'running'
+                            ? styles['dot-active']
+                            : status === 'error'
+                              ? styles['dot-error']
+                              : styles['dot-done']
+                        }`}
+                        aria-hidden="true"
+                      />
+                      <span>
+                        {tool.message ||
+                          t(
+                            ...(TOOL_LABEL[tool.name] ?? [
+                              'Đã tra cứu dữ kiện',
+                              'Checked evidence',
+                            ]),
+                          )}
+                        {count > 1 && (
+                          <span
+                            className={styles['tool-count']}
+                            aria-label={t(`${count} lần`, `${count} times`)}
+                          >
+                            ×{count}
+                          </span>
+                        )}
+                        {status === 'running' && (
+                          <span className={styles['tool-state']}>
+                            {t(' · đang chạy', ' · working')}
+                          </span>
+                        )}
+                        {status === 'error' && (
+                          <span className={styles['tool-state']}>
+                            {t(' · chưa hoàn tất', ' · did not complete')}
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </motion.ul>
               );
             case 'comparison':
               return (
                 <motion.div key={message.id} {...rise}>
-                  <ResultCards
-                    comparison={message.comparison}
-                    dropped={message.dropped}
-                    canUndo={canUndo}
-                    busy={busy}
-                    onRelax={onRelax}
-                    onUndo={onUndo}
-                  />
+                  <ResultCards comparison={message.comparison} busy={busy} onRelax={onRelax} />
                 </motion.div>
               );
             case 'error':

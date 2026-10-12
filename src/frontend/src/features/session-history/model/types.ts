@@ -7,8 +7,10 @@ export interface LocalSession {
   createdAt: string;
   updatedAt: string;
   draft: SearchDraft;
+  messages: unknown[];
   requirementId: string | null;
   comparisonId: string | null;
+  agentSessionId: string | null;
 }
 
 export interface SessionAccess {

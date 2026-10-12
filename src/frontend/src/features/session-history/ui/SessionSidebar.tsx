@@ -1,4 +1,5 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { displaySessionTitle } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import { Icon } from '../../../shared/ui';
@@ -14,19 +15,26 @@ export function SessionSidebar({
   width,
   onWidthChange,
   onToggle,
+  onStart,
+  onHome,
   children,
   footer,
   railFooter,
+  supportLink,
 }: {
   collapsed: boolean;
   width: number;
   onWidthChange: (width: number) => void;
   onToggle: () => void;
+  onStart: () => void;
+  onHome: (event: MouseEvent<HTMLAnchorElement>) => void;
   children: ReactNode;
   footer?: ReactNode;
   railFooter?: ReactNode;
+  supportLink?: ReactNode;
 }) {
   const { t } = usePreferences();
+  const reduceMotion = useReducedMotion();
   const aside = useRef<HTMLElement>(null);
   const pointer = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -42,9 +50,9 @@ export function SessionSidebar({
     >
       {collapsed ? (
         <div className={styles.rail}>
-          <span className={styles['rail-mark']}>
-            <img src="/assets/mark.svg" alt="" width={30} height={30} />
-          </span>
+          <a className={styles['rail-mark']} href="/" onClick={onHome} aria-label="TourLens">
+            <img className={styles['brand-mark']} src="/assets/mark.svg" alt="" width={32} height={32} />
+          </a>
           <button
             type="button"
             className="icon-button"
@@ -54,12 +62,40 @@ export function SessionSidebar({
           >
             <Icon name="panel" />
           </button>
+          <motion.button
+            type="button"
+            className="icon-button"
+            aria-label={t('Tìm tour mới', 'Start a new search')}
+            title={t('Tìm tour mới', 'Start a new search')}
+            onClick={onStart}
+            whileHover={reduceMotion ? undefined : { y: -1 }}
+            whileTap={reduceMotion ? undefined : { scale: 0.94 }}
+          >
+            <Icon name="plus" />
+          </motion.button>
           <span className={styles['rail-spacer']} />
           {railFooter && <div className={styles['rail-foot']}>{railFooter}</div>}
         </div>
       ) : (
         <>
-          <div className={styles.body}>{children}</div>
+          <div className={styles.body}>
+            <a className={styles.brand} href="/" onClick={onHome} aria-label="TourLens">
+              <img className={styles['brand-mark']} src="/assets/mark.svg" alt="" width={34} height={34} />
+            </a>
+            <motion.button
+              type="button"
+              className={styles['new-session']}
+              onClick={onStart}
+              whileHover={reduceMotion ? undefined : { y: -1 }}
+              whileTap={reduceMotion ? undefined : { scale: 0.985 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 32 }}
+            >
+              <Icon name="plus" size={17} />
+              <span>{t('Tìm tour mới', 'New search')}</span>
+            </motion.button>
+            {supportLink && <div className={styles['support-link']}>{supportLink}</div>}
+            <div className={styles['history-body']}>{children}</div>
+          </div>
           {footer && <div className={styles.foot}>{footer}</div>}
           <div
             className={styles.resize}

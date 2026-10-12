@@ -13,7 +13,7 @@ export function QuickReplies({
 }) {
   if (!options.length) return null;
   return (
-    <motion.div {...rise} className={styles['slot-options']}>
+    <motion.div {...rise} className={styles['choice-options']}>
       {options.map((option) => (
         <motion.button
           key={option.value}

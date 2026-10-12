@@ -58,24 +58,9 @@ backend:
     connect_timeout_s: 8
     trusted_domains: []
     freshness_seconds: {departure_date: 86400, price: 86400}
-  nim:
-    model: "nvidia/nemotron-3-super-120b-a12b"
-    timeout_s: 45.0
-    connect_timeout_s: 10.0
-  input:
-    money_units: {"tỷ": 1000000000, "tỉ": 1000000000, "ty": 1000000000, "ti": 1000000000,
-      "triệu": 1000000, "tr": 1000000, "trieu": 1000000,
-      "nghìn": 1000, "k": 1000, "nghin": 1000}
-    budget_words: ["tối đa", "dưới", "không quá", "ngân sách"]
-    departure_markers: ["từ", "xuất phát"]
-    required_slots: [destination, date_from, budget_max]
-    window_before: 16
-    window_budget: 40
-    quote_chars: 200
   decide:
     soft_fields: [itinerary, inclusions, exclusions, child_policy, cancellation_policy]
-    excerpt_chars: 6000
-    quote_chars: 300
+    quote_chars: 200
     risk_words: ["không hoàn", "thu phí 100%", "sold_out", "unknown"]
     analysis_chars: 160
     analysis_items: 6

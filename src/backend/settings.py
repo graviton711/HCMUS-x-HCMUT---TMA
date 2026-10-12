@@ -11,36 +11,14 @@ import os
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-class PromptCfg(BaseModel):
-    model_config = SettingsConfigDict(extra="ignore")
-
-    system: str
-    max_tokens: int
-    temperature: float
-    timeout_s: float
-
-
-class InputCfg(BaseModel):
-    model_config = SettingsConfigDict(extra="ignore")
-
-    money_units: dict[str, int]
-    budget_words: list[str]
-    departure_markers: list[str]
-    required_slots: list[str]
-    window_before: int
-    window_budget: int
-    quote_chars: int
 
 
 class DecideCfg(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
     soft_fields: list[str]
-    excerpt_chars: int
     quote_chars: int
     risk_words: list[str]
     analysis_chars: int
@@ -69,9 +47,6 @@ class ApiCfg(BaseModel):
 class Tuning(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
-    extract: PromptCfg
-    assess: PromptCfg
-    input: InputCfg
     decide: DecideCfg
     data: DataCfg
     api: ApiCfg
@@ -105,21 +80,6 @@ def _read_settings(path: str | Path | None) -> dict[str, Any]:
     return backend if isinstance(backend, dict) else {}
 
 
-def _read_prompt(path: str | Path | None, name: str) -> dict[str, Any]:
-    import yaml
-
-    resolved = _resolve(path, "prompts", f"{name}.yaml")
-    if resolved is None:
-        return {}
-    data = yaml.safe_load(resolved.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ValueError(f"Prompt must be a mapping: {resolved}")
-    return {"system": data.get("system"),
-            "max_tokens": data.get("max_tokens"),
-            "temperature": data.get("temperature"),
-            "timeout_s": data.get("timeout_s")}
-
-
 # YAML key -> flat Settings field. Env var of the same name wins over YAML.
 _FLAT_MAP = {
     "database_url": "database_url",
@@ -128,9 +88,6 @@ _FLAT_MAP = {
     ("data", "freshness_seconds"): "supabase_tour_freshness_seconds",
     ("api", "candidate_default"): "candidate_limit",
     ("data", "scan_limit"): "supabase_scan_limit",
-    ("nim", "model"): "nvidia_nim_model",
-    ("nim", "timeout_s"): "nim_timeout_seconds",
-    ("nim", "connect_timeout_s"): "nim_connect_timeout_s",
     "cors_origins": "cors_origins",
     "cors_origin_regex": "cors_origin_regex",
 }
@@ -150,10 +107,12 @@ class Settings(BaseSettings):
         default_factory=lambda: {"departure_date": 86400, "price": 86400}
     )
 
-    nvidia_nim_api: SecretStr = SecretStr("")
-    nvidia_nim_model: str
-    nim_timeout_seconds: float
-    nim_connect_timeout_s: float
+    opencode_server_url: str = ""
+    opencode_binary: str = "opencode"
+    opencode_model: str = ""
+    opencode_agent: str = "travel-consultant"
+    opencode_timeout_seconds: float = 120
+    agent_max_message_chars: int = 8000
     cors_origins: list[str] = Field(default_factory=list)
     cors_origin_regex: str = ""
 
@@ -161,11 +120,7 @@ class Settings(BaseSettings):
 
     @classmethod
     def load(cls, path: str | Path | None = None, **overrides: Any) -> Settings:
-        """Build settings from configs, letting env and kwargs win.
-
-        `path` is a settings file or a configs dir. Prompts load from
-        `prompts/<name>.yaml` beside it.
-        """
+        """Build settings from configs, letting env and kwargs win."""
         backend = _read_settings(path)
         from dotenv import dotenv_values
 
@@ -185,10 +140,7 @@ class Settings(BaseSettings):
             supabase_tour_db_url = process_values["supabase_tour_db_url"]
         else:
             supabase_tour_db_url = dot_values.get("supabase_tour_db_url")
-        tuning: dict[str, Any] = {
-            name: {k: v for k, v in _read_prompt(path, name).items() if v is not None}
-            for name in ("extract", "assess")
-        }
+        tuning: dict[str, Any] = {}
         tuning.update({k: v for k, v in backend.items()
                        if k in Tuning.model_fields and v is not None})
         init: dict[str, Any] = {"tuning": tuning}

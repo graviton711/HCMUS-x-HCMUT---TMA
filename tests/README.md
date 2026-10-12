@@ -1,6 +1,6 @@
 # Tests
 
-Chạy deterministic, offline: records mẫu, services mock, SQLite tạm. Không cần `.env`, credentials, ghi catalog hay gọi NIM/crawler live.
+Chạy deterministic, offline: records mẫu, services mock, SQLite tạm. Không cần `.env`, credentials, ghi catalog hay gọi service bên ngoài. Local agent conversation eval tự skip nếu không có OpenCode service.
 
 - `test_backend_*`: backend mới (input, normalize, decide, sessions, API).
 - `test_ingest_*`: pipeline crawler.

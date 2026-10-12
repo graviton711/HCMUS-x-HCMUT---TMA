@@ -1,10 +1,9 @@
 import pytest
 
-from backend.settings import DecideCfg, InputCfg, Settings
+from backend.settings import DecideCfg, Settings
 
 _ENV_VARS = ("DATABASE_URL", "DATA_PROVIDER", "CANDIDATE_LIMIT",
-             "SUPABASE_TOUR_DB_URL", "SUPABASE_SCAN_LIMIT",
-             "NVIDIA_NIM_API", "NVIDIA_NIM_MODEL", "NIM_TIMEOUT_SECONDS")
+             "SUPABASE_TOUR_DB_URL", "SUPABASE_SCAN_LIMIT")
 
 
 @pytest.fixture(autouse=True)
@@ -29,11 +28,6 @@ def _guarded_load(empty):
 @pytest.fixture
 def settings(tmp_path):
     return Settings.load(database_url=f"sqlite:///{tmp_path / 'test.db'}")
-
-
-@pytest.fixture
-def input_cfg(settings) -> InputCfg:
-    return settings.tuning.input
 
 
 @pytest.fixture

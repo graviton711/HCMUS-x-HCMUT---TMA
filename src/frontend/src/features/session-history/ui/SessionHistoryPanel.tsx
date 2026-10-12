@@ -1,7 +1,8 @@
 import { useId, useState, type MouseEvent, type ReactNode } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { usePreferences } from '../../../shared/preferences';
 import { displaySessionTitle } from '../../../shared/lib';
-import { Dialog } from '../../../shared/ui';
+import { Dialog, Icon } from '../../../shared/ui';
 import type { AuthProfile, LocalSession } from '../model';
 import { SessionHistory } from './SessionHistory';
 import { SessionSidebar } from './SessionSidebar';
@@ -12,9 +13,11 @@ export function SessionHistoryPanel({
   sessions,
   currentId,
   routePath,
+  desktopVisible,
   profile,
   mobileOpen,
   onMobileClose,
+  onStart,
   sidebarCollapsed,
   sidebarWidth,
   onSidebarWidthChange,
@@ -28,9 +31,11 @@ export function SessionHistoryPanel({
   sessions: LocalSession[];
   currentId?: string;
   routePath: string;
+  desktopVisible: boolean;
   profile: AuthProfile | null;
   mobileOpen: boolean;
   onMobileClose: () => void;
+  onStart: () => void;
   sidebarCollapsed: boolean;
   sidebarWidth: number;
   onSidebarWidthChange: (width: number) => void;
@@ -48,8 +53,10 @@ export function SessionHistoryPanel({
   const [remove, setRemove] = useState<LocalSession | null>(null);
   const searchId = useId();
   const { t } = usePreferences();
+  const reduceMotion = useReducedMotion();
   const closeLabel = t('Đóng hộp thoại', 'Close dialog');
   const fallbackName = t('Chuyến đi mới', 'New trip');
+  const accountName = profile?.name?.trim() || t('Phiên ẩn danh', 'Anonymous session');
   const showHistory = routePath === '/' || routePath === '/tours';
 
   function history(suffix: string) {
@@ -76,26 +83,39 @@ export function SessionHistoryPanel({
     return (
       <>
         <span className="sidebar-account">
+          <span className="sidebar-avatar" aria-hidden="true">
+            {accountName.charAt(0).toLocaleUpperCase()}
+          </span>
           <span className="sidebar-account-text">
-            <strong>{profile?.name || t('Phiên ẩn danh', 'Anonymous session')}</strong>
-            <small>{t('Lịch sử trên trình duyệt này', 'History on this browser')}</small>
+            <strong>{accountName}</strong>
+            <small>{t('Lưu trên trình duyệt', 'Saved on this browser')}</small>
           </span>
         </span>
-        {controls}
+        <span className="sidebar-controls">{controls}</span>
       </>
     );
   }
 
+  const supportLink = (
+    <a className="sidebar-nav-link" href="/support" onClick={onLink('/support')}>
+      <Icon name="help" size={17} />
+      <span>{t('Hỗ trợ', 'Help')}</span>
+    </a>
+  );
+
   return (
     <>
-      {showHistory && (
+      {showHistory && desktopVisible && (
         <SessionSidebar
           collapsed={sidebarCollapsed}
           width={sidebarWidth}
           onWidthChange={onSidebarWidthChange}
           onToggle={onSidebarToggle}
+          onStart={onStart}
+          onHome={onLink('/')}
           footer={account()}
           railFooter={railControls}
+          supportLink={supportLink}
         >
           {history('desktop')}
         </SessionSidebar>
@@ -106,9 +126,19 @@ export function SessionHistoryPanel({
         title={t('Lịch sử phiên', 'Session history')}
         closeLabel={closeLabel}
         variant="sidebar"
+        footer={<div className="session-account-foot">{account()}</div>}
       >
+        <motion.button
+          type="button"
+          className="sidebar-drawer-new"
+          onClick={onStart}
+          whileHover={reduceMotion ? undefined : { y: -1 }}
+          whileTap={reduceMotion ? undefined : { scale: 0.985 }}
+        >
+          <Icon name="plus" size={17} />
+          <span>{t('Tìm tour mới', 'New search')}</span>
+        </motion.button>
         {history('mobile')}
-        <div className="dialog-foot">{account()}</div>
       </Dialog>
       <Dialog
         open={!!rename}

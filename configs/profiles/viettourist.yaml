@@ -1,0 +1,89 @@
+# yaml-language-server: $schema=../profile.schema.json
+origin: viettourist.com
+render: false
+flows:
+- static
+sitemaps:
+- https://viettourist.com/sitemap.xml
+tour_url_patterns:
+- -pid-
+discovery:
+  method: sitemap
+  strip_query: true
+  keep_query: []
+fields:
+  tour_name:
+    source: css
+    selector: 'h1'
+  departure_city:
+    source: css
+    selector: 'ul.meta li:-soup-contains("Nơi khởi hành:")'
+    clean: 'research(r''Nơi khởi hành:\s*(.*)'', str(val), flags=re.S)'
+  destinations:
+    source: css
+    selector: '#detail-content-sticky-nav-timeline'
+    clean: 'list(dict.fromkeys([s.title() for s in [c for t in refindall(r''Ngày\s*\d{1,2}\s*([^()]*?)\s*(?=\(|Ngày\s*\d{1,2}|$)'', str(val), flags=re.S | re.I) for s in re.split(r''\s*[–—-]\s*'', t) for c in [re.sub(r''\s+'', '' '', re.sub(r''(?i)^(khám phá|tham quan|trải nghiệm|city tour|dạo thuyền|dạo|ngắm|chinh phục|viếng|thăm thân|thăm|đến|rời|tạm biệt|ngủ đêm|nghỉ đêm|mua sắm|check.in|tắm biển|vui chơi|giải trí)\s+'', '''', re.sub(r''(?i)^(khám phá|tham quan|trải nghiệm|city tour|dạo thuyền|dạo|ngắm|chinh phục|viếng|thăm thân|thăm|đến|rời|tạm biệt|ngủ đêm|nghỉ đêm|mua sắm|check.in|tắm biển|vui chơi|giải trí)\s+'', '''', s.strip('' .–—,;:|'')))).strip('' .–—,;:|'')] if 2 <= len(c) <= 40 and not re.search(r''(?i)(nhận phòng|trả phòng|\btiễn\b|\bđón\b|về việt nam|về lại|trở về|khởi hành|thân nhân|\bnhân\b|nghỉ đêm|ngủ đêm|nghỉ ngơi|tắm biển|\băn\b|bữa|tự túc|mua sắm|sân bay|massage|tặng|miễn phí|trọn gói|kích cầu|company|teambuilding|gala|quý khách|chuyến bay|trên máy bay|máy bay|bay thẳng|\bxe\b|quá cảnh|tự do|giải trí|vui chơi|khách sạn|nhà hàng|toàn cảnh|buffet|flycam|\bphí\b|lệ phí|thủ tục|hộ chiếu|\bvisa\b|city tour|lớn thứ|thứ \d|casino|shopping|vượt tuyến|đổi ngày|tỉnh thành|giờ bay|\bphút\b|xem thêm|lưu ý|trình tự|thay đổi|\?)'', c)]]))'
+  route:
+    source: css
+    selector: '#detail-content-sticky-nav-timeline'
+    clean: 'list({c.lower(): c for c in [c for t in refindall(r''Ngày\s*\d{1,2}\s*([^()]*?)\s*(?=\(|Ngày\s*\d{1,2}|$)'', str(val), flags=re.S | re.I) for s in re.split(r''\s*[–—-]\s*'', t) for c in [re.sub(r''\s+'', '' '', re.sub(r''(?i)^(khám phá|tham quan|trải nghiệm|city tour|dạo thuyền|dạo|ngắm|chinh phục|viếng|thăm thân|thăm|đến|rời|tạm biệt|ngủ đêm|nghỉ đêm|mua sắm|check.in|tắm biển|vui chơi|giải trí)\s+'', '''', re.sub(r''(?i)^(khám phá|tham quan|trải nghiệm|city tour|dạo thuyền|dạo|ngắm|chinh phục|viếng|thăm thân|thăm|đến|rời|tạm biệt|ngủ đêm|nghỉ đêm|mua sắm|check.in|tắm biển|vui chơi|giải trí)\s+'', '''', s.strip('' .–—,;:|'')))).strip('' .–—,;:|'')] if 2 <= len(c) <= 40 and not re.search(r''(?i)(nhận phòng|trả phòng|\btiễn\b|\bđón\b|về việt nam|về lại|trở về|khởi hành|thân nhân|\bnhân\b|nghỉ đêm|ngủ đêm|nghỉ ngơi|tắm biển|\băn\b|bữa|tự túc|mua sắm|sân bay|massage|tặng|miễn phí|trọn gói|kích cầu|company|teambuilding|gala|quý khách|chuyến bay|trên máy bay|máy bay|bay thẳng|\bxe\b|quá cảnh|tự do|giải trí|vui chơi|khách sạn|nhà hàng|toàn cảnh|buffet|flycam|\bphí\b|lệ phí|thủ tục|hộ chiếu|\bvisa\b|city tour|lớn thứ|thứ \d|casino|shopping|vượt tuyến|đổi ngày|tỉnh thành|giờ bay|\bphút\b|xem thêm|lưu ý|trình tự|thay đổi|\?)'', c)]}.values())'
+  transport:
+    source: css
+    selector: 'ul.meta li:-soup-contains("Phương tiện:")'
+    clean: '(''bus'' if re.search(r''(?i)(chưa gồm|chưa bao gồm|không gồm|không bao gồm)'', str(val)) else (''mixed'' if (re.search(r''(?i)(máy bay|may bay|\bbay\b|airlines|\bair\b|vietjet|vietnam air|bamboo|jetstar|pacific)'', str(val)) and re.search(r''(?i)(\bxe\b|ô tô|o to|oto|\bbus\b)'', str(val))) else (''flight'' if re.search(r''(?i)(máy bay|may bay|\bbay\b|airlines|\bair\b|vietjet|vietnam air|bamboo|jetstar|pacific)'', str(val)) else (''bus'' if re.search(r''(?i)(\bxe\b|ô tô|o to|oto|\bbus\b)'', str(val)) else (''cruise'' if re.search(r''(?i)(du thuyền|cruise|tàu biển)'', str(val)) else (''train'' if re.search(r''(?i)(tàu hỏa|tàu lửa|\btrain\b)'', str(val)) else ''mixed''))))))'
+  accommodation:
+    source: css
+    selector: '#INCLUSIONS'
+    clean: '('''' if not (set(refindall(r''([2-5])(?=\s*(?:[-–]\s*[2-5])?\s*(?:sao|\*))'', str(val).lower())) | ({''H''} if ''homestay'' in str(val).lower() else set())) else (''mixed'' if len(set(refindall(r''([2-5])(?=\s*(?:[-–]\s*[2-5])?\s*(?:sao|\*))'', str(val).lower())) | ({''H''} if ''homestay'' in str(val).lower() else set())) > 1 else {''2'': ''2_star'', ''3'': ''3_star'', ''4'': ''4_star'', ''5'': ''5_star'', ''H'': ''homestay''}[next(iter(set(refindall(r''([2-5])(?=\s*(?:[-–]\s*[2-5])?\s*(?:sao|\*))'', str(val).lower())) | ({''H''} if ''homestay'' in str(val).lower() else set()))) ]))'
+  duration_days:
+    source: css
+    selector: 'ul.meta li:-soup-contains("Thời gian:")'
+    clean: '(int(research(r''(\d+)\s*ngày'', str(val).lower())) if research(r''(\d+)\s*ngày'', str(val).lower()) else (int(research(r''(\d+)\s*n'', str(val))) if research(r''(\d+)\s*n'', str(val)) else ''''))'
+  duration_nights:
+    source: css
+    selector: 'ul.meta li:-soup-contains("Thời gian:")'
+    clean: '(int(research(r''(\d+)\s*đêm'', str(val).lower())) if research(r''(\d+)\s*đêm'', str(val).lower()) else (int(research(r''(\d+)\s*đ'', str(val))) if research(r''(\d+)\s*đ'', str(val)) else ''''))'
+  price:
+    source: css
+    selector: 'div.meta-detail-page div.price span.sale-price'
+    clean: '(int(re.sub(r''\D'', '''', str(val))) if research(r''(\d)'', str(val)) else '''')'
+  currency:
+    source: css
+    selector: 'div.meta-detail-page div.price'
+    clean: '''VND'''
+  price_type:
+    source: css
+    selector: 'div.meta-detail-page div.price'
+    clean: '(''contact'' if not research(r''(\d)'', str(val)) else ''fixed'')'
+  departure_pattern:
+    source: css
+    selector: 'h1'
+    clean: '(research(r''(?i)(định kỳ.*)'', str(val)) or research(r''(?i)((?:hàng tuần|hằng tuần|hàng ngày|hằng ngày).*)'', str(val)) or '''')'
+  offers:
+    source: css
+    selector: 'div.meta-detail-page div.price:-soup-contains("/"), table.table-schedule'
+    clean: '([{''departure_date'': t[2] + ''-'' + t[1] + ''-'' + t[0], ''price'': int(re.sub(r''\D'', '''', t[4])), ''availability'': (''available'' if ''còn'' in t[5].lower() else (''sold_out'' if ''hết'' in t[5].lower() else ''unknown''))} for t in refindall(r''(\d{2})/(\d{2})/(\d{4})\s+(.*?)\s*([\d.,]*\d[\d.,]*)\s*đ\s*([^\d]+?)(?=\s*\d{2}/\d{2}/\d{4}|\s*$)'', str(val))] if ''Tình Trạng'' in str(val) else [{''departure_date'': a[2] + ''-'' + a[1].zfill(2) + ''-'' + a[0].zfill(2), ''price'': (int(re.sub(r''\D'', '''', (refindall(r''[\d.,]+\s*đ'', str(val)) or [''0''])[-1])) if research(r''(\d)'', str(val)) else ''''), ''availability'': ''unknown''} for a in refindall(r''(\d{1,2})/(\d{1,2})/(\d{4})'', str(val))])'
+  itinerary:
+    source: css
+    selector: '#detail-content-sticky-nav-timeline'
+    clean: 're.sub(r''\s+'', '' '', str(val)).strip()'
+  inclusions:
+    source: css
+    selector: '#INCLUSIONS'
+    clean: 're.sub(r''\s+'', '' '', str(val)).strip()'
+  exclusions:
+    source: css
+    selector: '#EXCLUSIONS'
+    clean: 're.sub(r''\s+'', '' '', str(val)).strip()'
+  cancellation_policy:
+    source: css
+    selector: '#POLICY'
+    clean: 're.sub(r''\s+'', '' '', '' ''.join(list(dict.fromkeys(refindall(r''((?:\S+\s+){0,10}\b(?:hủy|huỷ|hoàn tiền|hoàn lại|mất phí|mất cọc|không hoàn|phạt|charge)\b(?:\s+\S+){0,25})'', str(val), flags=re.I))))).strip()'
+  surcharges:
+    source: css
+    selector: '#EXCLUSIONS'
+    clean: 're.sub(r''\s+'', '' '', '' ''.join(list(dict.fromkeys(refindall(r''((?:\S+\s+){0,8}\b(?:phụ thu|phụ phí|phòng đơn|single|tip|bồi dưỡng|visa|hộ chiếu)\b(?:\s+\S+){0,25})'', str(val), flags=re.I))))).strip()'
+  child_policy:
+    source: css
+    selector: '#POLICY'
+    clean: 're.sub(r''\s+'', '' '', '' ''.join(list(dict.fromkeys(refindall(r''((?:\S+\s+){0,8}\b(?:trẻ em|em bé|trẻ nhỏ|child|infant)\b(?:\s+\S+){0,25})'', str(val), flags=re.I))))).strip()'

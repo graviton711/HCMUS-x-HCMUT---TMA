@@ -36,7 +36,7 @@ prompt: |
   keyed JSON (API/hydration blobs/structured scripts) > DOM anchored by
   verbatim text (headings, labels, tables containing an anchor phrase) >
   positional coordinates (nth-of-type, sibling index, DOM order) >
-  regex over prose. Speed breaks ties only. A rule that works on your 20
+  regex over prose. Speed breaks ties only. A rule that works on your all `n`
   dev tours but depends on block order or class names that vary between
   this source's own tour variants is a wrong pick even if it passes today.
   Search in this order (a search procedure, not the decision criterion):
@@ -188,22 +188,17 @@ prompt: |
      is not covered (write the gap honestly; uncovered is not failure,
      unreported is).
   3. `selftest.md` -- the per-field dev-set PASS/FAIL with the real JSONL output.
-  4. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html .. tour-20.html).
+  4. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html .. tour-n.html).
   5. `unknowns.md` -- fields/pages that could not be verified + why.
 
-  DEV-SET COVERAGE (minimum 20 tours, random from the tour list):
-  - Draw at least 20 different tours (tour-1..tour-20) by random sampling from
-    the site's own tour list (sitemap `chuong-trinh` or listing pages) with a
-    fixed seed you record in `selftest.md`, so the draw is reproducible.
-    Never hand-pick tours of the same shape; never reuse a previous dev set
-    verbatim when re-surveying.
+  DEV-SET COVERAGE (all tours from sources, random from the tour list):
+  - Draw all tours (tour-1..tour-n) from the site's own
+    tour list (sitemap `chuong-trinh` or listing pages).
   - After the draw, check the sample spans the source's variants: domestic +
     international, each transport mode sold, each star rating / homestay if
     present, from-price + contact-price tours, tours with and without fixed
-    departure dates, deep and shallow breadcrumbs. If random misses a variant,
-    top up deliberately and record the top-up and its reason in `selftest.md`.
-  - A rule passing only because the dev set is uniform is a wrong handover
-    even with 20/20 PASS.
+    departure dates, deep and shallow breadcrumbs.
+  - Dev-set pass when all n/n cases pass.
 
   SELF-TEST LOOP (required before handover):
   - The engine module `ingest.extract` is importable (`PYTHONPATH` already includes
@@ -219,12 +214,13 @@ prompt: |
       python -c "import yaml; d=yaml.safe_load(open('profile.yaml',encoding='utf-8')); print(d['fields']['tour_name'])"
     If the printed value contains backslash-u escapes, rewrite the file.
   - Test your `profile.yaml` directly by running:
-      python -m ingest.extract raw/tour-1.html raw/tour-2.html raw/tour-3.html raw/tour-4.html raw/tour-5.html raw/tour-6.html raw/tour-7.html raw/tour-8.html raw/tour-9.html raw/tour-10.html raw/tour-11.html raw/tour-12.html raw/tour-13.html raw/tour-14.html raw/tour-15.html raw/tour-16.html raw/tour-17.html raw/tour-18.html raw/tour-19.html raw/tour-20.html --profile profile.yaml -o selftest.jsonl
+      python -m ingest.extract raw/tour-1.html raw/tour-2.html raw/tour-3.html raw/tour-4.html raw/tour-5.html raw/tour-6.html raw/tour-7.html raw/tour-8.html raw/tour-9.html raw/tour-10.html raw/tour-11.html raw/tour-12.html raw/tour-13.html raw/tour-14.html raw/tour-15.html raw/tour-16.html raw/tour-17.html raw/tour-18.html raw/tour-19.html ...  raw/tour-n.html --profile profile.yaml -o selftest.jsonl
+  - Dev set must contain all tours from sources, not just 20 or etc...
   - Inspect `selftest.jsonl` to ensure canonical values follow `docs/data-contract.md`.
   - If any field is empty, malformed, or has dirty HTML entities, adjust your clean expression or selectors in `profile.yaml` and re-run.
   - Maximum 5 iterations.
-  - Record the per-field result as compact `x/20` PASS counts plus the failing
-    tour ids in `selftest.md` (no 20-column tables), and paste the final
+  - Record the per-field result as compact `x/n` PASS counts plus the failing
+    tour ids in `selftest.md` (no n-column tables), and paste the final
     `selftest.jsonl` content into `selftest.md`.
 
 
@@ -234,6 +230,6 @@ handover_task: |
   NOTE: raw/ has been prefetched with robots.txt and sitemap XMLs.
   If raw/ already contains robots.txt, sitemaps or tour-*.html, DO NOT re-fetch them;
   use the existing files in raw/ and only download what is missing.
-  Before handover you MUST run the self-test loop over 20
+  Before handover you MUST run the self-test loop over all n tours
   different randomly-sampled tours using python -m ingest.extract, fix profile.yaml on any failure,
   and record the final result in selftest.md.

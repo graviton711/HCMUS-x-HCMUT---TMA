@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from 'framer-motion';
 import { usePreferences } from '../../shared/preferences';
 import { Icon } from '../../shared/ui';
 
@@ -18,6 +19,7 @@ export function SessionBar({
   onStart: () => void;
 }) {
   const { t } = usePreferences();
+  const reduceMotion = useReducedMotion();
   return (
     <div className="session-bar">
       <button
@@ -37,10 +39,17 @@ export function SessionBar({
       <p className="session-title truncate" title={title}>
         {title}
       </p>
-      <button type="button" className="session-new" onClick={onStart}>
+      <motion.button
+        type="button"
+        className="session-new"
+        aria-label={t('Tìm tour mới', 'Start a new search')}
+        onClick={onStart}
+        whileHover={reduceMotion ? undefined : { y: -1 }}
+        whileTap={reduceMotion ? undefined : { scale: 0.96 }}
+      >
         <Icon name="plus" size={15} />
         <span>{t('Tìm tour mới', 'New search')}</span>
-      </button>
+      </motion.button>
     </div>
   );
 }

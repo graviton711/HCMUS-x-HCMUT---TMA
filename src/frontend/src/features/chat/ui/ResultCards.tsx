@@ -13,6 +13,25 @@ import {
 import { rise, staggerParent } from './motion';
 import styles from './chat.module.css';
 
+function observedLabel(value: string, locale: 'vi' | 'en'): string | null {
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return null;
+  return new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : 'en-GB', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(time);
+}
+
+function uniqueTours<T extends { tour_id: string }>(candidates: T[]): T[] {
+  const seen = new Set<string>();
+  return candidates.filter((candidate) => {
+    if (seen.has(candidate.tour_id)) return false;
+    seen.add(candidate.tour_id);
+    return true;
+  });
+}
+
 function EvaluationRow({
   evaluation,
   condition,
@@ -66,14 +85,32 @@ function TourCard({
   index: number;
   missing: boolean;
 }) {
-  const { t } = usePreferences();
+  const { t, locale } = usePreferences();
   const tour = comparison.tour_snapshots.find((item) => item.id === tourId);
   const offer = tour?.offers.find((item) => item.id === offerId);
   if (!tour || !offer) return null;
   const state = conditionState(comparison, offer.id);
-  const url = safeUrl(tour.url || tour.evidence.url);
+  const url = safeUrl(offer.evidence.url || tour.url || tour.evidence.url);
+  const observed = observedLabel(offer.evidence.observed_at || tour.observed_at, locale);
   const details = evaluationsForOffer(comparison, offer.id);
   const failed = failedDetailsForOffer(comparison, offer.id);
+  const freshness =
+    offer.price_freshness === 'fresh'
+      ? t('Mới ghi nhận', 'Recently observed')
+      : offer.price_freshness === 'stale'
+        ? t('Dữ liệu cũ', 'Outdated data')
+        : t('Chưa rõ', 'Unknown');
+  const priceLabel =
+    offer.price == null
+      ? t('Liên hệ', 'Contact')
+      : [
+          offer.price_basis === 'from' ? t('Từ ', 'From ') : '',
+          offer.price.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-GB'),
+          ` ${offer.currency}`,
+        ].join('');
+  const trustLabel = offer.price_trusted
+    ? t('Nguồn tin cậy', 'Trusted source')
+    : t('Chưa xác minh độc lập', 'Not independently verified');
   const label = missing
     ? t(`Gần đạt · thiếu ${failed.length}`, `Near miss · missing ${failed.length}`)
     : state === 'pass'
@@ -125,11 +162,7 @@ function TourCard({
       <dl className={styles['tour-facts']}>
         <div>
           <dt>{t('Giá', 'Price')}</dt>
-          <dd>
-            {offer.price == null
-              ? t('Liên hệ', 'Contact')
-              : `${offer.price.toLocaleString('vi-VN')} ${offer.currency}`}
-          </dd>
+          <dd>{priceLabel}</dd>
         </div>
         <div>
           <dt>{t('Khởi hành', 'Departure')}</dt>
@@ -139,12 +172,18 @@ function TourCard({
           </dd>
         </div>
         <div>
-          <dt>{t('Độ mới', 'Freshness')}</dt>
+          <dt>{t('Thời lượng', 'Duration')}</dt>
           <dd>
-            {offer.price_freshness}
-            {offer.price_trusted
-              ? t(' · đã xác thực', ' · trusted')
-              : t(' · chưa xác thực', ' · not trusted')}
+            {tour.duration_days == null
+              ? t('Chưa có dữ liệu', 'Not listed')
+              : t(`${tour.duration_days} ngày`, `${tour.duration_days} days`)}
+          </dd>
+        </div>
+        <div>
+          <dt>{t('Giá và độ mới', 'Price and freshness')}</dt>
+          <dd>
+            {freshness}
+            {` · ${trustLabel}`}
           </dd>
         </div>
       </dl>
@@ -168,13 +207,20 @@ function TourCard({
       )}
 
       <div className={styles['tour-foot']}>
-        {url ? (
-          <a className={styles['tour-link']} href={url} target="_blank" rel="noreferrer">
-            {t('Mở nguồn tour', 'Open tour source')} ↗
-          </a>
-        ) : (
-          <span className="muted">{t('Chưa có nguồn', 'No source')}</span>
-        )}
+        <div className={styles['source-meta']}>
+          {url ? (
+            <a href={url} target="_blank" rel="noreferrer">
+              {t('Mở nguồn dữ kiện', 'Open source')} ↗
+            </a>
+          ) : (
+            <span>{t('Chưa có nguồn', 'No source')}</span>
+          )}
+          <span>
+            {observed
+              ? t(`Ghi nhận ${observed}`, `Observed ${observed}`)
+              : t('Chưa rõ thời điểm ghi nhận', 'Observation time unknown')}
+          </span>
+        </div>
       </div>
     </motion.article>
   );
@@ -182,23 +228,21 @@ function TourCard({
 
 export function ResultCards({
   comparison,
-  dropped,
-  canUndo,
   busy,
   onRelax,
-  onUndo,
 }: {
   comparison: CurrentComparison;
-  dropped: string[];
-  canUndo: boolean;
   busy: boolean;
   onRelax: (field: string) => void;
-  onUndo: () => void;
 }) {
   const { t } = usePreferences();
-  const nearMiss = comparison.near_miss ?? [];
+  const ranked = uniqueTours(comparison.ranked);
+  const rankedTourIds = new Set(ranked.map((candidate) => candidate.tour_id));
+  const nearMiss = uniqueTours(comparison.near_miss ?? []).filter(
+    (candidate) => !rankedTourIds.has(candidate.tour_id),
+  );
   const worst = mostFailedField(comparison);
-  const empty = comparison.ranked.length === 0 && nearMiss.length === 0;
+  const empty = ranked.length === 0 && nearMiss.length === 0;
 
   return (
     <section
@@ -213,13 +257,13 @@ export function ResultCards({
                 'No offer could prove it meets the requirements. Check missing data or relax one condition.',
               )
             : t(
-                `${comparison.ranked.length} tour đạt đủ · ${nearMiss.length} tour suýt đạt trong ${comparison.candidates_considered} tour đã xem.`,
-                `${comparison.ranked.length} qualified · ${nearMiss.length} near miss of ${comparison.candidates_considered} considered.`,
+                `${ranked.length} tour đạt đủ · ${nearMiss.length} tour suýt đạt trong ${comparison.candidates_considered} tour đã xem.`,
+                `${ranked.length} qualified · ${nearMiss.length} near miss of ${comparison.candidates_considered} considered.`,
               )}
         </p>
         <div className={styles['result-counts']}>
           <span className="tag tag-quiet">
-            {comparison.ranked.length} {t('đạt đủ', 'qualified')}
+            {ranked.length} {t('đạt đủ', 'qualified')}
           </span>
           {nearMiss.length > 0 && (
             <span className="tag tag-warn">
@@ -229,12 +273,12 @@ export function ResultCards({
         </div>
       </div>
 
-      {comparison.ranked.length > 0 && (
+      {ranked.length > 0 && (
         <>
           <h3 className={styles['result-group-title']}>
             {t('Tour đạt đủ điều kiện', 'Qualified tours')}{' '}
             <span>
-              {t('xếp theo bậc lọc cứng rồi điểm mềm', 'hard filter first, soft score after')}
+              {t('xếp theo số tiêu chí phù hợp rồi giá', 'ordered by fit verdicts, then price')}
             </span>
           </h3>
           <AnimatePresence>
@@ -244,7 +288,7 @@ export function ResultCards({
               animate="animate"
               className={styles['result-grid']}
             >
-              {comparison.ranked.map((entry, index) => (
+              {ranked.map((entry, index) => (
                 <TourCard
                   key={`${entry.tour_id}-${entry.offer_id}`}
                   comparison={comparison}
@@ -284,7 +328,7 @@ export function ResultCards({
         {worst && !empty && (
           <button
             type="button"
-            className="btn btn-primary"
+            className={`btn ${styles['result-action']}`}
             disabled={busy}
             onClick={() => onRelax(worst.field)}
           >
@@ -293,17 +337,6 @@ export function ResultCards({
               `Relax ${fieldLabel(worst.field, t)} (${worst.count} blocked)`,
             )}
           </button>
-        )}
-        {canUndo && (
-          <button type="button" className="btn" disabled={busy} onClick={onUndo}>
-            {t('Hoàn tác', 'Undo')}
-          </button>
-        )}
-        {dropped.length > 0 && (
-          <span className={styles['result-relaxed']}>
-            {t('Đang bỏ qua:', 'Relaxed:')}{' '}
-            {dropped.map((field) => fieldLabel(field, t)).join(', ')}
-          </span>
         )}
       </div>
     </section>

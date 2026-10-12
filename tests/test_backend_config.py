@@ -1,4 +1,6 @@
-"""Settings: YAML + env required, no code fallbacks. Hermetic via tmp files."""
+"""Settings: YAML + environment precedence, without extraction prompts."""
+
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -12,58 +14,43 @@ backend:
   api: {host: "127.0.0.1", port: 8000, candidate_default: 7, candidate_min: 1, candidate_max: 100,
     session_ttl_seconds: 2592000}
   data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3}
-  nim: {model: test-model, timeout_s: 9, connect_timeout_s: 4}
-  input: {money_units: {trieu: 1000000}, budget_words: [bw], departure_markers: [dm],
-    required_slots: [destination], window_before: 5, window_budget: 9, quote_chars: 9}
-  decide: {soft_fields: [itinerary], excerpt_chars: 99, quote_chars: 9,
+  decide: {soft_fields: [itinerary], quote_chars: 120,
     risk_words: [x], analysis_chars: 9, analysis_items: 2, top_n: 1}
 """
 
 
-def _configs(tmp_path, yaml_text=_YAML, extract="EXTRACT!", assess="ASSESS!"):
+def _configs(tmp_path, yaml_text=_YAML):
     root = tmp_path / "configs"
-    (root / "prompts").mkdir(parents=True)
+    root.mkdir()
     (root / "settings.yaml").write_text(yaml_text, encoding="utf-8")
-    (root / "prompts" / "extract.yaml").write_text(
-        f"description: t\nmax_tokens: 11\ntemperature: 0.5\ntimeout_s: 30\nsystem: |\n  {extract}\n",
-        encoding="utf-8")
-    (root / "prompts" / "assess.yaml").write_text(
-        f"description: t\nmax_tokens: 22\ntemperature: 0.5\ntimeout_s: 60\nsystem: |\n  {assess}\n",
-        encoding="utf-8")
     return root
 
 
-def test_yaml_tuning_and_prompts_loaded(tmp_path):
+def test_yaml_tuning_loaded(tmp_path):
     settings = Settings.load(_configs(tmp_path))
     assert settings.data_provider == "fixture"
     assert settings.candidate_limit == 7
     assert settings.supabase_scan_limit == 50
-    assert settings.nvidia_nim_model == "test-model"
-    assert settings.nim_timeout_seconds == 9
-    assert settings.nim_connect_timeout_s == 4
-    assert settings.tuning.extract.timeout_s == 30
-    assert settings.tuning.assess.timeout_s == 60
-    assert settings.tuning.input.budget_words == ["bw"]
-    assert settings.tuning.input.required_slots == ["destination"]
     assert settings.tuning.decide.top_n == 1
+    assert settings.tuning.decide.quote_chars == 120
     assert settings.tuning.data.providers_limit == 5
     assert settings.supabase_tour_freshness_seconds == {"departure_date": 86400, "price": 86400}
     assert settings.supabase_tour_trusted_domains == []
-    assert settings.tuning.extract.system.strip() == "EXTRACT!"
-    assert settings.tuning.extract.max_tokens == 11
-    assert settings.tuning.assess.system.strip() == "ASSESS!"
 
 
 def test_env_wins_over_yaml(tmp_path, monkeypatch):
     monkeypatch.setenv("CANDIDATE_LIMIT", "42")
-    assert Settings.load(_configs(tmp_path)).candidate_limit == 42
+    monkeypatch.setenv("OPENCODE_MODEL", "opencode/test-model")
+    settings = Settings.load(_configs(tmp_path))
+    assert settings.candidate_limit == 42
+    assert settings.opencode_model == "opencode/test-model"
 
 
 def test_data_validation_policy_loads_from_yaml(tmp_path):
     yaml_text = _YAML.replace(
         "data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3}",
-        'data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3, '
-        'trusted_domains: [trusted.example.test], freshness_seconds: {departure_date: 7200, price: 3600}}',
+        "data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3, "
+        "trusted_domains: [trusted.example.test], freshness_seconds: {departure_date: 7200, price: 3600}}",
     )
     settings = Settings.load(_configs(tmp_path, yaml_text))
     assert settings.supabase_tour_trusted_domains == ["trusted.example.test"]
@@ -72,11 +59,10 @@ def test_data_validation_policy_loads_from_yaml(tmp_path):
 
 def test_dotenv_file_wins_over_yaml(tmp_path):
     env = tmp_path / "t.env"
-    env.write_text("CANDIDATE_LIMIT=33\nNVIDIA_NIM_MODEL=test-dotenv-model\n",
-                   encoding="utf-8")
+    env.write_text("CANDIDATE_LIMIT=33\nOPENCODE_MODEL=opencode/dotenv-model\n", encoding="utf-8")
     settings = Settings.load(_configs(tmp_path), _env_file=str(env))
     assert settings.candidate_limit == 33
-    assert settings.nvidia_nim_model == "test-dotenv-model"
+    assert settings.opencode_model == "opencode/dotenv-model"
 
 
 def test_incomplete_yaml_fails_loud(tmp_path):
@@ -87,26 +73,14 @@ def test_incomplete_yaml_fails_loud(tmp_path):
         Settings.load(root)
 
 
-def test_missing_prompt_fails_loud_in_calls():
-    from backend.decide.engine import assess_soft_llm
-    from backend.errors import AppError
-    from backend.input.nim import NimClient
-    from backend.models import Condition
-
-    nim = NimClient("key", "model", 9.0)
-    with pytest.raises(AppError) as exc:
-        nim.extract("test")
-    assert exc.value.code == "PROMPT_NOT_CONFIGURED"
-    with pytest.raises(AppError) as exc:
-        assess_soft_llm([], [Condition(id="s1", field="preference", value="x", strength="soft")],
-                        nim, None, 99, 9, ["itinerary"])
-    assert exc.value.code == "PROMPT_NOT_CONFIGURED"
-
-
 def test_repo_configs_load():
     settings = Settings.load()
-    assert settings.tuning.input.window_before == 16
-    assert settings.tuning.decide.excerpt_chars == 6000
+    assert settings.tuning.decide.quote_chars <= 200
     assert settings.tuning.data.providers_limit == 100
     assert settings.tuning.api.port == 8000
-    assert "Trích yêu cầu tour" in settings.tuning.extract.system
+    import yaml
+
+    agent = Path(".opencode/agents/travel-consultant.md").read_text(encoding="utf-8")
+    assert "model: opencode/muse-spark-1.3-contributor-free" in agent
+    prompt = yaml.safe_load(Path("configs/prompts/agent.yaml").read_text(encoding="utf-8"))
+    assert agent.split("---", 2)[2].strip() == prompt["system"].strip()

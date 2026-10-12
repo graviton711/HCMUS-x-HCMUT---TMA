@@ -102,6 +102,7 @@ class Evaluation(BaseModel):
     state: State = "unknown"
     quote: str = ""
     reason_code: str = ""
+    reason: str = ""
 
 
 class RankedCandidate(BaseModel):

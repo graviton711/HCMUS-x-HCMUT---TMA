@@ -1,4 +1,4 @@
-export type { ChatMsg, ChatPhase, ChatStep } from './model/types';
+export type { ChatMsg, ChatPhase } from './model/types';
 export {
   conditionState,
   conditionText,

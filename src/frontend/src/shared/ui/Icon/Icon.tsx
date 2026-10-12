@@ -13,7 +13,8 @@ export type IconName =
   | 'sun'
   | 'moon'
   | 'panel'
-  | 'route';
+  | 'route'
+  | 'help';
 
 const shapes: Record<IconName, ReactNode> = {
   arrow: <path d="M4 12h15m-6-6 6 6-6 6" />,
@@ -42,6 +43,12 @@ const shapes: Record<IconName, ReactNode> = {
       <circle cx="5" cy="5" r="2" />
       <circle cx="19" cy="19" r="2" />
       <path d="M7 5h10a4 4 0 0 1 0 8H7a3 3 0 0 0 0 6h10" />
+    </>
+  ),
+  help: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.6 9a2.5 2.5 0 1 1 4.4 1.6c-.9 1-2 1.3-2 2.9m0 3h.01" />
     </>
   ),
   panel: (

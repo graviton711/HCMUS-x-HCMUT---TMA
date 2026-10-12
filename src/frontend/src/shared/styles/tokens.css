@@ -40,35 +40,34 @@
 }
 
 /*
- * Data-first material (2026): one cool neutral scale, one indigo accent for
- * action and focus, semantic colours reserved for state only. Surfaces are
- * tonal — a border is only drawn when it carries meaning.
+ * TourLens design system: warm neutral surfaces, indigo for action and focus,
+ * and semantic colours reserved for state. Borders clarify component edges.
  */
 
 :root {
   font-family: 'Manrope', system-ui, sans-serif;
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 16px;
+  line-height: 1.6;
   font-synthesis: none;
 
-  /* Neutral surfaces */
-  --paper: #f7f7f8;
+  /* Warm neutral surfaces keep attention on tour data. */
+  --paper: #f6f5f1;
   --surface: #ffffff;
-  --surface-2: #f1f2f4;
-  --ink: #17171a;
-  --muted: #5c5f66;
-  --subtle: #8b8e96;
-  --line: #e6e6e9;
-  --line-strong: #cfd0d5;
+  --surface-2: #efeee9;
+  --ink: #20212a;
+  --muted: #555965;
+  --subtle: #656a75;
+  --line: #e3e1da;
+  --line-strong: #cac8c0;
 
   /* Action */
-  --accent: #3b3aa8;
-  --accent-hover: #322f92;
+  --accent: #4338a8;
+  --accent-hover: #352c91;
   --on-accent: #ffffff;
-  --tint: #eeeef8;
+  --tint: #ecebfa;
 
-  /* Navigation recedes behind the working canvas */
-  --sidebar: #f0f0f3;
+  /* Navigation recedes behind the working canvas. */
+  --sidebar: #eeede8;
 
   /* Semantic state — never decorative */
   --good: #1f6b4f;
@@ -78,19 +77,25 @@
   --danger: #a3372a;
   --danger-bg: #fbeae6;
 
-  --focus: #3b3aa8;
+  --focus: var(--accent);
 
-  /* Type: Manrope for reading and headings, Space Grotesk for figures */
+  /* Manrope carries interface copy; Space Grotesk is reserved for wordmark and figures. */
   --heading: 'Manrope', system-ui, sans-serif;
   --wordmark: 'Space Grotesk', 'Manrope', sans-serif;
   --numeric: 'Space Grotesk', 'Manrope', sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: clamp(2rem, 3.2vw, 2.75rem);
   --content: 92rem;
-  --measure: 74ch;
+  --measure: 68ch;
 
   /* Geometry */
-  --radius-sm: 6px;
-  --radius: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
   --radius-full: 999px;
 
   /* Shadow only for floating layers */
@@ -98,10 +103,10 @@
   --shadow-overlay: 0 20px 48px rgba(12, 12, 18, 0.2), 0 2px 8px rgba(12, 12, 18, 0.08);
 
   /* Layout */
-  --header-height: 60px;
-  --header-min-height: 60px;
-  --sidebar-width: 248px;
-  --sidebar-rail: 64px;
+  --header-height: 68px;
+  --header-min-height: 68px;
+  --sidebar-width: 276px;
+  --sidebar-rail: 68px;
 
   /* Motion */
   --dur-fast: 120ms;
@@ -120,21 +125,21 @@
 }
 
 html[data-theme='dark'] {
-  --paper: #0e0e11;
-  --surface: #17171a;
-  --surface-2: #1e1e22;
-  --ink: #f2f2f4;
-  --muted: #a5a7ae;
-  --subtle: #7c7f87;
-  --line: #2a2a2f;
-  --line-strong: #3a3a41;
+  --paper: #111216;
+  --surface: #1a1b20;
+  --surface-2: #23242a;
+  --ink: #f2f2f5;
+  --muted: #b5b7c1;
+  --subtle: #999ca7;
+  --line: #30323a;
+  --line-strong: #484a54;
 
-  --accent: #9b9bea;
-  --accent-hover: #b0b0f2;
-  --on-accent: #14142b;
-  --tint: #22223a;
+  --accent: #aaa5f4;
+  --accent-hover: #c0bcff;
+  --on-accent: #171625;
+  --tint: #29283e;
 
-  --sidebar: #121215;
+  --sidebar: #191a1f;
 
   --good: #7fc9a0;
   --good-bg: #1a2a22;

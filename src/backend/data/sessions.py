@@ -1,4 +1,4 @@
-"""Runtime store for requirements and comparisons.
+"""Runtime store for guest sessions, agent sessions, requirements and comparisons.
 
 Settings selects the driver without changing the SessionStore contract:
 `sqlite://…` (file or `:memory:`) from local YAML by default, or the shared
@@ -10,6 +10,7 @@ migration runner applies them — the backend never runs DDL itself).
 from __future__ import annotations
 
 import hashlib
+import json
 import secrets
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -106,6 +107,32 @@ class BaseStore:
     def get_comparison(self, cid: str, owner_session_id: str | None = None) -> Comparison:
         return Comparison.model_validate_json(self._load("comparison", cid, owner_session_id))
 
+    def create_agent_session(self, owner_session_id: str) -> str:
+        local_id = f"agt_{uuid4().hex}"
+        self._save("agent_session", local_id, json.dumps({"opencode_session_id": None}), owner_session_id)
+        return local_id
+
+    def get_agent_session(self, local_id: str, owner_session_id: str) -> str | None:
+        payload = self._load("agent_session", local_id, owner_session_id)
+        try:
+            value = json.loads(payload).get("opencode_session_id")
+        except (json.JSONDecodeError, AttributeError) as exc:
+            raise AppError("RECORD_INVALID", "Invalid agent session record.", 500) from exc
+        return value if isinstance(value, str) and value else None
+
+    def save_agent_session(
+        self, local_id: str, owner_session_id: str, opencode_session_id: str
+    ) -> None:
+        current = self.get_agent_session(local_id, owner_session_id)
+        if current is not None and current != opencode_session_id:
+            raise AppError("SESSION_CONFLICT", "Agent session is already linked to OpenCode.", 409)
+        self._save(
+            "agent_session",
+            local_id,
+            json.dumps({"opencode_session_id": opencode_session_id}),
+            owner_session_id,
+        )
+
     def list_history(
         self,
         owner_session_id: str,
@@ -114,7 +141,8 @@ class BaseStore:
     ) -> tuple[list[dict[str, str]], bool]:
         safe_limit = max(1, min(limit, 100))
         query = (
-            f"SELECT id, kind, created_at FROM {self.records_table} WHERE owner_session_id = ?"
+            f"SELECT id, kind, created_at FROM {self.records_table}"
+            " WHERE owner_session_id = ? AND kind IN ('requirement', 'comparison')"
         )
         params: list[object] = [owner_session_id]
         if before is not None:
@@ -150,7 +178,7 @@ class BaseStore:
         elif kind == "comparison":
             resource = Comparison.model_validate_json(payload).model_dump()
         else:
-            raise AppError("RECORD_INVALID", "Invalid history item type.", 500)
+            raise AppError("NOT_FOUND", f"History item {item_id} not found.", 404)
         return {
             "id": item_id,
             "kind": kind,

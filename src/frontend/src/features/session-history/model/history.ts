@@ -1,6 +1,6 @@
 import { emptySearchDraft } from '../../../entities/search-draft';
 import type { LocalSession } from './types';
-import { validSession } from './validation';
+import { validChatMsg, validSession } from './validation';
 
 const historyKey = 'di-cung:history:v1';
 
@@ -25,8 +25,10 @@ function migrateSession(session: unknown): unknown {
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     draft,
+    messages: Array.isArray(session.messages) ? session.messages.filter(validChatMsg) : [],
     requirementId: session.requirementId ?? null,
     comparisonId: session.comparisonId ?? null,
+    agentSessionId: session.agentSessionId ?? null,
   };
 }
 
@@ -58,7 +60,9 @@ export function newSession(): LocalSession {
     createdAt: time,
     updatedAt: time,
     draft: structuredClone(emptySearchDraft),
+    messages: [],
     requirementId: null,
     comparisonId: null,
+    agentSessionId: null,
   };
 }

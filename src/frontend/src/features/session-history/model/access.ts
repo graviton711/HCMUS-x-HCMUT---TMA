@@ -66,7 +66,7 @@ const accessFlights = new Map<string, Promise<SessionAccess>>();
 export async function accessFor(session: LocalSession): Promise<SessionAccess> {
   const saved = getAccess(session.id);
   if (saved) return saved;
-  if (session.requirementId) throw new SessionExpiredError();
+  if (session.requirementId || session.agentSessionId) throw new SessionExpiredError();
   const pending = accessFlights.get(session.id);
   if (pending) return pending;
   const request = new CurrentBackendClient()

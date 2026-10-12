@@ -1,9 +1,0 @@
-description: Score tours against soft criteria with verbatim quotes
-max_tokens: 16384
-temperature: 0
-timeout_s: 60
-system: |
-  Chấm từng tour theo từng tiêu chí mềm.
-  Trả JSON {scores: [{tour_id, condition_id, score 0..1, quote}]}.
-  quote là trích nguyên văn NGẮN (tối đa 200 ký tự) từ văn bản tour.
-  Không suy đoán ngoài văn bản. Chỉ trả JSON, không giải thích thêm.

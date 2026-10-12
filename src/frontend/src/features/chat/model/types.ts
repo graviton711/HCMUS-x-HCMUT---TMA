@@ -1,20 +1,24 @@
-import type { CurrentComparison, CurrentRequirement } from '../../../shared/api';
+import type { CurrentAgentChoice, CurrentComparison } from '../../../shared/api';
 
 export type ChatPhase = 'idle' | 'thinking' | 'working';
-
-export interface ChatStep {
-  id: 'interpret' | 'compare';
-  state: 'pending' | 'active' | 'done' | 'error';
-}
 
 export type ChatMsg =
   | { id: string; kind: 'user'; text: string }
   | { id: string; kind: 'assistant'; text: string }
-  | { id: string; kind: 'interpretation'; requirement: CurrentRequirement }
+  | { id: string; kind: 'choice'; choice: CurrentAgentChoice }
+  | {
+      id: string;
+      kind: 'tool_activity';
+      tools: {
+        id: string;
+        name: string;
+        message?: string;
+        status: 'running' | 'completed' | 'error';
+      }[];
+    }
   | {
       id: string;
       kind: 'comparison';
       comparison: CurrentComparison;
-      dropped: string[];
     }
   | { id: string; kind: 'error'; text: string; expired?: boolean };

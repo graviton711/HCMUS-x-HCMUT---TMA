@@ -5,85 +5,86 @@
 }
 
 .supportRoot :global(.service-heading) {
-  margin-bottom: 38px;
+  max-width: 68ch;
+  margin-bottom: 40px;
 }
 
 .supportRoot :global(.service-heading) h1 {
-  margin-bottom: 20px;
+  margin-bottom: 14px;
 }
 
 .supportRoot :global(.service-heading) > p {
-  max-width: 660px;
+  max-width: 64ch;
   color: var(--muted);
-  font-size: 15px;
-  line-height: 1.9;
+  font-size: var(--text-lg);
+  line-height: 1.7;
 }
 
 .supportRoot :global(.service-layout) {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(270px, 0.8fr);
-  gap: 8%;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+  gap: clamp(32px, 6vw, 88px);
   align-items: start;
 }
 
+.supportRoot :global(.support-articles) {
+  max-width: 72ch;
+}
+
 .supportRoot :global(.service-note) {
-  padding: 28px;
+  padding: 28px 30px;
   border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--tint);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
 .supportRoot :global(.service-note) > :global(.icon) {
   color: var(--accent);
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 
 .supportRoot :global(.service-note) h2 {
   font-family: var(--heading);
-  font-size: 29px;
-  font-weight: 400;
-  margin-bottom: 14px;
+  font-size: var(--text-xl);
+  font-weight: 650;
+  margin-bottom: 10px;
+  letter-spacing: -0.025em;
 }
 
 .supportRoot :global(.service-note) p {
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.85;
+  font-size: var(--text-sm);
+  line-height: 1.7;
 }
 
 .supportRoot :global(.service-note) :global(.btn) {
-  margin-top: 24px;
+  margin-top: 20px;
 }
 
 .supportRoot :global(.support-articles) article {
   display: grid;
-  grid-template-columns: 35px minmax(0, 1fr);
-  gap: 18px;
-  padding-bottom: 28px;
-  margin-bottom: 28px;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 16px;
+  padding-bottom: 24px;
+  margin-bottom: 24px;
   border-bottom: 1px solid var(--line);
 }
 
 .supportRoot :global(.support-articles) article > span {
   color: var(--accent);
-  font: 500 29px/1.2 var(--heading);
+  font: 650 var(--text-sm)/1.5 var(--wordmark);
 }
 
 .supportRoot :global(.support-articles) h2 {
-  font-size: 18px;
-  margin-bottom: 10px;
+  font-size: var(--text-lg);
+  margin-bottom: 6px;
+  letter-spacing: -0.015em;
 }
 
 .supportRoot :global(.support-articles) p {
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.9;
-}
-
-@media (max-width: 1250px) {
-  .supportRoot :global(.service-layout) {
-    gap: 5%;
-  }
+  font-size: var(--text-sm);
+  line-height: 1.7;
 }
 
 @media (max-width: 760px) {
@@ -95,7 +96,7 @@
     gap: 30px;
   }
   .supportRoot :global(.service-note) {
-    padding: 24px;
+    padding: 22px;
   }
   .supportRoot :global(.support-articles) article {
     grid-template-columns: 28px minmax(0, 1fr);

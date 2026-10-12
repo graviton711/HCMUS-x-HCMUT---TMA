@@ -17,6 +17,34 @@ export interface CurrentHealth {
   version: string;
 }
 
+export interface CurrentAgentSession {
+  agent_session_id: string;
+}
+
+export interface CurrentAgentChoice {
+  question: string;
+  options: { label: string; value: string }[];
+  allow_custom: boolean;
+}
+
+export interface CurrentAgentResponse {
+  assistant_text: string;
+  choices?: CurrentAgentChoice;
+  tool_calls: { name: string; status: string }[];
+  requirement?: CurrentRequirement;
+  comparison?: CurrentComparison;
+}
+
+export type CurrentAgentProgressEvent =
+  | { type: 'progress'; status: string }
+  | {
+      type: 'tool';
+      id: string;
+      name: string;
+      message?: string;
+      status: 'running' | 'completed' | 'error';
+    };
+
 export interface CurrentCondition {
   id: string;
   field: string;
@@ -82,6 +110,7 @@ export interface CurrentEvaluation {
   state: 'pass' | 'fail' | 'unknown';
   quote: string;
   reason_code: string;
+  reason: string;
 }
 
 export interface CurrentComparison {

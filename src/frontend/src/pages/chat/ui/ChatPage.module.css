@@ -1,119 +1,176 @@
-/* Styles scoped to the chat page. */
+/* Chat canvas: generous reading space with a composer anchored to the bottom. */
 
 .workspace {
-  display: grid;
-  gap: 18px;
-  width: 100%;
-  max-width: 760px;
+  --chat-reading-width: 900px;
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 940px);
+  height: 100%;
+  min-height: 0;
   margin-inline: auto;
+  overflow: hidden;
 }
 
 .workspace-wide {
-  max-width: 1140px;
+  width: min(100%, 1160px);
 }
 
-/* ---------- Entry ---------- */
+/* ---------- First-use canvas ---------- */
 
 .entry {
-  display: grid;
-  gap: 28px;
-  padding-block: clamp(24px, 6vh, 64px);
+  justify-content: center;
+  padding: 30px 28px 18px;
 }
 
 .entry-hero {
   display: grid;
   gap: 12px;
-  max-width: 62ch;
+  width: min(100%, 720px);
+  margin: auto auto 24px;
+  text-align: center;
+  animation: entry-rise 400ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
 }
 
-.entry-hero :global(.eyebrow) {
-  margin-bottom: 0;
+.entry-hero h1,
+.chat-welcome h1 {
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.035em;
 }
 
-.entry-hero p {
+.entry-hero p,
+.chat-welcome p {
+  max-width: 66ch;
+  margin-inline: auto;
   color: var(--muted);
-  font-size: 15.5px;
+  font-size: 15px;
   line-height: 1.6;
 }
 
-.entry-facts {
+.entry-prompt {
   display: grid;
-  gap: 10px 24px;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  margin-top: 2px;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
+  gap: 18px;
+  width: min(100%, 880px);
+  margin: 0 auto auto;
+  animation: entry-rise 450ms 70ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
 }
 
-.entry-facts dt {
+.entry-note {
+  margin: 26px auto 0;
   color: var(--subtle);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.entry-facts dd {
-  margin-top: 3px;
-  font-size: 13.5px;
+  font-size: 12px;
+  text-align: center;
+  animation: entry-fade 350ms 180ms ease both;
 }
 
 .examples-title {
-  color: var(--subtle);
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  margin-bottom: 9px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 550;
 }
 
 .examples {
   display: grid;
-  gap: 8px;
-  margin-top: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
 }
 
 .example {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 13px 16px;
-  border: 0;
-  border-radius: var(--radius);
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 5px;
+  min-width: 0;
+  min-height: 70px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 14px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
   text-align: left;
-  box-shadow: 0 0 0 1px var(--line);
   transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
     box-shadow var(--dur-fast) var(--ease),
-    background-color var(--dur-fast) var(--ease);
+    transform var(--dur-fast) var(--ease);
+  animation: entry-fade 360ms ease both;
+}
+
+.example:nth-child(2) {
+  animation-delay: 55ms;
+}
+
+.example:nth-child(3) {
+  animation-delay: 110ms;
 }
 
 .example:hover {
-  background: var(--surface-2);
-  box-shadow: 0 0 0 1px var(--line-strong);
+  border-color: var(--line-strong);
+  background: var(--surface);
+  box-shadow: 0 3px 12px rgba(20, 20, 26, 0.05);
+  transform: translateY(-2px);
+}
+
+.example:active {
+  transform: scale(0.985);
+}
+
+.example span:first-child {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .example span:last-child {
   color: var(--subtle);
-  flex: 0 0 auto;
+  font-size: 10px;
 }
 
-/* ---------- Active ---------- */
+/* ---------- Active conversation ---------- */
 
-.slot {
-  max-width: 640px;
-  padding: 16px 18px;
-  border: 0;
-  border-radius: var(--radius);
-  background: var(--surface-2);
+.thread-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 48px 2px 28px;
+  scroll-behavior: smooth;
+}
+
+.thread-scroll > * {
+  width: min(100%, var(--chat-reading-width));
+  margin-inline: auto;
+}
+
+.thread-scroll > * + * {
+  margin-top: 18px;
+}
+
+.chat-welcome {
+  display: grid;
+  gap: 10px;
+  margin-block: auto !important;
+  padding: 20px 0;
+  text-align: center;
 }
 
 .composer-dock {
-  position: sticky;
-  bottom: 0;
+  position: relative;
   z-index: 5;
-  padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(to top, var(--paper) 62%, transparent);
+  flex: 0 0 auto;
+  width: min(100%, var(--chat-reading-width));
+  margin-inline: auto;
+  padding: 12px 0 calc(18px + env(safe-area-inset-bottom, 0px));
+  background: var(--paper);
 }
 
 .recovery {
@@ -121,15 +178,73 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  padding-bottom: 8px;
 }
 
 .recovery-note {
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--text-xs);
 }
 
-@media (min-width: 760px) {
+.workspace:not(.entry) {
+  animation: entry-fade 280ms ease both;
+}
+
+@keyframes entry-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes entry-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .entry {
+    min-height: calc(100dvh - var(--header-height) - 56px);
+    padding: 24px 0 16px;
+  }
+
+  .entry-hero {
+    margin-bottom: 20px;
+  }
+
+  .entry-hero p,
+  .chat-welcome p {
+    font-size: 14px;
+  }
+
   .examples {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+    gap: 7px;
+  }
+
+  .example {
+    min-height: 54px;
+  }
+
+  .entry-note {
+    margin-top: 18px;
+  }
+
+  .thread-scroll {
+    padding: 28px 0 20px;
+  }
+
+  .composer-dock {
+    position: sticky;
+    bottom: 0;
+    padding: 8px 0 calc(10px + env(safe-area-inset-bottom, 0px));
   }
 }

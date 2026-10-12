@@ -24,7 +24,7 @@ Một màn nhập chung nhận nhu cầu và URL tùy chọn:
 
 Người dùng review nhu cầu/phạm vi → hệ thống tìm/đánh giá/rank/tự chọn tối đa ba gợi ý và dựng bảng so sánh ngay → xem lý do/evidence hoặc tìm phương án khác/sửa yêu cầu. Không yêu cầu sàng lọc danh sách/chọn ba tour. Thiếu tour đủ điều kiện thì hiển thị đúng số có được; người dùng tự quyết định chọn tour cuối cùng.
 
-Khi chỉ có URL, dữ kiện tour gợi ý phạm vi để review, không tự thành sở thích/ràng buộc. Đề xuất giữ tour URL làm tham chiếu và so với tối đa ba gợi ý mới; một URL + ba gợi ý = bốn tour đối chiếu. Budget retrieval khởi điểm 20 tour/lượt và count tham chiếu cần review/đo với BE.
+Khi chỉ có URL, dữ kiện tour gợi ý phạm vi để review, không tự thành sở thích/ràng buộc. Đề xuất giữ tour URL làm tham chiếu và so với tối đa ba gợi ý mới; một URL + ba gợi ý = bốn tour đối chiếu. Agent quét catalog theo `backend.data.scan_limit` (mặc định 1000) để không biến ngân sách mặc định 20 của API comparison thành số lượng toàn catalog; UI chỉ trả tối đa năm tour và có thể benchmark giới hạn quét bằng dữ liệu thật.
 
 ## Phân biệt với recommendation và lập kế hoạch
 

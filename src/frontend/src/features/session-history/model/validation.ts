@@ -20,6 +20,57 @@ export function validDraft(v: unknown): v is SearchDraft {
   );
 }
 
+export function validChatMsg(v: unknown): boolean {
+  if (!record(v) || typeof v.id !== 'string' || typeof v.kind !== 'string') return false;
+  if (v.kind === 'user' || v.kind === 'assistant') return typeof v.text === 'string';
+  if (v.kind === 'error') {
+    return (
+      typeof v.text === 'string' && (v.expired === undefined || typeof v.expired === 'boolean')
+    );
+  }
+  if (v.kind === 'choice') {
+    if (
+      !record(v.choice) ||
+      typeof v.choice.question !== 'string' ||
+      !Array.isArray(v.choice.options)
+    )
+      return false;
+    return (
+      typeof v.choice.allow_custom === 'boolean' &&
+      v.choice.options.every(
+        (option) =>
+          record(option) && typeof option.label === 'string' && typeof option.value === 'string',
+      )
+    );
+  }
+  if (v.kind === 'tool_activity') {
+    return (
+      Array.isArray(v.tools) &&
+      v.tools.every(
+        (tool) =>
+          record(tool) &&
+          typeof tool.id === 'string' &&
+          typeof tool.name === 'string' &&
+          ['running', 'completed', 'error'].includes(String(tool.status)),
+      )
+    );
+  }
+  if (v.kind === 'comparison') {
+    const comparison = v.comparison;
+    return (
+      record(comparison) &&
+      typeof comparison.id === 'string' &&
+      record(comparison.requirement) &&
+      Array.isArray(comparison.ranked) &&
+      Array.isArray(comparison.near_miss) &&
+      Array.isArray(comparison.tour_snapshots) &&
+      Array.isArray(comparison.evaluations) &&
+      record(comparison.analysis)
+    );
+  }
+  return false;
+}
+
 export function validSession(v: unknown): v is LocalSession {
   if (!record(v) || typeof v.id !== 'string' || typeof v.title !== 'string' || !validDraft(v.draft))
     return false;
@@ -27,6 +78,10 @@ export function validSession(v: unknown): v is LocalSession {
     typeof v.pinned === 'boolean' &&
     typeof v.createdAt === 'string' &&
     typeof v.updatedAt === 'string' &&
-    ['requirementId', 'comparisonId'].every((k) => v[k] === null || typeof v[k] === 'string')
+    Array.isArray(v.messages) &&
+    v.messages.every(validChatMsg) &&
+    ['requirementId', 'comparisonId', 'agentSessionId'].every(
+      (k) => v[k] === null || typeof v[k] === 'string',
+    )
   );
 }

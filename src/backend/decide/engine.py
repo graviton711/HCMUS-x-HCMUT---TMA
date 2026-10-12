@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
-from collections.abc import Callable
 from datetime import date
 
-from backend.errors import AppError
-from backend.input.nim import NimClient
 from backend.models import (
     Analysis,
     Comparison,
@@ -22,15 +18,7 @@ from backend.models import (
     TourSnapshot,
     uid,
 )
-from backend.settings import DecideCfg, PromptCfg
-from shared import get_logger
-
-log = get_logger("decide")
-
-# Transient LLM failures degrade to "soft unknown" instead of failing the
-# comparison: hard-filter results stay valid, soft scores just stay absent.
-_DEGRADED_REASONS = {"LLM_TIMEOUT", "LLM_UPSTREAM_ERROR", "LLM_INVALID_OUTPUT",
-                     "LLM_NOT_CONFIGURED"}
+from backend.settings import DecideCfg
 
 
 def _contains(haystack: str, needle: str) -> bool:
@@ -192,61 +180,15 @@ def passing_offers(
     req: Requirement, tours: list[TourSnapshot], evals: list[Evaluation]
 ) -> list[tuple[TourSnapshot, str]]:
     hard_ids = {c.id for c in req.hard()}
-    bad: set[str] = set()
+    states: dict[str, dict[str, State]] = {}
     for e in evals:
-        if e.condition_id in hard_ids and e.state == "fail":
-            bad.add(e.offer_id)
+        if e.condition_id in hard_ids:
+            states.setdefault(e.offer_id, {})[e.condition_id] = e.state
     out = []
     for tour in tours:
         for offer in tour.offers:
-            if offer.id not in bad:
+            if all(states.get(offer.id, {}).get(condition_id) == "pass" for condition_id in hard_ids):
                 out.append((tour, offer.id))
-    return out
-
-
-def assess_soft_llm(
-    tours: list[TourSnapshot],
-    soft: list[Condition],
-    nim: NimClient | None,
-    prompt: PromptCfg | None,
-    excerpt_chars: int,
-    quote_chars: int,
-    soft_fields: list[str],
-) -> dict[tuple[str, str], tuple[float, str]]:
-    """One bounded LLM call over survivors. Returns {(tour_id, cond_id): (score, quote)}."""
-    if not soft or nim is None or not nim.configured():
-        return {}
-    if prompt is None or not prompt.system.strip():
-        raise AppError("PROMPT_NOT_CONFIGURED", "Missing assess prompt.", 500)
-    docs = []
-    for tour in tours:
-        blob = "\n".join(f"{f}: {getattr(tour, f, '')}" for f in soft_fields)[:excerpt_chars]
-        docs.append({"tour_id": tour.id, "text": blob})
-    user = json.dumps(
-        {"criteria": [{"id": c.id, "text": str(c.value)} for c in soft], "tours": docs}, ensure_ascii=False
-    )
-    try:
-        payload = nim.complete_json(
-            system=prompt.system, user=user,
-            max_tokens=prompt.max_tokens,
-            temperature=prompt.temperature,
-            timeout=prompt.timeout_s,
-        )
-    except AppError as exc:
-        if exc.code not in _DEGRADED_REASONS:
-            raise
-        log.warning("soft assess degraded (%s); soft criteria stay unknown", exc.code)
-        return {}
-    scores = payload.get("scores", [])
-    out: dict[tuple[str, str], tuple[float, str]] = {}
-    for s in scores:
-        try:
-            out[(str(s["tour_id"]), str(s["condition_id"]))] = (
-                max(0.0, min(1.0, float(s["score"]))),
-                str(s.get("quote", ""))[:quote_chars],
-            )
-        except (KeyError, TypeError, ValueError):
-            continue
     return out
 
 
@@ -267,6 +209,7 @@ def near_miss(
         return []
     fails: dict[str, int] = {}
     passes: dict[str, int] = {}
+    unknowns: dict[str, int] = {}
     for e in evals:
         if e.condition_id not in hard_ids:
             continue
@@ -274,41 +217,44 @@ def near_miss(
             fails[e.offer_id] = fails.get(e.offer_id, 0) + 1
         elif e.state == "pass":
             passes[e.offer_id] = passes.get(e.offer_id, 0) + 1
+        else:
+            unknowns[e.offer_id] = unknowns.get(e.offer_id, 0) + 1
     scored = []
     for tour in tours:
         for offer in tour.offers:
             if offer.id in ranked_offer_ids:
                 continue
             failed = fails.get(offer.id, 0)
-            if failed == 0 or failed > max_fails:
+            unknown = unknowns.get(offer.id, 0)
+            if failed > max_fails or (failed == 0 and unknown == 0):
                 continue
             passed = passes.get(offer.id, 0)
             price_key = offer.price if (offer.price is not None and offer.price_basis == "exact") else 10**15
-            scored.append((passed, -failed, -price_key, tour.id, offer.id))
-    scored.sort(key=lambda r: (r[0], r[1], r[2]), reverse=True)
+            scored.append((passed, -failed, -unknown, -price_key, tour.id, offer.id))
+    scored.sort(key=lambda r: (r[0], r[1], r[2], r[3]), reverse=True)
     return [
-        RankedCandidate(tour_id=t, offer_id=o, score=float(p) - 0.5 * float(-f))
-        for p, f, _, t, o in scored
+        RankedCandidate(tour_id=t, offer_id=o, score=float(p + f + u))
+        for p, f, u, _, t, o in scored
     ]
 
 
 def rank(
     req: Requirement,
     surviving: list[tuple[TourSnapshot, str]],
-    soft_scores: dict[tuple[str, str], tuple[float, str]],
+    soft_verdicts: dict[tuple[str, str], tuple[State, str, str]],
 ) -> list[RankedCandidate]:
     soft_ids = [c.id for c in req.soft()]
     scored = []
     for tour, offer_id in surviving:
         offer = next(o for o in tour.offers if o.id == offer_id)
-        soft_avg = 0.0
-        if soft_ids:
-            vals = [soft_scores.get((tour.id, cid), (0.0, ""))[0] for cid in soft_ids]
-            soft_avg = sum(vals) / len(vals)
+        fit_count = sum(
+            soft_verdicts.get((offer_id, cid), ("unknown", "", ""))[0] == "pass"
+            for cid in soft_ids
+        )
         price_key = offer.price if (offer.price is not None and offer.price_basis == "exact") else 10**15
-        scored.append((soft_avg, -price_key, tour.id, offer_id))
+        scored.append((fit_count, -price_key, tour.id, offer_id))
     scored.sort(key=lambda r: (r[0], r[1]), reverse=True)
-    return [RankedCandidate(tour_id=t, offer_id=o, score=s) for s, _, t, o in scored]
+    return [RankedCandidate(tour_id=t, offer_id=o, score=float(fits)) for fits, _, t, o in scored]
 
 
 def analyze(tours: list[TourSnapshot], ranked: list[RankedCandidate], cfg: DecideCfg) -> Analysis:
@@ -342,23 +288,29 @@ def analyze(tours: list[TourSnapshot], ranked: list[RankedCandidate], cfg: Decid
     )
 
 
-AssessFn = Callable[[list[TourSnapshot], list[Condition]], dict[tuple[str, str], tuple[float, str]]]
-
-
 def compare(
-    req: Requirement, tours: list[TourSnapshot], assess: AssessFn | None, cfg: DecideCfg
+    req: Requirement,
+    tours: list[TourSnapshot],
+    cfg: DecideCfg,
+    soft_verdicts: dict[tuple[str, str], tuple[State, str, str]] | None = None,
 ) -> Comparison:
     evals = hard_filter(req, tours)
     surviving = passing_offers(req, tours, evals)
-    seen: set[str] = set()
-    survivor_tours = [t for t, _ in surviving if not (t.id in seen or seen.add(t.id))]
-    soft_scores = assess(survivor_tours, req.soft()) if assess and req.soft() else {}
+    verdicts = soft_verdicts or {}
+    pass_ids = {offer_id for _, offer_id in surviving}
     evaluations = list(evals)
-    for (tour_id, cid), (_, quote) in soft_scores.items():
-        offer_ids = [o.id for t in tours if t.id == tour_id for o in t.offers]
-        for oid in offer_ids:
-            evaluations.append(Evaluation(offer_id=oid, condition_id=cid, state="pass", quote=quote))
-    ranked = rank(req, surviving, soft_scores)
+    for offer_id in pass_ids:
+        for condition in req.soft():
+            state, quote, reason = verdicts.get((offer_id, condition.id), ("unknown", "", ""))
+            evaluations.append(Evaluation(
+                offer_id=offer_id,
+                condition_id=condition.id,
+                state=state,
+                quote=quote,
+                reason=reason,
+                reason_code=f"SOFT_{state.upper()}",
+            ))
+    ranked = rank(req, surviving, verdicts)
     near = near_miss(req, tours, evaluations, {c.offer_id for c in ranked}, cfg.near_miss_max_fails)
     near = near[: cfg.top_n]
     return Comparison(

@@ -14,8 +14,34 @@ function response(body: unknown, status = 200) {
 }
 
 const calls: { path: string; body: unknown }[] = [];
+const requirement = {
+  id: 'req_dalat',
+  conditions: [
+    {
+      id: 'h1',
+      field: 'destination',
+      operator: 'contains',
+      value: 'Đà Lạt',
+      strength: 'hard',
+      quote: 'Đà Lạt',
+    },
+  ],
+  missing: [],
+  raw_text: 'Đà Lạt, tháng 12',
+  travelers: 1,
+};
+const comparison = {
+  id: 'cmp_chat',
+  requirement,
+  ranked: [],
+  near_miss: [],
+  tour_snapshots: [],
+  evaluations: [],
+  analysis: { hidden_costs: [], conditions: [], risks: [], benefits: [] },
+  candidates_considered: 1,
+};
 
-function makeBackend() {
+function makeBackend(modelDenied = false) {
   return vi.fn<typeof fetch>(async (input, init) => {
     const path = new URL(String(input), 'http://local').pathname;
     const method = init?.method ?? 'GET';
@@ -32,63 +58,87 @@ function makeBackend() {
         },
         201,
       );
-    if (path === '/catalog') return response({ destinations: ['Đà Lạt'] });
     if (path === '/health') return response({ status: 'ok', version: 'test' });
-    if (path === '/requirements' && method === 'POST')
+    if (path === '/agent/sessions' && method === 'POST')
+      return response({ agent_session_id: 'agt_0123456789abcdef0123456789abcdef' }, 201);
+    if (path.endsWith('/messages') && method === 'POST') {
+      if (modelDenied)
+        return response(
+          { error: { code: 'OPENCODE_MODEL_ACCESS_DENIED', message: 'OpenCode rejected access.' } },
+          502,
+        );
+      if (body?.message === 'Đà Lạt')
+        return response({
+          assistant_text: 'Bạn muốn đi vào tháng nào?',
+          choices: {
+            question: 'Thời gian nào phù hợp?',
+            options: [
+              { label: 'Tháng 12', value: 'tháng 12' },
+              { label: 'Tháng 1', value: 'tháng 1' },
+            ],
+            allow_custom: true,
+          },
+          tool_calls: [{ name: 'ask_choice', status: 'completed' }],
+        });
       return response({
-        requirement: {
-          id: `req_${(body?.drop_fields as string[] | undefined)?.join('+') || 'base'}`,
-          conditions: [
-            { id: 'h1', field: 'destination', operator: 'contains', value: 'Đà Lạt', strength: 'hard', quote: '' },
-          ],
-          missing: [],
-          raw_text: 'Đà Lạt',
-          travelers: 1,
-        },
+        assistant_text: 'Mình đã tìm được lựa chọn phù hợp.',
+        tool_calls: [{ name: 'query_tours', status: 'completed' }],
+        requirement,
+        comparison,
       });
-    if (path === '/comparisons' && method === 'POST')
-      return response({
-        comparison: {
-          id: 'cmp_chat',
-          requirement: { id: 'req_base', conditions: [], missing: [], raw_text: 'Đà Lạt', travelers: 1 },
-          ranked: [],
-          near_miss: [],
-          tour_snapshots: [],
-          evaluations: [],
-          analysis: { hidden_costs: [], conditions: [], risks: [], benefits: [] },
-          candidates_considered: 1,
-        },
-      });
-    if (path.startsWith('/requirements/'))
-      return response({
-        requirement: { id: 'req_base', conditions: [], missing: [], raw_text: 'Đà Lạt', travelers: 1 },
-      });
+    }
     return response({ error: { code: 'NOT_FOUND', message: 'not found' } }, 404);
   });
 }
 
 type ChatApi = ReturnType<typeof useChat>;
 
-function Inner({ initial, apiRef }: { initial: LocalSession; apiRef: { current: ChatApi | null } }) {
+function Inner({
+  initial,
+  apiRef,
+  sessionRef,
+}: {
+  initial: LocalSession;
+  apiRef: { current: ChatApi | null };
+  sessionRef?: { current: LocalSession | null };
+}) {
   const [session, setSession] = useState(initial);
-  const chat = useChat(session, (changes) =>
-    setSession((current) => ({ ...current, ...changes })),
-  );
+  const chat = useChat(session, (changes) => setSession((current) => ({ ...current, ...changes })));
   apiRef.current = chat;
+  if (sessionRef) sessionRef.current = session;
   return (
     <>
       <div data-testid="msgs">{chat.msgs.map((msg) => msg.kind).join(',')}</div>
+      <div data-testid="message-texts">
+        {chat.msgs.map((msg) => ('text' in msg ? msg.text : '')).join('\n')}
+      </div>
       <div data-testid="busy">{chat.busy ? 'busy' : 'idle'}</div>
-      <div data-testid="dropped">{chat.dropped.join('+')}</div>
+      <div data-testid="tool-states">
+        {chat.msgs
+          .filter((message) => message.kind === 'tool_activity')
+          .flatMap((message) =>
+            message.tools.map((tool) => `${tool.name}:${tool.message ?? ''}:${tool.status}`),
+          )
+          .join(',')}
+      </div>
       <div data-testid="title">{session.title}</div>
+      <div data-testid="agent-session">{session.agentSessionId ?? ''}</div>
     </>
   );
 }
 
-function Probe({ initial, apiRef }: { initial: LocalSession; apiRef: { current: ChatApi | null } }) {
+function Probe({
+  initial,
+  apiRef,
+  sessionRef,
+}: {
+  initial: LocalSession;
+  apiRef: { current: ChatApi | null };
+  sessionRef?: { current: LocalSession | null };
+}) {
   return (
     <PreferencesProvider>
-      <Inner initial={initial} apiRef={apiRef} />
+      <Inner initial={initial} apiRef={apiRef} sessionRef={sessionRef} />
     </PreferencesProvider>
   );
 }
@@ -101,48 +151,145 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('useChat relax and undo', () => {
-  it('sends, compares, relaxes with drop_fields, then undoes', async () => {
+describe('useChat OpenCode agent loop', () => {
+  it('reuses one agent session, renders choices, and stores the final comparison', async () => {
     vi.stubGlobal('fetch', makeBackend());
     const apiRef: { current: ChatApi | null } = { current: null };
     render(<Probe initial={newSession()} apiRef={apiRef} />);
 
     await waitFor(() => expect(screen.getByTestId('busy').textContent).toBe('idle'));
-    await waitFor(() => expect(apiRef.current?.catalog).toBeTruthy());
+    expect(screen.getByTestId('agent-session').textContent).toMatch(/^agt_/u);
 
     apiRef.current?.send('Đà Lạt');
     await waitFor(() =>
-      expect(screen.getByTestId('msgs').textContent).toBe('user,interpretation,comparison'),
+      expect(screen.getByTestId('msgs').textContent).toBe('user,tool_activity,assistant,choice'),
     );
-    expect(calls.some((call) => call.path === '/comparisons')).toBe(true);
 
-    apiRef.current?.relax('date_from');
-    await waitFor(() => expect(screen.getByTestId('dropped').textContent).toBe('date_from'));
-    const relaxed = calls.filter((call) => call.path === '/requirements').pop();
-    expect((relaxed?.body as { drop_fields?: string[] }).drop_fields).toEqual(['date_from']);
+    apiRef.current?.send('tháng 12');
     await waitFor(() =>
       expect(screen.getByTestId('msgs').textContent).toBe(
-        'user,interpretation,comparison,assistant,interpretation,comparison',
+        'user,tool_activity,assistant,choice,user,tool_activity,assistant,comparison',
       ),
     );
+    expect(screen.getByTestId('title').textContent).toBe('Đà Lạt');
 
-    apiRef.current?.undo();
-    await waitFor(() => expect(screen.getByTestId('dropped').textContent).toBe(''));
-    expect(screen.getByTestId('msgs').textContent).toBe('user,interpretation,comparison');
+    const messages = calls.filter((call) => call.path.endsWith('/messages'));
+    expect(messages.map((call) => (call.body as { message: string }).message)).toEqual([
+      'Đà Lạt',
+      'tháng 12',
+    ]);
+    expect(messages[0].path).toBe(messages[1].path);
   });
 
-  it('names the session from the interpreted destination, not the raw request', async () => {
+  it('restores the full transcript after remount without sending the prompt again', async () => {
     vi.stubGlobal('fetch', makeBackend());
+    const sessionRef: { current: LocalSession | null } = { current: null };
+    const firstApiRef: { current: ChatApi | null } = { current: null };
+    const firstRender = render(
+      <Probe initial={newSession()} apiRef={firstApiRef} sessionRef={sessionRef} />,
+    );
+
+    await waitFor(() => expect(screen.getByTestId('busy').textContent).toBe('idle'));
+    firstApiRef.current?.send('Đà Lạt');
+    await waitFor(() =>
+      expect(screen.getByTestId('msgs').textContent).toContain('assistant,choice'),
+    );
+    firstApiRef.current?.send('tháng 12');
+    await waitFor(() => expect(screen.getByTestId('msgs').textContent).toContain('comparison'));
+
+    const saved = sessionRef.current;
+    expect(saved?.messages.map((message) => (message as { kind: string }).kind)).toEqual([
+      'user',
+      'assistant',
+      'choice',
+      'user',
+      'assistant',
+      'comparison',
+    ]);
+    const sentBeforeReload = calls.filter((call) => call.path.endsWith('/messages')).length;
+    firstRender.unmount();
+
+    const restoredApiRef: { current: ChatApi | null } = { current: null };
+    render(<Probe initial={saved!} apiRef={restoredApiRef} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('msgs').textContent).toBe(
+        'user,assistant,choice,user,assistant,comparison',
+      ),
+    );
+    expect(calls.filter((call) => call.path.endsWith('/messages'))).toHaveLength(sentBeforeReload);
+  });
+
+  it('renders tool progress as soon as an SSE event arrives, before the final response', async () => {
+    const fallback = makeBackend();
+    let finishStream = () => {};
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const path = new URL(String(input), 'http://local').pathname;
+      if (!path.endsWith('/messages')) return fallback(input, init);
+
+      const encoder = new TextEncoder();
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            const emit = (name: string, payload: unknown) =>
+              controller.enqueue(
+                encoder.encode(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`),
+              );
+            emit('progress', { status: 'working' });
+            emit('tool', {
+              id: 'call-1',
+              name: 'catalog_facets',
+              message: 'Kiểm tra điểm đến, giá và ngày khởi hành trong dữ liệu',
+              status: 'running',
+            });
+            finishStream = () => {
+              emit('tool', {
+                id: 'call-1',
+                name: 'catalog_facets',
+                message: 'Kiểm tra điểm đến, giá và ngày khởi hành trong dữ liệu',
+                status: 'completed',
+              });
+              emit('result', { assistant_text: 'Đã kiểm tra.', tool_calls: [] });
+              controller.close();
+            };
+          },
+        }),
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const apiRef: { current: ChatApi | null } = { current: null };
+    render(<Probe initial={newSession()} apiRef={apiRef} />);
+    await waitFor(() => expect(screen.getByTestId('busy').textContent).toBe('idle'));
+
+    apiRef.current?.send('Tìm tour');
+    await waitFor(() =>
+      expect(screen.getByTestId('tool-states').textContent).toBe(
+        'catalog_facets:Kiểm tra điểm đến, giá và ngày khởi hành trong dữ liệu:running',
+      ),
+    );
+    expect(screen.getByTestId('busy').textContent).toBe('busy');
+
+    finishStream();
+    await waitFor(() =>
+      expect(screen.getByTestId('tool-states').textContent).toBe(
+        'catalog_facets:Kiểm tra điểm đến, giá và ngày khởi hành trong dữ liệu:completed',
+      ),
+    );
+    expect(screen.getByTestId('message-texts').textContent).toContain('Đã kiểm tra.');
+  });
+
+  it('explains when OpenCode rejects the configured free model', async () => {
+    vi.stubGlobal('fetch', makeBackend(true));
     const apiRef: { current: ChatApi | null } = { current: null };
     render(<Probe initial={newSession()} apiRef={apiRef} />);
 
     await waitFor(() => expect(screen.getByTestId('busy').textContent).toBe('idle'));
-    await waitFor(() => expect(apiRef.current?.catalog).toBeTruthy());
+    apiRef.current?.send('chào');
 
-    apiRef.current?.send('muốn đi du lịch đâu đó 3 ngày');
     await waitFor(() =>
-      expect(screen.getByTestId('msgs').textContent).toBe('user,interpretation,comparison'),
+      expect(screen.getByTestId('message-texts').textContent).toContain(
+        'Model Muse Spark miễn phí hiện không cho gọi từ ứng dụng qua CLI.',
+      ),
     );
-    expect(screen.getByTestId('title').textContent).toBe('Đà Lạt');
   });
 });

@@ -12,4 +12,4 @@ export { readAuthProfile } from './profile';
 export { useSidebarLayout } from './sidebarLayout';
 export type { AuthProfile, LocalSession, SessionAccess } from './types';
 export { useLocalSessions } from './useLocalSessions';
-export { validDraft, validSession } from './validation';
+export { validChatMsg, validDraft, validSession } from './validation';

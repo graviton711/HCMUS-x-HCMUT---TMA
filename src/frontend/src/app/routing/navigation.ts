@@ -30,8 +30,6 @@ export function useNavigation() {
   const navigate = useCallback((url: string) => {
     window.history.pushState(null, '', url);
     setRoute(locationState());
-    if (locationState().path !== '/tours' && !locationState().hash)
-      window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
 
   const link = useCallback(

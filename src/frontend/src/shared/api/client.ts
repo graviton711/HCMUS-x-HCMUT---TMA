@@ -1,5 +1,8 @@
 import { CurrentApiError } from './errors';
 import type {
+  CurrentAgentResponse,
+  CurrentAgentProgressEvent,
+  CurrentAgentSession,
   CurrentCatalog,
   CurrentComparison,
   CurrentHealth,
@@ -75,15 +78,145 @@ export class CurrentBackendClient {
     return this.request<CurrentHealth>('/health');
   }
 
+  createAgentSession() {
+    return this.request<CurrentAgentSession>('/agent/sessions', 'POST');
+  }
+
+  agentMessage(agentSessionId: string, message: string) {
+    return this.request<CurrentAgentResponse>(
+      `/agent/sessions/${encodeURIComponent(agentSessionId)}/messages`,
+      'POST',
+      { message },
+    );
+  }
+
+  async agentMessageStream(
+    agentSessionId: string,
+    message: string,
+    onEvent: (event: CurrentAgentProgressEvent) => void,
+  ): Promise<CurrentAgentResponse> {
+    const headers: Record<string, string> = {
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+    };
+    if (this.token) headers.Authorization = `Bearer ${this.token}`;
+    let response: Response;
+    try {
+      response = await this.fetcher(
+        `${this.baseUrl}/agent/sessions/${encodeURIComponent(agentSessionId)}/messages`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ message }),
+          credentials: 'omit',
+        },
+      );
+    } catch {
+      throw new CurrentApiError('NETWORK_ERROR', 'Không kết nối được backend.', 0);
+    }
+
+    if (!response.ok) {
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new CurrentApiError(
+          'RESPONSE_INVALID',
+          'Backend trả response không đọc được.',
+          response.status,
+        );
+      }
+      const error = object(object(payload)?.error);
+      throw new CurrentApiError(
+        typeof error?.code === 'string' ? error.code : 'HTTP_ERROR',
+        typeof error?.message === 'string' ? error.message : 'Không thể hoàn thành yêu cầu.',
+        response.status,
+      );
+    }
+
+    if (!response.headers.get('Content-Type')?.includes('text/event-stream')) {
+      try {
+        return (await response.json()) as CurrentAgentResponse;
+      } catch {
+        throw new CurrentApiError(
+          'RESPONSE_INVALID',
+          'Backend trả response không đọc được.',
+          response.status,
+        );
+      }
+    }
+    if (!response.body) {
+      throw new CurrentApiError('STREAM_UNAVAILABLE', 'Backend không mở được luồng tiến độ.', 502);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const resultHolder: { value: CurrentAgentResponse | null } = { value: null };
+    const dispatch = (frame: string) => {
+      let eventName = 'message';
+      const data: string[] = [];
+      for (const line of frame.split(/\r?\n/u)) {
+        if (line.startsWith('event:')) eventName = line.slice(6).trim();
+        else if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+      }
+      if (!data.length) return;
+      let payload: unknown;
+      try {
+        payload = JSON.parse(data.join('\n'));
+      } catch {
+        throw new CurrentApiError('STREAM_INVALID', 'Tiến độ từ backend không đọc được.', 502);
+      }
+      const value = object(payload);
+      if (!value) return;
+      if (eventName === 'error') {
+        throw new CurrentApiError(
+          typeof value.code === 'string' ? value.code : 'HTTP_ERROR',
+          typeof value.message === 'string' ? value.message : 'Không thể hoàn thành yêu cầu.',
+          502,
+        );
+      }
+      if (eventName === 'result') {
+        resultHolder.value = value as unknown as CurrentAgentResponse;
+        return;
+      }
+      if (eventName === 'progress' || eventName === 'tool') {
+        onEvent({ type: eventName, ...value } as CurrentAgentProgressEvent);
+      }
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const frames = buffer.split(/\r?\n\r?\n/u);
+        buffer = frames.pop() ?? '';
+        for (const frame of frames) dispatch(frame);
+        if (done) break;
+      }
+      if (buffer.trim()) dispatch(buffer);
+    } finally {
+      reader.releaseLock();
+    }
+    const result = resultHolder.value;
+    if (!result) {
+      throw new CurrentApiError(
+        'STREAM_INCOMPLETE',
+        'Backend đã đóng luồng trước khi trả kết quả.',
+        502,
+      );
+    }
+    return result;
+  }
+
   catalog() {
     return this.request<CurrentCatalog>('/catalog');
   }
 
-  createRequirement(text: string, form?: Record<string, unknown>, dropFields?: string[]) {
+  createRequirement(text: string, form?: Record<string, unknown>) {
     return this.request<{ requirement: CurrentRequirement }>('/requirements', 'POST', {
       text,
       ...(form ? { form } : {}),
-      ...(dropFields?.length ? { drop_fields: dropFields } : {}),
     });
   }
 

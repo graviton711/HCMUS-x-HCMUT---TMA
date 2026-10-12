@@ -8,6 +8,7 @@ export function Dialog({
   title,
   closeLabel,
   variant = 'default',
+  footer,
   children,
 }: {
   open: boolean;
@@ -15,16 +16,40 @@ export function Dialog({
   title: string;
   closeLabel: string;
   variant?: 'default' | 'sidebar';
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const closeTimer = useRef<number | null>(null);
   const titleId = useId();
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
-    else if (!open && dialog.open) dialog.close();
-  }, [open]);
+    if (open) {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+      dialog.removeAttribute('data-closing');
+      if (!dialog.open) dialog.showModal();
+      return;
+    }
+    if (!dialog.open) return;
+    const reduceMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      dialog.close();
+      return;
+    }
+    dialog.setAttribute('data-closing', 'true');
+    closeTimer.current = window.setTimeout(() => {
+      if (dialog.open && dialog.dataset.closing === 'true') dialog.close();
+      closeTimer.current = null;
+    }, variant === 'sidebar' ? 160 : 150);
+    return () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    };
+  }, [open, variant]);
   return (
     <dialog
       ref={ref}
@@ -55,6 +80,7 @@ export function Dialog({
           </button>
         </header>
         <div className="dialog-body">{children}</div>
+        {footer}
       </div>
     </dialog>
   );

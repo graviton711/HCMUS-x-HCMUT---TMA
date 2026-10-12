@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { LocalSession } from '../../../features/session-history';
-import { Composer, QuickReplies, Thread, ToolStatus } from '../../../features/chat';
+import { Composer, Thread, ToolStatus } from '../../../features/chat';
 import { usePreferences } from '../../../shared/preferences';
-import { slotPrompt } from '../lib/slots';
 import { useChat } from '../model/useChat';
 import styles from './ChatPage.module.css';
 
@@ -38,7 +37,6 @@ function Entry({ onStart }: { onStart: (initialText?: string) => void }) {
   return (
     <div className={`${styles.workspace} ${styles.entry}`}>
       <header className={styles['entry-hero']}>
-        <span className="eyebrow">{t('Soi tour bằng dữ kiện', 'Evidence-based tour search')}</span>
         <h1>{t('Đi đâu tiếp?', 'Where next?')}</h1>
         <p>
           {t(
@@ -48,46 +46,34 @@ function Entry({ onStart }: { onStart: (initialText?: string) => void }) {
         </p>
       </header>
 
-      <Composer busy={false} size="large" onSend={(text) => onStart(text)} />
+      <div className={styles['entry-prompt']}>
+        <Composer busy={false} size="large" onSend={(text) => onStart(text)} />
+        <section aria-labelledby="examples-title">
+          <h2 className={styles['examples-title']} id="examples-title">
+            {t('Thử một yêu cầu', 'Try an example')}
+          </h2>
+          <div className={styles.examples}>
+            {SUGGESTIONS.map(([text, meta]) => (
+              <button
+                key={text}
+                type="button"
+                className={styles.example}
+                onClick={() => onStart(text)}
+              >
+                <span>{text}</span>
+                <span>{meta}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
 
-      <dl className={styles['entry-facts']}>
-        <div>
-          <dt>{t('So sánh', 'Comparison')}</dt>
-          <dd>{t('Cùng bộ tiêu chí, không điểm số bí mật', 'Same criteria, no hidden score')}</dd>
-        </div>
-        <div>
-          <dt>{t('Bằng chứng', 'Evidence')}</dt>
-          <dd>
-            {t(
-              'Mỗi dữ kiện kèm nguồn và thời điểm lấy',
-              'Every fact has a source and an observation time',
-            )}
-          </dd>
-        </div>
-        <div>
-          <dt>{t('Thiếu dữ liệu', 'Missing data')}</dt>
-          <dd>{t('Ghi rõ "chưa rõ", không tự điền', 'Marked unknown, never invented')}</dd>
-        </div>
-      </dl>
-
-      <section aria-labelledby="examples-title">
-        <h2 className={styles['examples-title']} id="examples-title">
-          {t('Ví dụ yêu cầu', 'Example requests')}
-        </h2>
-        <div className={styles.examples}>
-          {SUGGESTIONS.map(([text, meta]) => (
-            <button
-              key={text}
-              type="button"
-              className={styles.example}
-              onClick={() => onStart(text)}
-            >
-              <span>{text}</span>
-              <span>{meta}</span>
-            </button>
-          ))}
-        </div>
-      </section>
+      <p className={styles['entry-note']}>
+        {t(
+          'Mỗi gợi ý được đối chiếu theo dữ kiện có nguồn; tour thiếu thông tin sẽ được ghi rõ.',
+          'Suggestions are checked against sourced data; missing tour information stays explicit.',
+        )}
+      </p>
     </div>
   );
 }
@@ -103,19 +89,23 @@ function ActiveChat({
 }) {
   const { t } = usePreferences();
   const chat = useChat(session, onChangeSession);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
   const autoSent = useRef(false);
 
   useEffect(() => {
-    const anchor = bottomRef.current;
-    if (!anchor) return;
-    const nearBottom =
-      window.innerHeight + window.scrollY > document.body.scrollHeight - 480;
+    const thread = threadRef.current;
+    if (!thread) return;
+    const nearBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 480;
     if (!nearBottom) return;
     const reduced =
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    anchor.scrollIntoView({ block: 'end', behavior: reduced ? 'auto' : 'smooth' });
+    const top = thread.scrollHeight;
+    if (typeof thread.scrollTo === 'function') {
+      thread.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' });
+    } else {
+      thread.scrollTop = top;
+    }
   }, [chat.msgs.length, chat.phase]);
 
   // A session created from an example request sends once on mount.
@@ -124,89 +114,76 @@ function ActiveChat({
       !autoSent.current &&
       chat.client &&
       chat.msgs.length === 0 &&
-      !session.requirementId &&
-      !session.comparisonId &&
+      chat.initialSendPending &&
       session.draft.text.trim()
     ) {
       autoSent.current = true;
       chat.send(session.draft.text.trim());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.client, chat.msgs.length]);
+  }, [chat.client, chat.initialSendPending, chat.msgs.length]);
 
-  const lastComparison = chat.msgs.map((msg) => msg.kind).lastIndexOf('comparison');
-  const lastInterpretation = [...chat.msgs]
-    .map((msg, index) => ({ msg, index }))
-    .filter(({ msg }) => msg.kind === 'interpretation')
-    .pop();
-  const pendingSlot =
-    lastInterpretation && lastInterpretation.index > lastComparison
-      ? lastInterpretation.msg.kind === 'interpretation'
-        ? lastInterpretation.msg.requirement.missing[0]
-        : undefined
-      : undefined;
-  const prompt = pendingSlot ? slotPrompt(pendingSlot, chat.catalog) : null;
   const hasResult = chat.msgs.some((msg) => msg.kind === 'comparison');
+  const hasActiveTool = [...chat.msgs]
+    .reverse()
+    .find((msg) => msg.kind === 'tool_activity')
+    ?.tools.some((tool) => tool.status === 'running');
   const lastError = [...chat.msgs].reverse().find((msg) => msg.kind === 'error');
   const expired = lastError?.kind === 'error' && lastError.expired === true;
   const draftText = session.draft.text.trim();
 
   return (
     <div className={`${styles.workspace} ${hasResult ? styles['workspace-wide'] : ''}`}>
-      <Thread
-        messages={chat.msgs}
-        busy={chat.busy}
-        onCompare={chat.compareNow}
-        onRelax={chat.relax}
-        onUndo={chat.undo}
-        canUndo={chat.canUndo}
-        compareLabel={t('Tìm và so sánh tour', 'Find and compare tours')}
-      />
+      <div className={styles['thread-scroll']} ref={threadRef}>
+        {chat.msgs.length === 0 && !chat.busy && (
+          <div className={styles['chat-welcome']}>
+            <h1>{t('Bạn muốn đi đâu?', 'Where would you like to go?')}</h1>
+            <p>
+              {t(
+                'Cho mình biết điểm đến, ngày đi hoặc ngân sách. Mình sẽ tìm tour phù hợp cùng bạn.',
+                'Share a destination, dates or budget. I’ll help you find trips that fit.',
+              )}
+            </p>
+          </div>
+        )}
+        <Thread messages={chat.msgs} busy={chat.busy} onSend={chat.send} onRelax={chat.relax} />
 
-      {prompt && (
-        <section className={styles.slot} aria-label={t('Câu hỏi còn thiếu', 'Missing detail')}>
-          <p className={styles['slot-question']}>{t(...prompt.question)}</p>
-          <QuickReplies
-            options={prompt.options}
-            onPick={(value) => chat.send(value)}
-            disabled={chat.busy}
-          />
-          {prompt.hint && <p className={styles['slot-hint']}>{t(...prompt.hint)}</p>}
-        </section>
-      )}
+        {(chat.phase === 'thinking' || chat.phase === 'working') && (
+          <ToolStatus working={chat.phase === 'working' && !hasActiveTool} />
+        )}
 
-      {(chat.phase === 'thinking' || chat.phase === 'working') && (
-        <ToolStatus steps={chat.steps} working={chat.phase === 'working'} />
-      )}
-
-      {chat.failedStep && !chat.busy && (
-        <div className={styles.recovery}>
-          {expired && draftText ? (
-            <>
-              <button type="button" className="btn btn-primary" onClick={() => onStart(draftText)}>
-                {t('Tạo phiên mới và tiếp tục', 'Start a new session and continue')}
-              </button>
+        {chat.failedStep && !chat.busy && (
+          <div className={styles.recovery}>
+            {expired && draftText ? (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => onStart(draftText)}
+                >
+                  {t('Tạo phiên mới và tiếp tục', 'Start a new session and continue')}
+                </button>
+                <button type="button" className="btn" onClick={chat.retry}>
+                  {t('Thử lại', 'Retry')}
+                </button>
+              </>
+            ) : (
               <button type="button" className="btn" onClick={chat.retry}>
                 {t('Thử lại', 'Retry')}
               </button>
-            </>
-          ) : (
-            <button type="button" className="btn" onClick={chat.retry}>
-              {t('Thử lại', 'Retry')}
-            </button>
-          )}
-          {expired && (
-            <span className={styles['recovery-note']}>
-              {t('Bản nháp vẫn còn; không mất nội dung.', 'Your draft is kept; nothing is lost.')}
-            </span>
-          )}
-        </div>
-      )}
+            )}
+            {expired && (
+              <span className={styles['recovery-note']}>
+                {t('Bản nháp vẫn còn; không mất nội dung.', 'Your draft is kept; nothing is lost.')}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className={styles['composer-dock']}>
         <Composer busy={chat.busy || !chat.client} onSend={chat.send} />
       </div>
-      <div ref={bottomRef} />
     </div>
   );
 }

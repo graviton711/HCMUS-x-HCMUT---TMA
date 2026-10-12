@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import {
   readAuthProfile,
   SessionHistoryPanel,
@@ -61,12 +61,15 @@ export function App() {
     document.title = `${label} · TourLens`;
   }, [route.path, t]);
 
-  useEffect(() => {
-    if (route.hash)
+  useLayoutEffect(() => {
+    if (route.hash) {
       document
         .getElementById(route.hash.slice(1))
         ?.scrollIntoView({ block: 'start', behavior: 'instant' });
-  }, [route.path, route.hash]);
+      return;
+    }
+    window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+  }, [route.path, route.session, route.hash]);
 
   function startSession(initialText?: string) {
     const next = createSession();
@@ -119,19 +122,21 @@ export function App() {
     ) : null;
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} data-workspace={isWorkspace || undefined}>
       <a className="skip-link" href="#main-content">
         {t('Đến nội dung chính', 'Skip to main content')}
       </a>
       <AppHeader onLink={link} />
-      <div className={`app-shell ${isWorkspace ? 'workspace-open' : ''}`}>
+      <div className={`app-shell ${isWorkspace ? 'workspace-open' : 'public-open'}`}>
         <SessionHistoryPanel
           sessions={sessions}
           currentId={current?.id}
           routePath={route.path}
+          desktopVisible={isDesktop}
           profile={profile}
           mobileOpen={drawerOpen}
           onMobileClose={() => setDrawerOpen(false)}
+          onStart={() => startSession()}
           sidebarCollapsed={sidebar.collapsed}
           sidebarWidth={sidebar.width}
           onSidebarWidthChange={sidebar.setWidth}

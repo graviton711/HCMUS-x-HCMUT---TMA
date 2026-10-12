@@ -1,25 +1,24 @@
-# backend/input — text/form thành điều kiện
+# backend/input — validate điều kiện có cấu trúc
 
 ## Trách nhiệm
 
-Biến một lượt nhập của user (text tự do và/hoặc form) thành `Requirement`: điều kiện cứng (so bằng code) + sở thích mềm (so bằng LLM) + slot `missing`. Không đọc catalog, không so sánh.
+Chuẩn hóa và kiểm tra `Requirement` có cấu trúc do agent tools gửi. Không trích điều kiện từ câu tự do, không đọc catalog và không so sánh.
 
 ## Input/output
 
-Vào: `{text?, form?, drop_fields?}` với form (điểm đến, nơi khởi hành, ngày đi/về, ngân sách max, số khách, phương tiện, lưu trú). Ra: `Requirement` kèm quote; cái nào không parse được vào `missing`, không đoán. `drop_fields` loại field cứng khỏi form, text và `missing` (dùng cho nới điều kiện).
+Vào: điều kiện JSON có field/operator/value/strength/quote đã được agent xác định. Ra: `Requirement` hợp lệ. Tiền chỉ là integer VND; ngày chỉ là ISO dương lịch; dữ liệu lỗi định dạng bị từ chối hoặc trở thành `unknown`, không tự quy đổi/đoán. Lunar date được chuyển đổi riêng qua tool `clarify_date`.
 
 ## Workflow
 
-Form map thẳng thành điều kiện cứng → text gửi NIM `extract` (prompt ở `configs/prompts/extract.yaml`, model/timeout ở `configs/settings.yaml` → `backend.nim`) → merge (form thắng khi conflict) → normalize (currency về VND, ngày về ISO) → check readiness (slot nào trong `required_slots` còn thiếu thì vào `missing`, không đoán). Ngày âm lịch được đổi sang dương lịch bằng `vi_lunaire` sau khi kiểm tra round-trip; NIM chỉ nhận ngày tham chiếu và mốc Tết đã tính sẵn, không tự tính lịch. Điều kiện nhiều lựa chọn dùng operator `any`; singleton được chuẩn hóa về `contains`. Ngân sách do NIM trả về chỉ được nhận khi câu nhập có chữ số tường minh. Không có key thì keyword offline, tên địa danh lấy từ catalog đang search (không list cứng).
+Agent gửi điều kiện đã cấu trúc tới tool; validator kiểm tra field/operator/value và giữ quote làm chứng cứ cho nguồn user. Điều kiện nhiều lựa chọn dùng operator `any`. `clarify_date` dùng `vi_lunaire` và kiểm tra round-trip trước khi trả ISO. `relax_criterion` xóa đúng một hard condition rồi chạy lại hard filter.
 
 ## Interface với module khác
 
-`api` gọi trước `decide`. Gọi NIM qua HTTPS (`nim.py`); không có `NVIDIA_NIM_API` thì text chỉ keyword và phần còn lại ở `missing`. Chỉ phụ thuộc `models.py`.
+Agent MCP tools gọi validator trước `decide`; không có keyword parser hoặc NIM extraction fallback. Chỉ phụ thuộc `models.py` và lunar calendar helper.
 
 ## Quyết định kỹ thuật
 
-- Một prompt duy nhất, không prompt từng field: rẻ, ít chỗ hỏng.
-- Form thắng text khi conflict: dữ liệu explicit hơn suy diễn.
-- Không machine trạng thái hội thoại/proposal: một lượt vào, một requirement ra.
-- Lịch âm luôn tính bằng thư viện xác định; output của mô hình chỉ cung cấp thành phần năm/tháng/ngày để validate và resolve.
-- Nhiều lựa chọn trong cùng một field được giữ thành một condition OR, không bị hiểu nhầm thành nhiều điều kiện AND.
+- Không trích xuất điều kiện bằng regex, từ khóa hoặc LLM phụ; agent là hội thoại và công cụ là ranh giới dữ liệu có cấu trúc.
+- Chỉ chấp nhận tiền VND dạng integer và ngày ISO; không có heuristic đổi đơn vị/định dạng.
+- Lịch âm được tính bằng thư viện xác định và kiểm tra round-trip.
+- Nhiều lựa chọn trong cùng một field là một condition OR (`any`).

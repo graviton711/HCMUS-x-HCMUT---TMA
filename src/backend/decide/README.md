@@ -1,25 +1,23 @@
-# backend/decide — lọc, chấm, rank, phân tích
+# backend/decide — hard filter, soft verdicts, ranking
 
 ## Trách nhiệm
 
-Toàn bộ luồng compare: lọc cứng pool → LLM chấm trường mềm trên survivors → rank → phân tích (chi phí ẩn, điều kiện, rủi ro, quyền lợi). Không lưu trữ, không HTTP.
+Áp hard rules xác định trên từng offer; giữ nguyên reason codes, freshness/trust gates, near-miss và phân tích dữ kiện tour. Sau hard pass, áp verdict mềm do agent gửi và xếp theo số `fit`, rồi giá exact VND.
 
 ## Input/output
 
-Vào: `Requirement` + list `TourSnapshot` + hook LLM. Ra: `Comparison` gồm rank candidate ids, `near_miss` cho offer fail không quá `near_miss_max_fails` điều kiện cứng (xếp pass nhiều → fail ít → giá rẻ, `unknown` không tính là fail), snapshot đầy đủ của candidates, chấm `pass`/`fail`/`unknown` từng offer kèm evidence, và `Analysis` chi phí/điều kiện/rủi ro/quyền lợi. Snapshots được lưu cùng comparison để detail/history render lại đúng dữ kiện đã chấm. Unknown không pass, không rank trên pass cứng. Nhóm đạt đủ không bao giờ lẫn offer fail.
+Vào: `Requirement`, snapshots đã normalize và verdict map `(offer_id, condition_id) → (pass|unknown|fail, quote, reason)`. Ra: `Comparison` gồm hard/soft evaluations, ranked hard-pass offers, near-miss, snapshots và analysis. `unknown` không bao giờ được tính là hard pass.
 
 ## Workflow
 
-`hard_filter`: mọi điều kiện cứng đánh giá trên từng offer. Destination match bỏ origin endpoints; destination thiếu/partial là unknown. Giá chỉ so khi fresh, trusted, exact, cùng currency/basis; giá `from` chỉ fail nếu lower bound đã vượt trần, nếu không unknown. `any` khớp ít nhất một lựa chọn → chỉ các tour còn offer không fail vào `assess_soft`: một call LLM cho pool survivors (prompt ở `configs/prompts/assess.yaml`, excerpt/quote theo `backend.decide` trong `configs/settings.yaml`), chấm itinerary/inclusions/exclusions/child/cancellation kèm quote → `rank`: hard status trước, rồi điểm mềm, rồi giá → `near_miss`: offer bị loại nhưng fail ≤ `near_miss_max_fails` (mặc định 2, chỉnh trong `backend.decide`) được xếp riêng để UI render nhóm "Gần đạt" kèm lý do fail → `analyze`: khui surcharges, điều kiện, rủi ro availability/verification và quyền lợi matched từ text snapshot (chạy trên cả hai nhóm).
+`hard_filter` đánh giá mọi hard condition. `passing_offers` chỉ nhận offer nếu tất cả điều kiện hard đều `pass`; unknown và fail đều bị loại khỏi ranked. `score_soft` chỉ chấm offer trong tập này; quote sai hoặc thiếu được thay bằng unknown trước khi gọi `compare`. `rank` đếm soft `pass`, tie-break bằng giá exact; `near_miss` giữ riêng offer fail ít điều kiện hoặc còn unknown; `analyze` tóm tắt phụ phí, điều khoản, rủi ro và quyền lợi.
 
 ## Interface với module khác
 
-`api` gọi. Đọc rows qua `data`, đổi qua `normalize`, parse user qua `input`. LLM qua `assess_fn` inject; không có thì mềm ở `unknown` và rank bằng cứng + giá.
+`workflows.py` cung cấp snapshots từ `data` qua `normalize`. MCP `query_tours`, `score_soft` và `relax_criterion` gọi engine; engine không truy cập HTTP, catalog, storage hay LLM.
 
 ## Quyết định kỹ thuật
 
-- Cứng trước mềm sau, luôn: pool LLM nhỏ, chi phí chặn trên (`candidate_limit`, excerpt caps).
-- Chấm theo offer, không theo tour: tour pass chỉ qua offer pass của nó.
-- Không chạy soft assessment cho tour đã bị loại bởi hard filter; khi một tour có nhiều offer, chỉ gửi một snapshot mỗi tour.
-- Một call LLM mỗi comparison, không phải mỗi candidate: ít hỏng, merge deterministic.
-- What-if chưa có runtime; khi port phải chạy trên snapshot/revision đã lưu, apply chỉ tạo proposal và search tiếp cần user confirm tường minh.
+- Không còn 0–1 score hoặc LLM callback trong engine.
+- Không chấm mềm cho offer có bất kỳ hard condition nào chưa được chứng minh là pass.
+- Near-miss không trộn vào ranked; mọi kết quả giữ condition state, reason code và source quote.

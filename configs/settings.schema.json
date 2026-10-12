@@ -117,32 +117,10 @@
           },
           "additionalProperties": true
         },
-        "nim": {
-          "type": "object",
-          "properties": {
-            "model": {"type": "string"},
-            "timeout_s": {"type": "number"}
-          },
-          "additionalProperties": true
-        },
-        "input": {
-          "type": "object",
-          "properties": {
-            "money_units": {"type": "object"},
-            "budget_words": {"type": "array", "items": {"type": "string"}},
-            "departure_markers": {"type": "array", "items": {"type": "string"}},
-            "required_slots": {"type": "array", "items": {"type": "string"}},
-            "window_before": {"type": "integer"},
-            "window_budget": {"type": "integer"},
-            "quote_chars": {"type": "integer"}
-          },
-          "additionalProperties": true
-        },
         "decide": {
           "type": "object",
           "properties": {
             "soft_fields": {"type": "array", "items": {"type": "string"}},
-            "excerpt_chars": {"type": "integer"},
             "quote_chars": {"type": "integer"},
             "risk_words": {"type": "array", "items": {"type": "string"}},
             "analysis_chars": {"type": "integer"},

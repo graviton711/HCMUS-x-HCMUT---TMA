@@ -832,5 +832,5 @@ def test_bare_publish_runs_all_profiles(monkeypatch, tmp_path):
     monkeypatch.setattr(pipeline_mod, "publish_snapshot",
                         lambda out_dir, profile: published.append(profile) or {"tours": 0})
     assert pipeline_mod.main(["--publish"]) == 0
-    assert sorted(published) == ["dulichviet", "saigontourist", "vietravel"]
+    assert sorted(published) == ["dulichviet", "saigontourist", "vietravel", "viettourist"]
 

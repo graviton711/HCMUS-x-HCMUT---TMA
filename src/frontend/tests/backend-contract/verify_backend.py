@@ -17,7 +17,6 @@ def collect() -> list[dict[str, object]]:
     settings = Settings.load(
         database_url="sqlite:///:memory:",
         data_provider="fixture",
-        nvidia_nim_api="",
     )
     captured: list[dict[str, object]] = []
 
@@ -35,7 +34,10 @@ def collect() -> list[dict[str, object]]:
         req = save(
             "requirement",
             "requirement",
-            client.post("/requirements", headers=headers, json={"text": "Đà Lạt"}),
+            client.post(
+                "/requirements", headers=headers,
+                json={"text": "Đà Lạt", "form": {"destinations": ["Đà Lạt"]}},
+            ),
         )["requirement"]
         save("saved requirement", "requirement", client.get(f"/requirements/{req['id']}", headers=headers))
         comp = save(

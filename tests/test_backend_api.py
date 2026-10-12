@@ -2,13 +2,14 @@
 
 from fastapi.testclient import TestClient
 
+from backend.agent.runner import OpenCodeRunner
 from backend.api import create_app
 
 
-def _client(tmp_path):
+def _client(tmp_path, **overrides):
     from backend.settings import Settings
 
-    settings = Settings.load(database_url=f"sqlite:///{tmp_path / 'api.db'}")
+    settings = Settings.load(database_url=f"sqlite:///{tmp_path / 'api.db'}", **overrides)
     assert settings.data_provider == "fixture"
     return TestClient(create_app(settings))
 
@@ -22,7 +23,11 @@ def test_health(tmp_path):
 def test_full_compare_flow(tmp_path):
     client = _client(tmp_path)
     req = client.post(
-        "/requirements", json={"text": "Đà Lạt 3 ngày, từ Sài Gòn, tối đa 8 triệu/người"}
+        "/requirements",
+        json={"text": "ignored free text", "form": {
+            "destinations": ["Đà Lạt"], "duration_days": 3, "departure_city": "Sài Gòn",
+            "budget_max": 8_000_000,
+        }},
     ).json()["requirement"]
     assert req["id"]
     assert "destination" not in req["missing"]
@@ -37,9 +42,14 @@ def test_full_compare_flow(tmp_path):
     assert again["tour_snapshots"] == comp["tour_snapshots"]
 
 
-def test_text_only_comparison(tmp_path):
+def test_free_text_is_not_interpreted_without_explicit_fields(tmp_path):
     client = _client(tmp_path)
-    comp = client.post("/comparisons", json={"text": "Phú Quốc 4 ngày"}).json()["comparison"]
+    response = client.post("/requirements", json={"text": "Phú Quốc 4 ngày"})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "REQUIREMENT_INVALID"
+
+    req = client.post("/requirements", json={"form": {"destinations": ["Phú Quốc"]}}).json()["requirement"]
+    comp = client.post("/comparisons", json={"requirement_id": req["id"]}).json()["comparison"]
     assert comp["candidates_considered"] == 3
     assert {c["tour_id"] for c in comp["ranked"]} == {"vtr-phuquoc-4n"}
 
@@ -61,7 +71,7 @@ def test_guest_session_scopes_requirements_and_history(tmp_path):
     created = client.post(
         "/requirements",
         headers={"Authorization": f"Bearer {token_a}"},
-        json={"text": "Đà Lạt"},
+        json={"form": {"destinations": ["Đà Lạt"]}},
     )
     assert created.status_code == 200
     requirement_id = created.json()["requirement"]["id"]
@@ -134,8 +144,10 @@ def test_history_cursor_and_detail_are_owner_scoped(tmp_path):
     session = client.post("/sessions").json()
     headers = {"Authorization": f"Bearer {session['token']}"}
     requirement_ids = []
-    for text in ("Đà Lạt", "Phú Quốc"):
-        response = client.post("/requirements", headers=headers, json={"text": text})
+    for destination in ("Đà Lạt", "Phú Quốc"):
+        response = client.post(
+            "/requirements", headers=headers, json={"form": {"destinations": [destination]}}
+        )
         requirement_ids.append(response.json()["requirement"]["id"])
 
     first = client.get("/history?limit=1", headers=headers)
@@ -176,3 +188,127 @@ def test_error_messages_are_ascii_english(tmp_path):
     for body in bodies:
         message = body["error"]["message"]
         assert message and message.isascii(), message
+
+
+def test_agent_session_is_owner_scoped_and_uses_request_response(tmp_path, monkeypatch):
+    monkeypatch.setattr(OpenCodeRunner, "_executable", lambda _self: "opencode")
+
+    async def fake_events(_self, message, session_id):
+        assert message == "Tôi muốn đi Phú Quốc"
+        assert session_id is None
+        yield {
+            "type": "text",
+            "part": {
+                "text": "Để tôi kiểm tra.",
+                "metadata": {"openai": {"phase": "commentary"}},
+            },
+        }
+        yield {
+            "type": "text",
+            "sessionID": "ses_abcdefgh12345678",
+            "part": {"text": "Bạn muốn đi vào tháng nào?"},
+        }
+
+    monkeypatch.setattr(OpenCodeRunner, "events", fake_events)
+    client = _client(tmp_path, opencode_server_url="http://127.0.0.1:4098")
+    owner = client.post("/sessions").json()
+    other = client.post("/sessions").json()
+    own_headers = {"Authorization": f"Bearer {owner['token']}"}
+    other_headers = {"Authorization": f"Bearer {other['token']}"}
+
+    assert client.post("/agent/sessions").status_code == 401
+    created = client.post("/agent/sessions", headers=own_headers)
+    assert created.status_code == 201
+    agent_id = created.json()["agent_session_id"]
+    response = client.post(
+        f"/agent/sessions/{agent_id}/messages",
+        headers=own_headers,
+        json={"message": "Tôi muốn đi Phú Quốc"},
+    )
+    assert response.status_code == 200
+    assert response.json()["assistant_text"] == "Bạn muốn đi vào tháng nào?"
+    assert client.post(
+        f"/agent/sessions/{agent_id}/messages", headers=other_headers,
+        json={"message": "Xin chào"},
+    ).status_code == 404
+    assert client.get("/history", headers=own_headers).json()["items"] == []
+
+
+def test_agent_sse_includes_safe_tool_activity_summary(tmp_path, monkeypatch):
+    monkeypatch.setattr(OpenCodeRunner, "_executable", lambda _self: "opencode")
+
+    async def fake_events(_self, _message, _session_id):
+        part = {
+            "tool": "tour-catalog_query_tours",
+            "callID": "call-1",
+            "state": {
+                "status": "running",
+                "input": {"conditions": [{"field": "destination", "value": "Đà Lạt"}]},
+            },
+        }
+        yield {"type": "tool_use", "part": part}
+        yield {"type": "text", "part": {"text": "Đã đối chiếu."}}
+
+    monkeypatch.setattr(OpenCodeRunner, "events", fake_events)
+    client = _client(tmp_path, opencode_server_url="http://127.0.0.1:4098")
+    guest = client.post("/sessions").json()
+    headers = {"Authorization": f"Bearer {guest['token']}"}
+    agent_id = client.post("/agent/sessions", headers=headers).json()["agent_session_id"]
+
+    response = client.post(
+        f"/agent/sessions/{agent_id}/messages",
+        headers={**headers, "Accept": "text/event-stream"},
+        json={"message": "Tìm tour Đà Lạt"},
+    )
+
+    assert response.status_code == 200
+    assert 'event: tool\ndata: {"id":"call-1","name":"query_tours","message":"Đối chiếu tour theo: điểm đến Đà Lạt","status":"running"}' in response.text
+
+
+def test_agent_surfaces_model_access_errors_instead_of_empty_success(tmp_path, monkeypatch):
+    monkeypatch.setattr(OpenCodeRunner, "_executable", lambda _self: "opencode")
+
+    async def fake_events(_self, _message, _session_id):
+        yield {
+            "type": "error",
+            "error": {
+                "name": "APIError",
+                "data": {"statusCode": 403, "message": "provider denied the free-tier model"},
+            },
+        }
+
+    monkeypatch.setattr(OpenCodeRunner, "events", fake_events)
+    client = _client(tmp_path, opencode_server_url="http://127.0.0.1:4098")
+    owner = client.post("/sessions").json()
+    headers = {"Authorization": f"Bearer {owner['token']}"}
+    agent_id = client.post("/agent/sessions", headers=headers).json()["agent_session_id"]
+    response = client.post(
+        f"/agent/sessions/{agent_id}/messages",
+        headers=headers,
+        json={"message": "chào"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "OPENCODE_MODEL_ACCESS_DENIED"
+
+
+def test_agent_rejects_empty_opencode_response(tmp_path, monkeypatch):
+    monkeypatch.setattr(OpenCodeRunner, "_executable", lambda _self: "opencode")
+
+    async def fake_events(_self, _message, _session_id):
+        if False:
+            yield {}
+
+    monkeypatch.setattr(OpenCodeRunner, "events", fake_events)
+    client = _client(tmp_path, opencode_server_url="http://127.0.0.1:4098")
+    owner = client.post("/sessions").json()
+    headers = {"Authorization": f"Bearer {owner['token']}"}
+    agent_id = client.post("/agent/sessions", headers=headers).json()["agent_session_id"]
+    response = client.post(
+        f"/agent/sessions/{agent_id}/messages",
+        headers=headers,
+        json={"message": "chào"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["error"]["code"] == "OPENCODE_RESPONSE_EMPTY"
