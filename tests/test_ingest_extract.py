@@ -112,6 +112,56 @@ def test_same_origin_getter_refuses_cross_origin():
         getter("https://evil.test/api")
 
 
+def test_same_origin_getter_enforces_exact_origin_and_robots():
+    import json
+    from urllib.robotparser import RobotFileParser
+
+    from ingest.fetch import FetchResult, SafeFetcher
+
+    calls = []
+
+    class FakeFetcher(SafeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
+            calls.append((url, origin_host))
+            return FetchResult(url, 200, "application/json", json.dumps({"ok": True}).encode())
+
+    robots = RobotFileParser("https://example.test/robots.txt")
+    robots.parse(["User-agent: *", "Disallow: /private"])
+    getter = same_origin_getter("https://example.test/tour", FakeFetcher(), robots)
+    assert getter("https://example.test/api") == {"ok": True}
+    assert calls == [("https://example.test/api", "https://example.test")]
+    with pytest.raises(OSError, match="cross-origin"):
+        getter("http://example.test/api")
+    with pytest.raises(OSError, match="disallows"):
+        getter("https://example.test/private")
+
+
+def test_self_test_api_getter_uses_disk_cache_and_robots(tmp_path):
+    from urllib.robotparser import RobotFileParser
+
+    from ingest.extract import _cached_api_getter
+    from ingest.fetch import FetchResult, SafeFetcher
+
+    class FakeFetcher(SafeFetcher):
+        calls = 0
+
+        def fetch(self, url, origin_host="", extra_headers=None):
+            self.calls += 1
+            return FetchResult(url, 200, "application/json", b'{"name":"Da Lat"}')
+
+    robots = RobotFileParser("https://example.test/robots.txt")
+    robots.parse(["User-agent: *", "Disallow: /private"])
+    fetcher = FakeFetcher()
+    get = _cached_api_getter("https://example.test/tour", fetcher, robots, tmp_path / "api-cache")
+
+    assert get("https://example.test/api/tour") == {"name": "Da Lat"}
+    assert _cached_api_getter("https://example.test/tour", fetcher, robots,
+                              tmp_path / "api-cache")("https://example.test/api/tour") == {"name": "Da Lat"}
+    assert fetcher.calls == 1
+    with pytest.raises(OSError, match="disallows"):
+        get("https://example.test/private/data")
+
+
 def test_crawl_fields_full_row_with_deferred_api():
     profile = {
         "fields": {

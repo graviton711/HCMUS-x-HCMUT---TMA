@@ -17,17 +17,16 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
-import re
 import shutil
 import subprocess
 import sys
 import time
+import urllib.robotparser
 from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
 
 from shared import ensure_utf8_stdout
 
@@ -73,19 +72,33 @@ def _robots_sitemaps(text: str) -> list[str]:
 
 def _save_url(url: str, raw_dir: Path, user_agent: str = USER_AGENT,
               timeout_s: float = PREFETCH_TIMEOUT_S,
-              max_bytes: int = MAX_BODY_BYTES) -> str | None:
-    name = re.sub(r"[^A-Za-z0-9._-]+", "_", urlsplit(url).path.strip("/")) or "robots.txt"
+              max_bytes: int = MAX_BODY_BYTES,
+              origin_host: str = "",
+              robots: urllib.robotparser.RobotFileParser | None = None,
+              fetcher=None) -> str | None:
+    """Save one same-origin public response through the bounded fetcher."""
+    from .fetch import RateLimiter, SafeFetcher
+
+    host = (urlsplit(url).hostname or "").lower()
+    scope_host = (urlsplit(origin_host).hostname or "").lower() if "://" in origin_host else origin_host.lower()
+    if not host or (origin_host and host != scope_host):
+        return None
+    if robots is not None and not robots.can_fetch(user_agent, url):
+        return None
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256(url.encode("utf-8")).hexdigest()[:16]
+    name = ("robots.txt" if urlsplit(url).path.endswith("/robots.txt")
+            else f"discovery-{digest}.xml")
     dest = raw_dir / name
     if dest.exists():
         return None
-    try:
-        req = Request(url, headers={"User-Agent": user_agent})
-        with urlopen(req, timeout=timeout_s) as resp:
-            body = resp.read(max_bytes)
-        dest.write_bytes(body)
-        return name
-    except Exception:
+    client = fetcher or SafeFetcher(timeout=timeout_s, max_bytes=max_bytes,
+                                    user_agent=user_agent, limiter=RateLimiter(1.0))
+    result = client.fetch(url, origin_host or host)
+    if result.status_code != 200 or result.error:
         return None
+    dest.write_bytes(result.body)
+    return name
 
 
 def _agent_env() -> dict[str, str] | None:
@@ -104,31 +117,48 @@ def _agent_env() -> dict[str, str] | None:
 
 
 def prefetch(origin: str, raw_dir: Path, settings: dict | None = None) -> list[str]:
-    """Best-effort: save robots.txt and its declared sitemaps into raw/.
+    """Save robots and same-origin sitemaps using bounded polite GETs.
 
-    Mechanical work the agent would otherwise burn HTTP requests and LLM
-    turns on; any failure is ignored (the agent still handles the source).
+    This is discovery bootstrap only. Full tour discovery/fetch happens after
+    the agent has written its profile via :mod:`ingest.survey_fetch`.
     """
     survey_cfg = (settings or {}).get("survey", {})
     fetch_cfg = (settings or {}).get("fetch", {})
     user_agent = str(fetch_cfg.get("user_agent", USER_AGENT))
     timeout_s = float(survey_cfg.get("prefetch_timeout_s", PREFETCH_TIMEOUT_S))
     max_bytes = int(survey_cfg.get("max_body_bytes", MAX_BODY_BYTES))
-    def save(url: str) -> str | None:
-        return _save_url(url, raw_dir, user_agent, timeout_s, max_bytes)
-
     base = origin.rstrip("/")
-    robots = save(f"{base}/robots.txt")
-    if robots:
-        sitemaps = _robots_sitemaps(
-            (raw_dir / robots).read_text(encoding="utf-8", errors="replace"))
-    else:
+    from .fetch import RateLimiter, SafeFetcher
+
+    fetcher = SafeFetcher(timeout=timeout_s, max_bytes=max_bytes,
+                          user_agent=user_agent, limiter=RateLimiter(1.0))
+    host = (urlsplit(base).hostname or "").lower()
+    if not host:
+        return []
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    robots_url = f"{base}/robots.txt"
+    robots_result = fetcher.fetch(robots_url, base)
+    saved: list[str] = []
+    robots = urllib.robotparser.RobotFileParser(robots_url)
+    if robots_result.status_code == 200 and not robots_result.error:
+        robots_text = robots_result.body.decode("utf-8", errors="replace")
+        robots.parse(robots_text.splitlines())
+        (raw_dir / "robots.txt").write_text(robots_text, encoding="utf-8")
+        saved.append("robots.txt")
+        sitemaps = [url for url in _robots_sitemaps(robots_text)
+                    if (urlsplit(url).hostname or "").lower() == host]
+    elif robots_result.status_code in (404, 410):
+        robots.parse([])
         sitemaps = []
-    sitemaps.append(f"{base}/sitemap.xml")
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        names = pool.map(save, dict.fromkeys(sitemaps))
-        saved = [robots] if robots else []
-        saved.extend(name for name in names if name)
+    else:
+        return saved
+    if not sitemaps:
+        sitemaps = [f"{base}/sitemap.xml"]
+    for url in dict.fromkeys(sitemaps):
+        name = _save_url(url, raw_dir, user_agent, timeout_s, max_bytes,
+                         base, robots, fetcher)
+        if name:
+            saved.append(name)
     return saved
 
 

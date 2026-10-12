@@ -53,7 +53,7 @@ backend:
     candidate_max: 100
     session_ttl_seconds: 2592000
   data:
-    scan_limit: 1000
+    scan_limit: 2000
     providers_limit: 100
     connect_timeout_s: 8
     trusted_domains: []

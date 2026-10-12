@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import argparse
 import csv
+import gzip
 import hashlib
+import io
 import json
 import os
 import queue
@@ -19,27 +21,50 @@ import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Generator, Sequence
 from pathlib import Path
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from typing import Protocol
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 from shared import ensure_utf8_stdout, get_logger, now_vn_iso
 
 from . import extract, quality
 from .extract import load_profile, load_settings
-from .fetch import BrowserSession, SafeFetcher, fetch_robots, make_fetcher
-from .quality import BLOCKED, FETCH_FAIL, OK, PARSE_FAIL, departure_evidence, verify_record
+from .fetch import BrowserSession, FetchResult, fetch_robots, make_fetcher
+from .quality import BLOCKED, FETCH_FAIL, OK, PARSE_FAIL, departure_evidence, verify_record_fields
 
 log = get_logger("pipeline")
+
+
+class Fetcher(Protocol):
+    """Transport interface shared by the guarded survey wrapper and crawler."""
+
+    def fetch(self, url: str, origin_host: str = "",
+              extra_headers: dict | None = None) -> FetchResult: ...
 
 CSV_COLUMNS = ["url", "observed_at", "profile", "status", "title",
                "departures", "verified", "notes_keys", "record_evidence", "error"]
 
 
-def _fetch_sitemap(fetcher: SafeFetcher, sitemap: str, attempts: int = 2) -> bytes | None:
+def _fetch_sitemap(fetcher: Fetcher, sitemap: str, attempts: int = 2,
+                   origin_host: str = "", gaps: list[str] | None = None) -> bytes | None:
     """Retry `attempts` times; None when all fail (logged once)."""
     last_error: object = "unknown"
     for _ in range(max(1, attempts)):
-        result = fetcher.fetch(sitemap)
+        result = fetcher.fetch(sitemap, origin_host)
         if result.status_code == 200 and not result.error:
+            if sitemap.lower().endswith(".gz"):
+                try:
+                    with gzip.GzipFile(fileobj=io.BytesIO(result.body)) as stream:
+                        body = stream.read(2_000_001)
+                except (OSError, EOFError) as exc:
+                    log.warning("sitemap gzip invalid %s %s", sitemap, exc)
+                    if gaps is not None:
+                        gaps.append(f"sitemap_decompress_failed:{sitemap}")
+                    return None
+                if len(body) > 2_000_000:
+                    if gaps is not None:
+                        gaps.append(f"sitemap_decompressed_over_2mb:{sitemap}")
+                    return None
+                return body
             return result.body
         last_error = result.error or result.status_code
     log.warning("sitemap failed %s %s", sitemap, last_error)
@@ -75,52 +100,59 @@ def _urlset_entries(body: bytes, patterns: list[str]) -> list[tuple[str, str]]:
     return out
 
 
-def sitemap_urls(fetcher: SafeFetcher, sitemaps: list[str],
+def sitemap_urls(fetcher: Fetcher, sitemaps: list[str],
                  patterns: list[str], min_lastmod: str = "",
-                 attempts: int = 2) -> list[str]:
-    """Tour URLs from sitemaps, following one sitemap-index level down.
+                 attempts: int = 2, gaps: list[str] | None = None) -> list[str]:
+    """Tour URLs from same-origin sitemaps, recursively following indexes.
 
     Freshest first (by sitemap lastmod, ISO strings compare directly);
     `min_lastmod` drops anything older. Lastmod is a crawl-ordering hint
     only, never published as tour data.
     """
     stamped: dict[str, str] = {}
-    children: list[str] = []
-    for sitemap in sitemaps:
-        body = _fetch_sitemap(fetcher, sitemap, attempts)
+    seed = next((url for url in sitemaps if urlsplit(url).hostname), "")
+    origin_host = (urlsplit(seed).hostname or "").lower()
+    queue = list(dict.fromkeys(sitemaps))
+    seen_sitemaps: set[str] = set()
+    while queue:
+        sitemap = queue.pop(0)
+        if sitemap in seen_sitemaps:
+            continue
+        seen_sitemaps.add(sitemap)
+        if (urlsplit(sitemap).hostname or "").lower() != origin_host:
+            if gaps is not None:
+                gaps.append(f"cross_origin_sitemap:{sitemap}")
+            continue
+        body = _fetch_sitemap(fetcher, sitemap, attempts, origin_host, gaps)
         if body is None:
+            if gaps is not None:
+                gaps.append(f"sitemap_fetch_failed:{sitemap}")
             continue
         try:
             root = ET.fromstring(body)
         except ET.ParseError:
             log.warning("sitemap unparseable %s", sitemap)
+            if gaps is not None:
+                gaps.append(f"sitemap_parse_failed:{sitemap}")
             continue
         if root.tag.rsplit("}", 1)[-1] == "sitemapindex":
             for node in root.iter():
                 if node.tag.rsplit("}", 1)[-1] == "loc" and node.text:
                     child = node.text.strip()
-                    if child.lower().endswith(".xml"):
-                        children.append(child)
+                    if child and child not in seen_sitemaps:
+                        queue.append(child)
             continue
         for url, lastmod in _urlset_entries(body, patterns):
-            if url not in stamped or (lastmod and lastmod > stamped[url]):
-                stamped[url] = lastmod
-    for child in children:
-        body = _fetch_sitemap(fetcher, child, attempts)
-        if body is None:
-            continue
-        try:
-            ET.fromstring(body)
-        except ET.ParseError:
-            log.warning("sitemap unparseable %s", child)
-            continue
-        for url, lastmod in _urlset_entries(body, patterns):
+            if (urlsplit(url).hostname or "").lower() != origin_host:
+                if gaps is not None:
+                    gaps.append(f"cross_origin_tour_url:{url}")
+                continue
             if url not in stamped or (lastmod and lastmod > stamped[url]):
                 stamped[url] = lastmod
     if min_lastmod:
         stamped = {url: stamp for url, stamp in stamped.items() if stamp >= min_lastmod}
     ordered = sorted(stamped, key=lambda url: (stamped[url], url), reverse=True)
-    log.info("sitemap urls: %d tours from %d sitemaps", len(ordered), len(sitemaps) + len(children))
+    log.info("sitemap urls: %d tours from %d sitemaps", len(ordered), len(seen_sitemaps))
     return ordered
 
 
@@ -147,10 +179,9 @@ def _listing_links(body: bytes, entry: str, patterns: list[str]) -> list[str]:
         href = (double_quoted or single_quoted).strip()
         if not href or href.startswith(("#", "javascript:", "mailto:", "tel:")):
             continue
-        if href.startswith("/"):
-            href = f"{base.scheme}://{base.netloc}{href}"
+        href = urljoin(entry, href)
         parts = urlsplit(href)
-        if parts.netloc.lower() != base.netloc.lower():
+        if parts.scheme != base.scheme or parts.netloc.lower() != base.netloc.lower():
             continue
         if any(pat in parts.path for pat in patterns):
             out.append(href)
@@ -170,18 +201,19 @@ def _listing_max_page(body: bytes, page_param: str, cap: int) -> int:
 
 
 def _fetch_listing_page(page: int, entry: str, page_param: str, per_page_param: str,
-                        per_page: int, attempts: int, fetcher: SafeFetcher,
-                        factory: Callable[[], SafeFetcher] | None) -> bytes | None:
+                        per_page: int, attempts: int, fetcher: Fetcher,
+                        factory: Callable[[], Fetcher] | None) -> bytes | None:
     worker = factory() if factory is not None else fetcher
     return _fetch_sitemap(worker, _page_url(entry, page_param, per_page_param, per_page, page),
                           attempts)
 
 
-def search_page_urls(fetcher: SafeFetcher, discovery: dict,
+def search_page_urls(fetcher: Fetcher, discovery: dict,
                      patterns: list[str], attempts: int = 2, workers: int = 1,
                      limit: int = 0,
                      on_page: Callable[[int, list[str]], None] | None = None,
-                     fetcher_factory: Callable[[], SafeFetcher] | None = None) -> list[str]:
+                     fetcher_factory: Callable[[], Fetcher] | None = None,
+                     gaps: list[str] | None = None) -> list[str]:
     """Unique tour slugs from SSR paginated lists (one card link per departure).
 
     Page 1 reveals the real last page via its paging links; iteration stops
@@ -214,9 +246,16 @@ def search_page_urls(fetcher: SafeFetcher, discovery: dict,
                 fresh.append(key)
         return fresh
 
+    origin_host = (urlsplit(entry).hostname or "").lower()
+    if not origin_host:
+        if gaps is not None:
+            gaps.append("invalid_listing_origin")
+        return []
     first = _fetch_sitemap(fetcher, _page_url(entry, page_param, per_page_param, per_page, 1),
-                           attempts)
+                           attempts, origin_host)
     if first is None:
+        if gaps is not None:
+            gaps.append(f"listing_fetch_failed:page=1:{entry}")
         return []
     if on_page is not None:
         on_page(1, harvest(first))
@@ -227,7 +266,10 @@ def search_page_urls(fetcher: SafeFetcher, discovery: dict,
         log.info("search pages: %d unique tours from %d raw links over 1 page (limit hit)",
                  len(ordered), raw)
         return ordered
-    pages = _listing_max_page(first, page_param, cap)
+    detected_pages = _listing_max_page(first, page_param, max(cap, 2**31 - 1))
+    if detected_pages > cap and gaps is not None:
+        gaps.append(f"listing_page_cap:{detected_pages}>{cap}")
+    pages = min(detected_pages, cap)
     log.info("search pages: walking %d pages", pages)
     width = 1 if workers <= 1 else max(2, workers * 2)
     for start in range(2, pages + 1, width):
@@ -246,9 +288,13 @@ def search_page_urls(fetcher: SafeFetcher, discovery: dict,
                     drain.close()
                     raise outcome
                 log.warning("search page %d failed %s", page, outcome)
+                if gaps is not None:
+                    gaps.append(f"listing_fetch_failed:page={page}:{outcome}")
                 continue
             body = outcome
             if body is None:
+                if gaps is not None:
+                    gaps.append(f"listing_fetch_failed:page={page}")
                 continue
             fresh = harvest(body)
             if on_page is not None:
@@ -265,18 +311,19 @@ def search_page_urls(fetcher: SafeFetcher, discovery: dict,
     return ordered
 
 
-def discover_urls(fetcher: SafeFetcher, profile: dict,
+def discover_urls(fetcher: Fetcher, profile: dict,
                   patterns: list[str], min_lastmod: str = "",
                   attempts: int = 2, workers: int = 1, limit: int = 0,
                   on_page: Callable[[int, list[str]], None] | None = None,
-                  fetcher_factory: Callable[[], SafeFetcher] | None = None) -> list[str]:
+                  fetcher_factory: Callable[[], Fetcher] | None = None,
+                  gaps: list[str] | None = None) -> list[str]:
     """Enumerate tour URLs via the profile's declared discovery method."""
     discovery = profile.get("discovery") or {"method": "sitemap"}
     if discovery.get("method") == "search_pages" and discovery.get("entry"):
         return search_page_urls(fetcher, discovery, patterns, attempts, workers,
-                                limit, on_page, fetcher_factory)
+                                limit, on_page, fetcher_factory, gaps)
     return sitemap_urls(fetcher, profile.get("sitemaps", []), patterns,
-                        min_lastmod=min_lastmod, attempts=attempts)
+                        min_lastmod=min_lastmod, attempts=attempts, gaps=gaps)
 
 
 def _save_discovered(urls: list[str], path: Path) -> Path:
@@ -432,15 +479,15 @@ def run_tour(url: str, profile: dict, settings: dict, out_dir: Path,
     merged["page_prose"] = extract.page_prose(html)
 
     if profile.get("fields"):
-        record, record_raw = extract.crawl_fields(
-            html, profile, extract.same_origin_getter(page.url, fetcher),
-            include_raw=True)
+        record, record_raw, extraction_states = extract.crawl_fields_detailed(
+            html, profile, extract.same_origin_getter(page.url, fetcher, robots))
         merged["record"] = record
         merged["record_raw"] = record_raw
-        evidence_context = merged["page_prose"] + "\n" + extract.script_texts(html)
-        verdict, missing = verify_record(record, record_raw, evidence_context)
+        verdict, missing, field_checks = verify_record_fields(
+            record, record_raw, html, profile, extraction_states, merged["json_ld"])
         merged["record_evidence"] = verdict
         merged["record_missing"] = missing
+        merged["record_field_checks"] = field_checks
 
     browser_error = ""
     rendered_text = ""
@@ -808,7 +855,8 @@ def _key(*parts: object) -> str:
 
 
 def _field_meta(record: dict, record_raw: dict, missing: list,
-                tour_url: str, observed_at: str) -> dict:
+                tour_url: str, observed_at: str,
+                checks: dict | None = None) -> dict:
     """Per-field wrapper for the contract: flat columns stay for filtering,
     this JSON keeps {status, raw_value, evidence[]} so UI/audit can trace."""
     missing_set = set(missing or [])
@@ -817,9 +865,11 @@ def _field_meta(record: dict, record_raw: dict, missing: list,
         if field == "offers":
             continue
         empty = value in (None, "", [], {})
-        if empty:
+        check = checks.get(field, {}) if isinstance(checks, dict) else {}
+        check_status = check.get("status", "") if isinstance(check, dict) else ""
+        if check_status == "not_observed" or (empty and not check_status):
             status = "not_observed"
-        elif field in missing_set:
+        elif field in missing_set or check_status in {"failed", "unverified"}:
             status = "partial"
         else:
             status = "observed"
@@ -828,6 +878,9 @@ def _field_meta(record: dict, record_raw: dict, missing: list,
             raw = raw[:500]
         meta[str(field)] = {
             "status": status,
+            "check_status": check_status,
+            "check_reason": check.get("reason", "") if isinstance(check, dict) else "",
+            "source_coordinate": check.get("source", {}) if isinstance(check, dict) else {},
             "raw_value": raw,
             "evidence": [{
                 "source_url": tour_url,
@@ -880,7 +933,8 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                 observed = detail.get("fetched_at", "")
                 record_raw = detail.get("record_raw") if isinstance(detail.get("record_raw"), dict) else {}
                 record_missing = detail.get("record_missing") or []
-                field_meta = _field_meta(record, record_raw, record_missing, tour_url, observed)
+                field_meta = _field_meta(record, record_raw, record_missing, tour_url, observed,
+                                         detail.get("record_field_checks"))
                 cursor.execute(
                     """INSERT INTO tours (record_key, provider_id, url, observed_at,
                            tour_name, departure_city, destinations, route, transport,
@@ -924,6 +978,7 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                      tour_url,
                      json.dumps({"record_evidence": detail.get("record_evidence", ""),
                                  "record_missing": detail.get("record_missing", []),
+                                 "record_field_checks": detail.get("record_field_checks", {}),
                                  "observed_at": detail.get("fetched_at", "")}),
                      json.dumps(field_meta, ensure_ascii=False)),
                 )

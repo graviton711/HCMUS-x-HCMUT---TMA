@@ -115,7 +115,8 @@ class SupabaseCatalog:
                         " destinations, route, transport, accommodation, duration_days,"
                         " price, currency, price_type, field_meta, itinerary,"
                         " inclusions, exclusions, cancellation_policy, surcharges, child_policy,"
-                        " verification_status, observed_at FROM tours LIMIT %s",
+                        " verification_status, observed_at FROM tours"
+                        " ORDER BY observed_at DESC NULLS LAST LIMIT %s",
                         (bound,),
                     )
                     tour_cols = [d[0] for d in (cur.description or [])]

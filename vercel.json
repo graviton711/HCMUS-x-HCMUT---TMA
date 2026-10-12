@@ -29,6 +29,8 @@
     { "source": "/comparisons/:cid", "destination": { "service": "api" } },
     { "source": "/history", "destination": { "service": "api" } },
     { "source": "/history/:item", "destination": { "service": "api" } },
+    { "source": "/agent/sessions", "destination": { "service": "api" } },
+    { "source": "/agent/sessions/:id/messages", "destination": { "service": "api" } },
     { "source": "/docs", "destination": { "service": "api" } },
     { "source": "/openapi.json", "destination": { "service": "api" } },
     { "source": "/(.*)", "destination": { "service": "web" } }

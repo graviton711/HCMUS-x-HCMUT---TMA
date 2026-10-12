@@ -7,6 +7,7 @@ cleaning happens only through reviewed `clean` expressions in profiles.
 
 from __future__ import annotations
 
+import hashlib
 import html as _html
 import json as _json
 import re as _re
@@ -241,10 +242,16 @@ def extract_api_field(rule: dict, row: dict, fetch_json: Callable[[str], object]
                       raw_out: dict | None = None) -> object:
     """GET a public same-origin JSON endpoint declared in the profile.
 
-    `{placeholders}` fill from fields extracted earlier. Origin check lives
-    in the caller's fetch_json; failures mean not_observed, never guesses.
+    `{placeholders}` fill from fields extracted earlier. Origin/robots checks
+    live in the caller's fetch_json; fetch failures are not source absence.
     When raw_out is given, the raw response text is stored under "response".
     """
+    if rule.get("status") == "not_observed":
+        if raw_out is not None:
+            raw_out["state"] = "declared_not_observed"
+        return None
+    if raw_out is not None:
+        raw_out["state"] = "api_fetch_failed"
     try:
         url = str(rule.get("url", "")).format(**{k: v for k, v in row.items() if isinstance(v, (str, int))})
     except (KeyError, IndexError, ValueError):
@@ -266,9 +273,15 @@ def extract_api_field(rule: dict, row: dict, fetch_json: Callable[[str], object]
         for part in str(rule["path"]).split("."):
             curr = curr.get(part) if isinstance(curr, dict) else None
         val = curr
-    if val is None:
+    if raw_out is not None:
+        raw_out["value"] = val
+        raw_out["state"] = "source_empty" if not _has_value(val) else "extracted"
+    if not _has_value(val):
         return None
-    return apply_clean(rule, val)
+    cleaned = apply_clean(rule, val)
+    if raw_out is not None:
+        raw_out["state"] = "extracted" if _has_value(cleaned) else "clean_empty"
+    return cleaned
 
 
 @overload
@@ -288,24 +301,68 @@ def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] |
     With include_raw=True returns (row, raw) where raw holds pre-clean values;
     evidence must always be checked against raw, never against cleaned output.
     """
+    row, raw, _states = crawl_fields_detailed(html, profile, fetch_json)
+    if include_raw:
+        return row, raw
+    return row
+
+
+def _has_value(value: object) -> bool:
+    return value is not None and value != "" and value != [] and value != {}
+
+
+def crawl_fields_detailed(html: str, profile: dict,
+                          fetch_json: Callable[[str], object] | None = None
+                          ) -> tuple[dict[str, Any], dict[str, Any], dict[str, str]]:
+    """Return cleaned row, exact pre-clean values, and extractor outcomes.
+
+    `source_empty` means the declared coordinate resolved but contained no
+    value; `selector_missing`/`extraction_error` mean the extractor failed to
+    locate or process it. These states are intentionally kept distinct.
+    """
     soup = BeautifulSoup(html, "html.parser")
     json_ld = parse_json_ld(html)
     row: dict[str, object] = {}
     raw: dict[str, object] = {}
+    states: dict[str, str] = {}
     deferred: dict[str, dict] = {}
     for field, rule in (profile.get("fields") or {}).items():
-        if rule and rule.get("source") == "api":
+        rule = rule or {}
+        if rule.get("status") == "not_observed":
+            row[str(field)] = ""
+            raw[str(field)] = ""
+            states[str(field)] = "declared_not_observed"
+            continue
+        if rule.get("source") == "api":
             deferred[str(field)] = rule
             continue
         try:
-            v = extract_field(soup, json_ld, rule or {})
-            r = _raw_field(soup, json_ld, rule or {})
+            raw_rule = dict(rule)
+            raw_rule.pop("clean", None)
+            raw_rule.pop("transform", None)
+            r = extract_field(soup, json_ld, raw_rule)
+            if r is None:
+                v = ""
+                state = ("source_empty" if _source_locator_exists(soup, json_ld, raw_rule)
+                         else "selector_missing")
+            elif not _has_value(r):
+                v = ""
+                state = "source_empty"
+            else:
+                try:
+                    v = apply_clean(rule, r)
+                    state = "extracted" if _has_value(v) else "clean_empty"
+                except Exception as exc:
+                    log.warning("field %s clean failed (%s: %s); left empty",
+                                field, type(exc).__name__, str(exc)[:120])
+                    v, state = "", "clean_error"
         except Exception as exc:
             log.warning("field %s failed (%s: %s); left empty",
                         field, type(exc).__name__, str(exc)[:120])
-            v, r = "", ""
+            v, r, state = "", "", "extraction_error"
         row[str(field)] = v if v is not None else ""
-        raw[str(field)] = r
+        raw[str(field)] = r if r is not None else ""
+        states[str(field)] = state
     if fetch_json is not None:
         for field, rule in deferred.items():
             holder: dict = {}
@@ -314,21 +371,22 @@ def crawl_fields(html: str, profile: dict, fetch_json: Callable[[str], object] |
             except Exception as exc:
                 log.warning("api field %s failed (%s: %s); left empty",
                             field, type(exc).__name__, str(exc)[:120])
+                holder["state"] = "clean_error"
                 v = ""
             row[field] = v if v is not None else ""
-            raw[field] = holder.get("response", "")
+            raw[field] = holder.get("value", "")
+            states[field] = str(holder.get("state", "api_fetch_failed"))
     else:
         for field in deferred:
             row[field] = ""
             raw[field] = ""
+            states[field] = "api_fetch_unavailable"
     offers = row.get("offers")
     if isinstance(offers, list):
         from .quality import normalize_offer, sort_offers
 
         row["offers"] = sort_offers([normalize_offer(d) for d in offers])
-    if include_raw:
-        return row, raw
-    return row
+    return row, raw, states
 
 
 def _raw_field(soup: BeautifulSoup, json_ld: list, rule: dict) -> object:
@@ -342,13 +400,41 @@ def _raw_field(soup: BeautifulSoup, json_ld: list, rule: dict) -> object:
     return v if v is not None else ""
 
 
-def same_origin_getter(page_url: str, fetcher: SafeFetcher) -> Callable[[str], object]:
-    """fetch_json callback that only allows same-origin GETs through the SafeFetcher."""
-    origin = (urlsplit(page_url).hostname or "").lower()
+def _source_locator_exists(soup: BeautifulSoup, json_ld: list, rule: dict) -> bool:
+    """Whether the declared anchor exists, even if its requested value is absent."""
+    source = rule.get("source")
+    if source == "css":
+        return soup.select_one(rule.get("selector", "")) is not None
+    if source == "json_ld":
+        entity = rule.get("entity", "")
+        return any(isinstance(item, dict) and
+                   (not entity or entity in str(item.get("@type", "")))
+                   for item in json_ld)
+    if source == "label_sibling":
+        return soup.find(string=_re.compile(_re.escape(rule.get("label", "")))) is not None
+    if source == "section":
+        return soup.find(lambda tag: tag.name in ("h1", "h2", "h3", "h4") and
+                         rule.get("start_label", "") in tag.get_text()) is not None
+    return False
+
+
+def same_origin_getter(page_url: str, fetcher: SafeFetcher, robots=None) -> Callable[[str], object]:
+    """Public, robots-allowed GETs through SafeFetcher at the exact page origin."""
+    page_parts = urlsplit(page_url)
+    origin = f"{page_parts.scheme}://{page_parts.netloc}"
+
+    def origin_key(url: str) -> tuple[str, str, int]:
+        parts = urlsplit(url)
+        port = parts.port or (443 if parts.scheme == "https" else 80)
+        return parts.scheme, (parts.hostname or "").lower(), port
 
     def fetch_json(url: str) -> object:
-        if (urlsplit(url).hostname or "").lower() != origin:
+        if origin_key(url) != origin_key(origin):
             raise OSError(f"cross-origin api not allowed: {url}")
+        if robots is None:
+            raise OSError("robots.txt unavailable for API request")
+        if not robots.can_fetch(fetcher.user_agent, url):
+            raise OSError(f"robots.txt disallows API URL: {url}")
         result = fetcher.fetch(url, origin)
         if result.error or result.status_code != 200:
             raise OSError(result.error or f"HTTP {result.status_code}")
@@ -358,18 +444,24 @@ def same_origin_getter(page_url: str, fetcher: SafeFetcher) -> Callable[[str], o
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Self-test entry: files (or URLs) + profile -> JSONL. Used by site surveys."""
+    """Extract files or verify every successful page in a survey manifest."""
     import argparse
     from pathlib import Path
 
     import yaml
 
     parser = argparse.ArgumentParser(prog="ingest-extract", description="Strict profile-DSL field extraction.")
-    parser.add_argument("targets", nargs="+")
+    parser.add_argument("targets", nargs="*")
+    parser.add_argument("--all", dest="all_dir", type=Path,
+                        help="self-test all tour HTML files described by tour_pages.csv")
     parser.add_argument("--profile", required=True)
     parser.add_argument("-o", "--output", default="tours.jsonl")
     args = parser.parse_args(argv)
-    profile = yaml.safe_load(Path(args.profile).read_text(encoding="utf-8"))
+    if bool(args.targets) == bool(args.all_dir):
+        parser.error("provide positional targets OR --all <raw-dir>")
+    profile = yaml.safe_load(Path(args.profile).read_text(encoding="utf-8")) or {}
+    if args.all_dir:
+        return _self_test_all(args.all_dir, Path(args.output), profile)
     rows = []
     fetcher = None
     for target in args.targets:
@@ -389,6 +481,159 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _cached_api_getter(page_url: str, fetcher: SafeFetcher, robots,
+                      cache_dir: Path) -> Callable[[str], object]:
+    """Same-origin robots-checked API GETs backed by a bounded disk cache."""
+    page_parts = urlsplit(page_url)
+    origin = f"{page_parts.scheme}://{page_parts.netloc}"
+    safe_get = same_origin_getter(page_url, fetcher, robots)
+
+    def get(api_url: str) -> object:
+        parts = urlsplit(api_url)
+        origin_parts = urlsplit(origin)
+        api_port = parts.port or (443 if parts.scheme == "https" else 80)
+        origin_port = origin_parts.port or (443 if origin_parts.scheme == "https" else 80)
+        if (parts.scheme, (parts.hostname or "").lower(), api_port) != (
+                origin_parts.scheme, (origin_parts.hostname or "").lower(), origin_port):
+            raise OSError(f"cross-origin api not allowed: {api_url}")
+        if robots is None or not robots.can_fetch(fetcher.user_agent, api_url):
+            raise OSError(f"robots.txt unavailable or disallows API URL: {api_url}")
+        cache_path = cache_dir / (hashlib.sha256(api_url.encode("utf-8")).hexdigest() + ".json")
+        if cache_path.exists() and cache_path.stat().st_size <= 2_000_000:
+            try:
+                return _json.loads(cache_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                pass
+        value = safe_get(api_url)
+        serialized = _json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        if len(serialized.encode("utf-8")) > 2_000_000:
+            raise OSError("API cache response exceeds 2 MB")
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache_path.write_text(serialized, encoding="utf-8")
+        return value
+
+    return get
+
+
+def _self_test_all(raw_dir: Path, output: Path, profile: dict) -> int:
+    """Run per-field checks against the complete fetched-tour manifest."""
+    import csv
+    from collections import Counter
+    from urllib.robotparser import RobotFileParser
+
+    from .fetch import RateLimiter, SafeFetcher
+    from .quality import verify_record_fields
+
+    raw_dir = raw_dir.resolve()
+    manifest = raw_dir / "tour_pages.csv"
+    gaps: list[str] = []
+    if not manifest.exists():
+        gaps.append("coverage_unknown:tour_pages.csv is missing")
+        entries = [{"index": str(i), "url": "", "file": path.name,
+                    "status": "ok", "error": ""}
+                   for i, path in enumerate(sorted(raw_dir.glob("tour-*.html")), 1)]
+    else:
+        with manifest.open(encoding="utf-8-sig", newline="") as handle:
+            entries = list(csv.DictReader(handle))
+    report_path = raw_dir / "survey_fetch_report.json"
+    if not report_path.exists():
+        gaps.append("coverage_unknown:survey_fetch_report.json is missing")
+    else:
+        try:
+            fetch_report = _json.loads(report_path.read_text(encoding="utf-8"))
+            gaps.extend(str(item) for item in fetch_report.get("gaps", []))
+            if fetch_report.get("discovered_unique") != len(entries):
+                gaps.append("coverage_count_mismatch:report_vs_manifest")
+        except (OSError, ValueError, AttributeError):
+            gaps.append("coverage_unknown:survey_fetch_report.json is invalid")
+    urls_in_manifest = [str(entry.get("url", "")) for entry in entries]
+    if len(set(urls_in_manifest)) != len(urls_in_manifest):
+        gaps.append("duplicate_tour_urls_in_manifest")
+    urls_path = raw_dir / "tour_urls.txt"
+    if not urls_path.exists():
+        gaps.append("coverage_unknown:tour_urls.txt is missing")
+    else:
+        listed_urls = [line.strip() for line in urls_path.read_text(encoding="utf-8").splitlines()
+                       if line.strip()]
+        if listed_urls != urls_in_manifest:
+            gaps.append("coverage_mismatch:tour_urls_vs_manifest")
+    if not entries:
+        gaps.append("no_tours_in_manifest")
+
+    rows: list[dict] = []
+    field_status: dict[str, Counter] = {}
+    failed_tours: list[str] = []
+    api_rules = [rule for rule in (profile.get("fields") or {}).values()
+                 if isinstance(rule, dict) and rule.get("source") == "api"]
+    api_fetcher = (SafeFetcher(max_bytes=2_000_000, user_agent="MLAITourSourceAuditor/0.1",
+                               limiter=RateLimiter(1.0), retries=2)
+                   if api_rules else None)
+    api_cache = raw_dir / "api-cache"
+    robots_parser = None
+    if api_rules:
+        robots_file = raw_dir / "robots.txt"
+        if robots_file.exists():
+            robots_parser = RobotFileParser(robots_file.resolve().as_uri())
+            robots_parser.parse(robots_file.read_text(encoding="utf-8", errors="replace").splitlines())
+        else:
+            gaps.append("api_gap:robots.txt snapshot is missing")
+
+    for entry in entries:
+        url = str(entry.get("url", ""))
+        status = str(entry.get("status", ""))
+        filename = str(entry.get("file", ""))
+        if status not in {"ok", "cached"} or not filename:
+            gaps.append(f"fetch_gap:{url or entry.get('index', '?')}:{entry.get('error', status)}")
+            failed_tours.append(url or str(entry.get("index", "?")))
+            continue
+        path = (raw_dir / filename).resolve()
+        if raw_dir not in path.parents or not path.is_file():
+            gaps.append(f"missing_or_unsafe_file:{url or filename}")
+            failed_tours.append(url or filename)
+            continue
+        try:
+            html_text = path.read_text(encoding="utf-8", errors="replace")
+            fetch_json: Callable[[str], object] | None = None
+            if api_fetcher is not None:
+                fetch_json = _cached_api_getter(url, api_fetcher, robots_parser, api_cache)
+
+            record, record_raw, states = crawl_fields_detailed(html_text, profile, fetch_json)
+            json_ld = parse_json_ld(html_text)
+            verdict, missing, checks = verify_record_fields(
+                record, record_raw, html_text, profile, states, json_ld)
+        except Exception as exc:
+            gaps.append(f"extract_failed:{url or filename}:{type(exc).__name__}:{exc}")
+            failed_tours.append(url or filename)
+            continue
+        rows.append({"url": url, "source_file": filename, "record": record,
+                     "record_raw": record_raw, "record_evidence": verdict,
+                     "record_missing": missing, "record_field_checks": checks})
+        if missing or verdict != "verified":
+            failed_tours.append(url or filename)
+        for name, check in checks.items():
+            field_status.setdefault(name, Counter())[str(check.get("status", "unknown"))] += 1
+            if check.get("reason") in {"api_fetch_failed", "api_fetch_unavailable"}:
+                gaps.append(f"api_gap:{url}:{name}:{check.get('reason')}")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text("\n".join(_json.dumps(row, ensure_ascii=False) for row in rows)
+                      + ("\n" if rows else ""), encoding="utf-8")
+    summary = {
+        "discovered": len(entries),
+        "checked": len(rows),
+        "failed_or_unverified_tours": list(dict.fromkeys(failed_tours)),
+        "gaps": list(dict.fromkeys(gaps)),
+        "fields": {name: dict(counts) for name, counts in sorted(field_status.items())},
+        "jsonl": str(output),
+    }
+    summary_path = output.with_suffix(output.suffix + ".summary.json")
+    summary_path.write_text(_json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+                            encoding="utf-8")
+    print(_json.dumps(summary, ensure_ascii=False, indent=2))
+    complete = len(rows) == len(entries) and not gaps and not failed_tours and bool(entries)
+    return 0 if complete else 1
+
+
 if __name__ == "__main__":
     from shared.runtime import run_cli
 
@@ -398,6 +643,7 @@ if __name__ == "__main__":
 __all__ = [
     "apply_clean",
     "crawl_fields",
+    "crawl_fields_detailed",
     "extract_api_field",
     "extract_field",
     "iso_to_dmy",

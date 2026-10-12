@@ -34,6 +34,15 @@ Mọi field trong cả ba entity dùng cùng wrapper:
 - `verification_status`: `provider_claimed` hoặc `independently_verified`. Nội dung trên website nhà cung cấp mặc định là tự khai báo.
 - `observed_at` ghi thời điểm thu thập theo giờ Việt Nam (`Asia/Ho_Chi_Minh`, ISO-8601 kèm offset), không có nghĩa dữ liệu là thời gian thực.
 
+### Kiểm chứng khi ingest
+
+Kiểm tra ingest xác nhận extractor lấy đúng kiểu dữ liệu từ đúng tọa độ nguồn đã khai báo; nó không biến nội dung nhà cung cấp thành xác minh độc lập. Vì thế `verification_status` của dữ liệu crawl vẫn là `provider_claimed`.
+
+- Mỗi tour detail giữ `record_field_checks`: trạng thái và lý do kiểm tra theo từng field. `record_evidence` là kết quả tổng hợp; `record_missing` liệt kê field chưa đạt. Các trường này phục vụ self-test/audit, không thay wrapper field trong catalog.
+- Giá trị có dữ liệu phải đúng kiểu/format của contract và được đối chiếu ngữ nghĩa với raw value trích từ rule nguồn tương ứng (ví dụ số giá/thời lượng phải có mặt trong raw, các chặng `route` phải giữ đúng thứ tự). So khớp chuỗi với toàn trang không được dùng để xác nhận field.
+- Giá trị rỗng chỉ được xem là `not_observed` nếu profile khai báo rõ và evidence/unknowns ghi cách đã kiểm tra nguồn. Extractor rỗng ngoài trường hợp đó là lỗi chưa giải quyết. Field bắt buộc không quan sát được làm self-test tour fail; crawler không được tự điền.
+- `destinations` là danh sách địa điểm riêng. Mỗi phần tử phải khớp một mục taxonomy (rule có thể khai báo `taxonomy_selector`) hoặc node địa điểm structured data của chính nguồn. Tách nhãn ghép chỉ khi nguồn xác nhận riêng từng thành phần. Không tách theo dấu gạch ngang một cách máy móc. `route` giữ toàn bộ chặng theo thứ tự, gồm điểm xuất phát và trung chuyển.
+
 ## Cấu trúc entity
 
 ```
@@ -65,7 +74,7 @@ Offer    { fields }
 |---|---|---|---|
 | `tour_name` | str | * | |
 | `departure_city` | str | * | một giá trị, điểm khởi hành |
-| `destinations` | list[str] | * | Title Case (`["Mộc Châu", "Sơn La"]`), không viết tắt, lọc từ taxonomy/breadcrumb, dùng để lọc |
+| `destinations` | list[str] | * | Mỗi phần tử là một địa điểm Title Case (`["Mộc Châu", "Sơn La"]`), không viết tắt, xác nhận bằng taxonomy/structured data của nguồn, dùng để lọc |
 | `route` | list[str] | | điểm dừng theo thứ tự, gồm transit, bỏ slogan (không dùng string gộp) |
 | `transport` | enum | | `flight` \| `bus` \| `train` \| `cruise` \| `mixed` |
 | `accommodation` | str | | `homestay` \| `2_star`–`5_star` \| `mixed` |

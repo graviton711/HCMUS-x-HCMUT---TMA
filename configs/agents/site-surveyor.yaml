@@ -14,7 +14,9 @@ prompt: |
   HARD RULES (violating any fails the task):
   - Public HTTP GET only, same origin. Respect robots.txt; never fetch a
     disallowed path. No login, no CAPTCHA/paywall bypass, no POST/PUT/DELETE,
-    no credentials or cookies. Max 60 requests total, >=1s apart, <=2MB each.
+    no credentials or cookies. No total-request cap; every request must be
+    >=1s apart and every response <=2MB. Use the bounded survey fetch helper
+    for complete discovery and tour-page downloads.
   - Never invent facts. Every claim needs a verbatim quote from a fetched page.
   - Write all output files inside the working directory only.
   - You may ONLY edit profile.yaml. You must never write or edit crawler code.
@@ -48,17 +50,17 @@ prompt: |
      exclusions, departure_pattern) or contains empty placeholder shells due to
      client-side JavaScript / Next.js hydration:
      - YOU DECIDE to activate browser rendering: set `render: true` and `flows: [browser]`.
-     - Use the provided `render_url.py` in your working directory to capture hydrated DOM:
-         python render_url.py <tour_url> raw/tour-1.html
-     - Inspect the hydrated HTML to locate the exact CSS / section / label coordinates.
+     - Use `python -m ingest.survey_fetch --profile profile.yaml --raw-dir raw`
+       to capture hydrated tour pages through the bounded same-origin browser route.
+     - Inspect the resulting `raw/tour-rendered-*.html` to locate exact coordinates.
 
   3. Internal API endpoints (per-departure detail like price_by_age, flights):
-     If a decision field only appears after clicking a departure, discover the
-     JSON endpoint with:
-         python render_url.py <tour_url> raw/tour-1.html --capture-net raw/api
-     then read raw/api/network.json and the saved response files, pick the right
-     endpoint, and declare a `source: api` rule in profile.yaml. The endpoint
-     must be a public same-origin GET and counts against your request budget.
+     If a decision field appears in a same-origin JSON response during page
+     render, read `raw/browser-api/network.json` and its saved response files,
+     then declare a `source: api` rule. Self-test fetches such endpoints through
+     the guarded GET client, robots policy, one-second pacing, and disk cache.
+     If the field only appears after a user interaction that the safe renderer
+     does not perform, document it as unresolved instead of bypassing the guard.
 
   CANONICAL FIELDS (the fixed target set; every field must be addressed):
   hard  (compared by code): tour_name, departure_city, destinations, route,
@@ -84,11 +86,11 @@ prompt: |
     hotel_location (verbatim text). OMIT an optional key entirely when the
     source does not publish it - never guess or null-fill. Prices on the
     schedule take precedence over the headline price.
-  - offers MUST be maximally enriched: before handover, actively check whether
-    richer per-departure data (price_by_age, flights, conditions, tour_code,
+  - offers MUST be maximally enriched: before handover, check whether richer
+    per-departure data (price_by_age, flights, conditions, tour_code,
     single_supplement, pickup_point) exists in static HTML, hydration blobs, or
-    via `render_url.py --capture-net raw/api` endpoint discovery - even if the
-    cached pages already pass self-test. An offers entry carrying only the 3
+    `raw/browser-api/network.json` - even if cached pages already pass. An
+    offers entry carrying only the 3
     required keys while richer public data exists on the site is an incomplete
     handover, not a pass.
   - When the site publishes no fixed dates, set offers: [] and
@@ -162,10 +164,20 @@ prompt: |
   If a field is not present on the site, declare:
     status: not_observed
 
+  DESTINATION VERIFICATION:
+  - The `destinations` rule must resolve each item as a single source-backed
+    place. Prefer structured-data Place/Country/City nodes. If the source uses
+    an on-page taxonomy instead, add `taxonomy_selector` on that field rule,
+    targeting only the authoritative destination taxonomy/breadcrumb labels.
+  - Do not treat route headings or a combined raw phrase as place confirmation.
+    For a label such as "Singapore – Malaysia", return two destinations only
+    when the source separately exposes both places. Keep ordered transit legs
+    in `route`. Record the per-place evidence in `evidence.md`.
+
   OUTPUT FILES (all five required, nothing else counts as done):
   1. `profile.yaml` with EXACTLY these keys:
      origin, render (boolean: true if browser rendering is needed, false otherwise),
-     flows (subset of [static, browser, api]), sitemaps (list),
+     flows (subset of [static, browser, combo_api_browser]), sitemaps (list),
      tour_url_patterns (list of path substrings identifying tour-detail URLs),
      discovery (map declaring HOW to enumerate tour links: method + pagination
      coordinates per the discovery contract in src/ingest/README.md section 2.4),
@@ -179,26 +191,35 @@ prompt: |
     per_page, max_pages (from the real last-page link, plus headroom), whether
     card links carry per-departure query params (e.g. ?startday=) needing
     strip_query, and which query params to keep as schedule seeds.
+  - If sitemap and listing are both available, declare the listing under
+    `discovery.listing` (or multiple sources under `discovery.listings`) even
+    when `discovery.method` is `sitemap`; the helper unions both inventories.
   - Self-test discovery on 2 list pages: count raw links vs unique slugs after
     normalization, and overlap against the sitemap set when both exist; record
-    the numbers in selftest.md as proof of no missed tours.
+    the numbers in selftest.md. After profile.yaml is written, run
+    `python -m ingest.survey_fetch --profile profile.yaml --raw-dir raw`;
+    this unions/dedupes sitemap and listing URLs, fetches every detail page,
+    caches successful pages, and writes `tour_pages.csv`. Do not use a hand-
+    selected sample for coverage.
   2. `evidence.md` -- the per-field evidence table. Every field row ends with
      one stability line: which tour variants of this source the rule is
      correct on, which dev tours proved it (tour-1..N), and which variant
      is not covered (write the gap honestly; uncovered is not failure,
      unreported is).
   3. `selftest.md` -- the per-field dev-set PASS/FAIL with the real JSONL output.
-  4. `raw/` -- saved raw bodies (robots.txt, sitemaps, tour-1.html .. tour-n.html).
+  4. `raw/` -- robots/sitemaps/listings, every fetched tour HTML, manifests,
+     rendered same-origin JSON responses, and API cache.
   5. `unknowns.md` -- fields/pages that could not be verified + why.
 
-  DEV-SET COVERAGE (all tours from sources, random from the tour list):
-  - Draw all tours (tour-1..tour-n) from the site's own
-    tour list (sitemap `chuong-trinh` or listing pages).
-  - After the draw, check the sample spans the source's variants: domestic +
+  DEV-SET COVERAGE (complete discovered inventory):
+  - Use every unique tour URL discovered from the site's own sitemap/listing;
+    the fetched page filenames and `tour_pages.csv` are the authoritative IDs.
+  - Check the full set spans the source's variants: domestic +
     international, each transport mode sold, each star rating / homestay if
     present, from-price + contact-price tours, tours with and without fixed
     departure dates, deep and shallow breadcrumbs.
-  - Dev-set pass when all n/n cases pass.
+  - Dev-set pass only when every discovered URL and every required field passes.
+    Any blocked/failed download, unresolved field, or capped listing is a gap.
 
   SELF-TEST LOOP (required before handover):
   - The engine module `ingest.extract` is importable (`PYTHONPATH` already includes
@@ -214,8 +235,11 @@ prompt: |
       python -c "import yaml; d=yaml.safe_load(open('profile.yaml',encoding='utf-8')); print(d['fields']['tour_name'])"
     If the printed value contains backslash-u escapes, rewrite the file.
   - Test your `profile.yaml` directly by running:
-      python -m ingest.extract raw/tour-1.html raw/tour-2.html raw/tour-3.html raw/tour-4.html raw/tour-5.html raw/tour-6.html raw/tour-7.html raw/tour-8.html raw/tour-9.html raw/tour-10.html raw/tour-11.html raw/tour-12.html raw/tour-13.html raw/tour-14.html raw/tour-15.html raw/tour-16.html raw/tour-17.html raw/tour-18.html raw/tour-19.html ...  raw/tour-n.html --profile profile.yaml -o selftest.jsonl
-  - Dev set must contain all tours from sources, not just 20 or etc...
+      python -m ingest.extract --all raw --profile profile.yaml -o selftest.jsonl
+  - `selftest.jsonl` includes `record_field_checks`; inspect the generated
+    `.summary.json` for total coverage and failing tour/field IDs.
+  - Never report full PASS if manifest gaps remain or a field is failed,
+    unverified, or required-but-not-observed.
   - Inspect `selftest.jsonl` to ensure canonical values follow `docs/data-contract.md`.
   - If any field is empty, malformed, or has dirty HTML entities, adjust your clean expression or selectors in `profile.yaml` and re-run.
   - Maximum 5 iterations.
@@ -230,6 +254,6 @@ handover_task: |
   NOTE: raw/ has been prefetched with robots.txt and sitemap XMLs.
   If raw/ already contains robots.txt, sitemaps or tour-*.html, DO NOT re-fetch them;
   use the existing files in raw/ and only download what is missing.
-  Before handover you MUST run the self-test loop over all n tours
-  different randomly-sampled tours using python -m ingest.extract, fix profile.yaml on any failure,
+  Before handover you MUST fetch and self-test every unique tour URL using
+  `ingest.survey_fetch` and `ingest.extract --all`; fix profile.yaml on failures,
   and record the final result in selftest.md.

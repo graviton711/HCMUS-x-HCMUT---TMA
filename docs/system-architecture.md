@@ -9,7 +9,6 @@ flowchart LR
     Agent --> OpenCode[opencode serve: agent + MCP]
     OpenCode --> Agent
     API --> Workflow[backend/workflows: application services]
-    Assistant --> Workflow
     Agent --> MCP[backend/agent: 7 grounded MCP tools]
     MCP --> Input[backend/input: validate điều kiện cấu trúc]
     MCP --> Workflow

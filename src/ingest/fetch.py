@@ -11,6 +11,7 @@ from __future__ import annotations
 import gzip as _gzip
 import hashlib
 import http.client as _http
+import io
 import ipaddress
 import json
 import re
@@ -54,12 +55,16 @@ class RateLimiter:
     def __init__(self, delay: float = 1.0):
         self.delay = delay
         self._last = 0.0
+        self._lock = threading.Lock()
 
     def wait(self) -> None:
-        wait_for = self.delay - (time.monotonic() - self._last)
-        if wait_for > 0:
-            time.sleep(wait_for)
-        self._last = time.monotonic()
+        # Serialize callers: the interval applies to actual request starts,
+        # even when a crawl has concurrent workers.
+        with self._lock:
+            wait_for = self.delay - (time.monotonic() - self._last)
+            if wait_for > 0:
+                time.sleep(wait_for)
+            self._last = time.monotonic()
 
 
 _DNS_TTL_S = 300.0
@@ -90,8 +95,16 @@ def validate_public_url(url: str, origin_host: str = "",
     host = (parts.hostname or "").lower()
     if parts.scheme not in {"http", "https"} or not host:
         raise UnsafeURLError("Only absolute HTTP(S) URLs are accepted")
-    if origin_host and host != origin_host.lower():
-        raise UnsafeURLError("Cross-origin URL is outside the crawl scope")
+    if origin_host:
+        if "://" in origin_host:
+            scope = urlsplit(origin_host)
+            scope_port = scope.port or (443 if scope.scheme == "https" else 80)
+            request_port = parts.port or (443 if parts.scheme == "https" else 80)
+            if (parts.scheme != scope.scheme or host != (scope.hostname or "").lower()
+                    or request_port != scope_port):
+                raise UnsafeURLError("Cross-origin URL is outside the crawl scope")
+        elif host != origin_host.lower():
+            raise UnsafeURLError("Cross-origin URL is outside the crawl scope")
     try:
         ips = _cached_ips(host, _DNS_TTL_S if dns_ttl is None else dns_ttl)
     except (OSError, ValueError) as exc:
@@ -155,14 +168,13 @@ class SafeFetcher:
             safe = validate_public_url(url, origin_host, self.dns_ttl)
         except UnsafeURLError as exc:
             return FetchResult(url, 0, "", b"", str(exc))
-        self.limiter.wait()
         self.requests_made += 1
         headers = {"User-Agent": self.user_agent, "Accept-Encoding": "gzip"}
         headers.update(extra_headers or {})
         last_exc: BaseException | None = None
         for attempt in range(self.retries):
             try:
-                result = self._get(safe, headers)
+                result = self._get(safe, headers, origin_host)
             except Exception as exc:
                 if not _retryable_exc(exc) or attempt + 1 >= self.retries:
                     return FetchResult(safe, 0, "", b"", f"{type(exc).__name__}: {exc}"[:200])
@@ -174,7 +186,7 @@ class SafeFetcher:
         assert last_exc is not None
         return FetchResult(safe, 0, "", b"", f"{type(last_exc).__name__}: {last_exc}"[:200])
 
-    def _get(self, safe: str, headers: dict) -> FetchResult:
+    def _get(self, safe: str, headers: dict, origin_host: str = "") -> FetchResult:
         """One attempt: redirects followed (max 5), gzip decoded, pooled conns."""
         current = safe
         for _ in range(_MAX_REDIRECTS + 1):
@@ -193,6 +205,7 @@ class SafeFetcher:
             status = 0
             heads: dict = {}
             for _ in range(2):
+                self.limiter.wait()
                 conn = _pool().get(key)
                 if conn is None:
                     conn = _dial(scheme, host, port, str(ips[0]), self.timeout)
@@ -213,7 +226,7 @@ class SafeFetcher:
                 raise _http.RemoteDisconnected("stale pooled connection")
             if status in _REDIRECT_STATUSES and heads.get("location"):
                 current = validate_public_url(urljoin(current, heads["location"]),
-                                              "", self.dns_ttl)
+                                              origin_host, self.dns_ttl)
                 continue
             if status == 304:
                 return FetchResult(safe, 304, "", b"", None, _response_validators(heads))
@@ -223,7 +236,10 @@ class SafeFetcher:
                                    "Response exceeds byte limit")
             if heads.get("content-encoding", "").lower().strip() == "gzip":
                 try:
-                    body = _gzip.decompress(wire)
+                    # Bound decompressed output too: a small gzip payload can
+                    # expand far beyond the response limit before a post-check.
+                    with _gzip.GzipFile(fileobj=io.BytesIO(wire)) as stream:
+                        body = stream.read(self.max_bytes + 1)
                 except Exception as exc:
                     return FetchResult(safe, status, "", b"",
                                        f"BadGzip: {exc}"[:200])
@@ -297,7 +313,11 @@ def make_fetcher(settings: dict) -> SafeFetcher:
 
 def fetch_robots(fetcher: SafeFetcher, site_base: str, origin_host: str):
     """Robots parser or None when unavailable (fail closed upstream)."""
-    result = fetcher.fetch(f"{site_base}/robots.txt", origin_host)
+    result = fetcher.fetch(f"{site_base}/robots.txt", site_base)
+    if result.status_code in (404, 410):
+        parser = urllib.robotparser.RobotFileParser(f"{site_base}/robots.txt")
+        parser.parse([])
+        return parser
     if result.status_code != 200 or result.error:
         return None
     parser = urllib.robotparser.RobotFileParser(f"{site_base}/robots.txt")

@@ -24,7 +24,9 @@
         "per_page": {"type": "integer"},
         "max_pages": {"type": "integer"},
         "strip_query": {"type": "boolean"},
-        "keep_query": {"type": "array", "items": {"type": "string"}}
+        "keep_query": {"type": "array", "items": {"type": "string"}},
+        "listing": {"$ref": "#/$defs/listingDiscovery"},
+        "listings": {"type": "array", "items": {"$ref": "#/$defs/listingDiscovery"}}
       },
       "additionalProperties": true
     },
@@ -54,5 +56,21 @@
     "junk_presentation_keys": {"type": "array", "items": {"type": "string"}},
     "keep_patterns": {"type": "array", "items": {"type": "string"}}
   },
-  "additionalProperties": true
+  "additionalProperties": true,
+  "$defs": {
+    "listingDiscovery": {
+      "type": "object",
+      "required": ["entry"],
+      "properties": {
+        "entry": {"type": "string", "format": "uri"},
+        "page_param": {"type": "string"},
+        "per_page_param": {"type": "string"},
+        "per_page": {"type": "integer"},
+        "max_pages": {"type": "integer"},
+        "strip_query": {"type": "boolean"},
+        "keep_query": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": true
+    }
+  }
 }

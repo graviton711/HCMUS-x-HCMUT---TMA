@@ -30,7 +30,7 @@ API: <http://127.0.0.1:8000/docs>. Mặc định local dùng SQLite và catalog 
 
 ## Frontend
 
-React UI nằm tại `src/frontend`. Guest search đã nối với API hiện tại từ session đến comparison snapshot; Auth, account history, proposals, jobs, contact và what-if chưa được port. Xem [tình trạng tích hợp](src/frontend/BACKEND-GAPS.md); tiếp tục phát triển trên `src/backend`, không khôi phục `src/api` cũ.
+React UI nằm tại `src/frontend`. Guest search đã nối với API hiện tại từ session đến comparison snapshot; Auth, account history, proposals, jobs, contact và what-if chưa được port. Tiếp tục phát triển trên `src/backend`, không khôi phục `src/api` cũ.
 
 ## Kiểm tra
 

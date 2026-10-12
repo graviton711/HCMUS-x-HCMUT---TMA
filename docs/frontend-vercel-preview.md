@@ -1,8 +1,14 @@
-# Deploy preview — một project Vercel, hai services
+# Deploy preview — Vercel web + Render backend single-box
 
-Frontend React/Vite (`web`) và backend FastAPI (`api`) deploy chung một project
-Vercel, một domain, theo [`docs/backend-contract.md`](backend-contract.md).
-Cấu hình duy nhất là `vercel.json` ở root.
+Frontend React/Vite (`web`) chạy trên Vercel; backend FastAPI + OpenCode agent
+chạy chung một container Docker trên Render (single-box, y hệt local dev:
+`opencode serve 127.0.0.1:4098` nội bộ + `tour-backend serve 0.0.0.0:$PORT`
+public). Lý do backend không ở Vercel: `backend/agent/runner.py` spawn binary
+`opencode` local (`shutil.which`), Vercel Python function không có binary này
+nên mọi route `/agent/*` trả 503 ở đó. Giữ service `api` trên Vercel chỉ cho
+các route đồng bộ cũ (xem Ranh giới); chat demo đi qua backend Render.
+Cấu hình Vercel duy nhất là `vercel.json` ở root; cấu hình Render là
+`render.yaml` + `Dockerfile` ở root.
 
 Trạng thái: API client chỉ gọi contract backend hiện tại (không `/v2`),
 contract tests xanh (`src/frontend/tests/backend-contract`). Deploy preview là
@@ -11,69 +17,68 @@ contract tests xanh (`src/frontend/tests/backend-contract`). Deploy preview là
 ## Kiến trúc
 
 ```text
-Browser ──same origin──▶ Vercel routing ──┬── /health, /sessions, /catalog,
-                                           │    /requirements*, /comparisons*,
-                                           │    /history*, /agent/sessions*,
-                                           │    /docs, /openapi.json
-                                           │    → service api (FastAPI)
-                                           └── còn lại → service web (Vite SPA)
+Browser ──Vercel preview URL──▶ web (Vite SPA)
+   │  VITE_API_BASE_URL=https://mlai-tour-backend.onrender.com
+   └──▶ Render mlai-tour-backend (Docker single-box)
+          ├── tour-backend 0.0.0.0:$PORT (public: /health, /sessions,
+          │    /catalog, /requirements*, /comparisons*, /history*,
+          │    /agent/sessions, /agent/sessions/*/messages, /docs)
+          └── opencode serve 127.0.0.1:4098 (container-local only,
+               repo + MCP tour-catalog trong image, không public)
 ```
 
-- Frontend gọi backend **same-origin**: `VITE_API_BASE_URL` để trống (đã là
-  default trong `src/frontend/src/shared/api/client.ts`) nên không set biến này
-  trên Vercel. Không có proxy Vite ở production. Nhờ cùng origin, CORS không
-  phát sinh trên đường chính (CORS settings vẫn giữ cho truy cập trực tiếp).
-- Service `api` là internal mặc định; chỉ 11 path liệt kê trong `vercel.json`
-  được public. Không có rewrite nào trỏ vào `api` ngoài danh sách đó.
-- Runtime store chạy Postgres (`migrations/004_runtime_store.sql`) nên backend
-  stateless, phù hợp serverless. Catalog đọc read-only từ cùng project Supabase.
+- Frontend gọi backend Render **cross-origin**: set `VITE_API_BASE_URL` trên
+  service `web` lúc build (client đọc `import.meta.env`, default rỗng =
+  same-origin). Backend cho phép origin qua `CORS_ORIGINS` (env Render) và
+  `cors_origin_regex` có sẵn (`https://[a-z0-9-]+\.vercel\.app`).
+- Service `api` trên Vercel còn lại phục vụ route đồng bộ cũ
+  (`/health`, `/sessions`, `/catalog`, `/requirements*`, `/comparisons*`,
+  `/history*`, `/docs`, `/openapi.json` + `/agent/*` rewrite nhưng agent 503
+  ở đó vì thiếu binary opencode). Sau demo xem xét gỡ để khỏi nuôi hai backend.
 
 ## Cấu hình trong repo
 
 | File                            | Vai trò                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------- |
-| `vercel.json`                   | Hai services + toàn bộ public routing. Không binding (xem dưới).                          |
-| `vercel_backend.py` (repo root) | Adapter Vercel; yêu cầu `SUPABASE_TOUR_DB_URL` là pooler PostgreSQL (xem dưới). Module path dạng file ở root vì Vercel không resolve dotted path dưới `src/`. |
-| `src/backend/data/sessions.py`  | Kết nối Postgres lazy (import không bao giờ dial DB; DB chết trả 503 JSON thay vì crash function) + reconnect-and-retry 1 lần khi kết nối chết sau idle (warm instance serverless).  |
+| `vercel.json`                   | Hai services + toàn bộ public routing Vercel.                                             |
+| `Dockerfile` (repo root)        | Image single-box Render: Node 22 + `opencode-ai` + `uv sync` + repo (MCP, agent, prompts). Chưa build-verify local (Docker engine không chạy được trên máy dev); lần build đầu trên Render là điểm verify. |
+| `render.yaml`                   | Service Docker `mlai-tour-backend` (free 0.1 CPU/512 MB — chật cho uvicorn+opencode+MCP; OOM thì nâng plan). |
+| `vercel_backend.py` (repo root) | Adapter Vercel cho service `api` legacy; yêu cầu `SUPABASE_TOUR_DB_URL` là pooler PostgreSQL (serverless không route được IPv6 direct). Module path dạng file ở root vì Vercel không resolve dotted path dưới `src/`. |
+| `src/backend/data/sessions.py`  | Kết nối Postgres lazy (import không bao giờ dial DB; DB chết trả 503 JSON thay vì crash function) + reconnect-and-retry 1 lần khi kết nối chết sau idle. |
 | `migrations/004_runtime_store.sql` | Bảng Postgres `runtime_sessions`/`runtime_records` (ingest runner áp dụng).            |
-| `configs/settings.yaml`         | `cors_origins` (dev) và `cors_origin_regex` (truy cập trực tiếp, không qua rewrite).      |
-
-## Vì sao không có binding
-
-Cuộc gọi duy nhất giữa hai services là browser → backend, mà binding chỉ inject
-vào function lúc runtime (không tồn tại lúc build static, browser cũng không đọc
-được). Same-origin rewrite thay thế hoàn toàn: không hostname cố định, preview
-nào gọi đúng backend của preview đó, không cần CORS tạm. Backend gọi Supabase và
-catalog trực tiếp bằng env, không qua service Vercel nào — thêm binding sẽ là config
-chết. OpenCode agent chưa được bật trên Vercel; production cần endpoint OpenCode riêng
-trước khi chat hoạt động.
+| `configs/settings.yaml`         | `cors_origins` (dev) và `cors_origin_regex` (cover `https://[a-z0-9-]+\.vercel\.app`).     |
 
 ## Env trên dashboard (người deploy điền, không commit)
 
-- Service `api`: `SUPABASE_TOUR_DB_URL` dùng chung cho runtime store (ghi) và catalog
-  (đọc). OpenCode chưa được cấu hình cho preview.
-- `SUPABASE_TOUR_DB_URL` trên Vercel bắt buộc là **pooler URL**
-  (`*.pooler.supabase.com`, IPv4). Direct URL (`db.*.supabase.co:5432`, IPv6)
-  không route được từ serverless và làm function crash lúc import.
-  Dạng đúng: `postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres`.
-- Không cần `DATABASE_URL` hoặc `DATA_PROVIDER`: khi có `SUPABASE_TOUR_DB_URL`,
-  backend dùng Postgres đó cho runtime và tự chọn catalog Supabase.
+- Render `mlai-tour-backend`: `SUPABASE_TOUR_DB_URL` (direct `db.*` dùng được —
+  container có full networking, không bắt buộc pooler), `CORS_ORIGINS`
+  (domain web Vercel), `OPENCODE_SERVER_URL=http://127.0.0.1:4098`,
+  `OPENCODE_MODEL` + `OPENCODE_AGENT` như `.env.example`. Không cần password
+  vì serve chỉ bind container-localhost, không public.
+- Vercel `web`: `VITE_API_BASE_URL=https://mlai-tour-backend.onrender.com`
+  (set lúc build — client embed tại build time).
+- Vercel `api` (legacy): giữ env cũ nếu còn dùng route đồng bộ ở đó.
 - `SUPABASE_TOUR_PUBLISHABLE_KEY` nằm trong `.env.example`, nhưng runtime hiện tại chưa đọc biến này.
-- Service `web`: không cần biến nào (`VITE_API_BASE_URL` cố tình để trống).
 - Preview dùng chung data Supabase với prod (ghi vào bảng `runtime_*`); chấp nhận
   được cho team test, tách DB sau nếu cần.
 
 ## Bước deploy
 
 1. **Migration (một lần):** `uv run python -c "from ingest.pipeline import migrate_db; migrate_db()"` với `.env` có `SUPABASE_TOUR_DB_URL`.
-2. **Vercel:** import repo, preset Services (Root Directory `.`). Kiểm tra preview build log: service `web` build Vite, service `api` bundle Python (không có `node_modules`, `tests`, `artifacts` — xem `excludeFiles`).
-3. **Kiểm sau deploy:** `/health` trả `{status: ok}`; `/tours` deep-link mở SPA (không 404); network tab không còn request `/v2`, không lỗi CORS; `/docs` mở được. Chat chờ OpenCode service riêng.
-4. **E2E lên preview:** `E2E_BASE_URL=https://<preview>.vercel.app` rồi chạy `test:e2e` (cần backend thật + Chrome, không dùng production data).
+2. **Render:** blueprint `render.yaml` build image lần đầu (điểm verify Dockerfile);
+  kiểm tra `/health`, rồi chat thử 1 turn end-to-end (SSE) trước demo.
+3. **Vercel:** import repo, preset Services (Root Directory `.`); set
+  `VITE_API_BASE_URL` trên service `web`.
+4. **Kiểm sau deploy:** `/health` Render trả `{status: ok}`; SPA mở được;
+  network tab không còn request `/v2`, không lỗi CORS; chat ra đủ 5 tour cards;
+  BGK query tự do có budget/date cứng mà giá stale/`from` thì `unknown` là đúng
+  policy — demo luồng near-miss/`relax_criterion` trong trường hợp này.
+5. **E2E lên preview:** `E2E_BASE_URL=https://<preview>.vercel.app` rồi chạy `test:e2e` (cần backend thật + Chrome, không dùng production data).
 
 ## Ranh giới
 
 - Auth/account chưa runtime → trang account/auth hiện là trang "chưa khả dụng", không kỳ vọng đăng nhập trên preview.
 - Bảng runtime nằm cùng project Supabase với catalog (tên `runtime_*`, ingest không chạm đến); nếu team muốn tách biệt tuyệt đối thì chuyển sang schema riêng và cập nhật migration.
-- Hobby tối đa 300s/invocation: agent turn timeout cần được kiểm tra cùng giới hạn nền tảng trước khi bật chat trên preview.
-- `render.yaml` còn lại cho đường deploy Render cũ; xóa khi team chốt chỉ dùng Vercel services để tránh hai đường drift nhau.
+- Render free ngủ khi idle (cold-start query đầu chậm) + tối đa timeout nền tảng:
+  giữ ấm trước giờ demo (cron ping hoặc lên plan trả phí 1 tháng).
 - Không tự deploy thêm service cloud khác trước khi smoke test trên backend chuẩn pass.

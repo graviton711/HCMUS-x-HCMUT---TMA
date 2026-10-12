@@ -138,11 +138,6 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) ->
         currency = "VND"
         basis = "per_adult"
         coverage = "tour_price"
-        if isinstance(v, dict):
-            amount = v.get("amount", v.get("upper"))
-            currency = str(v.get("currency") or "")
-            basis = str(v.get("basis") or "")
-            coverage = str(v.get("coverage") or "")
         if currency and currency.upper() != offer.currency.upper():
             return "unknown", "PRICE_CURRENCY_MISMATCH"
         if basis not in ("", "per_adult") or coverage not in ("", "tour_price"):

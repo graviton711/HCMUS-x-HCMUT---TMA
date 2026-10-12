@@ -50,7 +50,7 @@ Mỗi trường trong `fields.<field_name>` phải tuân thủ đúng một tron
    url: "https://site/api/tour?code={tour_code}"   # placeholder nạp từ field đã trích trước đó ({tour_code}, {url}...)
    path: data.departures            # dot-notation vào JSON response
    ```
-   Runner GET endpoint công khai same-origin SAU khi trích xong các field khác, đi bộ theo `path` rồi chạy `clean`. Cách dò endpoint: `render_url.py --capture-net <dir>` ghi lại mọi JSON XHR vào `<dir>/network.json`; agent đọc file đó rồi khai báo rule `api`. Vẫn chịu mọi quy tắc GET công khai same-origin.
+   Runner GET endpoint công khai same-origin SAU khi trích xong các field khác, đi bộ theo `path` rồi chạy `clean`. Cách dò endpoint trong survey: bật `render: true`, chạy `ingest.survey_fetch`, rồi kiểm tra `raw/browser-api/network.json`; agent đọc file đó rồi khai báo rule `api`.
 
 ### 2.2. Cơ chế làm sạch dữ liệu (`clean` & `transform`)
 
@@ -80,18 +80,23 @@ Runner thực thi cơ học biểu thức `clean` trên `val`. Nếu biểu th�
 ### 2.3. Cờ điều khiển Render (`render`) và Quy trình Quyết định
 
 Agent khảo sát tự chủ quyết định cấu hình render dựa trên bản chất kỹ thuật của website:
-* `render: false` (mặc định): Tải trang tĩnh qua HTTP GET (`urllib`). Sử dụng khi static HTML hoặc embedded JSON (JSON-LD, hydration blob) đã chứa đủ các trường canonical (như PYS Travel). Tối ưu tốc độ (~200ms/trang) và compute.
-* `render: true`: Tải và render JavaScript qua Playwright headless Chromium (`wait_until="networkidle"`). Bắt buộc sử dụng khi static HTML chỉ chứa placeholder rỗng hoặc thiếu các trường quyết định (`itinerary`, `inclusions`, `exclusions`, `departure_pattern`) do website là Next.js/React SPA render client-side (như Vietravel).
+* `render: false` (mặc định): Tải trang tĩnh qua `SafeFetcher` HTTP GET. Dùng khi static HTML hoặc embedded JSON đã có đủ trường canonical.
+* `render: true`: Tải và render JavaScript qua Playwright headless Chromium. Mọi browser request được route qua `SafeFetcher`; chỉ GET same-origin, robots-allowed, mỗi response tối đa 2 MB và request cách nhau ít nhất 1 giây. Dùng khi static HTML chỉ có placeholder rỗng hoặc thiếu trường quyết định do website là SPA.
 
 **Quy trình Agent tự quyết định:**
 1. Khảo sát static HTML trước: Tải HTML tĩnh và kiểm tra các trường canonical.
-2. Nếu các trường cốt lõi bị rỗng do client-side rendering:
-   - Chuyển sang flow browser: Dùng `python -m ingest.render` (file thật `render.py`, được copy thành `render_url.py` trong workdir survey) để lấy DOM hoàn chỉnh sau render vào `raw/tour-*.html`.
-   - Xác định tọa độ (CSS selector / section / label_sibling) trên DOM đã render.
-   - Khai báo `render: true` và `flows: [browser]` trong `profile.yaml`.
-3. Tự kiểm thử (`python -m ingest.extract`): Chạy kiểm thử trên các file đã render trong `raw/` và xác nhận kết quả trên file `.jsonl`.
+2. Nếu các trường cốt lõi bị rỗng do client-side rendering, khai `render: true`/`flows: [browser]` trước khi chạy `ingest.survey_fetch`; inspect DOM và `raw/browser-api/network.json` để định nghĩa tọa độ.
+3. Tự kiểm thử (`python -m ingest.extract --all`): Chạy trên toàn bộ tour trong manifest; API GET dùng chung giới hạn origin/robots/kích thước/tốc độ và cache `raw/api-cache/`.
 
-Trường không tồn tại trên web được đánh dấu: `status: not_observed`.
+Trường không tồn tại trên web được khai báo rõ bằng `status: not_observed` và phải ghi cách kiểm tra trong `evidence.md`/`unknowns.md`. Giá trị rỗng khi profile vẫn khai báo extractor là lỗi chưa phân loại, không được xem như vắng mặt hợp lệ. Field bắt buộc không quan sát được làm self-test tour fail; không suy đoán hay tự điền.
+
+Self-test kiểm tra toàn bộ tour detail đã phát hiện, không lấy mẫu mặc định 20. Tất cả URL phải được liệt kê/dedupe trước khi kiểm tra; fetch tuần tự theo từng origin, cách nhau ít nhất 1 giây, chỉ cùng origin, tôn trọng `robots.txt`, tối đa 2 MB mỗi response. Dùng cache để sửa profile và chạy lại extraction không tải lại các trang đã lấy. Lỗi sau retry phải có trong manifest và báo cáo coverage; không được tính thành PASS.
+
+`ingest.survey_fetch` thực hiện discovery và lưu snapshot/cache: `python -m ingest.survey_fetch --profile profile.yaml --raw-dir raw`. Lệnh union/dedupe URL từ sitemap và listing đã khai báo, ghi `tour_urls.txt` cùng `tour_pages.csv` (URL, file, status, error), rồi fetch tuần tự. Sitemap/listing và trang tour thành công được cache trong `raw/`; dùng `--refresh` để tải snapshot mới. Listing vượt `max_pages`, robots không tải được, hoặc trang lỗi sau retry đều được ghi là gap; không được tuyên bố coverage đầy đủ.
+
+`ingest.extract` hỗ trợ self-test toàn bộ HTML đã lưu: `python -m ingest.extract --all raw --profile profile.yaml -o selftest.jsonl`. Lệnh đọc mọi HTML theo manifest, xuất record cùng `record_field_checks`, và tóm tắt PASS/tổng cho từng field và từng tour. Nếu manifest có URL chưa tải thành công, có file hỏng hoặc field chưa xác minh thì báo GAP/FAIL và exit khác 0.
+
+Kiểm chứng có hai lớp: shape/format theo canonical field và evidence từ raw value tại rule nguồn. Destination phải là các địa điểm đơn được nguồn xác nhận bằng taxonomy/structured data; nhãn ghép chưa tách được thì báo unresolved, không tự split. Route là danh sách chặng có thứ tự. `record_field_checks` trong detail JSON cho biết `verified`, `not_observed`, `failed` hoặc `unverified` cùng lý do; `record_evidence` và `record_missing` vẫn là kết quả tổng hợp tương thích.
 
 ## 2.4. Hợp đồng Discovery (khai báo cách tìm link tour)
 
@@ -100,6 +105,15 @@ Mỗi site phân trang/search khác nhau nên agent phải khảo sát và khai 
 ```yaml
 discovery:
   method: sitemap            # sitemap | search_pages (mặc định sitemap khi thiếu khối này)
+  # Nếu sitemap là nguồn chính nhưng có listing riêng, khai báo thêm listing:
+  listing:
+    entry: "https://site/tim-kiem?q=&type=tour"
+    page_param: page
+    per_page_param: perPage
+    per_page: 50
+    max_pages: 200
+    strip_query: true
+  # Có thể khai nhiều listing phụ bằng `listings: [...]`.
   # --- search_pages: danh sách SSR phân trang, mỗi card link 1 lần/ngày khởi hành ---
   entry: "https://site/tim-kiem?q=&type=tour"  # trang 1 (đã chứa link trang 2..N)
   page_param: page            # tên query param số trang
@@ -110,7 +124,7 @@ discovery:
   keep_query: [startday]      # dự trữ: param lịch để seed offers ở bước sau
 ```
 
-Quy tắc agent khi khảo sát discovery: xác định SSR hay API/JS (SSR mới dùng `search_pages`; JS thì khai `render: true` + endpoint `api` nếu có); đọc tổng số tour trên trang 1 và link trang cuối để đặt `max_pages`; mô tả hình dạng link (có `?startday=` không) để đặt `strip_query`; self-test trên 2 trang rồi đối chiếu với tập sitemap (nếu có) để chứng minh không sót.
+Quy tắc agent khi khảo sát discovery: xác định SSR hay API/JS (SSR mới dùng `search_pages`; JS thì khai `render: true` + endpoint `api` nếu có); đọc trang cuối thật để đặt `max_pages`; mô tả hình dạng link (có `?startday=` không) để đặt `strip_query`; enumerate toàn bộ tour, dedupe URL và đối chiếu listing với sitemap khi có. Self-test cuối chạy trên toàn bộ tour đã enumerate, không chỉ 2 trang hoặc mẫu cố định.
 
 Vận hành `search_pages`: fetch song song theo `batch.workers` (mỗi worker một fetcher/limiter riêng, tốc độ tăng tuyến tính; `fetch.delay_s` là núm lịch sự duy nhất), đi theo đợt để giữ thứ tự trang ổn định; `--limit N` dừng ngay khi đủ N slug (smoke test chỉ tốn trang 1); mỗi đợt ghi nối `discovered.csv` và flush ngay nên ngắt giữa chừng vẫn giữ phần đã liệt kê. Batch crawl cũng lưu `_state.json` định kỳ, không chỉ lúc cuối. Batch crawl cách request cùng origin bằng start-spacing (`max(batch.delay_s, fetch.delay_s)` giữa các lần bắt đầu fetch) thay vì mutex ôm cả tour, nên parse song song mà vẫn lịch sự.
 
@@ -122,8 +136,9 @@ Vận hành `search_pages`: fetch song song theo `batch.workers` (mỗi worker m
 
 | Script | Trách nhiệm | Input | Output |
 |---|---|---|---|
-| `survey.py` (`python -m ingest.survey`) | Điều phối Agent khảo sát domain, tự kiểm thử bằng `ingest.extract` trên tập `raw/` | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
-| `render.py` | Helper render URL động qua Playwright Chromium, xuất HTML ra file; `--capture-net <dir>` ghi thêm mọi JSON response (XHR) vào `<dir>/` + index `network.json` để dò endpoint API. File thật là `render.py`, khi survey được copy thành `render_url.py` trong workdir (`survey.py` copy) nên docs agent ghi `render_url.py` | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
+| `survey.py` (`python -m ingest.survey`) | Điều phối Agent khảo sát domain; bootstrap robots/sitemap | Domain / origin URL | `profile.yaml`, `evidence.md`, `unknowns.md`, `raw/` |
+| `survey_fetch.py` (`python -m ingest.survey_fetch`) | Union/dedupe discovery URL, tải có robots/origin/rate/size guard, cache discovery/tour HTML và ghi gap manifest | `profile.yaml` | `tour_urls.txt`, `tour_pages.csv`, snapshot raw |
+| `render.py` | Helper thủ công render một URL động và capture JSON response; survey full inventory dùng `survey_fetch.py` để áp dụng origin/robots/size/rate guard cho mọi request | URL + File đích (+ `--capture-net`) | File HTML hoàn chỉnh sau render (+ network capture) |
 | `pipeline.py` (`python -m ingest`) | Crawl hàng loạt theo profile: trang tĩnh qua `extract.py`, site động qua `browser` khi profile khai báo flow | Danh sách URL + profile | CSV + JSON + provenance |
 | `run.py` (`python -m ingest.run --source <source>`) | Chạy full chuỗi một lệnh: survey (`--promote`) → discover → batch → migrate → publish; dừng ngay ở bước fail đầu tiên. Không audit trong chain (batch đã chấm evidence từng tour; audit chạy tay khi đổi profile/nguồn mới) | source trong `configs/sources-mvp.csv` | DB tour |
 | | `--discover` liệt kê link theo khối `discovery` và lưu `.local/<source>/discovered.csv` cho `--batch`; `--publish` và `audit --urls` mặc định trỏ vào output của batch (`<output.dir>/<source>/tours`, `tours.csv`) | | |

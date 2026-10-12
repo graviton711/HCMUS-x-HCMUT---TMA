@@ -111,6 +111,86 @@ def test_fetcher_refuses_unsafe_without_network():
     assert fetcher.requests_made == 0
 
 
+def test_validate_public_url_can_enforce_full_origin_scope(monkeypatch):
+    import ipaddress
+
+    import ingest.fetch as fetch_mod
+    from ingest.fetch import UnsafeURLError, validate_public_url
+
+    monkeypatch.setattr(fetch_mod, "_cached_ips",
+                        lambda host, ttl: [ipaddress.ip_address("8.8.8.8")])
+
+    assert validate_public_url("https://example.test/a", "https://example.test")
+    for url in ("http://example.test/a", "https://example.test:8443/a",
+                "https://other.test/a"):
+        try:
+            validate_public_url(url, "https://example.test")
+        except UnsafeURLError:
+            pass
+        else:
+            raise AssertionError(f"accepted out-of-origin URL {url}")
+
+
+def test_fetcher_bounds_gzip_expansion(monkeypatch):
+    import gzip
+    import ipaddress
+
+    import ingest.fetch as fetch_mod
+    from ingest.fetch import RateLimiter, SafeFetcher
+
+    class Response:
+        status = 200
+
+        def __init__(self, body):
+            self.body = body
+
+        def read(self, _limit):
+            return self.body
+
+        def getheaders(self):
+            return [("content-encoding", "gzip"), ("content-type", "text/html")]
+
+    class Connection:
+        def request(self, *_args, **_kwargs):
+            pass
+
+        def getresponse(self):
+            return Response(gzip.compress(b"x" * 10_000))
+
+    pool = {}
+    monkeypatch.setattr(fetch_mod, "validate_public_url", lambda url, *_args: url)
+    monkeypatch.setattr(fetch_mod, "_cached_ips",
+                        lambda *_args: [ipaddress.ip_address("8.8.8.8")])
+    monkeypatch.setattr(fetch_mod, "_pool", lambda: pool)
+    monkeypatch.setattr(fetch_mod, "_dial", lambda *_args: Connection())
+    fetcher = SafeFetcher(max_bytes=100, limiter=RateLimiter(0))
+
+    result = fetcher._get("https://example.test/tour", {}, "https://example.test")
+
+    assert result.error == "Response exceeds byte limit"
+
+
+def test_fetch_robots_distinguishes_absent_policy_from_fetch_failure():
+    from ingest.fetch import FetchResult, SafeFetcher, fetch_robots
+
+    class FakeFetcher(SafeFetcher):
+        def __init__(self, result):
+            super().__init__()
+            self.result = result
+
+        def fetch(self, url, origin_host="", extra_headers=None):
+            return self.result
+
+    missing = fetch_robots(FakeFetcher(FetchResult("https://example.test/robots.txt", 404, "",
+                                                   error="HTTP 404")),
+                           "https://example.test", "example.test")
+    assert missing is not None and missing.can_fetch("test-agent", "https://example.test/tour")
+    failed = fetch_robots(FakeFetcher(FetchResult("https://example.test/robots.txt", 503, "",
+                                                  error="HTTP 503")),
+                           "https://example.test", "example.test")
+    assert failed is None
+
+
 def test_departure_evidence_grades():
     from ingest.quality import departure_evidence
 
@@ -307,6 +387,23 @@ def test_sitemap_follows_index_and_retries_once():
     urls = sitemap_urls(FakeFetcher(), ["https://example.test/sitemap_tour_index.xml"], ["/du-lich-"])
     assert urls == ["https://example.test/du-lich-ha-long"]
     assert calls.count("https://example.test/sitemap_tour_index.xml") == 1
+
+
+def test_sitemap_reads_gzip_urlsets_with_output_size_cap():
+    import gzip
+
+    from ingest.fetch import FetchResult
+    from ingest.pipeline import sitemap_urls
+
+    xml = (b"<urlset><url><loc>https://example.test/du-lich-a</loc></url></urlset>")
+    compressed = gzip.compress(xml)
+
+    class FakeFetcher(SafeFetcher):
+        def fetch(self, url, origin_host="", extra_headers=None):
+            return FetchResult(url, 200, "application/gzip", compressed)
+
+    assert sitemap_urls(FakeFetcher(), ["https://example.test/tours.xml.gz"],
+                        ["/du-lich-"]) == ["https://example.test/du-lich-a"]
 
 
 def test_sitemap_orders_fresh_first_and_filters_since():
