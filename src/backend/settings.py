@@ -7,12 +7,13 @@ empty (absent key = feature off, guarded at use time).
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class DecideCfg(BaseModel):
@@ -50,6 +51,26 @@ class Tuning(BaseModel):
     decide: DecideCfg
     data: DataCfg
     api: ApiCfg
+
+
+def _string_list(value: Any) -> list[str]:
+    """Env/dashboard operators hand-edit these; accept JSON or bare CSV."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value]
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+        return [part.strip() for part in text.split(",") if part.strip()]
+    return [str(value)]
 
 
 def _resolve(path: str | Path | None, *parts: str) -> Path | None:
@@ -102,7 +123,7 @@ class Settings(BaseSettings):
 
     supabase_tour_db_url: str = ""
     supabase_scan_limit: int
-    supabase_tour_trusted_domains: list[str] = Field(default_factory=list)
+    supabase_tour_trusted_domains: Annotated[list[str], NoDecode] = Field(default_factory=list)
     supabase_tour_freshness_seconds: dict[str, int] = Field(
         default_factory=lambda: {"departure_date": 86400, "price": 86400}
     )
@@ -113,10 +134,15 @@ class Settings(BaseSettings):
     opencode_agent: str = "travel-consultant"
     opencode_timeout_seconds: float = 120
     agent_max_message_chars: int = 8000
-    cors_origins: list[str] = Field(default_factory=list)
+    cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     cors_origin_regex: str = ""
 
     tuning: Tuning
+
+    @field_validator("cors_origins", "supabase_tour_trusted_domains", mode="before")
+    @classmethod
+    def _split_string_list(cls, value: Any) -> list[str]:
+        return _string_list(value)
 
     @classmethod
     def load(cls, path: str | Path | None = None, **overrides: Any) -> Settings:

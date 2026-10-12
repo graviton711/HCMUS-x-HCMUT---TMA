@@ -65,6 +65,22 @@ def test_dotenv_file_wins_over_yaml(tmp_path):
     assert settings.opencode_model == "opencode/dotenv-model"
 
 
+def test_cors_origins_env_accepts_bare_csv_and_json(tmp_path, monkeypatch):
+    configs = _configs(tmp_path)
+    monkeypatch.setenv("CORS_ORIGINS", "https://app.example")
+    assert Settings.load(configs).cors_origins == ["https://app.example"]
+    monkeypatch.setenv("CORS_ORIGINS", "https://a.example, https://b.example")
+    assert Settings.load(configs).cors_origins == [
+        "https://a.example",
+        "https://b.example",
+    ]
+    monkeypatch.setenv("CORS_ORIGINS", '["https://a.example", "https://b.example"]')
+    assert Settings.load(configs).cors_origins == [
+        "https://a.example",
+        "https://b.example",
+    ]
+
+
 def test_incomplete_yaml_fails_loud(tmp_path):
     root = tmp_path / "configs"
     root.mkdir()
