@@ -29,7 +29,8 @@ COPY configs/ ./configs/
 COPY src/ ./src/
 COPY opencode.json ./
 COPY .opencode/ ./.opencode/
-RUN uv sync --frozen --no-dev
+COPY start.sh ./
+RUN chmod +x start.sh && uv sync --frozen --no-dev
 
 EXPOSE 8000
-CMD opencode serve --hostname 127.0.0.1 --port 4098 & exec uv run tour-backend serve --host 0.0.0.0 --port $PORT
+CMD ["./start.sh"]

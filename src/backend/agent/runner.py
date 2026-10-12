@@ -63,13 +63,14 @@ class OpenCodeRunner:
         if not self.configured:
             raise AppError("AGENT_DISABLED", "OpenCode agent is not configured.", 503)
         project_root = Path(__file__).resolve().parents[3]
+        remote_dir = self.settings.opencode_project_dir.strip()
         args = [
             self._executable(),
             "run",
             "--attach",
             self.settings.opencode_server_url.rstrip("/"),
             "--dir",
-            str(project_root),
+            remote_dir or str(project_root),
             "--agent",
             self.settings.opencode_agent,
             "--format",

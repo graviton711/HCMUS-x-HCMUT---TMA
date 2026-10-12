@@ -1,14 +1,14 @@
-# Deploy preview — Vercel web + Render backend single-box
+# Deploy preview — Vercel web + Render split boxes (free)
 
-Frontend React/Vite (`web`) chạy trên Vercel; backend FastAPI + OpenCode agent
-chạy chung một container Docker trên Render (single-box, y hệt local dev:
-`opencode serve 127.0.0.1:4098` nội bộ + `tour-backend serve 0.0.0.0:$PORT`
-public). Lý do backend không ở Vercel: `backend/agent/runner.py` spawn binary
-`opencode` local (`shutil.which`), Vercel Python function không có binary này
-nên mọi route `/agent/*` trả 503 ở đó. Giữ service `api` trên Vercel chỉ cho
-các route đồng bộ cũ (xem Ranh giới); chat demo đi qua backend Render.
-Cấu hình Vercel duy nhất là `vercel.json` ở root; cấu hình Render là
-`render.yaml` + `Dockerfile` ở root.
+Frontend React/Vite (`web`) chạy trên Vercel; backend FastAPI và OpenCode agent
+chạy riêng trên hai service Docker free (512 MB mỗi box) vì single-box OOM
+(`Ran out of memory` khi turn chat). Cùng một image (`Dockerfile` +
+`start.sh`), env `ROLE` chọn tiến trình. Lý do backend không ở Vercel:
+`backend/agent/runner.py` spawn binary `opencode` local (`shutil.which`),
+Vercel Python function không có binary này nên mọi route `/agent/*` trả 503 ở
+đó. Giữ service `api` trên Vercel chỉ cho các route đồng bộ cũ (xem Ranh giới);
+chat demo đi qua backend Render. Cấu hình Vercel duy nhất là `vercel.json` ở
+root; cấu hình Render là `render.yaml` + `Dockerfile` + `start.sh` ở root.
 
 Trạng thái: API client chỉ gọi contract backend hiện tại (không `/v2`),
 contract tests xanh (`src/frontend/tests/backend-contract`). Deploy preview là
@@ -18,14 +18,22 @@ contract tests xanh (`src/frontend/tests/backend-contract`). Deploy preview là
 
 ```text
 Browser ──Vercel preview URL──▶ web (Vite SPA)
-   │  VITE_API_BASE_URL=https://mlai-tour-backend.onrender.com
-   └──▶ Render mlai-tour-backend (Docker single-box)
-          ├── tour-backend 0.0.0.0:$PORT (public: /health, /sessions,
-          │    /catalog, /requirements*, /comparisons*, /history*,
-          │    /agent/sessions, /agent/sessions/*/messages, /docs)
-          └── opencode serve 127.0.0.1:4098 (container-local only,
-               repo + MCP tour-catalog trong image, không public)
+   │  VITE_API_BASE_URL=https://mlai-tour-backend[-suffix].onrender.com
+   └──▶ Render mlai-tour-backend (ROLE=backend, public /health, /sessions,
+        │    /catalog, /requirements*, /comparisons*, /history*,
+        │    /agent/sessions, /agent/sessions/*/messages, /docs)
+        │    opencode CLI --attach https://mlai-opencode[-suffix].onrender.com
+        │    --dir /app (server-side path, setting opencode_project_dir)
+        └──▶ Render mlai-opencode (ROLE=opencode, public /global/health,
+             serve cwd /app = repo + MCP tour-catalog, catalog đọc Supabase)
 ```
+
+Thứ tự deploy: opencode trước (copy URL public của nó), rồi điền vào
+`OPENCODE_SERVER_URL` của backend và deploy backend. Serve không đặt password
+tuần demo (health check cần endpoint public; URL khó đoán); thấy abuse thì đặt
+`OPENCODE_SERVER_PASSWORD` giống nhau ở cả hai box (CLI tự đọc env, không cần
+sửa code). Cả hai box free đều ngủ khi idle — giữ ấm trước giờ demo bằng cron
+ping `/health` backend và `/global/health` opencode.
 
 - Frontend gọi backend Render **cross-origin**: set `VITE_API_BASE_URL` trên
   service `web` lúc build (client đọc `import.meta.env`, default rỗng =
@@ -41,8 +49,8 @@ Browser ──Vercel preview URL──▶ web (Vite SPA)
 | File                            | Vai trò                                                                                   |
 | ------------------------------- | ----------------------------------------------------------------------------------------- |
 | `vercel.json`                   | Hai services + toàn bộ public routing Vercel.                                             |
-| `Dockerfile` (repo root)        | Image single-box Render: Node 22 + `opencode-ai` + `uv sync` + repo (MCP, agent, prompts). Chưa build-verify local (Docker engine không chạy được trên máy dev); lần build đầu trên Render là điểm verify. |
-| `render.yaml`                   | Service Docker `mlai-tour-backend` (free 0.1 CPU/512 MB — chật cho uvicorn+opencode+MCP; OOM thì nâng plan). |
+| `Dockerfile` + `start.sh` (repo root) | Image chung: Node 22 + `opencode-ai` + `uv sync` + repo (MCP, agent, prompts). `ROLE=backend` chạy tour-backend public; `ROLE=opencode` chạy serve trên `$PORT`. Chưa build-verify local (Docker engine không chạy được trên máy dev); build Render là điểm verify. |
+| `render.yaml`                   | Hai services Docker free 512 MB: `mlai-tour-backend` (giữ URL cũ, Vercel không cần đổi) + `mlai-opencode` mới (URL có suffix, chỉ backend gọi). Nếu turn chat vẫn OOM thì nâng plan hoặc Standard $25. |
 | `vercel_backend.py` (repo root) | Adapter Vercel cho service `api` legacy; yêu cầu `SUPABASE_TOUR_DB_URL` là pooler PostgreSQL (serverless không route được IPv6 direct). Module path dạng file ở root vì Vercel không resolve dotted path dưới `src/`. |
 | `src/backend/data/sessions.py`  | Kết nối Postgres lazy (import không bao giờ dial DB; DB chết trả 503 JSON thay vì crash function) + reconnect-and-retry 1 lần khi kết nối chết sau idle. |
 | `migrations/004_runtime_store.sql` | Bảng Postgres `runtime_sessions`/`runtime_records` (ingest runner áp dụng).            |
@@ -50,13 +58,14 @@ Browser ──Vercel preview URL──▶ web (Vite SPA)
 
 ## Env trên dashboard (người deploy điền, không commit)
 
-- Render `mlai-tour-backend`: `SUPABASE_TOUR_DB_URL` (direct `db.*` dùng được —
-  container có full networking, không bắt buộc pooler), `CORS_ORIGINS`
-  (domain web Vercel), `OPENCODE_SERVER_URL=http://127.0.0.1:4098`,
-  `OPENCODE_MODEL` + `OPENCODE_AGENT` như `.env.example`. Không cần password
-  vì serve chỉ bind container-localhost, không public.
-- Vercel `web`: `VITE_API_BASE_URL=https://mlai-tour-backend.onrender.com`
-  (set lúc build — client embed tại build time).
+- Render `mlai-opencode` (deploy trước): `SUPABASE_TOUR_DB_URL` (MCP đọc
+  catalog server-side), không cần thêm gì. Copy URL public của nó.
+- Render `mlai-tour-backend`: `SUPABASE_TOUR_DB_URL`, `CORS_ORIGINS`
+  (domain web Vercel), `OPENCODE_SERVER_URL` = URL opencode ở trên,
+  `OPENCODE_MODEL` + `OPENCODE_AGENT` + `OPENCODE_PROJECT_DIR=/app` đã có
+  value trong yaml.
+- Vercel `web`: `VITE_API_BASE_URL` = URL backend (không đổi nếu giữ service
+  cũ — vẫn `mlai-tour-backend[-suffix].onrender.com` như trước).
 - Vercel `api` (legacy): giữ env cũ nếu còn dùng route đồng bộ ở đó.
 - `SUPABASE_TOUR_PUBLISHABLE_KEY` nằm trong `.env.example`, nhưng runtime hiện tại chưa đọc biến này.
 - Preview dùng chung data Supabase với prod (ghi vào bảng `runtime_*`); chấp nhận

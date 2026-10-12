@@ -1,11 +1,9 @@
-# Single-box demo service (Docker). One container runs both processes exactly
-# like local dev: `opencode serve 127.0.0.1:4098` (container localhost only,
-# never public) + `tour-backend serve 0.0.0.0:$PORT` (public, session auth).
-# Runtime data lives in Postgres (migrations/004_runtime_store.sql on the
-# shared Supabase DB). No code change vs local: the runner spawns the same
-# `opencode run --attach` CLI against the same localhost server.
-# NOTE: free plan is 0.1 CPU / 512 MB. If the box OOMs under chat load,
-# upgrade `plan` (starter keeps 512 MB; standard 1c-2g has 2 GB).
+# Split free boxes (512 MB each): backend and agent server separated after the
+# single-box OOM. Same image (`Dockerfile` + `start.sh`), ROLE picks process.
+# Deploy order: opencode first (copy its public URL), then set the backend's
+# OPENCODE_SERVER_URL to it. No password on serve for demo week (health checks
+# need a public endpoint; URL is unguessable); add OPENCODE_SERVER_PASSWORD on
+# both boxes + runner --password only if abuse appears.
 services:
   - type: web
     name: mlai-tour-backend
@@ -14,13 +12,28 @@ services:
     plan: free
     healthCheckPath: /health
     envVars:
+      - key: ROLE
+        value: backend
       - key: SUPABASE_TOUR_DB_URL
         sync: false
+      - key: CORS_ORIGINS
+        sync: false
       - key: OPENCODE_SERVER_URL
-        value: http://127.0.0.1:4098
+        sync: false
       - key: OPENCODE_MODEL
         value: opencode/muse-spark-1.3-contributor-free
       - key: OPENCODE_AGENT
         value: travel-consultant
-      - key: CORS_ORIGINS
+      - key: OPENCODE_PROJECT_DIR
+        value: /app
+  - type: web
+    name: mlai-opencode
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /global/health
+    envVars:
+      - key: ROLE
+        value: opencode
+      - key: SUPABASE_TOUR_DB_URL
         sync: false

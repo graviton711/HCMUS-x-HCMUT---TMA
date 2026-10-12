@@ -81,6 +81,22 @@ def test_cors_origins_env_accepts_bare_csv_and_json(tmp_path, monkeypatch):
     ]
 
 
+def test_db_url_env_strips_pasted_whitespace(tmp_path, monkeypatch):
+    monkeypatch.setenv(
+        "SUPABASE_TOUR_DB_URL", "postgresql://u:p@host:5432/postgres\n"
+    )
+    settings = Settings.load(_configs(tmp_path))
+    assert settings.supabase_tour_db_url == "postgresql://u:p@host:5432/postgres"
+    assert settings.database_url == "postgresql://u:p@host:5432/postgres"
+
+
+def test_opencode_project_dir_defaults_empty_and_env_overrides(tmp_path, monkeypatch):
+    configs = _configs(tmp_path)
+    assert Settings.load(configs).opencode_project_dir == ""
+    monkeypatch.setenv("OPENCODE_PROJECT_DIR", "/app")
+    assert Settings.load(configs).opencode_project_dir == "/app"
+
+
 def test_incomplete_yaml_fails_loud(tmp_path):
     root = tmp_path / "configs"
     root.mkdir()

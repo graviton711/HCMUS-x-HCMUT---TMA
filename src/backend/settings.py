@@ -132,6 +132,9 @@ class Settings(BaseSettings):
     opencode_binary: str = "opencode"
     opencode_model: str = ""
     opencode_agent: str = "travel-consultant"
+    # Project dir ON THE SERVER when attaching remotely (CLI docs: --dir is
+    # the remote path). Empty = local project root (local dev, single-box).
+    opencode_project_dir: str = ""
     opencode_timeout_seconds: float = 120
     agent_max_message_chars: int = 8000
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
@@ -143,6 +146,12 @@ class Settings(BaseSettings):
     @classmethod
     def _split_string_list(cls, value: Any) -> list[str]:
         return _string_list(value)
+
+    @field_validator("database_url", "supabase_tour_db_url", mode="before")
+    @classmethod
+    def _strip_url(cls, value: Any) -> Any:
+        # Dashboard paste often leaves trailing newlines in secret URLs.
+        return value.strip() if isinstance(value, str) else value
 
     @classmethod
     def load(cls, path: str | Path | None = None, **overrides: Any) -> Settings:
