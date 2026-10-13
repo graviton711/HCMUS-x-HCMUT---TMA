@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { LocalSession } from '../../../features/session-history';
-import { Composer, Thread, ToolStatus } from '../../../features/chat';
+import { Composer, QuickReplies, Thread, ToolStatus } from '../../../features/chat';
+import type { CurrentComparison } from '../../../shared/api';
 import { usePreferences } from '../../../shared/preferences';
 import { useChat } from '../model/useChat';
 import styles from './ChatPage.module.css';
@@ -15,16 +16,22 @@ export function ChatPage({
   session,
   onStart,
   onChangeSession,
+  isSavedTour,
+  onToggleSavedTour,
 }: {
   session: LocalSession | null;
   onStart: (initialText?: string) => void;
   onChangeSession: (id: string, changes: Partial<LocalSession>) => void;
+  isSavedTour?: (tourId: string, offerId: string) => boolean;
+  onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
 }) {
   return session ? (
     <ActiveChat
       key={session.id}
       session={session}
       onStart={onStart}
+      isSavedTour={isSavedTour}
+      onToggleSavedTour={onToggleSavedTour}
       onChangeSession={(changes) => onChangeSession(session.id, changes)}
     />
   ) : (
@@ -82,10 +89,14 @@ function ActiveChat({
   session,
   onStart,
   onChangeSession,
+  isSavedTour,
+  onToggleSavedTour,
 }: {
   session: LocalSession;
   onStart: (initialText?: string) => void;
   onChangeSession: (changes: Partial<LocalSession>) => void;
+  isSavedTour?: (tourId: string, offerId: string) => boolean;
+  onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
 }) {
   const { t } = usePreferences();
   const chat = useChat(session, onChangeSession);
@@ -124,10 +135,7 @@ function ActiveChat({
   }, [chat.client, chat.initialSendPending, chat.msgs.length]);
 
   const hasResult = chat.msgs.some((msg) => msg.kind === 'comparison');
-  const hasActiveTool = [...chat.msgs]
-    .reverse()
-    .find((msg) => msg.kind === 'tool_activity')
-    ?.tools.some((tool) => tool.status === 'running');
+  const hasTurnToolActivity = Boolean(chat.activeToolActivityId);
   const expired = chat.sessionExpired;
   const draftText = session.draft.text.trim();
 
@@ -143,41 +151,58 @@ function ActiveChat({
                 'Share a destination, dates or budget. I’ll help you find trips that fit.',
               )}
             </p>
+            <QuickReplies
+              options={SUGGESTIONS.map(([text]) => ({ label: text, value: text }))}
+              onPick={chat.send}
+              disabled={chat.busy || !chat.client}
+            />
           </div>
         )}
-        <Thread messages={chat.msgs} busy={chat.busy} onSend={chat.send} onRelax={chat.relax} />
+        <Thread
+          messages={chat.msgs}
+          busy={chat.busy}
+          activeToolActivityId={chat.activeToolActivityId}
+          onSend={chat.send}
+          onRelax={chat.relax}
+          isSavedTour={isSavedTour}
+          onToggleSavedTour={onToggleSavedTour}
+          renderRecovery={
+            chat.failedStep
+              ? (expired) =>
+                  expired ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        onClick={() => onStart(draftText || undefined)}
+                      >
+                        {draftText
+                          ? t(
+                              'Tạo phiên mới và gửi lại bản nháp',
+                              'Start a new session and resend the draft',
+                            )
+                          : t('Tạo phiên mới', 'Start a new session')}
+                      </button>
+                      {draftText && (
+                        <span className={styles['error-note']}>
+                          {t(
+                            'Phiên mới gửi lại bản nháp; ngữ cảnh hội thoại cũ không được chuyển sang.',
+                            'The new session resends the draft; the old conversation context is not transferred.',
+                          )}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <button type="button" className="btn" onClick={chat.retry}>
+                      {t('Thử lại', 'Retry')}
+                    </button>
+                  )
+              : undefined
+          }
+        />
 
-        {(chat.phase === 'thinking' || chat.phase === 'working') && (
-          <ToolStatus working={chat.phase === 'working' && !hasActiveTool} />
-        )}
-
-        {chat.failedStep && !chat.busy && (
-          <div className={styles.recovery}>
-            {expired ? (
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => onStart(draftText || undefined)}
-              >
-                {draftText
-                  ? t('Tạo phiên mới và gửi lại bản nháp', 'Start a new session and resend the draft')
-                  : t('Tạo phiên mới', 'Start a new session')}
-              </button>
-            ) : (
-              <button type="button" className="btn" onClick={chat.retry}>
-                {t('Thử lại', 'Retry')}
-              </button>
-            )}
-            {expired && draftText && (
-              <span className={styles['recovery-note']}>
-                {t(
-                  'Phiên mới gửi lại bản nháp; ngữ cảnh hội thoại cũ không được chuyển sang.',
-                  'The new session resends the draft; the old conversation context is not transferred.',
-                )}
-              </span>
-            )}
-          </div>
-        )}
+        {chat.phase === 'thinking' && !hasTurnToolActivity && <ToolStatus phase="preparing" />}
+        {chat.phase === 'working' && !hasTurnToolActivity && <ToolStatus phase="working" />}
       </div>
 
       <div className={styles['composer-dock']}>

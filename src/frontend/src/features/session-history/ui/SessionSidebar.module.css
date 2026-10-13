@@ -7,8 +7,17 @@
   display: flex;
   flex-direction: column;
   height: calc(100dvh - var(--header-height));
-  background: var(--sidebar);
+  background:
+    linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--surface) 48%, var(--sidebar)),
+      transparent 44%
+    ),
+    var(--sidebar);
   border-right: 1px solid var(--line);
+  box-shadow:
+    inset -1px 0 0 color-mix(in srgb, var(--surface) 70%, transparent),
+    10px 0 28px color-mix(in srgb, var(--ink) 3%, transparent);
   overflow: hidden;
 }
 
@@ -31,13 +40,13 @@
 }
 
 .brand {
-  display: grid;
+  display: flex;
   align-items: center;
-  justify-items: center;
-  width: 40px;
-  height: 40px;
-  margin: 0 0 9px 1px;
-  padding: 2px;
+  gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 9px;
+  padding: 2px 5px;
   color: var(--ink);
   text-decoration: none;
   border-radius: 12px;
@@ -58,9 +67,19 @@
 
 .brand img {
   display: block;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
   object-fit: contain;
+  filter: drop-shadow(0 3px 5px color-mix(in srgb, var(--accent) 18%, transparent));
+}
+
+.brand-name {
+  color: var(--ink);
+  font-family: var(--wordmark);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.045em;
 }
 
 .new-session {
@@ -70,9 +89,13 @@
   width: 100%;
   min-height: 40px;
   padding: 0 10px;
-  border: 1px solid transparent;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: 9px;
-  background: var(--surface-2);
+  background: linear-gradient(
+    180deg,
+    var(--surface),
+    color-mix(in srgb, var(--surface) 75%, var(--surface-2))
+  );
   color: var(--ink);
   font-size: 15px;
   font-weight: 550;
@@ -85,13 +108,15 @@
 }
 
 .new-session:hover {
-  border-color: var(--line);
-  background: color-mix(in srgb, var(--surface-2), var(--ink) 4%);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border-color: var(--line-strong);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  box-shadow: var(--shadow-rest);
+  transform: translateY(-1px);
 }
 
 .new-session:active {
-  transform: scale(0.985);
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent);
 }
 
 .new-session .icon {
@@ -211,13 +236,18 @@
 }
 
 :global(.sidebar-content) :global(.session-item):hover {
-  background: color-mix(in srgb, var(--surface), transparent 45%);
+  background: color-mix(in srgb, var(--surface) 68%, transparent);
   transform: translateX(2px);
 }
 
 :global(.sidebar-content) :global(.session-item):global(.selected) {
-  background: var(--surface-2);
-  border-color: transparent;
+  background: linear-gradient(
+    180deg,
+    var(--surface),
+    color-mix(in srgb, var(--surface) 78%, var(--surface-2))
+  );
+  border-color: color-mix(in srgb, var(--line) 75%, transparent);
+  box-shadow: var(--shadow-rest);
 }
 
 :global(.sidebar-content) :global(.session-item) > a {
@@ -275,19 +305,38 @@
 }
 
 :global(.sidebar-content) :global(.session-actions) :global(.icon-button) {
-  width: 27px;
-  min-width: 27px;
-  height: 27px;
-  min-height: 27px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 9px;
   background: transparent;
   color: var(--muted);
 }
 
+:global(.sidebar-content)
+  :global(.session-item):has([aria-expanded='true'])
+  :global(.session-actions) {
+  opacity: 1;
+}
+
 :global(.sidebar-content) :global(.session-actions) :global(.icon-button):hover {
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: none;
+  transform: none;
+}
+
+:global(.sidebar-content) :global(.session-actions) :global(.icon-button):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+:global(.sidebar-content) :global(.session-actions) :global(.icon-button)[aria-expanded='true'] {
   background: var(--surface);
   color: var(--ink);
+  box-shadow: none;
 }
 
 .foot {

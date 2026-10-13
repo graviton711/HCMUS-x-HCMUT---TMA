@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useState } from 'react';
 import type { CurrentComparison, CurrentCondition, CurrentEvaluation } from '../../../shared/api';
 import { observedLabel, safeUrl } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
@@ -11,6 +12,8 @@ import {
   mostFailedField,
 } from '../lib/format';
 import { rise, staggerParent } from './motion';
+import { QuickReplies } from './QuickReplies';
+import { DecisionComparisonDialog, type ComparedOffer } from './DecisionComparisonDialog';
 import styles from './chat.module.css';
 
 function uniqueTours<T extends { tour_id: string }>(candidates: T[]): T[] {
@@ -68,12 +71,22 @@ function TourCard({
   offerId,
   index,
   missing,
+  selectedForCompare,
+  compareDisabled,
+  isSaved,
+  onToggleCompare,
+  onToggleSaved,
 }: {
   comparison: CurrentComparison;
   tourId: string;
   offerId: string;
   index: number;
   missing: boolean;
+  selectedForCompare: boolean;
+  compareDisabled: boolean;
+  isSaved: boolean;
+  onToggleCompare: () => void;
+  onToggleSaved?: () => void;
 }) {
   const { t, locale } = usePreferences();
   const tour = comparison.tour_snapshots.find((item) => item.id === tourId);
@@ -90,9 +103,7 @@ function TourCard({
       : [
           offer.price_basis === 'from' ? t('Từ ', 'From ') : '',
           offer.price.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-GB'),
-          offer.currency
-            ? ` ${offer.currency}`
-            : ` · ${t('chưa rõ tiền tệ', 'currency unknown')}`,
+          offer.currency ? ` ${offer.currency}` : ` · ${t('chưa rõ tiền tệ', 'currency unknown')}`,
         ].join('');
   const label = missing
     ? t(`Gần đạt · thiếu ${failed.length}`, `Near miss · missing ${failed.length}`)
@@ -197,6 +208,27 @@ function TourCard({
               : t('Chưa rõ thời điểm ghi nhận', 'Observation time unknown')}
           </span>
         </div>
+        <div className={styles['tour-card-actions']}>
+          {onToggleSaved && (
+            <button
+              type="button"
+              className={styles['tour-card-action']}
+              aria-pressed={isSaved}
+              onClick={onToggleSaved}
+            >
+              {isSaved ? t('Đã lưu', 'Saved') : t('Lưu tour', 'Save tour')}
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles['tour-card-action']}
+            aria-pressed={selectedForCompare}
+            disabled={compareDisabled}
+            onClick={onToggleCompare}
+          >
+            {selectedForCompare ? t('Đã chọn', 'Selected') : t('So sánh', 'Compare')}
+          </button>
+        </div>
       </div>
     </motion.article>
   );
@@ -206,19 +238,128 @@ export function ResultCards({
   comparison,
   busy,
   onRelax,
+  isSavedTour,
+  onToggleSavedTour,
+  onAsk,
 }: {
   comparison: CurrentComparison;
   busy: boolean;
   onRelax: (field: string) => void;
+  isSavedTour?: (tourId: string, offerId: string) => boolean;
+  onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
+  onAsk?: (text: string) => void;
 }) {
   const { t } = usePreferences();
-  const ranked = uniqueTours(comparison.ranked);
-  const rankedTourIds = new Set(ranked.map((candidate) => candidate.tour_id));
+  const [selected, setSelected] = useState<ComparedOffer[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const [weights, setWeights] = useState<Record<string, number>>({});
+  const rankedOriginal = uniqueTours(comparison.ranked);
+  const rankedTourIds = new Set(rankedOriginal.map((candidate) => candidate.tour_id));
   const nearMiss = uniqueTours(comparison.near_miss ?? []).filter(
     (candidate) => !rankedTourIds.has(candidate.tour_id),
   );
+  const softConditions = comparison.requirement.conditions.filter(
+    (condition) => condition.strength === 'soft',
+  );
+  const originalOrder = new Map(
+    rankedOriginal.map((candidate, index) => [candidate.offer_id, index]),
+  );
+  const evaluations = new Map<string, Set<string>>();
+  for (const evaluation of comparison.evaluations) {
+    if (evaluation.state !== 'pass') continue;
+    const passed = evaluations.get(evaluation.offer_id) ?? new Set<string>();
+    passed.add(evaluation.condition_id);
+    evaluations.set(evaluation.offer_id, passed);
+  }
+  const ranked = [...rankedOriginal].sort((left, right) => {
+    const leftPassed = evaluations.get(left.offer_id) ?? new Set<string>();
+    const rightPassed = evaluations.get(right.offer_id) ?? new Set<string>();
+    const leftScore = softConditions.reduce(
+      (sum, condition) => sum + (leftPassed.has(condition.id) ? (weights[condition.id] ?? 1) : 0),
+      0,
+    );
+    const rightScore = softConditions.reduce(
+      (sum, condition) => sum + (rightPassed.has(condition.id) ? (weights[condition.id] ?? 1) : 0),
+      0,
+    );
+    return (
+      rightScore - leftScore ||
+      (originalOrder.get(left.offer_id) ?? 0) - (originalOrder.get(right.offer_id) ?? 0)
+    );
+  });
   const worst = mostFailedField(comparison);
   const empty = ranked.length === 0 && nearMiss.length === 0;
+  const customOrder = softConditions.some((condition) => (weights[condition.id] ?? 1) !== 1);
+
+  function toggleCompare(tourId: string, offerId: string) {
+    setSelected((current) => {
+      const existing = current.some((item) => item.tourId === tourId && item.offerId === offerId);
+      if (existing)
+        return current.filter((item) => item.tourId !== tourId || item.offerId !== offerId);
+      if (current.length >= 3) return current;
+      return [...current, { tourId, offerId }];
+    });
+  }
+
+  const suggestions: { label: string; value: string }[] = [];
+  const firstTwo = ranked.slice(0, 2).map((entry) => {
+    const tour = comparison.tour_snapshots.find((item) => item.id === entry.tour_id);
+    return tour?.name || entry.tour_id;
+  });
+  if (firstTwo.length === 2) {
+    suggestions.push({
+      label: t('Giải thích khác biệt', 'Explain the difference'),
+      value: t(
+        `Hãy giải thích khác biệt chính giữa ${firstTwo[0]} và ${firstTwo[1]} theo các điều kiện trong yêu cầu của tôi.`,
+        `Explain the main differences between ${firstTwo[0]} and ${firstTwo[1]} against the criteria in my request.`,
+      ),
+    });
+  }
+  if (comparison.analysis.hidden_costs.length || comparison.analysis.risks.length) {
+    suggestions.push({
+      label: t('Xem phụ phí và rủi ro', 'Review costs and risks'),
+      value: t(
+        'Tóm tắt các phụ phí, khoản chưa bao gồm và rủi ro cần lưu ý ở các tour đạt đủ điều kiện.',
+        'Summarize the extra costs, exclusions, and risks to review for the qualified tours.',
+      ),
+    });
+  }
+  if (comparison.evaluations.some((evaluation) => evaluation.state === 'unknown')) {
+    suggestions.push({
+      label: t('Kiểm tra dữ kiện còn thiếu', 'Check missing details'),
+      value: t(
+        'Dữ kiện nào còn chưa rõ và tôi nên xác nhận điều gì với nhà cung cấp trước khi chọn?',
+        'Which details are still unclear, and what should I confirm with the supplier before choosing?',
+      ),
+    });
+  }
+  if (suggestions.length === 0) {
+    if (ranked.length > 0) {
+      suggestions.push({
+        label: t('Giải thích kết quả', 'Explain these results'),
+        value: t(
+          'Hãy giải thích vì sao các tour này đạt yêu cầu và thứ tự xếp hạng dựa trên những dữ kiện nào.',
+          'Explain why these tours meet my requirements and which evidence determines their ranking.',
+        ),
+      });
+    } else if (nearMiss.length > 0) {
+      suggestions.push({
+        label: t('Xem tour gần đạt', 'Review near matches'),
+        value: t(
+          'Các tour gần đạt còn vướng điều kiện nào? Điều kiện nào có thể nới để mở thêm lựa chọn, và đánh đổi là gì?',
+          'Which requirements block the near matches? What could I relax to get more options, and what would the trade-off be?',
+        ),
+      });
+    } else {
+      suggestions.push({
+        label: t('Điều chỉnh yêu cầu', 'Adjust my request'),
+        value: t(
+          'Với dữ liệu hiện có chưa có tour phù hợp. Hãy gợi ý một điều kiện có thể nới và giải thích lựa chọn nào có thể xuất hiện.',
+          'No tour fits based on the available data. Suggest one requirement I could relax and explain what options that may reveal.',
+        ),
+      });
+    }
+  }
 
   return (
     <section
@@ -249,12 +390,77 @@ export function ResultCards({
         </div>
       </div>
 
+      {softConditions.length > 0 && ranked.length > 1 && (
+        <details className={styles['preference-controls']} open>
+          <summary>
+            <span>{t('Điều chỉnh mức ưu tiên', 'Adjust priorities')}</span>
+            <span>
+              {t(
+                'Chỉ đổi thứ tự tour đạt đủ đang hiển thị',
+                'Reorders displayed qualified tours only',
+              )}
+            </span>
+          </summary>
+          <p>
+            {t(
+              'Các tiêu chí này là ưu tiên mềm do agent nhận diện. Điều kiện bắt buộc và nhóm gần đạt không thay đổi.',
+              'These are soft preferences identified by the agent. Required criteria and near misses stay unchanged.',
+            )}
+          </p>
+          <div className={styles['preference-list']}>
+            {softConditions.map((condition) => (
+              <label className={styles['preference-row']} key={condition.id}>
+                <span>
+                  {fieldLabel(condition.field, t)}{' '}
+                  {conditionText(condition.operator, condition.value, t)}
+                </span>
+                <input
+                  type="range"
+                  min="1"
+                  max="5"
+                  step="1"
+                  value={weights[condition.id] ?? 1}
+                  aria-label={t(
+                    `Mức ưu tiên: ${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`,
+                    `Priority: ${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`,
+                  )}
+                  onChange={(event) =>
+                    setWeights((current) => ({
+                      ...current,
+                      [condition.id]: Number(event.target.value),
+                    }))
+                  }
+                />
+                <output>{weights[condition.id] ?? 1}/5</output>
+              </label>
+            ))}
+          </div>
+          {customOrder && (
+            <button
+              type="button"
+              className={styles['preference-reset']}
+              onClick={() => setWeights({})}
+            >
+              {t('Đặt lại mức đều nhau', 'Reset to equal priority')}
+            </button>
+          )}
+        </details>
+      )}
+
       {ranked.length > 0 && (
         <>
           <h3 className={styles['result-group-title']}>
             {t('Tour đạt đủ điều kiện', 'Qualified tours')}{' '}
             <span>
-              {t('xếp theo số tiêu chí phù hợp rồi giá', 'ordered by fit verdicts, then price')}
+              {customOrder
+                ? t(
+                    'ưu tiên bạn chọn · hòa thì theo thứ tự ban đầu',
+                    'your priorities · ties keep the original order',
+                  )
+                : t(
+                    'tiêu chí phù hợp · hòa thì theo giá',
+                    'matching preferences · ties go to price',
+                  )}
             </span>
           </h3>
           <AnimatePresence>
@@ -272,6 +478,22 @@ export function ResultCards({
                   offerId={entry.offer_id}
                   index={index}
                   missing={false}
+                  selectedForCompare={selected.some(
+                    (item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id,
+                  )}
+                  compareDisabled={
+                    selected.length >= 3 &&
+                    !selected.some(
+                      (item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id,
+                    )
+                  }
+                  isSaved={isSavedTour?.(entry.tour_id, entry.offer_id) ?? false}
+                  onToggleCompare={() => toggleCompare(entry.tour_id, entry.offer_id)}
+                  onToggleSaved={
+                    onToggleSavedTour
+                      ? () => onToggleSavedTour(comparison, entry.tour_id, entry.offer_id)
+                      : undefined
+                  }
                 />
               ))}
             </motion.div>
@@ -294,6 +516,22 @@ export function ResultCards({
                 offerId={entry.offer_id}
                 index={index}
                 missing
+                selectedForCompare={selected.some(
+                  (item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id,
+                )}
+                compareDisabled={
+                  selected.length >= 3 &&
+                  !selected.some(
+                    (item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id,
+                  )
+                }
+                isSaved={isSavedTour?.(entry.tour_id, entry.offer_id) ?? false}
+                onToggleCompare={() => toggleCompare(entry.tour_id, entry.offer_id)}
+                onToggleSaved={
+                  onToggleSavedTour
+                    ? () => onToggleSavedTour(comparison, entry.tour_id, entry.offer_id)
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -301,6 +539,25 @@ export function ResultCards({
       )}
 
       <div className={styles['result-actions']}>
+        {selected.length > 0 && (
+          <button
+            type="button"
+            className={`btn ${styles['result-action']}`}
+            disabled={selected.length < 2}
+            onClick={() => setCompareOpen(true)}
+          >
+            {t(`So sánh lựa chọn (${selected.length}/3)`, `Compare choices (${selected.length}/3)`)}
+          </button>
+        )}
+        {selected.length > 0 && (
+          <button
+            type="button"
+            className={styles['clear-comparison']}
+            onClick={() => setSelected([])}
+          >
+            {t('Bỏ chọn', 'Clear selection')}
+          </button>
+        )}
         {worst && !empty && (
           <button
             type="button"
@@ -315,6 +572,20 @@ export function ResultCards({
           </button>
         )}
       </div>
+
+      {suggestions.length > 0 && onAsk && (
+        <div className={styles['follow-up']}>
+          <span>{t('Gợi ý hỏi tiếp', 'Ask next')}</span>
+          <QuickReplies options={suggestions.slice(0, 3)} onPick={onAsk} disabled={busy} />
+        </div>
+      )}
+
+      <DecisionComparisonDialog
+        comparison={comparison}
+        selected={selected}
+        open={compareOpen}
+        onClose={() => setCompareOpen(false)}
+      />
     </section>
   );
 }

@@ -8,26 +8,6 @@
 
 .root[data-workspace='true'] {
   --header-height: 0px;
-  --paper: #f8f8f8;
-  --sidebar: #f0f0f0;
-  --surface: #ffffff;
-  --surface-2: #e9e9ea;
-  --ink: #19191d;
-  --muted: #57575e;
-  --subtle: #77777e;
-  --line: #e4e4e6;
-  --line-strong: #cfcfd2;
-  --accent: #34343b;
-  --accent-hover: #1f1f24;
-  --on-accent: #ffffff;
-  --tint: #e8e8e9;
-  --focus: #5d5d64;
-  --heading:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --wordmark:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --numeric:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
@@ -39,30 +19,14 @@
   display: none;
 }
 
-:global(html[data-theme='dark']) .root[data-workspace='true'] {
-  --paper: #111216;
-  --sidebar: #191a1f;
-  --surface: #1a1b20;
-  --surface-2: #23242a;
-  --ink: #f2f2f5;
-  --muted: #b5b7c1;
-  --subtle: #999ca7;
-  --line: #30323a;
-  --line-strong: #484a54;
-  --accent: #aaa5f4;
-  --accent-hover: #c0bcff;
-  --on-accent: #171625;
-  --tint: #29283e;
-  --focus: #9b9bea;
-}
-
 .root :global(.site-header) {
   position: sticky;
   top: 0;
   z-index: var(--z-header);
   height: var(--header-height);
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .root :global(.header-inner) {
@@ -76,12 +40,13 @@
 }
 
 .root :global(.brand) {
-  display: inline-grid;
+  display: inline-flex;
   align-items: center;
-  justify-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  gap: 9px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 7px 0 0;
+  border-radius: 14px;
   text-decoration: none;
   transition:
     background-color var(--dur-fast) var(--ease),
@@ -99,10 +64,19 @@
 
 .root :global(.brand-mark) {
   display: block;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   flex: 0 0 auto;
   object-fit: contain;
+  filter: drop-shadow(0 3px 5px color-mix(in srgb, var(--accent) 18%, transparent));
+}
+
+.root :global(.brand-name) {
+  color: var(--ink);
+  font-family: var(--wordmark);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.045em;
 }
 
 .root :global(.header-support) {
@@ -148,14 +122,16 @@
   flex-direction: column;
   min-width: 0;
   min-height: calc(100dvh - var(--header-height));
-  background: var(--paper);
+  background:
+    radial-gradient(ellipse at 52% -18%, var(--ambient-light), transparent 62%), var(--paper);
 }
 
 .root :global(.app-shell.workspace-open) :global(.canvas) {
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
-  background: var(--paper);
+  background:
+    radial-gradient(ellipse at 52% -18%, var(--ambient-light), transparent 62%), var(--paper);
 }
 
 .root :global(.session-bar) {
@@ -175,7 +151,9 @@
   top: 0;
   min-height: 56px;
   padding-inline: clamp(20px, 2.4vw, 36px);
-  background: var(--paper);
+  background: color-mix(in srgb, var(--paper) 88%, transparent);
+  backdrop-filter: blur(18px) saturate(1.15);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.58);
 }
 
 .root :global(.session-title) {
@@ -184,6 +162,47 @@
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--ink);
+}
+
+.root :global(.session-saved) {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+
+.root :global(.session-saved):hover {
+  border-color: var(--line);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.root :global(.session-saved):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.root :global(.session-saved-count) {
+  min-width: 19px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--subtle);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .root :global(.app-shell.workspace-open) :global(.session-title) {
@@ -200,12 +219,21 @@
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: linear-gradient(
+    180deg,
+    var(--surface),
+    color-mix(in srgb, var(--surface) 93%, var(--surface-2))
+  );
   color: var(--ink);
   font-size: var(--text-sm);
   font-weight: 600;
   white-space: nowrap;
-  transition: background-color var(--dur-fast) var(--ease);
+  box-shadow: var(--shadow-rest);
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 
 .root :global(.session-new) {
@@ -220,10 +248,13 @@
 .root :global(.session-new):hover {
   background: var(--surface-2);
   border-color: var(--line-strong);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
 }
 
 .root :global(.session-new):active {
-  transform: scale(0.97);
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(42, 35, 24, 0.12);
 }
 
 .root :global(.session-new) .icon {
@@ -247,7 +278,7 @@
 }
 
 .root[data-workspace='true'] :global(.icon-button):active:not(:disabled) {
-  transform: scale(0.94);
+  transform: translateY(1px) scale(0.98);
 }
 
 .root :global(.canvas-content) {
@@ -388,5 +419,15 @@
     width: 36px;
     padding: 0;
     justify-content: center;
+  }
+
+  .root :global(.session-saved-label) {
+    display: none;
+  }
+
+  .root :global(.session-saved) {
+    min-width: 36px;
+    justify-content: center;
+    padding: 0 7px;
   }
 }

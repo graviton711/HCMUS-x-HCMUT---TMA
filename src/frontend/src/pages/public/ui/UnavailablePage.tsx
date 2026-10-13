@@ -45,12 +45,15 @@ export function UnavailablePage({
   const page = content[route];
 
   return (
-    <section className="empty-state">
-      <h1>{page.title}</h1>
+    <section className="empty-state" aria-labelledby="unavailable-heading">
+      <div className="empty-state-icon" aria-hidden="true">
+        <Icon name={route === 'not-found' ? 'search' : 'help'} size={24} />
+      </div>
+      <h1 id="unavailable-heading">{page.title}</h1>
       {page.body && <p>{page.body}</p>}
       {route === 'not-found' ? (
         <a className="btn" href="/" onClick={onLink('/')}>
-          {t('Về Giới thiệu', 'Back to About')}
+          {t('Về Tìm tour', 'Back to Find tours')}
           <Icon name="arrow" />
         </a>
       ) : (

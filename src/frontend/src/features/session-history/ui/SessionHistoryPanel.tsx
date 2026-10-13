@@ -1,4 +1,4 @@
-import { useId, useState, type MouseEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { usePreferences } from '../../../shared/preferences';
 import { displaySessionTitle } from '../../../shared/lib';
@@ -51,6 +51,8 @@ export function SessionHistoryPanel({
   const [rename, setRename] = useState<LocalSession | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [remove, setRemove] = useState<LocalSession | null>(null);
+  const renameInput = useRef<HTMLInputElement>(null);
+  const removeCancel = useRef<HTMLButtonElement>(null);
   const searchId = useId();
   const { t } = usePreferences();
   const reduceMotion = useReducedMotion();
@@ -75,6 +77,7 @@ export function SessionHistoryPanel({
           setRename(session);
           setRenameValue(session.title);
         }}
+        onRemove={(session) => setRemove(session)}
       />
     );
   }
@@ -144,20 +147,26 @@ export function SessionHistoryPanel({
         open={!!rename}
         onClose={() => setRename(null)}
         title={t('Đổi tên phiên', 'Rename session')}
+        description={t(
+          'Đặt tên ngắn để bạn dễ tìm lại chuyến đi này.',
+          'Choose a short name so this trip is easy to find later.',
+        )}
         closeLabel={closeLabel}
+        initialFocusRef={renameInput}
       >
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (rename) onUpdate(rename.id, { title: renameValue.trim() });
+            const title = renameValue.trim();
+            if (rename && title) onUpdate(rename.id, { title });
             setRename(null);
           }}
         >
           <label className="field">
             {t('Tên phiên', 'Session name')}
             <input
+              ref={renameInput}
               required
-              autoFocus
               maxLength={100}
               value={renameValue}
               onChange={(event) => setRenameValue(event.target.value)}
@@ -167,21 +176,13 @@ export function SessionHistoryPanel({
             <button className="btn" type="button" onClick={() => setRename(null)}>
               {t('Huỷ', 'Cancel')}
             </button>
-            <button className="btn btn-primary" type="submit">
+            <button
+              className="btn btn-primary"
+              type="submit"
+              disabled={!renameValue.trim() || renameValue.trim() === rename?.title.trim()}
+            >
               {t('Lưu tên', 'Save name')}
             </button>
-            {rename && (
-              <button
-                className="text-action danger-action"
-                type="button"
-                onClick={() => {
-                  setRemove(rename);
-                  setRename(null);
-                }}
-              >
-                {t('Xóa khỏi lịch sử', 'Remove from history')}
-              </button>
-            )}
           </div>
         </form>
       </Dialog>
@@ -189,25 +190,39 @@ export function SessionHistoryPanel({
         open={!!remove}
         onClose={() => setRemove(null)}
         title={t('Xóa khỏi lịch sử?', 'Remove from history?')}
+        description={t(
+          'Thao tác này chỉ xóa bản lưu trên trình duyệt hiện tại.',
+          'This removes the saved copy from this browser only.',
+        )}
         closeLabel={closeLabel}
+        tone="danger"
+        role="alertdialog"
+        initialFocusRef={removeCancel}
       >
-        <p>
-          {t('Xóa bản lưu trên trình duyệt của phiên', 'Remove this browser’s saved session')}{' '}
-          <strong>{displaySessionTitle(remove?.title, fallbackName)}</strong>.{' '}
+        <div className="dialog-record">
+          <strong>{displaySessionTitle(remove?.title, fallbackName)}</strong>
+        </div>
+        <p className="dialog-note">
           {t(
-            'Tác vụ đang xử lý trên dịch vụ không bị hủy.',
+            'Tác vụ đang xử lý trên dịch vụ sẽ không bị hủy.',
             'Running service tasks will continue.',
           )}
         </p>
-        <button
-          className="btn btn-danger"
-          onClick={() => {
-            if (remove) onRemove(remove);
-            setRemove(null);
-          }}
-        >
-          {t('Xóa bản lưu', 'Remove saved session')}
-        </button>
+        <div className="dialog-actions">
+          <button ref={removeCancel} className="btn" type="button" onClick={() => setRemove(null)}>
+            {t('Hủy', 'Cancel')}
+          </button>
+          <button
+            className="btn btn-danger"
+            type="button"
+            onClick={() => {
+              if (remove) onRemove(remove);
+              setRemove(null);
+            }}
+          >
+            {t('Xóa bản lưu', 'Remove saved session')}
+          </button>
+        </div>
       </Dialog>
     </>
   );

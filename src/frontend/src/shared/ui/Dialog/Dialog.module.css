@@ -5,17 +5,26 @@
   inset: 0;
   margin: auto;
   padding: 0;
-  width: min(560px, calc(100% - 32px));
+  width: min(440px, calc(100% - 32px));
   max-height: calc(100dvh - 48px);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-strong);
+  border-radius: 18px;
   background: var(--surface);
   color: var(--ink);
-  box-shadow: var(--shadow-overlay);
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
+}
+
+.wide {
+  width: min(920px, calc(100% - 32px));
+}
+
+.root[data-tone='danger'] {
+  border-color: var(--line-strong);
 }
 
 .root::backdrop {
-  background: rgba(14, 14, 20, 0.42);
+  background: var(--overlay-backdrop);
   animation: backdrop-enter 190ms ease both;
 }
 
@@ -31,59 +40,113 @@
   animation: backdrop-exit 150ms ease both;
 }
 
-:global(html[data-theme='dark']) .root::backdrop {
-  background: rgba(0, 0, 0, 0.68);
-}
-
 .root :global(.dialog-shell) {
   display: flex;
   flex-direction: column;
   max-height: calc(100dvh - 48px);
-  padding: 22px 24px;
+  padding: 20px 22px 22px;
 }
 
 .root :global(.dialog-head) {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   padding-bottom: 14px;
 }
 
-.root :global(.dialog-head) h2 {
-  font-size: var(--text-xl);
+.root :global(.dialog-heading) {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.root :global(.dialog-heading) h2 {
+  font-size: 1.25rem;
   font-weight: 650;
   letter-spacing: -0.025em;
+  line-height: 1.3;
+}
+
+.root :global(.dialog-heading) p {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.root :global(.dialog-close) {
+  flex: 0 0 auto;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  margin: -3px -6px 0 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.root :global(.dialog-close):hover {
+  border-color: var(--line);
+  background: var(--surface-2);
+  box-shadow: none;
+  transform: none;
 }
 
 .root :global(.dialog-body) {
   min-height: 0;
   overflow: auto;
   overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.6;
 }
 
 .root :global(.dialog-body) > * + * {
   margin-top: 14px;
 }
 
+.root :global(.dialog-body) > :global(.dialog-actions) {
+  margin-top: 20px;
+}
+
 .root :global(.dialog-body) .btn {
-  margin-top: 6px;
+  margin-top: 0;
 }
 
 .root :global(.dialog-actions) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 9px;
   margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .root :global(.dialog-actions) :global(.btn) {
   margin-top: 0;
 }
 
-.root :global(.dialog-actions) :global(.danger-action) {
-  margin-left: auto;
+.root :global(.dialog-record) {
+  display: block;
+  min-height: 0;
+  padding: 0;
+  color: var(--ink);
+}
+
+.root :global(.dialog-record) strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.dialog-note) {
+  color: var(--subtle);
+  font-size: var(--text-xs);
 }
 
 .root :global(.dialog-foot) {
@@ -95,6 +158,50 @@
   border-top: 1px solid var(--line);
 }
 
+.root :global(.dialog-actions) :global(.btn) {
+  min-height: 38px;
+  padding: 8px 13px;
+  border-radius: 9px;
+  box-shadow: none;
+  transform: none;
+}
+
+.root :global(.dialog-actions) :global(.btn):hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--line-strong);
+  box-shadow: none;
+  transform: none;
+}
+
+.root :global(.dialog-actions) :global(.btn-primary),
+.root :global(.dialog-actions) :global(.btn-danger) {
+  border-color: transparent;
+}
+
+.root :global(.dialog-actions) :global(.btn-primary) {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.root :global(.dialog-actions) :global(.btn-danger) {
+  background: var(--danger);
+  color: var(--surface);
+}
+
+.root :global(.dialog-actions) :global(.btn-primary):hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.root :global(.dialog-actions) :global(.btn-danger):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger), var(--ink) 12%);
+  border-color: transparent;
+}
+
+.root :global(.dialog-actions) :global(.btn):active:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+
 .sidebar {
   inset: 0 auto 0 0;
   margin: 0;
@@ -104,7 +211,7 @@
   border: 0;
   border-radius: 0;
   background: var(--sidebar);
-  box-shadow: none;
+  box-shadow: var(--shadow-overlay);
 }
 
 .sidebar :global(.dialog-shell) {
@@ -159,7 +266,7 @@
   padding-bottom: 10px;
 }
 
-.sidebar :global(.dialog-head) h2 {
+.sidebar :global(.dialog-heading) h2 {
   font-size: var(--text-md);
 }
 

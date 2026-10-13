@@ -87,7 +87,9 @@ export function SupportPage({ onStart }: { onStart: () => void }) {
           ))}
         </div>
         <aside className="service-note">
-          <Icon name="route" size={28} />
+          <div className={styles['service-note-mark']} aria-hidden="true">
+            <Icon name="route" size={24} />
+          </div>
           <h2>{t('Tiếp tục chuyến đi của bạn.', 'Continue your journey.')}</h2>
           <p>
             {t(

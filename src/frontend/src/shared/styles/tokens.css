@@ -40,8 +40,8 @@
 }
 
 /*
- * TourLens design system: warm neutral surfaces, indigo for action and focus,
- * and semantic colours reserved for state. Borders clarify component edges.
+ * TourLens visual system: warm mineral surfaces, indigo-violet action, and
+ * semantic colour reserved for state. Elevation separates purposeful layers.
  */
 
 :root {
@@ -51,23 +51,27 @@
   font-synthesis: none;
 
   /* Warm neutral surfaces keep attention on tour data. */
-  --paper: #f6f5f1;
-  --surface: #ffffff;
-  --surface-2: #efeee9;
-  --ink: #20212a;
-  --muted: #555965;
-  --subtle: #656a75;
-  --line: #e3e1da;
-  --line-strong: #cac8c0;
+  --paper: #f5f2ec;
+  --surface: #fffdfa;
+  --surface-2: #f0ede7;
+  --surface-3: #e9e5dd;
+  --ink: #282622;
+  --muted: #5e5a54;
+  --subtle: #777168;
+  --line: #e4dfd6;
+  --line-strong: #c9c1b5;
 
   /* Action */
-  --accent: #4338a8;
-  --accent-hover: #352c91;
+  --accent: #5144b9;
+  --accent-hover: #4438a7;
+  --accent-pressed: #382f91;
+  --accent-edge: #3d348f;
   --on-accent: #ffffff;
-  --tint: #ecebfa;
+  --tint: #eeebff;
+  --accent-shadow: rgba(68, 56, 167, 0.24);
 
   /* Navigation recedes behind the working canvas. */
-  --sidebar: #eeede8;
+  --sidebar: #efede7;
 
   /* Semantic state — never decorative */
   --good: #1f6b4f;
@@ -77,7 +81,10 @@
   --danger: #a3372a;
   --danger-bg: #fbeae6;
 
-  --focus: var(--accent);
+  --focus: #6458cf;
+  --surface-highlight: rgba(255, 255, 255, 0.82);
+  --button-highlight: rgba(255, 255, 255, 0.24);
+  --overlay-backdrop: rgba(22, 20, 27, 0.46);
 
   /* Manrope carries interface copy; Space Grotesk is reserved for wordmark and figures. */
   --heading: 'Manrope', system-ui, sans-serif;
@@ -98,9 +105,17 @@
   --radius-lg: 16px;
   --radius-full: 999px;
 
-  /* Shadow only for floating layers */
-  --shadow-pop: 0 8px 24px rgba(18, 18, 24, 0.12);
-  --shadow-overlay: 0 20px 48px rgba(12, 12, 18, 0.2), 0 2px 8px rgba(12, 12, 18, 0.08);
+  /* Resting, raised, and floating planes share one warm light direction. */
+  --shadow-rest: 0 1px 2px rgba(42, 35, 24, 0.06), inset 0 1px 0 var(--surface-highlight);
+  --shadow-card: 0 2px 5px rgba(42, 35, 24, 0.045), 0 10px 28px rgba(42, 35, 24, 0.035);
+  --shadow-float:
+    0 1px 0 var(--surface-highlight) inset, 0 8px 18px rgba(42, 35, 24, 0.08),
+    0 28px 58px rgba(42, 35, 24, 0.075);
+  --shadow-overlay: 0 24px 64px rgba(26, 23, 33, 0.22), 0 4px 12px rgba(26, 23, 33, 0.1);
+  --shadow-pop: 0 10px 28px rgba(42, 35, 24, 0.13), 0 2px 6px rgba(42, 35, 24, 0.08);
+  --shadow-dialog: 0 18px 48px rgba(26, 23, 33, 0.18);
+  --shadow-menu: 0 8px 24px rgba(26, 23, 33, 0.12);
+  --ambient-light: rgba(255, 255, 255, 0.78);
 
   /* Layout */
   --header-height: 68px;
@@ -125,33 +140,48 @@
 }
 
 html[data-theme='dark'] {
-  --paper: #111216;
-  --surface: #1a1b20;
-  --surface-2: #23242a;
-  --ink: #f2f2f5;
-  --muted: #b5b7c1;
-  --subtle: #999ca7;
-  --line: #30323a;
-  --line-strong: #484a54;
+  --paper: #17171b;
+  --surface: #202024;
+  --surface-2: #29292f;
+  --surface-3: #33333a;
+  --ink: #f2f0ec;
+  --muted: #c1bdb6;
+  --subtle: #a09a90;
+  --line: #38373a;
+  --line-strong: #514f52;
 
-  --accent: #aaa5f4;
-  --accent-hover: #c0bcff;
-  --on-accent: #171625;
-  --tint: #29283e;
+  --accent: #aaa0ff;
+  --accent-hover: #beb7ff;
+  --accent-pressed: #9287ec;
+  --accent-edge: #8d82dd;
+  --on-accent: #211e38;
+  --tint: #302d48;
+  --accent-shadow: rgba(112, 98, 220, 0.22);
 
-  --sidebar: #191a1f;
+  --sidebar: #1d1d21;
 
-  --good: #7fc9a0;
+  --good: #83cba1;
   --good-bg: #1a2a22;
   --warn: #ddb87f;
   --warn-bg: #2e2718;
   --danger: #e09a8c;
   --danger-bg: #2f1f1c;
 
-  --focus: #9b9bea;
+  --focus: #b7adff;
+  --surface-highlight: rgba(255, 255, 255, 0.045);
+  --button-highlight: rgba(255, 255, 255, 0.1);
+  --overlay-backdrop: rgba(0, 0, 0, 0.68);
 
-  --shadow-pop: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-overlay: 0 24px 56px rgba(0, 0, 0, 0.65), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-rest: 0 1px 2px rgba(0, 0, 0, 0.22), inset 0 1px 0 var(--surface-highlight);
+  --shadow-card: 0 3px 8px rgba(0, 0, 0, 0.24), 0 12px 30px rgba(0, 0, 0, 0.18);
+  --shadow-float:
+    0 1px 0 var(--surface-highlight) inset, 0 8px 20px rgba(0, 0, 0, 0.3),
+    0 28px 60px rgba(0, 0, 0, 0.28);
+  --shadow-pop: 0 10px 28px rgba(0, 0, 0, 0.42), 0 2px 6px rgba(0, 0, 0, 0.25);
+  --shadow-overlay: 0 24px 64px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-dialog: 0 18px 48px rgba(0, 0, 0, 0.48);
+  --shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.38);
+  --ambient-light: rgba(161, 145, 255, 0.1);
 
   color-scheme: dark;
 }

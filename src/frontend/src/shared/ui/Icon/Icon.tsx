@@ -8,13 +8,15 @@ export type IconName =
   | 'chevron'
   | 'pin'
   | 'edit'
+  | 'more'
   | 'trash'
   | 'check'
   | 'sun'
   | 'moon'
   | 'panel'
   | 'route'
-  | 'help';
+  | 'help'
+  | 'bookmark';
 
 const shapes: Record<IconName, ReactNode> = {
   arrow: <path d="M4 12h15m-6-6 6 6-6 6" />,
@@ -29,8 +31,18 @@ const shapes: Record<IconName, ReactNode> = {
   chevron: <path d="m6 9 6 6 6-6" />,
   pin: <path d="M8 4h8l-1 6 3 3v2H6v-2l3-3-1-6m4 11v6" />,
   edit: <path d="m15 4 5 5M5 20l5-1L21 8a2 2 0 0 0-5-5L5 14v6Z" />,
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+    </>
+  ),
   trash: <path d="M4 6h16M9 3h6m-9 3 1 15h10l1-15M10 10v7m4-7v7" />,
   check: <path d="m5 12 4 4L19 6" />,
+  bookmark: (
+    <path d="M6 4.75A1.75 1.75 0 0 1 7.75 3h8.5A1.75 1.75 0 0 1 18 4.75V21l-6-3.8L6 21V4.75Z" />
+  ),
   sun: (
     <>
       <circle cx="12" cy="12" r="4" />

@@ -10,6 +10,8 @@ import {
 } from '../../../shared/api';
 import { accessFor, isSessionExpired } from '../../../features/session-history';
 import { sessionTitle } from '../../../shared/lib';
+import { usePreferences } from '../../../shared/preferences';
+import type { Locale } from '../../../shared/preferences';
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -20,28 +22,42 @@ function isChatMsg(value: unknown): value is ChatMsg {
   return validChatMsg(value);
 }
 
-function errorText(cause: unknown, fallback: string) {
+function errorText(cause: unknown, fallback: string, locale: Locale) {
+  const t = (vi: string, en: string) => (locale === 'vi' ? vi : en);
   if (cause instanceof CurrentApiError) {
     if (cause.code === 'OPENCODE_MODEL_ACCESS_DENIED') {
-      return 'Model Muse Spark miễn phí hiện không cho gọi từ ứng dụng qua CLI. Cần chọn model/provider có quyền gọi qua CLI.';
+      return t(
+        'Model đang dùng chưa cho phép gửi yêu cầu từ ứng dụng. Hãy chọn model khác hoặc liên hệ quản trị viên.',
+        'The current model cannot accept requests from this app. Choose another model or contact your administrator.',
+      );
     }
     if (cause.code === 'OPENCODE_RESPONSE_EMPTY') {
-      return 'OpenCode không trả nội dung cho lượt này. Hãy thử lại.';
+      return t(
+        'Agent chưa trả lời cho lượt tìm này. Nội dung của bạn vẫn được giữ; hãy thử lại.',
+        'The agent did not return a response. Your message is kept; please try again.',
+      );
     }
-    if (cause.code === 'OPENCODE_RUN_FAILED') {
-      return 'OpenCode gặp lỗi khi xử lý lượt chat. Hãy thử lại.';
+    if (cause.code === 'NETWORK_ERROR') {
+      return t(
+        'Không kết nối được dịch vụ tìm tour. Hãy kiểm tra mạng rồi thử lại.',
+        'Could not connect to the tour service. Check your connection and try again.',
+      );
     }
   }
-  return cause instanceof Error ? cause.message : fallback;
+  return fallback;
 }
 
 export function useChat(
   session: LocalSession,
   onChangeSession: (changes: Partial<LocalSession>) => void,
 ) {
+  const { locale } = usePreferences();
+  const localeRef = useRef(locale);
+  localeRef.current = locale;
   const [client, setClient] = useState<CurrentBackendClient | null>(null);
   const [msgs, setMsgs] = useState<ChatMsg[]>([]);
   const [phase, setPhase] = useState<ChatPhase>('idle');
+  const [activeToolActivityId, setActiveToolActivityId] = useState<string | null>(null);
   const [initialSendPending, setInitialSendPending] = useState(false);
   const [failedStep, setFailedStep] = useState<'init' | 'message' | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
@@ -58,22 +74,45 @@ export function useChat(
 
   const push = useCallback((message: ChatMsg) => {
     setMsgs((all) => [...all, message]);
-    if (message.kind === 'tool_activity') return;
     const transcript = [...transcriptRef.current, message];
     transcriptRef.current = transcript;
     onChangeSessionRef.current({ messages: transcript });
   }, []);
 
-  const recordToolProgress = useCallback((event: CurrentAgentProgressEvent) => {
-    if (event.type !== 'tool') return;
-    hasLiveToolEventsRef.current = true;
-    const activityId = toolActivityIdRef.current ?? uid();
-    toolActivityIdRef.current = activityId;
-    setMsgs((all) => {
-      const messageIndex = all.findIndex(
+  const upsertToolActivity = useCallback(
+    (activity: Extract<ChatMsg, { kind: 'tool_activity' }>) => {
+      const transcriptIndex = transcriptRef.current.findIndex(
+        (message) => message.id === activity.id && message.kind === 'tool_activity',
+      );
+      transcriptRef.current =
+        transcriptIndex >= 0
+          ? transcriptRef.current.map((message, index) =>
+              index === transcriptIndex ? activity : message,
+            )
+          : [...transcriptRef.current, activity];
+
+      setMsgs((all) => {
+        const messageIndex = all.findIndex(
+          (message) => message.id === activity.id && message.kind === 'tool_activity',
+        );
+        return messageIndex >= 0
+          ? all.map((message, index) => (index === messageIndex ? activity : message))
+          : [...all, activity];
+      });
+    },
+    [],
+  );
+
+  const recordToolProgress = useCallback(
+    (event: CurrentAgentProgressEvent) => {
+      if (event.type !== 'tool') return;
+      hasLiveToolEventsRef.current = true;
+      const activityId = toolActivityIdRef.current ?? uid();
+      toolActivityIdRef.current = activityId;
+      setActiveToolActivityId(activityId);
+      const current = transcriptRef.current.find(
         (message) => message.id === activityId && message.kind === 'tool_activity',
       );
-      const current = messageIndex >= 0 ? all[messageIndex] : null;
       const tools = current?.kind === 'tool_activity' ? current.tools : [];
       const toolIndex = tools.findIndex((tool) => tool.id === event.id);
       const nextTools = [...tools];
@@ -81,33 +120,26 @@ export function useChat(
       const tool = {
         id: event.id,
         name: event.name,
-        message: event.message ?? previous?.message,
+        message: event.message || previous?.message,
         status: event.status,
       } as const;
       if (toolIndex >= 0) nextTools[toolIndex] = tool;
       else nextTools.push(tool);
-      const nextMessage: ChatMsg = { id: activityId, kind: 'tool_activity', tools: nextTools };
-      if (messageIndex >= 0) {
-        return all.map((message, index) => (index === messageIndex ? nextMessage : message));
-      }
-      return [...all, nextMessage];
-    });
-  }, []);
+      upsertToolActivity({ id: activityId, kind: 'tool_activity', tools: nextTools });
+    },
+    [upsertToolActivity],
+  );
 
   const failRunningTools = useCallback(() => {
-    setMsgs((all) =>
-      all.map((message) =>
-        message.kind === 'tool_activity' && message.id === toolActivityIdRef.current
-          ? {
-              ...message,
-              tools: message.tools.map((tool) =>
-                tool.status === 'running' ? { ...tool, status: 'error' as const } : tool,
-              ),
-            }
-          : message,
-      ),
+    const activity = transcriptRef.current.find(
+      (message) => message.id === toolActivityIdRef.current && message.kind === 'tool_activity',
     );
-  }, []);
+    if (activity?.kind !== 'tool_activity') return;
+    const tools = activity.tools.map((tool) =>
+      tool.status === 'running' ? { ...tool, status: 'error' as const } : tool,
+    );
+    upsertToolActivity({ ...activity, tools });
+  }, [upsertToolActivity]);
 
   useEffect(() => {
     const target = sessionRef.current;
@@ -118,14 +150,13 @@ export function useChat(
       Boolean(target.draft.text.trim());
     let active = true;
     setClient(null);
-    const restoredMessages = target.messages
-      .filter(isChatMsg)
-      .filter((message) => message.kind !== 'tool_activity');
+    const restoredMessages = target.messages.filter(isChatMsg);
     transcriptRef.current = restoredMessages;
     setMsgs(restoredMessages);
     setInitialSendPending(false);
     setSessionExpired(false);
     toolActivityIdRef.current = null;
+    setActiveToolActivityId(null);
     hasLiveToolEventsRef.current = false;
     setPhase('thinking');
     setFailedStep(null);
@@ -160,7 +191,13 @@ export function useChat(
           push({
             id: uid(),
             kind: 'error',
-            text: errorText(cause, 'Could not connect to the travel agent.'),
+            text: errorText(
+              cause,
+              localeRef.current === 'vi'
+                ? 'Chưa kết nối được dịch vụ tìm tour. Hãy thử lại sau ít phút.'
+                : 'Could not connect to the tour service. Try again in a moment.',
+              localeRef.current,
+            ),
             expired,
           });
           setSessionExpired(expired);
@@ -180,33 +217,26 @@ export function useChat(
       if (response.tool_calls.length && !hasLiveToolEventsRef.current) {
         const activityId = toolActivityIdRef.current ?? uid();
         toolActivityIdRef.current = activityId;
-        setMsgs((all) => {
-          const messageIndex = all.findIndex(
-            (message) => message.id === activityId && message.kind === 'tool_activity',
-          );
-          const existing = messageIndex >= 0 ? all[messageIndex] : null;
-          const tools = existing?.kind === 'tool_activity' ? [...existing.tools] : [];
-          const finalCalls = new Map<string, 'running' | 'completed' | 'error'>();
-          response.tool_calls.forEach((call) => {
-            const status =
-              call.status === 'completed' || call.status === 'success'
-                ? 'completed'
-                : call.status === 'error' || call.status === 'failed'
-                  ? 'error'
-                  : 'running';
-            finalCalls.set(call.name, status);
-          });
-          [...finalCalls].forEach(([name, status], index) => {
-            if (!tools.some((tool) => tool.name === name)) {
-              tools.push({ id: `${activityId}-result-${index}`, name, status });
-            }
-          });
-          const nextMessage: ChatMsg = { id: activityId, kind: 'tool_activity', tools };
-          if (messageIndex >= 0) {
-            return all.map((message, index) => (index === messageIndex ? nextMessage : message));
-          }
-          return [...all, nextMessage];
+        const existing = transcriptRef.current.find(
+          (message) => message.id === activityId && message.kind === 'tool_activity',
+        );
+        const tools = existing?.kind === 'tool_activity' ? [...existing.tools] : [];
+        const finalCalls = new Map<string, 'running' | 'completed' | 'error'>();
+        response.tool_calls.forEach((call) => {
+          const status =
+            call.status === 'completed' || call.status === 'success'
+              ? 'completed'
+              : call.status === 'error' || call.status === 'failed'
+                ? 'error'
+                : 'running';
+          finalCalls.set(call.name, status);
         });
+        [...finalCalls].forEach(([name, status], index) => {
+          if (!tools.some((tool) => tool.name === name)) {
+            tools.push({ id: `${activityId}-result-${index}`, name, status });
+          }
+        });
+        upsertToolActivity({ id: activityId, kind: 'tool_activity', tools });
       }
       if (response.assistant_text.trim()) {
         push({ id: uid(), kind: 'assistant', text: response.assistant_text.trim() });
@@ -229,7 +259,7 @@ export function useChat(
         push({ id: uid(), kind: 'comparison', comparison });
       }
     },
-    [push],
+    [push, upsertToolActivity],
   );
 
   const sendMessage = useCallback(
@@ -240,6 +270,7 @@ export function useChat(
       setFailedStep(null);
       setPhase('working');
       toolActivityIdRef.current = null;
+      setActiveToolActivityId(null);
       hasLiveToolEventsRef.current = false;
       lastMessageRef.current = text.trim();
       if (showUserMessage) {
@@ -263,12 +294,19 @@ export function useChat(
         push({
           id: uid(),
           kind: 'error',
-          text: errorText(cause, 'Could not complete this message.'),
+          text: errorText(
+            cause,
+            localeRef.current === 'vi'
+              ? 'Chưa thể hoàn tất lượt tìm tour. Nội dung của bạn vẫn được giữ; hãy thử lại.'
+              : 'The search could not be completed. Your message is kept; please try again.',
+            localeRef.current,
+          ),
           expired,
         });
         setSessionExpired(expired);
         setFailedStep('message');
       } finally {
+        onChangeSessionRef.current({ messages: transcriptRef.current });
         setPhase('idle');
       }
     },
@@ -294,6 +332,7 @@ export function useChat(
     msgs,
     busy,
     phase,
+    activeToolActivityId,
     initialSendPending,
     failedStep,
     sessionExpired,

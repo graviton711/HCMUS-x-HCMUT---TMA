@@ -7,6 +7,7 @@ import {
   type AuthProfile,
   type LocalSession,
 } from '../features/session-history';
+import { SavedToursDialog, useSavedTours } from '../features/saved-tours';
 import { PreferencesControl } from '../features/preferences';
 import { SupportPage, UnavailablePage } from '../pages/public';
 import { WorkspacePage } from '../pages/workspace';
@@ -39,9 +40,11 @@ export function App() {
   const { sessions, storageError, createSession, updateSession, removeSession } = useLocalSessions(
     profile?.id,
   );
+  const saved = useSavedTours(profile?.id);
   const sidebar = useSidebarLayout();
   const isDesktop = useIsDesktop();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [savedToursOpen, setSavedToursOpen] = useState(false);
   const current =
     sessions.find((session) => session.id === route.session) ||
     (route.path === '/' ? sessions[0] || null : null);
@@ -101,12 +104,20 @@ export function App() {
       sidebarOpen={isDesktop ? !sidebar.collapsed : drawerOpen}
       onToggleSidebar={toggleSidebar}
       onStart={() => startSession()}
+      savedCount={saved.savedTours.length}
+      onOpenSaved={() => setSavedToursOpen(true)}
     />
   );
 
   const page =
     route.path === '/' ? (
-      <ChatPage session={current} onStart={startSession} onChangeSession={updateSession} />
+      <ChatPage
+        session={current}
+        onStart={startSession}
+        onChangeSession={updateSession}
+        isSavedTour={saved.isSaved}
+        onToggleSavedTour={saved.toggleFromComparison}
+      />
     ) : route.path === '/support' ? (
       <SupportPage onStart={continueTours} />
     ) : route.path === '/tours' ? (
@@ -156,6 +167,14 @@ export function App() {
               )}
             </p>
           )}
+          {saved.storageError && (
+            <p className="notice notice-warning" role="status">
+              {t(
+                'Trình duyệt chưa lưu được danh mục tour. Lựa chọn vẫn còn trong tab này.',
+                'The browser could not save your tour list. Your changes remain in this tab.',
+              )}
+            </p>
+          )}
           {isWorkspace ? (
             <>
               {sessionBar}
@@ -166,6 +185,12 @@ export function App() {
           )}
         </main>
       </div>
+      <SavedToursDialog
+        open={savedToursOpen}
+        savedTours={saved.savedTours}
+        onClose={() => setSavedToursOpen(false)}
+        onRemove={saved.remove}
+      />
       {!isWorkspace && <AppFooter onLink={link} />}
     </div>
   );

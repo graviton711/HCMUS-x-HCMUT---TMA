@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react';
 import { Icon } from '../Icon';
 import styles from './Dialog.module.css';
 
@@ -6,22 +6,33 @@ export function Dialog({
   open,
   onClose,
   title,
+  description,
   closeLabel,
   variant = 'default',
+  size = 'default',
+  tone = 'default',
+  role,
+  initialFocusRef,
   footer,
   children,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
+  description?: ReactNode;
   closeLabel: string;
   variant?: 'default' | 'sidebar';
+  size?: 'default' | 'wide';
+  tone?: 'default' | 'danger';
+  role?: 'dialog' | 'alertdialog';
+  initialFocusRef?: RefObject<HTMLElement | null>;
   footer?: ReactNode;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const closeTimer = useRef<number | null>(null);
   const titleId = useId();
+  const descriptionId = useId();
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
@@ -29,7 +40,10 @@ export function Dialog({
       if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
       closeTimer.current = null;
       dialog.removeAttribute('data-closing');
-      if (!dialog.open) dialog.showModal();
+      if (!dialog.open) {
+        dialog.showModal();
+        initialFocusRef?.current?.focus();
+      }
       return;
     }
     if (!dialog.open) return;
@@ -41,20 +55,26 @@ export function Dialog({
       return;
     }
     dialog.setAttribute('data-closing', 'true');
-    closeTimer.current = window.setTimeout(() => {
-      if (dialog.open && dialog.dataset.closing === 'true') dialog.close();
-      closeTimer.current = null;
-    }, variant === 'sidebar' ? 160 : 150);
+    closeTimer.current = window.setTimeout(
+      () => {
+        if (dialog.open && dialog.dataset.closing === 'true') dialog.close();
+        closeTimer.current = null;
+      },
+      variant === 'sidebar' ? 160 : 150,
+    );
     return () => {
       if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
       closeTimer.current = null;
     };
-  }, [open, variant]);
+  }, [initialFocusRef, open, variant]);
   return (
     <dialog
       ref={ref}
-      className={`${styles.root}${variant === 'sidebar' ? ` ${styles.sidebar}` : ''}`}
+      className={`${styles.root}${variant === 'sidebar' ? ` ${styles.sidebar}` : ''}${size === 'wide' ? ` ${styles.wide}` : ''}`}
+      data-tone={tone}
+      role={role}
       aria-labelledby={titleId}
+      aria-describedby={description ? descriptionId : undefined}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -74,8 +94,16 @@ export function Dialog({
     >
       <div className="dialog-shell">
         <header className="dialog-head">
-          <h2 id={titleId}>{title}</h2>
-          <button className="icon-button" onClick={onClose} aria-label={closeLabel}>
+          <div className="dialog-heading">
+            <h2 id={titleId}>{title}</h2>
+            {description && <p id={descriptionId}>{description}</p>}
+          </div>
+          <button
+            className="icon-button dialog-close"
+            type="button"
+            onClick={onClose}
+            aria-label={closeLabel}
+          >
             <Icon name="close" />
           </button>
         </header>

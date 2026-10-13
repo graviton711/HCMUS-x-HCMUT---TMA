@@ -200,9 +200,11 @@ describe('useChat OpenCode agent loop', () => {
     const saved = sessionRef.current;
     expect(saved?.messages.map((message) => (message as { kind: string }).kind)).toEqual([
       'user',
+      'tool_activity',
       'assistant',
       'choice',
       'user',
+      'tool_activity',
       'assistant',
       'comparison',
     ]);
@@ -213,7 +215,7 @@ describe('useChat OpenCode agent loop', () => {
     render(<Probe initial={saved!} apiRef={restoredApiRef} />);
     await waitFor(() =>
       expect(screen.getByTestId('msgs').textContent).toBe(
-        'user,assistant,choice,user,assistant,comparison',
+        'user,tool_activity,assistant,choice,user,tool_activity,assistant,comparison',
       ),
     );
     expect(calls.filter((call) => call.path.endsWith('/messages'))).toHaveLength(sentBeforeReload);
@@ -288,7 +290,7 @@ describe('useChat OpenCode agent loop', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('message-texts').textContent).toContain(
-        'Model Muse Spark miễn phí hiện không cho gọi từ ứng dụng qua CLI.',
+        'Model đang dùng chưa cho phép gửi yêu cầu từ ứng dụng. Hãy chọn model khác hoặc liên hệ quản trị viên.',
       ),
     );
   });

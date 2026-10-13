@@ -81,6 +81,7 @@ export function SessionSidebar({
           <div className={styles.body}>
             <a className={styles.brand} href="/" onClick={onHome} aria-label="TourLens">
               <img className={styles['brand-mark']} src="/assets/mark.svg" alt="" width={34} height={34} />
+              <span className={styles['brand-name']}>TourLens</span>
             </a>
             <motion.button
               type="button"

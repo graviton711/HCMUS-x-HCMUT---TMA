@@ -1,6 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { ReactNode } from 'react';
+import type { CurrentComparison } from '../../../shared/api';
 import { usePreferences } from '../../../shared/preferences';
 import type { ChatMsg } from '../model/types';
 import { QuickReplies } from './QuickReplies';
@@ -18,38 +20,32 @@ const TOOL_LABEL: Record<string, [string, string]> = {
   clarify_date: ['Kiểm tra ngày âm lịch', 'Resolve lunar date'],
 };
 
-type ToolStep = Extract<ChatMsg, { kind: 'tool_activity' }>['tools'][number];
-
-function groupToolSteps(tools: ToolStep[]) {
-  const groups = new Map<string, { tool: ToolStep; count: number; status: ToolStep['status'] }>();
-  for (const tool of tools) {
-    const message = tool.message?.trim() ?? '';
-    const key = `${tool.name}\u0000${message}`;
-    const current = groups.get(key);
-    if (!current) {
-      groups.set(key, { tool, count: 1, status: tool.status });
-      continue;
-    }
-    current.count += 1;
-    if (tool.status === 'running' || (tool.status === 'error' && current.status === 'completed')) {
-      current.status = tool.status;
-    }
-  }
-  return [...groups.values()];
-}
-
 export function Thread({
   messages,
   busy,
+  activeToolActivityId,
   onSend,
   onRelax,
+  renderRecovery,
+  isSavedTour,
+  onToggleSavedTour,
 }: {
   messages: ChatMsg[];
   busy: boolean;
+  activeToolActivityId?: string | null;
   onSend: (text: string) => void;
   onRelax: (field: string) => void;
+  renderRecovery?: (expired: boolean) => ReactNode;
+  isSavedTour?: (tourId: string, offerId: string) => boolean;
+  onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
 }) {
   const { t } = usePreferences();
+  const latestActivityId = [...messages]
+    .reverse()
+    .find((message) => message.kind === 'tool_activity')?.id;
+  const currentActivityId = activeToolActivityId === undefined
+    ? latestActivityId
+    : activeToolActivityId;
   return (
     <div className={styles.thread} aria-live="polite">
       <AnimatePresence initial={false}>
@@ -94,70 +90,122 @@ export function Thread({
                   )}
                 </motion.section>
               );
-            case 'tool_activity':
+            case 'tool_activity': {
+              if (message.tools.length === 0) return null;
+
+              const activeTool = [...message.tools]
+                .reverse()
+                .find((tool) => tool.status === 'running');
+              const failedSteps = message.tools.filter((tool) => tool.status === 'error').length;
+              const isCurrentActivity = busy && message.id === currentActivityId;
+              const state = isCurrentActivity ? 'running' : failedSteps > 0 ? 'error' : 'completed';
+              const summary = isCurrentActivity
+                ? activeTool
+                  ? activeTool.message ||
+                    t(
+                      ...(TOOL_LABEL[activeTool.name] ?? [
+                        'Đang tra cứu dữ kiện',
+                        'Checking evidence',
+                      ]),
+                    )
+                  : t('Đang tổng hợp kết quả', 'Putting the results together')
+                : failedSteps > 0
+                  ? t(
+                      `Có ${failedSteps} bước tra cứu chưa hoàn tất`,
+                      `${failedSteps} search step${failedSteps === 1 ? '' : 's'} did not complete`,
+                    )
+                  : t(
+                      `Đã kiểm tra ${message.tools.length} bước`,
+                      `Checked ${message.tools.length} steps`,
+                    );
+
               return (
-                <motion.ul
-                  key={message.id}
-                  {...rise}
-                  className={styles['tool-steps']}
-                  aria-live="polite"
-                  aria-relevant="additions text"
-                >
-                  {groupToolSteps(message.tools).map(({ tool, count, status }) => (
-                    <li key={`${tool.name}:${tool.message ?? ''}`} data-state={status}>
+                <motion.div key={message.id} {...rise} className={styles['tool-progress']}>
+                  <details className={styles['tool-progress-details']} data-state={state}>
+                    <summary className={styles['tool-progress-summary']}>
                       <span
-                        className={`${styles.dot} ${
-                          status === 'running'
-                            ? styles['dot-active']
-                            : status === 'error'
-                              ? styles['dot-error']
-                              : styles['dot-done']
-                        }`}
-                        aria-hidden="true"
-                      />
-                      <span>
-                        {tool.message ||
-                          t(
-                            ...(TOOL_LABEL[tool.name] ?? [
-                              'Đã tra cứu dữ kiện',
-                              'Checked evidence',
-                            ]),
-                          )}
-                        {count > 1 && (
-                          <span
-                            className={styles['tool-count']}
-                            aria-label={t(`${count} lần`, `${count} times`)}
-                          >
-                            ×{count}
-                          </span>
-                        )}
-                        {status === 'running' && (
-                          <span className={styles['tool-state']}>
-                            {t(' · đang chạy', ' · working')}
-                          </span>
-                        )}
-                        {status === 'error' && (
-                          <span className={styles['tool-state']}>
-                            {t(' · chưa hoàn tất', ' · did not complete')}
-                          </span>
-                        )}
+                        className={styles['activity-copy']}
+                        data-active={isCurrentActivity || undefined}
+                      >
+                        {summary}
                       </span>
-                    </li>
-                  ))}
-                </motion.ul>
+                      <span className={styles['activity-chevron']} aria-hidden="true" />
+                    </summary>
+                    <ol
+                      className={styles['tool-steps']}
+                      aria-label={t('Các bước đã thực hiện', 'Steps performed')}
+                    >
+                      {message.tools.map((tool) => (
+                        <li key={tool.id} data-state={tool.status}>
+                          <span
+                            className={`${styles.dot} ${
+                              tool.status === 'running'
+                                ? styles['dot-active']
+                                : tool.status === 'error'
+                                  ? styles['dot-error']
+                                  : styles['dot-done']
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <span className={styles['tool-step-message']}>
+                            {tool.message ||
+                              t(
+                                ...(TOOL_LABEL[tool.name] ?? [
+                                  'Đã tra cứu dữ kiện',
+                                  'Checked evidence',
+                                ]),
+                              )}
+                          </span>
+                          <span className={styles['tool-state']}>
+                            {tool.status === 'running'
+                              ? t('Đang chạy', 'Working')
+                              : tool.status === 'error'
+                                ? t('Chưa hoàn tất', 'Incomplete')
+                                : t('Hoàn tất', 'Done')}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                </motion.div>
               );
+            }
             case 'comparison':
               return (
                 <motion.div key={message.id} {...rise}>
-                  <ResultCards comparison={message.comparison} busy={busy} onRelax={onRelax} />
+                  <ResultCards
+                    comparison={message.comparison}
+                    busy={busy}
+                    onRelax={onRelax}
+                    isSavedTour={isSavedTour}
+                    onToggleSavedTour={onToggleSavedTour}
+                    onAsk={onSend}
+                  />
                 </motion.div>
               );
             case 'error':
               return (
                 <motion.div key={message.id} {...rise} className={styles['msg-error']} role="alert">
-                  {message.expired
-                    ? t('Phiên khách đã hết hạn. Bản nháp vẫn được giữ.', 'Guest session expired. Your draft is kept.')
-                    : message.text}
+                  <span className={styles['error-copy']}>
+                    <strong className={styles['error-title']}>
+                      {message.expired
+                        ? t('Phiên khách đã hết hạn', 'Guest session expired')
+                        : t('Chưa thể hoàn tất lượt tìm tour', 'The search did not finish')}
+                    </strong>
+                    <span className={styles['error-description']}>
+                      {message.expired
+                        ? t(
+                            'Bản nháp vẫn còn. Tạo phiên mới để tiếp tục.',
+                            'Your draft is still here. Start a new session to continue.',
+                          )
+                        : message.text}
+                    </span>
+                  </span>
+                  {renderRecovery && message.id === messages[messages.length - 1]?.id && (
+                    <div className={styles['error-actions']}>
+                      {renderRecovery(Boolean(message.expired))}
+                    </div>
+                  )}
                 </motion.div>
               );
           }

@@ -12,11 +12,15 @@ export function SessionBar({
   sidebarOpen,
   onToggleSidebar,
   onStart,
+  savedCount,
+  onOpenSaved,
 }: {
   title: string;
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
   onStart: () => void;
+  savedCount: number;
+  onOpenSaved: () => void;
 }) {
   const { t } = usePreferences();
   const reduceMotion = useReducedMotion();
@@ -39,6 +43,18 @@ export function SessionBar({
       <p className="session-title truncate" title={title}>
         {title}
       </p>
+      <button
+        type="button"
+        className="session-saved"
+        aria-haspopup="dialog"
+        aria-label={t(`Tour đã lưu (${savedCount})`, `Saved tours (${savedCount})`)}
+        title={t('Tour đã lưu', 'Saved tours')}
+        onClick={onOpenSaved}
+      >
+        <Icon name="bookmark" size={16} />
+        <span className="session-saved-label">{t('Đã lưu', 'Saved')}</span>
+        {savedCount > 0 && <span className="session-saved-count">{savedCount}</span>}
+      </button>
       <motion.button
         type="button"
         className="session-new"

@@ -1,0 +1,120 @@
+.scroll {
+  max-width: 100%;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  overscroll-behavior-inline: contain;
+}
+
+.scroll:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.table {
+  width: 100%;
+  min-width: 690px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: var(--ink);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.table th,
+.table td {
+  min-width: 150px;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.table thead th {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.table thead th:first-child,
+.table tbody th {
+  width: 170px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tourName,
+.supplier,
+.conditionLabel,
+.observed {
+  display: block;
+}
+
+.tourName {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.supplier,
+.observed {
+  margin-top: 2px;
+  color: var(--subtle);
+  font-size: 11px;
+}
+
+.strength {
+  display: inline-block;
+  margin-bottom: 4px;
+  color: var(--subtle);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.strength[data-strength='soft'] {
+  color: var(--accent);
+}
+
+.state {
+  display: inline-block;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.state[data-state='pass'] {
+  color: var(--good);
+}
+
+.state[data-state='fail'] {
+  color: var(--danger);
+}
+
+.state[data-state='unknown'] {
+  color: var(--warn);
+}
+
+.quote {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.source {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.source:hover {
+  text-decoration: underline;
+}

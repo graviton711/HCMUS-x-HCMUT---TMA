@@ -1,0 +1,129 @@
+.trigger {
+  min-width: 32px;
+  width: 32px;
+  min-height: 32px;
+  height: 32px;
+  border-radius: 9px;
+}
+
+.trigger:hover:not(:disabled) {
+  background: var(--surface-2);
+  box-shadow: none;
+  transform: none;
+}
+
+.menu {
+  position: fixed;
+  inset: auto;
+  z-index: var(--z-overlay);
+  display: grid;
+  width: max-content;
+  min-width: 184px;
+  max-width: min(224px, calc(100vw - 16px));
+  margin: 0;
+  padding: 4px;
+  overflow: visible;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-menu);
+  transform-origin: top right;
+}
+
+.menu:not(:popover-open) {
+  display: none;
+}
+
+.menu:popover-open {
+  animation: menu-enter 130ms cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-align: left;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease),
+    outline-color var(--dur-fast) var(--ease);
+}
+
+.item:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--focus) 72%, transparent);
+  outline-offset: -2px;
+}
+
+.item :global(.icon) {
+  color: var(--subtle);
+}
+
+.item.separated {
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid var(--line);
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.item.destructive {
+  color: var(--danger);
+}
+
+.item.destructive :global(.icon) {
+  color: var(--danger);
+}
+
+.item.destructive:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.item.destructive:focus-visible {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+@keyframes menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu:popover-open {
+    animation: none;
+  }
+}
+
+@supports not selector(:popover-open) {
+  .menu[data-open='false'] {
+    display: none;
+  }
+
+  .menu[data-open='true'] {
+    display: grid;
+    visibility: visible;
+  }
+}

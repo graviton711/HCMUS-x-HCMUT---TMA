@@ -40,11 +40,17 @@ export function failedDetailsForOffer(
 }
 
 /** The hard condition field failed by the most offers, for one-tap relax. */
-export function mostFailedField(comparison: CurrentComparison): { field: string; count: number } | null {
+export function mostFailedField(
+  comparison: CurrentComparison,
+): { field: string; count: number } | null {
   const counts = new Map<string, number>();
-  const fieldOf = new Map(comparison.requirement.conditions.map((item) => [item.id, item.field]));
+  const hardConditions = comparison.requirement.conditions.filter(
+    (item) => item.strength === 'hard',
+  );
+  const hardIds = new Set(hardConditions.map((item) => item.id));
+  const fieldOf = new Map(hardConditions.map((item) => [item.id, item.field]));
   for (const evaluation of comparison.evaluations) {
-    if (evaluation.state !== 'fail') continue;
+    if (evaluation.state !== 'fail' || !hardIds.has(evaluation.condition_id)) continue;
     const field = fieldOf.get(evaluation.condition_id);
     if (!field) continue;
     counts.set(field, (counts.get(field) ?? 0) + 1);
@@ -57,10 +63,18 @@ export function mostFailedField(comparison: CurrentComparison): { field: string;
 }
 
 export function conditionState(comparison: CurrentComparison, offerId: string) {
-  const states = comparison.evaluations.filter((item) => item.offer_id === offerId);
-  if (states.some((item) => item.state === 'fail')) return 'fail';
-  if (states.some((item) => item.state === 'unknown')) return 'unknown';
-  return states.length ? 'pass' : 'unknown';
+  const hardIds = comparison.requirement.conditions
+    .filter((condition) => condition.strength === 'hard')
+    .map((condition) => condition.id);
+  if (!hardIds.length) return 'pass';
+  const states = new Map(
+    comparison.evaluations
+      .filter((item) => item.offer_id === offerId && hardIds.includes(item.condition_id))
+      .map((item) => [item.condition_id, item.state]),
+  );
+  if (hardIds.some((id) => states.get(id) === 'fail')) return 'fail';
+  if (hardIds.some((id) => states.get(id) !== 'pass')) return 'unknown';
+  return 'pass';
 }
 
 /* Operators come from LLM extraction (`operator = str(item.get("operator", "eq"))`

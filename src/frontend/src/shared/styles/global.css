@@ -46,7 +46,7 @@ button {
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.58;
   cursor: default;
 }
 
@@ -245,10 +245,15 @@ textarea:focus-visible,
 
 /* Shared surfaces stay quiet; borders clarify component boundaries. */
 .card {
-  background: var(--surface);
+  background: linear-gradient(
+    180deg,
+    var(--surface),
+    color-mix(in srgb, var(--surface) 96%, var(--surface-2))
+  );
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px 20px;
+  box-shadow: var(--shadow-rest);
 }
 
 .card-quiet {
@@ -277,7 +282,11 @@ textarea:focus-visible,
   padding: 10px 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: linear-gradient(
+    180deg,
+    var(--surface),
+    color-mix(in srgb, var(--surface) 92%, var(--surface-2))
+  );
   color: var(--ink);
   font-size: var(--text-sm);
   font-weight: 600;
@@ -286,31 +295,59 @@ textarea:focus-visible,
   text-decoration: none;
   white-space: normal;
   overflow-wrap: anywhere;
+  box-shadow: var(--shadow-rest);
   transition:
     background-color var(--dur-fast) var(--ease),
     border-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease);
+    color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 
 .btn:hover:not(:disabled) {
   background: var(--surface-2);
   border-color: var(--line-strong);
+  box-shadow: var(--shadow-card);
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(42, 35, 24, 0.12);
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent));
   color: var(--on-accent);
-  border-color: var(--accent);
+  border-color: var(--accent-edge);
   font-weight: 650;
+  box-shadow:
+    inset 0 1px 0 var(--button-highlight),
+    0 1px 1px rgba(25, 22, 55, 0.12),
+    0 5px 12px var(--accent-shadow);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent-hover) 84%, white),
+    var(--accent-hover)
+  );
   border-color: var(--accent-hover);
+  box-shadow:
+    inset 0 1px 0 var(--button-highlight),
+    0 2px 3px rgba(25, 22, 55, 0.14),
+    0 9px 18px var(--accent-shadow);
+}
+
+.btn-primary:active:not(:disabled) {
+  background: var(--accent-pressed);
+  border-color: var(--accent-edge);
+  box-shadow: inset 0 2px 4px rgba(25, 22, 55, 0.24);
 }
 
 .btn-danger {
-  background: var(--danger);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--danger) 88%, white), var(--danger));
   border-color: var(--danger);
   color: var(--surface);
   font-weight: 650;
@@ -349,12 +386,21 @@ textarea:focus-visible,
   flex: 0 0 auto;
   transition:
     background-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease);
+    color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 
 .icon-button:hover:not(:disabled) {
-  background: var(--surface-2);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
   color: var(--ink);
+  box-shadow: var(--shadow-rest);
+  transform: translateY(-1px);
+}
+
+.icon-button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(42, 35, 24, 0.12);
 }
 
 .text-action {
@@ -405,12 +451,20 @@ textarea:focus-visible,
   cursor: pointer;
   transition:
     background-color var(--dur-fast) var(--ease),
-    color var(--dur-fast) var(--ease);
+    color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
 }
 
 .chip-button:hover:not(:disabled) {
-  background: var(--tint);
+  background: linear-gradient(180deg, var(--surface), var(--tint));
   color: var(--ink);
+  box-shadow: var(--shadow-rest);
+  transform: translateY(-1px);
+}
+
+.chip-button:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .tag {
@@ -566,9 +620,10 @@ legend {
 }
 
 .notice-error {
-  background: var(--danger-bg);
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--danger) 20%, var(--line));
+  background: linear-gradient(135deg, var(--danger-bg), var(--surface));
   color: var(--danger);
+  box-shadow: var(--shadow-rest);
 }
 
 .notice-success {
@@ -589,12 +644,37 @@ legend {
 }
 
 .empty-state {
-  padding: 40px 28px;
+  width: min(100%, 800px);
+  margin: clamp(48px, 10vh, 120px) auto;
+  padding: clamp(32px, 5vw, 52px) clamp(24px, 5vw, 64px);
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
+  border-radius: 28px;
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      color-mix(in srgb, var(--accent) 5%, transparent),
+      transparent 68%
+    ),
+    linear-gradient(
+      180deg,
+      var(--surface),
+      color-mix(in srgb, var(--surface) 93%, var(--surface-2))
+    );
   text-align: center;
-  box-shadow: 0 12px 32px rgba(31, 32, 38, 0.04);
+  box-shadow: var(--shadow-card);
+}
+
+.empty-state-icon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 20px;
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line));
+  border-radius: 18px;
+  background: linear-gradient(145deg, var(--surface), var(--tint));
+  color: var(--accent);
+  box-shadow: var(--shadow-rest);
 }
 
 .empty-state > * {
@@ -606,11 +686,20 @@ legend {
   margin-bottom: 12px;
 }
 
+.empty-state h1 {
+  font-size: clamp(28px, 3.2vw, 42px);
+  letter-spacing: -0.045em;
+}
+
 .empty-state p {
   max-width: 56ch;
   color: var(--muted);
   font-size: var(--text-md);
   line-height: 1.7;
+}
+
+.empty-state .btn {
+  margin-top: 8px;
 }
 
 .empty-state-actions {
@@ -755,5 +844,6 @@ legend {
 
   .empty-state {
     padding: 28px 18px;
+    margin-block: 32px;
   }
 }
