@@ -36,12 +36,53 @@ def test_from_price_is_unknown_and_never_passes_budget(decide_cfg):
     assert offer_id in {item.offer_id for item in comparison.near_miss}
 
 
+def test_from_price_above_budget_fails(decide_cfg):
+    row = TourRow(
+        tour={"record_key": "from-high", "price_type": "from", "currency": "VND"},
+        offers=[{
+            "record_key": "from-high-offer",
+            "price": 11_000_000,
+            "currency": "VND",
+            "departure_date": "2027-02-01",
+            "observed_at": datetime.now(UTC).isoformat(),
+        }],
+    )
+    comparison = compare(
+        _req({"budget_max": 10_000_000}), rows_to_snapshots([row]), decide_cfg
+    )
+    budget_id = next(c.id for c in comparison.requirement.conditions if c.field == "budget_max")
+    evaluation = next(e for e in comparison.evaluations if e.condition_id == budget_id)
+    assert evaluation.state == "fail"
+    assert evaluation.reason_code == "PRICE_LOWER_BOUND_OVER_BUDGET"
+
+
+def test_missing_contact_and_non_vnd_prices_are_unknown(decide_cfg):
+    observed = datetime.now(UTC).isoformat()
+    row = TourRow(
+        tour={"record_key": "price-cases", "price_type": "fixed"},
+        offers=[
+            {"record_key": "missing", "price": None, "currency": "VND", "observed_at": observed},
+            {"record_key": "contact", "price": 5_000_000, "price_type": "contact",
+             "currency": "VND", "observed_at": observed},
+            {"record_key": "foreign-currency", "price": 5_000_000, "currency": "USD",
+             "observed_at": observed},
+        ],
+    )
+    comparison = compare(_req({"budget_max": 8_000_000}), rows_to_snapshots([row]), decide_cfg)
+    budget_id = next(c.id for c in comparison.requirement.conditions if c.field == "budget_max")
+    states = {(e.offer_id, e.state, e.reason_code) for e in comparison.evaluations}
+    assert ("missing", "unknown", "PRICE_MISSING") in states
+    assert ("contact", "unknown", "PRICE_NOT_EXACT") in states
+    assert ("foreign-currency", "unknown", "PRICE_CURRENCY_MISMATCH") in states
+    assert all(e.condition_id == budget_id for e in comparison.evaluations)
+
+
 def test_destination_mismatch_fails(decide_cfg):
     comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
     assert {item.tour_id for item in comparison.ranked} == {"dlv-dalat-3n"}
 
 
-def test_unknown_destination_does_not_pass_hard_filter(decide_cfg):
+def test_destination_value_without_catalog_match_fails_when_destinations_exist(decide_cfg):
     now = datetime.now(UTC).isoformat()
     partial = TourRow(
         tour={"record_key": "partial", "departure_city": "TP.HCM", "destinations": ["Unknown city"]},
@@ -53,12 +94,12 @@ def test_unknown_destination_does_not_pass_hard_filter(decide_cfg):
     )])
     comparison = compare(req, rows_to_snapshots([partial]), decide_cfg)
     states = {(item.offer_id, item.condition_id): item.state for item in comparison.evaluations}
-    assert states[("partial-offer", "city")] == "unknown"
+    assert states[("partial-offer", "city")] == "fail"
     assert comparison.ranked == []
     assert [item.tour_id for item in comparison.near_miss] == ["partial"]
 
 
-def test_country_matching_ignores_origin_endpoints_and_keeps_unknown_places(decide_cfg):
+def test_destination_matching_uses_only_explicit_catalog_labels(decide_cfg):
     now = datetime.now(UTC).isoformat()
     foreign = TourRow(
         tour={"record_key": "foreign", "departure_city": "TP.HCM",
@@ -74,26 +115,42 @@ def test_country_matching_ignores_origin_endpoints_and_keeps_unknown_places(deci
                  "price": 20_000_000, "price_type": "fixed", "observed_at": now}],
     )
     req = Requirement(id=uid("req"), conditions=[
+        Condition(id="explicit", field="destination", operator="any",
+                  value=["Thượng Hải", "Hàng Châu"], strength="hard"),
         Condition(id="country", field="destination", value="Việt Nam", strength="hard"),
-        Condition(id="city", field="destination", value="Tokyo", strength="hard"),
     ])
     comparison = compare(req, rows_to_snapshots([foreign, unknown]), decide_cfg)
     states = {(item.offer_id, item.condition_id): item.state for item in comparison.evaluations}
+    assert states[("foreign-offer", "explicit")] == "pass"
     assert states[("foreign-offer", "country")] == "fail"
-    assert states[("partial-offer", "country")] == "unknown"
-    assert states[("partial-offer", "city")] == "unknown"
+    assert states[("partial-offer", "explicit")] == "fail"
+    assert states[("partial-offer", "country")] == "fail"
     assert comparison.ranked == []
     assert {item.tour_id for item in comparison.near_miss} == {"foreign", "partial"}
 
 
-def test_stale_offer_cannot_pass_hard_budget_or_date(decide_cfg):
+def test_missing_destination_data_is_unknown(decide_cfg):
+    row = TourRow(
+        tour={"record_key": "missing-destination", "destinations": []},
+        offers=[{"record_key": "missing-destination-offer"}],
+    )
+    req = Requirement(id=uid("req"), conditions=[Condition(
+        id="destination", field="destination", value="Tokyo", strength="hard"
+    )])
+    comparison = compare(req, rows_to_snapshots([row]), decide_cfg)
+    assert comparison.evaluations[0].state == "unknown"
+    assert comparison.evaluations[0].reason_code == "DESTINATION_MISSING"
+
+
+def test_stale_price_can_pass_budget_while_stale_departure_cannot_pass_date(decide_cfg):
     future = datetime.now(UTC) + timedelta(days=2)
     stale_tours = rows_to_snapshots(FixtureCatalog().list_tours(10), now=future)
     req = _req({"destinations": ["Đà Lạt"], "budget_max": 8_000_000})
     req.conditions.append(Condition(id="old-date", field="date_from", value="2026-12-01"))
     comparison = compare(req, stale_tours, decide_cfg)
     reasons = {(item.offer_id, item.condition_id): item.reason_code for item in comparison.evaluations}
-    assert reasons[("dlv-dalat-3n-20261225", "h2")] == "FIELD_STALE"
+    states = {(item.offer_id, item.condition_id): item.state for item in comparison.evaluations}
+    assert states[("dlv-dalat-3n-20261225", "h2")] == "pass"
     assert reasons[("dlv-dalat-3n-20261225", "old-date")] == "FIELD_STALE"
 
 

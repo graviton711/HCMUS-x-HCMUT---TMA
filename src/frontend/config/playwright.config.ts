@@ -1,4 +1,9 @@
 import { defineConfig } from '@playwright/test';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const frontendDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const baseURL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
 
 export default defineConfig({
   testDir: '../tests',
@@ -12,8 +17,16 @@ export default defineConfig({
     ['list'],
     ['json', { outputFile: '../../../artifacts/frontend/playwright-report.json' }],
   ],
+  webServer: process.env.E2E_BASE_URL
+    ? undefined
+    : {
+        command: 'pnpm dev',
+        cwd: frontendDir,
+        url: baseURL,
+        reuseExistingServer: !process.env.CI,
+      },
   use: {
-    baseURL: process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173',
+    baseURL,
     browserName: 'chromium',
     launchOptions: {
       executablePath:

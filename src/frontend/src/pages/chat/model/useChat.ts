@@ -44,6 +44,7 @@ export function useChat(
   const [phase, setPhase] = useState<ChatPhase>('idle');
   const [initialSendPending, setInitialSendPending] = useState(false);
   const [failedStep, setFailedStep] = useState<'init' | 'message' | null>(null);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [reload, setReload] = useState(0);
   const transcriptRef = useRef<ChatMsg[]>(session.messages.filter(isChatMsg));
   const sessionRef = useRef(session);
@@ -123,6 +124,7 @@ export function useChat(
     transcriptRef.current = restoredMessages;
     setMsgs(restoredMessages);
     setInitialSendPending(false);
+    setSessionExpired(false);
     toolActivityIdRef.current = null;
     hasLiveToolEventsRef.current = false;
     setPhase('thinking');
@@ -154,15 +156,14 @@ export function useChat(
         }
       } catch (cause) {
         if (active) {
+          const expired = isSessionExpired(cause);
           push({
             id: uid(),
             kind: 'error',
             text: errorText(cause, 'Could not connect to the travel agent.'),
-            expired:
-              isSessionExpired(cause) ||
-              (cause instanceof CurrentApiError &&
-                (cause.code === 'SESSION_EXPIRED' || cause.code === 'SESSION_INVALID')),
+            expired,
           });
+          setSessionExpired(expired);
           setFailedStep('init');
         }
       } finally {
@@ -235,7 +236,7 @@ export function useChat(
     async (text: string, showUserMessage: boolean) => {
       const api = client;
       const agentSessionId = sessionRef.current.agentSessionId;
-      if (!api || !agentSessionId || !text.trim()) return;
+      if (sessionExpired || !api || !agentSessionId || !text.trim()) return;
       setFailedStep(null);
       setPhase('working');
       toolActivityIdRef.current = null;
@@ -258,21 +259,20 @@ export function useChat(
         applyResponse(response, text);
       } catch (cause) {
         failRunningTools();
+        const expired = isSessionExpired(cause);
         push({
           id: uid(),
           kind: 'error',
           text: errorText(cause, 'Could not complete this message.'),
-          expired:
-            isSessionExpired(cause) ||
-            (cause instanceof CurrentApiError &&
-              (cause.code === 'SESSION_EXPIRED' || cause.code === 'SESSION_INVALID')),
+          expired,
         });
+        setSessionExpired(expired);
         setFailedStep('message');
       } finally {
         setPhase('idle');
       }
     },
-    [applyResponse, client, failRunningTools, push, recordToolProgress],
+    [applyResponse, client, failRunningTools, push, recordToolProgress, sessionExpired],
   );
 
   const send = useCallback((text: string) => void sendMessage(text, true), [sendMessage]);
@@ -284,9 +284,21 @@ export function useChat(
   );
 
   const retry = useCallback(() => {
+    if (sessionExpired) return;
     if (failedStep === 'init') setReload((value) => value + 1);
     else if (lastMessageRef.current) void sendMessage(lastMessageRef.current, false);
-  }, [failedStep, sendMessage]);
+  }, [failedStep, sendMessage, sessionExpired]);
 
-  return { client, msgs, busy, phase, initialSendPending, failedStep, retry, send, relax };
+  return {
+    client,
+    msgs,
+    busy,
+    phase,
+    initialSendPending,
+    failedStep,
+    sessionExpired,
+    retry,
+    send,
+    relax,
+  };
 }

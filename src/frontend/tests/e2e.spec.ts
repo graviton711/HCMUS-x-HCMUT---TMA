@@ -1,38 +1,202 @@
 import { expect, test, type Page } from '@playwright/test';
 
+const draft = 'Đà Lạt 3 ngày, tối đa 8 triệu/người';
+
+function currentComparison() {
+  const observedAt = '2026-10-13T10:00:00+07:00';
+  const evidence = {
+    url: 'https://travel.example/tour-da-lat',
+    method: 'database_record',
+    observed_at: observedAt,
+    record_ref: 'offer-dalat',
+  };
+  const requirement = {
+    id: 'req-e2e',
+    conditions: [
+      {
+        id: 'budget',
+        field: 'budget_max',
+        operator: 'lte',
+        value: 8_000_000,
+        strength: 'hard',
+        quote: 'tối đa 8 triệu/người',
+      },
+    ],
+    missing: [],
+    raw_text: draft,
+    travelers: 1,
+  };
+  return {
+    id: 'cmp-e2e',
+    requirement,
+    ranked: [{ tour_id: 'tour-dalat', offer_id: 'offer-dalat', score: 0 }],
+    near_miss: [],
+    tour_snapshots: [
+      {
+        id: 'tour-dalat',
+        supplier: 'Travel Example',
+        name: 'Tour Đà Lạt cuối tuần',
+        url: evidence.url,
+        destinations: ['Đà Lạt'],
+        raw_destinations: ['Đà Lạt'],
+        route: ['TP.HCM', 'Đà Lạt'],
+        departure_city: 'TP.HCM',
+        duration_days: 3,
+        transport: 'bus',
+        accommodation: 'Hotel',
+        itinerary: '',
+        inclusions: '',
+        exclusions: '',
+        cancellation_policy: '',
+        surcharges: '',
+        child_policy: '',
+        evidence: { ...evidence, record_ref: 'tour-dalat' },
+        observed_at: observedAt,
+        verification: 'provider_claimed',
+        offers: [
+          {
+            id: 'offer-dalat',
+            tour_id: 'tour-dalat',
+            departure_date: '2026-11-10',
+            price: 6_500_000,
+            currency: 'VND',
+            price_basis: 'exact',
+            departure_freshness: 'fresh',
+            availability: 'available',
+            conditions: '',
+            evidence,
+          },
+        ],
+      },
+    ],
+    evaluations: [
+      {
+        offer_id: 'offer-dalat',
+        condition_id: 'budget',
+        state: 'pass',
+        quote: '',
+        reason_code: '',
+        reason: '',
+      },
+    ],
+    analysis: { hidden_costs: [], conditions: [], risks: [], benefits: [] },
+    candidates_considered: 1,
+  };
+}
+
+async function mockBackend(page: Page, expireFirstMessage = false) {
+  const messageCalls: { agentSessionId: string; text: string }[] = [];
+  let sessionsCreated = 0;
+  let agentSessionsCreated = 0;
+
+  await page.route('**/*', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+    const json = (body: unknown, status = 200) =>
+      route.fulfill({
+        status,
+        contentType: 'application/json',
+        body: JSON.stringify(body),
+      });
+
+    if (url.pathname === '/sessions' && method === 'POST') {
+      sessionsCreated += 1;
+      return json(
+        {
+          id: `session-${sessionsCreated}`,
+          session_id: `session-${sessionsCreated}`,
+          token: `guest-token-${sessionsCreated}`,
+          token_type: 'Bearer',
+          expires_at: '2030-01-01T00:00:00+00:00',
+        },
+        201,
+      );
+    }
+    if (url.pathname === '/health' && method === 'GET') {
+      return json({ status: 'ok', version: 'e2e' });
+    }
+    if (url.pathname === '/agent/sessions' && method === 'POST') {
+      agentSessionsCreated += 1;
+      return json({ agent_session_id: `agent-${agentSessionsCreated}` }, 201);
+    }
+    if (url.pathname.startsWith('/agent/sessions/') && url.pathname.endsWith('/messages')) {
+      const agentSessionId = url.pathname.split('/')[3] ?? '';
+      const body = request.postDataJSON() as { message: string };
+      messageCalls.push({ agentSessionId, text: body.message });
+      if (expireFirstMessage && messageCalls.length === 1) {
+        return json({ error: { code: 'SESSION_EXPIRED', message: 'Guest session expired.' } }, 401);
+      }
+      return json({
+        assistant_text: 'Đây là tour phù hợp theo ngân sách bạn đưa ra.',
+        tool_calls: [],
+        comparison: currentComparison(),
+      });
+    }
+    return route.continue();
+  });
+
+  return {
+    messageCalls,
+    get sessionsCreated() {
+      return sessionsCreated;
+    },
+  };
+}
+
 async function startChat(page: Page) {
   await page.goto('/');
   await expect(page.getByLabel('Nhắn cho TourLens')).toBeVisible();
 }
 
 test('guest chats, compares, and restores the persisted result', async ({ page }) => {
+  const backend = await mockBackend(page);
   const legacyRequests: string[] = [];
   page.on('request', (request) => {
     if (new URL(request.url()).pathname.startsWith('/v2/')) legacyRequests.push(request.url());
   });
+
   await startChat(page);
-  await page.getByLabel('Nhắn cho TourLens').fill('Đà Lạt 3 ngày, tối đa 8 triệu/người');
+  await page.getByLabel('Nhắn cho TourLens').fill(draft);
   await page.getByRole('button', { name: 'Gửi', exact: true }).click();
-  await expect(page.getByText('Đã hiểu như sau')).toBeVisible();
-  await page.getByRole('button', { name: 'Tìm và so sánh tour', exact: true }).click();
-  await expect(page.getByText(/tour đạt đủ/)).toBeVisible();
+  await expect(page.getByText('Tour Đà Lạt cuối tuần')).toBeVisible();
+  await expect(page.getByText(/1 tour đạt đủ/)).toBeVisible();
+
   await expect
     .poll(() =>
       page.evaluate(() => {
         const saved = JSON.parse(localStorage.getItem('di-cung:history:v1') ?? '[]') as {
           comparisonId?: string;
         }[];
-        return saved.some(
-          (item) => typeof item.comparisonId === 'string' && item.comparisonId.length > 0,
-        );
+        return saved.some((item) => item.comparisonId === 'cmp-e2e');
       }),
     )
     .toBe(true);
-
+  expect(backend.messageCalls).toHaveLength(1);
+  expect(backend.messageCalls[0]?.text).toBe(draft);
   expect(legacyRequests).toEqual([]);
+
   await page.reload();
-  await expect(page.getByText('Đã hiểu như sau')).toBeVisible();
-  await expect(page.getByText(/tour đạt đủ/)).toBeVisible();
+  await expect(page.getByText('Tour Đà Lạt cuối tuần')).toBeVisible();
+  await expect(page.getByText(/1 tour đạt đủ/)).toBeVisible();
+});
+
+test('expired guest starts a new session and resends the draft once', async ({ page }) => {
+  const backend = await mockBackend(page, true);
+  await startChat(page);
+  await page.getByLabel('Nhắn cho TourLens').fill(draft);
+  await page.getByRole('button', { name: 'Gửi', exact: true }).click();
+
+  await expect(page.getByRole('alert')).toContainText('Phiên khách đã hết hạn');
+  await expect(page.getByRole('button', { name: 'Thử lại' })).toHaveCount(0);
+  await expect(page.getByLabel('Nhắn cho TourLens')).toBeDisabled();
+  await page.getByRole('button', { name: 'Tạo phiên mới và gửi lại bản nháp' }).click();
+  await expect(page.getByText('Tour Đà Lạt cuối tuần')).toBeVisible();
+
+  expect(backend.sessionsCreated).toBe(2);
+  expect(backend.messageCalls).toHaveLength(2);
+  expect(backend.messageCalls.map((call) => call.text)).toEqual([draft, draft]);
+  expect(backend.messageCalls[0]?.agentSessionId).not.toBe(backend.messageCalls[1]?.agentSessionId);
 });
 
 test('account and contact routes clearly report that their backend features are not ported', async ({

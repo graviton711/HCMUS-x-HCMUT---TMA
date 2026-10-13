@@ -40,8 +40,8 @@ function Entry({ onStart }: { onStart: (initialText?: string) => void }) {
         <h1>{t('Đi đâu tiếp?', 'Where next?')}</h1>
         <p>
           {t(
-            'Mô tả chuyến đi bạn muốn. TourLens đối chiếu từng tour theo cùng bộ tiêu chí, ghi rõ điều kiện nào đạt, thiếu hay chưa xác minh — bạn tự quyết định.',
-            'Describe the trip you want. TourLens compares every tour against the same criteria and marks what passes, what is missing and what is unverified — you decide.',
+            'Mô tả chuyến đi bạn muốn. TourLens đối chiếu từng tour theo cùng bộ tiêu chí, ghi rõ điều kiện nào đạt và dữ liệu nào còn thiếu — bạn tự quyết định.',
+            'Describe the trip you want. TourLens compares every tour against the same criteria and shows what passes and what information is missing — you decide.',
           )}
         </p>
       </header>
@@ -128,8 +128,7 @@ function ActiveChat({
     .reverse()
     .find((msg) => msg.kind === 'tool_activity')
     ?.tools.some((tool) => tool.status === 'running');
-  const lastError = [...chat.msgs].reverse().find((msg) => msg.kind === 'error');
-  const expired = lastError?.kind === 'error' && lastError.expired === true;
+  const expired = chat.sessionExpired;
   const draftText = session.draft.text.trim();
 
   return (
@@ -154,27 +153,27 @@ function ActiveChat({
 
         {chat.failedStep && !chat.busy && (
           <div className={styles.recovery}>
-            {expired && draftText ? (
-              <>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => onStart(draftText)}
-                >
-                  {t('Tạo phiên mới và tiếp tục', 'Start a new session and continue')}
-                </button>
-                <button type="button" className="btn" onClick={chat.retry}>
-                  {t('Thử lại', 'Retry')}
-                </button>
-              </>
+            {expired ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => onStart(draftText || undefined)}
+              >
+                {draftText
+                  ? t('Tạo phiên mới và gửi lại bản nháp', 'Start a new session and resend the draft')
+                  : t('Tạo phiên mới', 'Start a new session')}
+              </button>
             ) : (
               <button type="button" className="btn" onClick={chat.retry}>
                 {t('Thử lại', 'Retry')}
               </button>
             )}
-            {expired && (
+            {expired && draftText && (
               <span className={styles['recovery-note']}>
-                {t('Bản nháp vẫn còn; không mất nội dung.', 'Your draft is kept; nothing is lost.')}
+                {t(
+                  'Phiên mới gửi lại bản nháp; ngữ cảnh hội thoại cũ không được chuyển sang.',
+                  'The new session resends the draft; the old conversation context is not transferred.',
+                )}
               </span>
             )}
           </div>
@@ -182,7 +181,7 @@ function ActiveChat({
       </div>
 
       <div className={styles['composer-dock']}>
-        <Composer busy={chat.busy || !chat.client} onSend={chat.send} />
+        <Composer busy={chat.busy || !chat.client || expired} onSend={chat.send} />
       </div>
     </div>
   );

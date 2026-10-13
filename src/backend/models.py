@@ -11,7 +11,6 @@ State = Literal["pass", "fail", "unknown"]
 Strength = Literal["hard", "soft"]
 PriceBasis = Literal["exact", "from", "contact"]
 Freshness = Literal["fresh", "stale", "unknown"]
-PricingMetadataState = Literal["missing", "validated", "invalid", "untrusted"]
 
 
 def uid(prefix: str) -> str:
@@ -53,15 +52,10 @@ class OfferSnapshot(BaseModel):
     tour_id: str
     departure_date: str = ""
     price: int | None = None
-    currency: str = "VND"
+    currency: str = ""
     price_basis: PriceBasis = "contact"
-    price_trusted: bool = False
-    price_freshness: Freshness = "unknown"
     departure_freshness: Freshness = "unknown"
-    price_freshness_policy_seconds: int | None = None
     departure_freshness_policy_seconds: int | None = None
-    pricing_metadata_state: PricingMetadataState = "missing"
-    pricing_issue: str = ""
     pricing_complete: bool | None = None
     price_quotes: list[dict[str, Any]] = Field(default_factory=list)
     extra_charges: list[dict[str, Any]] = Field(default_factory=list)
@@ -78,8 +72,6 @@ class TourSnapshot(BaseModel):
     destinations: list[str] = Field(default_factory=list)
     raw_destinations: list[str] = Field(default_factory=list)
     route: list[str] = Field(default_factory=list)
-    destination_countries: list[str] = Field(default_factory=list)
-    destination_country_complete: bool = False
     departure_city: str = ""
     duration_days: int | None = None
     transport: str = ""

@@ -43,29 +43,51 @@ export function CurrentWorkspace({
         </h1>
         <p className="measure">
           {t(
-            'Mỗi lần tìm được diễn giải riêng. Dữ kiện thiếu, cũ hoặc chưa xác minh được ghi rõ là "chưa rõ" và không được tính là đạt.',
-            'Each search is interpreted independently. Missing, stale or unverified facts are marked unknown and never counted as a pass.',
+            'Mỗi lần tìm được diễn giải riêng. Dữ kiện thiếu được ghi rõ là "chưa rõ"; ngày khởi hành cũ không được coi là còn hiệu lực.',
+            'Each search is interpreted independently. Missing information stays unknown, and stale departure dates are not treated as current.',
           )}
         </p>
       </header>
 
       {error && (
         <div className="notice notice-error" role="alert">
-          <span>{error}</span>
+          <span>
+            {expired
+              ? t(
+                  'Phiên khách đã hết hạn. Bản nháp vẫn được giữ.',
+                  'Guest session expired. Your draft is kept.',
+                )
+              : error}
+          </span>
           <span className="row">
-            {expired && session.draft.text.trim() && onStart ? (
+            {expired && onStart ? (
               <button
                 className="btn btn-primary"
                 disabled={busy}
-                onClick={() => onStart(session.draft.text.trim())}
+                onClick={() => onStart(session.draft.text.trim() || undefined)}
               >
-                {t('Tạo phiên mới và tiếp tục', 'Start a new session and continue')}
+                {session.draft.text.trim()
+                  ? t(
+                      'Tạo phiên mới và gửi lại bản nháp',
+                      'Start a new session and resend the draft',
+                    )
+                  : t('Tạo phiên mới', 'Start a new session')}
               </button>
             ) : null}
-            <button className="btn" disabled={busy} onClick={retry}>
-              {t('Thử lại', 'Retry')}
-            </button>
+            {!expired && (
+              <button className="btn" disabled={busy} onClick={retry}>
+                {t('Thử lại', 'Retry')}
+              </button>
+            )}
           </span>
+          {expired && session.draft.text.trim() && (
+            <p>
+              {t(
+                'Phiên mới gửi lại bản nháp; ngữ cảnh hội thoại cũ không được chuyển sang.',
+                'The new session resends the draft; the old conversation context is not transferred.',
+              )}
+            </p>
+          )}
         </div>
       )}
       {stale && (
@@ -82,7 +104,8 @@ export function CurrentWorkspace({
         destinations={destinations}
         catalog={catalog}
         requirement={requirement}
-        busy={busy}
+        busy={busy || expired}
+        disabled={expired}
         writeDraft={writeDraft}
         interpret={interpret}
         search={search}

@@ -155,7 +155,9 @@ export function Thread({
             case 'error':
               return (
                 <motion.div key={message.id} {...rise} className={styles['msg-error']} role="alert">
-                  {message.text}
+                  {message.expired
+                    ? t('Phiên khách đã hết hạn. Bản nháp vẫn được giữ.', 'Guest session expired. Your draft is kept.')
+                    : message.text}
                 </motion.div>
               );
           }

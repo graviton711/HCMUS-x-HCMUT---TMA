@@ -105,7 +105,6 @@ def _read_settings(path: str | Path | None) -> dict[str, Any]:
 _FLAT_MAP = {
     "database_url": "database_url",
     "data_provider": "data_provider",
-    ("data", "trusted_domains"): "supabase_tour_trusted_domains",
     ("data", "freshness_seconds"): "supabase_tour_freshness_seconds",
     ("api", "candidate_default"): "candidate_limit",
     ("data", "scan_limit"): "supabase_scan_limit",
@@ -123,9 +122,8 @@ class Settings(BaseSettings):
 
     supabase_tour_db_url: str = ""
     supabase_scan_limit: int
-    supabase_tour_trusted_domains: Annotated[list[str], NoDecode] = Field(default_factory=list)
     supabase_tour_freshness_seconds: dict[str, int] = Field(
-        default_factory=lambda: {"departure_date": 86400, "price": 86400}
+        default_factory=lambda: {"departure_date": 86400}
     )
 
     opencode_server_url: str = ""
@@ -135,17 +133,24 @@ class Settings(BaseSettings):
     # Project dir ON THE SERVER when attaching remotely (CLI docs: --dir is
     # the remote path). Empty = local project root (local dev, single-box).
     opencode_project_dir: str = ""
-    opencode_timeout_seconds: float = 120
     agent_max_message_chars: int = 8000
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)
     cors_origin_regex: str = ""
 
     tuning: Tuning
 
-    @field_validator("cors_origins", "supabase_tour_trusted_domains", mode="before")
+    @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_string_list(cls, value: Any) -> list[str]:
         return _string_list(value)
+
+    @field_validator("supabase_tour_freshness_seconds", mode="before")
+    @classmethod
+    def _departure_freshness_only(cls, value: Any) -> dict[str, int]:
+        if not isinstance(value, dict):
+            return {}
+        departure_ttl = value.get("departure_date")
+        return {"departure_date": departure_ttl} if isinstance(departure_ttl, int) else {}
 
     @field_validator("database_url", "supabase_tour_db_url", mode="before")
     @classmethod

@@ -1,5 +1,5 @@
 import type { LocalSession, SessionAccess } from './types';
-import { CurrentBackendClient } from '../../../shared/api';
+import { CurrentApiError, CurrentBackendClient } from '../../../shared/api';
 
 const accessKey = 'di-cung:access:v1';
 
@@ -47,7 +47,7 @@ export function removeAccess(id: string) {
 }
 
 export const EXPIRED_SESSION_MESSAGE =
-  'Guest session expired. The draft is still here — start a new session to keep searching.';
+  'Phiên khách đã hết hạn. Bản nháp vẫn được giữ.';
 
 /** The stored token no longer grants access; only a new session can continue. */
 export class SessionExpiredError extends Error {
@@ -58,7 +58,11 @@ export class SessionExpiredError extends Error {
 }
 
 export function isSessionExpired(cause: unknown): boolean {
-  return cause instanceof SessionExpiredError;
+  return (
+    cause instanceof SessionExpiredError ||
+    (cause instanceof CurrentApiError &&
+      (cause.code === 'SESSION_EXPIRED' || cause.code === 'SESSION_INVALID'))
+  );
 }
 
 const accessFlights = new Map<string, Promise<SessionAccess>>();

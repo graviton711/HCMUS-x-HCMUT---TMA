@@ -119,7 +119,7 @@ Plain text thuần túy cho cả 6 field: sạch thẻ HTML, giải mã entities
 - Khi nguồn không công bố ngày cụ thể: ghi `departure_pattern` ở `Tour.fields` kèm `status: partial`, và `offers` để rỗng.
 - Field phụ nguồn không công bố thì bỏ hẳn khỏi dict, không ghi null đoán mò.
 
-`offers.field_meta.pricing` có thể bổ sung quote có cấu trúc nhưng không thay raw columns/evidence. Mỗi quote phải gắn với offer và khớp amount, currency, kind và observation time; chỉ host thuộc allowlist mới được xác thực. `from` luôn là lower bound; phụ thu rỗng không đồng nghĩa `complete=true`. Freshness quá TTL hoặc metadata không kiểm chứng được thì eligibility là `unknown`.
+`offers.field_meta.pricing` có thể bổ sung quote có cấu trúc nhưng không thay các trường chuẩn `offers.price`, `tours.price_type` và currency trong catalog. Backend dùng các trường chuẩn này trực tiếp, không kiểm tra lại host hoặc ràng buộc quote với raw columns. `from` luôn là lower bound; giá thấp hơn ngân sách không chứng minh giá cuối cùng nằm trong ngân sách. Không áp dụng TTL cho giá; `observed_at` vẫn được giữ làm bằng chứng. Freshness của ngày khởi hành tiếp tục được đánh giá theo policy backend.
 
 ## Required policy
 

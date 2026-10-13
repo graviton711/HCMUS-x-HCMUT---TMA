@@ -198,10 +198,16 @@
   padding: 0 4px 0 0;
   border: 1px solid transparent;
   border-radius: 9px;
+  cursor: default;
   transition:
     background-color var(--dur-fast) var(--ease),
     border-color var(--dur-fast) var(--ease),
     transform var(--dur-fast) var(--ease);
+}
+
+:global(.sidebar-content) :global(.session-item) > a,
+:global(.sidebar-content) :global(.session-name) {
+  cursor: default;
 }
 
 :global(.sidebar-content) :global(.session-item):hover {

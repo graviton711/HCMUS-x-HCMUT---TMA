@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 describe('ChatPage expired-session recovery', () => {
-  it('offers a new session that keeps the draft instead of only retrying', async () => {
+  it('offers a new session that resends the draft and does not retry the expired session', async () => {
     const session = newSession();
     session.requirementId = 'req_old';
     session.draft = { ...session.draft, text: 'Đà Lạt 3 ngày' };
@@ -27,8 +27,10 @@ describe('ChatPage expired-session recovery', () => {
       </PreferencesProvider>,
     );
 
-    const action = await screen.findByRole('button', { name: 'Tạo phiên mới và tiếp tục' });
-    expect(screen.getByRole('alert').textContent).toMatch(/expired/i);
+    const action = await screen.findByRole('button', { name: 'Tạo phiên mới và gửi lại bản nháp' });
+    expect(screen.getByRole('alert').textContent).toContain('Phiên khách đã hết hạn');
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull();
+    expect((screen.getByLabelText('Nhắn cho TourLens') as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(action);
     expect(onStart).toHaveBeenCalledWith('Đà Lạt 3 ngày');
   });

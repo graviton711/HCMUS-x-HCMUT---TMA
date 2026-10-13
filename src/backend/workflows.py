@@ -26,9 +26,7 @@ class TourWorkflows:
             limit = default_limit
         return rows_to_snapshots(
             self.catalog.list_tours(limit),
-            trusted_domains=self.settings.supabase_tour_trusted_domains,
             freshness_seconds=self.settings.supabase_tour_freshness_seconds,
-            require_trusted_pricing=self.settings.data_provider == "supabase",
         )
 
     def comparison(

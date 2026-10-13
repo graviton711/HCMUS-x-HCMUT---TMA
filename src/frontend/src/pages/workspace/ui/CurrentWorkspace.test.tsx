@@ -79,8 +79,6 @@ function makeBackend() {
               destinations: ['Đà Lạt'],
               raw_destinations: ['Đà Lạt'],
               route: [],
-              destination_countries: ['vn'],
-              destination_country_complete: true,
               departure_city: 'TP.HCM',
               duration_days: 3,
               transport: 'bus',
@@ -107,10 +105,7 @@ function makeBackend() {
                   price: 5000000,
                   currency: 'VND',
                   price_basis: 'exact',
-                  price_trusted: true,
-                  price_freshness: 'fresh',
                   departure_freshness: 'fresh',
-                  pricing_metadata_state: 'validated',
                   availability: 'unknown',
                   conditions: '',
                   evidence: {
@@ -130,8 +125,6 @@ function makeBackend() {
               destinations: ['Đà Lạt'],
               raw_destinations: ['Đà Lạt'],
               route: [],
-              destination_countries: ['vn'],
-              destination_country_complete: true,
               departure_city: 'TP.HCM',
               duration_days: 3,
               transport: 'bus',
@@ -158,10 +151,7 @@ function makeBackend() {
                   price: 9000000,
                   currency: 'VND',
                   price_basis: 'exact',
-                  price_trusted: true,
-                  price_freshness: 'fresh',
                   departure_freshness: 'fresh',
-                  pricing_metadata_state: 'validated',
                   availability: 'unknown',
                   conditions: '',
                   evidence: {
@@ -229,6 +219,25 @@ afterEach(() => {
 });
 
 describe('CurrentWorkspace guest flow', () => {
+  it('offers a new session for an expired guest and never retries the old session', async () => {
+    const initial = newSession();
+    initial.requirementId = 'req-expired';
+    initial.draft.text = 'Đà Lạt 3 ngày';
+    const onStart = vi.fn();
+    render(
+      <PreferencesProvider>
+        <CurrentWorkspace session={initial} onStart={onStart} onChangeSession={() => {}} />
+      </PreferencesProvider>,
+    );
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Phiên khách đã hết hạn');
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Tạo phiên mới và gửi lại bản nháp' })).toBeTruthy();
+    expect(screen.getByLabelText('Mô tả chuyến đi').matches(':disabled')).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo phiên mới và gửi lại bản nháp' }));
+    expect(onStart).toHaveBeenCalledWith('Đà Lạt 3 ngày');
+  });
+
   it('interprets, searches and renders a persisted current-backend snapshot', async () => {
     const fetcher = makeBackend();
     vi.stubGlobal('fetch', fetcher);

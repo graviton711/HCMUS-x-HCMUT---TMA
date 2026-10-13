@@ -34,8 +34,7 @@ def test_yaml_tuning_loaded(tmp_path):
     assert settings.tuning.decide.top_n == 1
     assert settings.tuning.decide.quote_chars == 120
     assert settings.tuning.data.providers_limit == 5
-    assert settings.supabase_tour_freshness_seconds == {"departure_date": 86400, "price": 86400}
-    assert settings.supabase_tour_trusted_domains == []
+    assert settings.supabase_tour_freshness_seconds == {"departure_date": 86400}
 
 
 def test_env_wins_over_yaml(tmp_path, monkeypatch):
@@ -46,15 +45,15 @@ def test_env_wins_over_yaml(tmp_path, monkeypatch):
     assert settings.opencode_model == "opencode/test-model"
 
 
-def test_data_validation_policy_loads_from_yaml(tmp_path):
+def test_legacy_price_trust_and_ttl_settings_are_ignored(tmp_path):
     yaml_text = _YAML.replace(
         "data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3}",
         "data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3, "
         "trusted_domains: [trusted.example.test], freshness_seconds: {departure_date: 7200, price: 3600}}",
     )
     settings = Settings.load(_configs(tmp_path, yaml_text))
-    assert settings.supabase_tour_trusted_domains == ["trusted.example.test"]
-    assert settings.supabase_tour_freshness_seconds == {"departure_date": 7200, "price": 3600}
+    assert settings.supabase_tour_freshness_seconds == {"departure_date": 7200}
+    assert not hasattr(settings, "supabase_tour_trusted_domains")
 
 
 def test_dotenv_file_wins_over_yaml(tmp_path):
@@ -95,6 +94,7 @@ def test_opencode_project_dir_defaults_empty_and_env_overrides(tmp_path, monkeyp
     assert Settings.load(configs).opencode_project_dir == ""
     monkeypatch.setenv("OPENCODE_PROJECT_DIR", "/app")
     assert Settings.load(configs).opencode_project_dir == "/app"
+    assert not hasattr(Settings.load(configs), "opencode_timeout_seconds")
 
 
 def test_incomplete_yaml_fails_loud(tmp_path):
@@ -116,3 +116,5 @@ def test_repo_configs_load():
     assert "model: opencode/muse-spark-1.3-contributor-free" in agent
     prompt = yaml.safe_load(Path("configs/prompts/agent.yaml").read_text(encoding="utf-8"))
     assert agent.split("---", 2)[2].strip() == prompt["system"].strip()
+    assert "operator any" in prompt["system"]
+    assert "cannot prove the full catalog" in prompt["system"]

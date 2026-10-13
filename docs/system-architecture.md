@@ -21,7 +21,7 @@ flowchart LR
     Data --> SQLite[(SQLite sessions, owned records, history, agent mapping)]
 ```
 
-Luồng: input tự do → OpenCode agent hỏi thêm hoặc gọi MCP → tool kiểm tra điều kiện có cấu trúc → `decide` lấy ứng viên qua `data`, chuẩn hóa qua `normalize`, hard-filter trả pass/unknown/fail → agent chấm soft thành fit/unknown/not_fit với quote → rank theo số fit rồi giá → trả tối đa 5 tour. Thiếu là unknown, không bao giờ tính là đạt.
+Luồng: input tự do → OpenCode agent hỏi thêm hoặc gọi MCP → agent ánh xạ yêu cầu ngữ nghĩa sang nhãn catalog thực → tool kiểm tra điều kiện có cấu trúc → `decide` lấy ứng viên qua `data`, chuẩn hóa qua `normalize`, hard-filter trả pass/unknown/fail → agent chấm soft thành fit/unknown/not_fit với quote → rank theo số fit rồi giá → trả tối đa 5 tour. Engine không suy luận country/place aliases. Thiếu là unknown, không bao giờ tính là đạt.
 
 ## Ranh giới runtime
 
@@ -29,10 +29,10 @@ Luồng: input tự do → OpenCode agent hỏi thêm hoặc gọi MCP → tool 
 |---|---|---|
 | `backend/data` | Guest sessions, owner-scoped records/history, đọc catalog chỉ đọc | Rank, LLM, HTTP |
 | `backend/input` | Validate điều kiện có cấu trúc, tiền VND integer, ngày ISO | Text extraction, catalog, so sánh |
-| `backend/normalize` | Rows catalog thành snapshot + evidence | Input người dùng, rank |
-| `backend/decide` | Lọc cứng, áp soft verdict có evidence, rank, phân tích | Lưu trữ, HTTP, gọi LLM |
+| `backend/normalize` | Rows catalog thành snapshot + evidence, lọc endpoint trùng nhãn sau chuẩn hóa tổng quát | Country/place aliases, input người dùng, rank |
+| `backend/decide` | Lọc cứng trên điều kiện tường minh, áp soft verdict có evidence, rank, phân tích | Lưu trữ, HTTP, gọi LLM, suy luận địa danh |
 | `backend/workflows` | Ghép input/catalog/decide thành use case dùng chung | HTTP, UI |
-| `backend/agent` | Gọi OpenCode CLI qua server đã cấu hình, giữ owner-scoped session, validate tool results | Quyết định hard eligibility ngoài tools, truy cập UI |
+| `backend/agent` | Gọi OpenCode CLI không deadline tổng, giữ owner-scoped session, diễn giải yêu cầu và validate tool results | Quyết định hard eligibility ngoài tools, truy cập UI |
 | `backend/api` | Routes mỏng, validate, envelope lỗi | Logic nghiệp vụ |
 | `frontend` | Guest search/session/results; gọi backend qua HTTP | Truy cập SQLite/Supabase trực tiếp, quyết định eligibility |
 | `ingest` | Crawl, làm sạch, xuất bản catalog | Mọi thứ lúc request |

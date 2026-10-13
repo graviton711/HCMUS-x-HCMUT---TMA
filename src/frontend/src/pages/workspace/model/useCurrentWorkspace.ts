@@ -83,9 +83,10 @@ export function useCurrentWorkspace(
   };
 
   const interpret = async () => {
-    if (!client || !catalog) return;
+    if (!client || !catalog || expired) return;
     setBusy(true);
     setError('');
+    setExpired(false);
     setStale(false);
     try {
       const form = currentForm(session.draft, catalog);
@@ -99,21 +100,24 @@ export function useCurrentWorkspace(
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not interpret this trip.');
+      setExpired(isSessionExpired(cause));
     } finally {
       setBusy(false);
     }
   };
 
   const search = async () => {
-    if (!client || !requirement) return;
+    if (!client || !requirement || expired) return;
     setBusy(true);
     setError('');
+    setExpired(false);
     try {
       const result = await client.createComparison(requirement.id);
       setComparison(result.comparison);
       onChangeSession({ comparisonId: result.comparison.id });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not compare tours.');
+      setExpired(isSessionExpired(cause));
     } finally {
       setBusy(false);
     }
@@ -127,7 +131,9 @@ export function useCurrentWorkspace(
     error,
     expired,
     stale,
-    retry: () => setReload((value) => value + 1),
+    retry: () => {
+      if (!expired) setReload((value) => value + 1);
+    },
     writeDraft,
     interpret,
     search,

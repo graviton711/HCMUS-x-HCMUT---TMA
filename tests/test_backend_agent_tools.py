@@ -94,6 +94,26 @@ def test_agent_catalog_tools_use_data_scan_limit_not_api_default(settings):
     assert catalog.limits == [settings.supabase_scan_limit, settings.supabase_scan_limit]
 
 
+def test_query_accepts_country_expansion_as_any_catalog_destination(settings):
+    tools = _tools(settings)
+    facets = json.loads(tools.catalog_facets())
+    labels = facets["destinations"]
+    result = json.loads(tools.query_tours(
+        raw_text="Việt Nam",
+        travelers=1,
+        conditions=[{
+            "id": "h1", "field": "destination", "operator": "any", "value": labels,
+            "strength": "hard", "quote": "Việt Nam",
+        }],
+    ))
+
+    assert len(labels) >= 2
+    assert {item["hard_state"] for item in result["candidates"]} == {"pass"}
+    assert {item["tour_id"] for item in result["comparison"]["ranked"]} == {
+        "dlv-dalat-3n", "vtr-phuquoc-4n", "sgt-halong-3n",
+    }
+
+
 def test_limited_comparison_shows_each_tour_once_across_departure_offers(settings):
     tools = _tools(settings)
     requirement = tools.workflows.requirement("Phú Quốc", [
@@ -238,3 +258,30 @@ def test_ask_choice_limits_to_distinct_options(settings):
     ))
     assert [item["value"] for item in result["options"]] == ["dalat", "phuquoc"]
     assert result["allow_custom"] is True
+
+
+def test_empty_turn_falls_back_to_retry_text(settings):
+    """A turn whose tools all error must still hand the UI a message."""
+    from backend.agent.service import AgentService
+    from backend.data.sessions import SessionStore
+
+    async def fake_events(message, session_id):
+        yield {
+            "type": "message",
+            "part": {"tool": "tour-catalog_task",
+                     "state": {"status": "error", "input": {}}},
+        }
+
+    async def collect(stream):
+        return [event async for event in stream]
+
+    service = AgentService(settings, SessionStore(settings.database_url))
+    owner = service.store.create_session(3600)["id"]
+    local_id = service.store.create_agent_session(owner)
+    service.runner.events = fake_events
+    events = asyncio.run(collect(service.stream_message(owner, local_id, "hello")))
+    response = next(event["response"] for event in events if event.get("type") == "result")
+    assert response["assistant_text"] != ""
+    assert "comparison" not in response
+    assert "choices" not in response
+    service.store.close()

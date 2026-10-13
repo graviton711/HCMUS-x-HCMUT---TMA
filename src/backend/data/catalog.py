@@ -6,9 +6,7 @@ from pathlib import Path
 
 from backend.errors import AppError
 from backend.models import TourRow
-from shared import get_logger, now_vn_iso
-
-log = get_logger("catalog")
+from shared import now_vn_iso
 
 
 def _resolve_fixture(path: str | Path | None) -> Path:
@@ -93,7 +91,6 @@ class SupabaseCatalog:
         except AppError:
             raise
         except Exception as exc:
-            log.warning("catalog unavailable: %s", exc)
             raise AppError("CATALOG_UNAVAILABLE", "Catalog is unavailable.", 502, retryable=True) from exc
 
     def list_tours(self, limit: int) -> list[TourRow]:
@@ -143,7 +140,6 @@ class SupabaseCatalog:
         except AppError:
             raise
         except Exception as exc:
-            log.warning("catalog unavailable: %s", exc)
             raise AppError("CATALOG_UNAVAILABLE", "Catalog is unavailable.", 502, retryable=True) from exc
         out: list[TourRow] = []
         for t in tours:

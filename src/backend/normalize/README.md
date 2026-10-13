@@ -10,7 +10,7 @@ Vào: `TourRow` (fields tour + offers + evidence + `field_meta` + timestamps). R
 
 ## Workflow
 
-Map fields vô hướng (enums transport/accommodation, durations, destinations) → tách offers (mỗi offer một ngày/giá/availability; giá "from" gắn cờ `price_type="from"`, không tính là exact) → validate optional structured pricing metadata gắn đúng offer, currency, basis và observation time → gắn evidence từng snapshot → giữ `observed_at` (giờ VN) và verification. Metadata thiếu, stale hoặc mâu thuẫn không được nâng thành giá exact.
+Map fields vô hướng (enums transport/accommodation, durations, destinations) → loại endpoint xuất phát chỉ khi nhãn trùng sau chuẩn hóa chữ tổng quát → tách offers (mỗi offer một ngày/giá/availability; giá "from" gắn cờ `price_type="from"`, không tính là exact) → ánh xạ giá và loại giá từ cột catalog → gắn evidence và freshness cho ngày khởi hành. Không tạo alias địa danh, country code hay completeness metadata. Metadata giá cấu trúc được giữ như thông tin phụ; không xác minh domain, không ràng buộc quote với raw fields và không ghi đè giá catalog.
 
 ## Interface với module khác
 
@@ -20,4 +20,6 @@ Map fields vô hướng (enums transport/accommodation, durations, destinations)
 
 - Cơ học như `src/ingest`: không branch theo nguồn, không heuristic.
 - Một offer = một ngày khởi hành + một basis giá. Gộp cross-offer là bug, không phải tối ưu.
-- Giữ raw values/evidence khi normalized pricing invalid; metadata không thể chứng minh thì để unknown/unverified.
+- Giá ngân sách lấy từ `offers.price`, `tours.price_type` và currency; tuổi giá không chặn eligibility.
+- `observed_at` là bằng chứng thời điểm ghi nhận. Freshness TTL chỉ áp dụng cho ngày khởi hành.
+- Chuẩn hóa chữ chỉ phục vụ so khớp cùng một nhãn; ánh xạ quốc gia/vùng sang destination catalog thuộc agent.

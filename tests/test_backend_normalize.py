@@ -49,11 +49,11 @@ def test_origin_endpoints_are_removed_only_from_visit_destinations():
     assert tour.destinations == ["Thượng Hải", "Hàng Châu"]
     assert tour.raw_destinations == ["TP.HCM", "Thượng Hải", "Hàng Châu", "TP.HCM"]
     assert tour.route == tour.raw_destinations
-    assert tour.destination_countries == ["cn"]
-    assert tour.destination_country_complete
+    assert not hasattr(tour, "destination_countries")
+    assert not hasattr(tour, "destination_country_complete")
 
 
-def test_destination_list_with_origin_only_becomes_unknown_not_a_domestic_match():
+def test_origin_endpoint_with_different_label_is_not_removed_by_alias():
     row = TourRow(
         tour={
             "record_key": "origin-only",
@@ -62,11 +62,23 @@ def test_destination_list_with_origin_only_becomes_unknown_not_a_domestic_match(
         },
     )
     tour = rows_to_snapshots([row])[0]
-    assert tour.destinations == []
-    assert not tour.destination_country_complete
+    assert tour.destinations == ["TP.HCM"]
+    assert not hasattr(tour, "destination_country_complete")
 
 
-def test_structured_pricing_metadata_requires_bound_fields_and_trusted_source():
+def test_origin_endpoint_alias_is_not_removed_without_an_alias_registry():
+    row = TourRow(
+        tour={
+            "record_key": "origin-alias",
+            "departure_city": "TP.HCM",
+            "destinations": ["Sài Gòn", "Đà Lạt"],
+        },
+    )
+    tour = rows_to_snapshots([row])[0]
+    assert tour.destinations == ["Sài Gòn", "Đà Lạt"]
+
+
+def test_database_price_is_authoritative_over_optional_pricing_metadata():
     observed = datetime.now(UTC).isoformat()
     row = TourRow(
         tour={
@@ -87,11 +99,11 @@ def test_structured_pricing_metadata_requires_bound_fields_and_trusted_source():
                         "quotes": [
                             {
                                 "quote_id": "adult",
-                                "kind": "exact",
-                                "amount": 10_000_000,
-                                "currency": "VND",
-                                "basis": "per_adult",
-                                "coverage": "tour_price",
+                                "kind": "from",
+                                "amount": 99_000_000,
+                                "currency": "USD",
+                                "basis": "per_group",
+                                "coverage": "trip_total",
                                 "applicability": [],
                             }
                         ],
@@ -102,21 +114,14 @@ def test_structured_pricing_metadata_requires_bound_fields_and_trusted_source():
             }
         ],
     )
-    offer = rows_to_snapshots([row], trusted_domains=["trusted.example.test"])[0].offers[0]
-    assert offer.pricing_metadata_state == "validated"
-    assert offer.price_trusted
-    assert offer.pricing_complete is False
+    offer = rows_to_snapshots([row])[0].offers[0]
+    assert offer.price == 10_000_000
     assert offer.price_basis == "exact"
-    assert offer.price_quotes[0]["amount"] == "10000000"
-
-    untrusted = rows_to_snapshots([row])[0].offers[0]
-    assert untrusted.pricing_metadata_state == "untrusted"
-
-    live_without_policy = rows_to_snapshots([row], require_trusted_pricing=True)[0].offers[0]
-    assert not live_without_policy.price_trusted
+    assert offer.pricing_complete is False
+    assert offer.price_quotes[0]["amount"] == 99_000_000
 
 
-def test_bad_price_metadata_is_never_used_to_change_from_price():
+def test_optional_quote_metadata_never_changes_canonical_from_price():
     row = TourRow(
         tour={"record_key": "from", "url": "https://trusted.example.test/tour", "price_type": "from", "currency": "VND"},
         offers=[{
@@ -132,13 +137,12 @@ def test_bad_price_metadata_is_never_used_to_change_from_price():
             }},
         }],
     )
-    offer = rows_to_snapshots([row], trusted_domains=["trusted.example.test"])[0].offers[0]
-    assert offer.pricing_metadata_state == "invalid"
-    assert offer.pricing_issue == "CATALOG_PRICING_METADATA_INVALID"
+    offer = rows_to_snapshots([row])[0].offers[0]
+    assert offer.price == 10_000_000
     assert offer.price_basis == "from"
 
 
-def test_stale_offer_is_not_freshened_by_normalization():
+def test_stale_departure_date_is_retained_without_price_freshness_state():
     row = TourRow(
         tour={"record_key": "old", "departure_city": "Sài Gòn", "destinations": ["Đà Lạt"]},
         offers=[{"record_key": "old-offer", "price": 1_000_000,
@@ -147,5 +151,5 @@ def test_stale_offer_is_not_freshened_by_normalization():
     )
     later = datetime.fromisoformat("2026-10-10T00:00:00+00:00")
     offer = rows_to_snapshots([row], now=later)[0].offers[0]
-    assert offer.price_freshness == "stale"
     assert offer.departure_freshness == "stale"
+    assert not hasattr(offer, "price_freshness")

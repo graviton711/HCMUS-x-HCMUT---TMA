@@ -31,33 +31,10 @@ def _fold(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
-_COUNTRY_ALIASES = {
-    "vn": {"vietnam", "trongnuoc"},
-    "cn": {"china", "trungquoc"},
-    "tw": {"taiwan", "dailoan"},
-    "bn": {"brunei", "bruneidarussalam"},
-    "jp": {"japan", "nhatban"},
-    "kr": {"korea", "southkorea", "hanquoc"},
-    "th": {"thailand", "thailan"},
-    "sg": {"singapore"},
-    "my": {"malaysia"},
-    "id": {"indonesia"},
-    "ph": {"philippines"},
-    "la": {"laos"},
-    "kh": {"cambodia", "campuchia"},
-}
-
-
 def _destination_state(value: str, tour: TourSnapshot) -> State:
-    key = _fold(value)
-    country = next((code for code, aliases in _COUNTRY_ALIASES.items() if key in aliases), None)
-    if country:
-        if country in tour.destination_countries:
-            return "pass"
-        return "fail" if tour.destination_country_complete else "unknown"
     if any(_contains(place, value) for place in tour.destinations):
         return "pass"
-    return "fail" if tour.destination_country_complete else "unknown"
+    return "fail" if tour.destinations else "unknown"
 
 
 def _unknown_reason(freshness: str, policy_seconds: int | None) -> str:
@@ -79,7 +56,7 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) ->
             ("pass", "")
             if "pass" in states
             else (
-                ("unknown", "DESTINATION_PARTIAL")
+                ("unknown", "DESTINATION_MISSING")
                 if "unknown" in states
                 else ("fail", "DESTINATION_MISMATCH")
             )
@@ -128,10 +105,6 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) ->
         ok = day >= bound if f == "date_from" else day <= bound
         return ("pass", "") if ok else ("fail", "DATE_MISMATCH")
     if f == "budget_max":
-        if offer.price_freshness != "fresh":
-            return "unknown", _unknown_reason(offer.price_freshness, offer.price_freshness_policy_seconds)
-        if not offer.price_trusted:
-            return "unknown", "PRICE_UNVERIFIED"
         if offer.price is None or isinstance(v, list):
             return "unknown", "PRICE_MISSING"
         amount = v

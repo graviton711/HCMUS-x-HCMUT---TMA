@@ -4,13 +4,15 @@ Bài toán gốc ở `idea.md` (không sửa). Demo Day 17/10/2026.
 
 ## Phạm vi
 
-- Nguồn: 3–5 site lữ hành, bắt đầu từ `dulichviet`. Thêm site mới chỉ bằng `python -m ingest.survey --source <source> --promote` kèm selftest PASS và `audit` PASS; cấm parser viết tay per-site ngoài profile YAML, cấm sửa profile tay (resurvey để tái sinh).
+- Nguồn: 3–5 site lữ hành, bắt đầu từ `dulichviet`. Thêm nguồn bằng `python -m ingest.survey --source <source> --promote`; nghiệm thu profile mới hoặc đã đổi bằng self-test toàn bộ inventory PASS và holdout `audit` PASS. Chỉ dùng crawler chung cùng profile YAML, không viết parser riêng theo site hoặc sửa profile tay (resurvey để tái sinh).
 - Demo: query tự do trên Supabase thật qua chat agent, không khóa tuyến cố định. `fixture-catalog.yaml` chỉ phục vụ dev/test offline, không dùng demo. Trước demo kiểm tra freshness/TTL và rehearsal 2–3 query (tránh budget/date cứng khi giá stale hoặc `price_basis=from`, vì policy ép các trường hợp này về `unknown`).
 - Không điểm số bí mật: mọi thứ tự hiển thị đều kèm lý do tính bằng code từ field có nguồn. Không "học preference", chỉ lưu lựa chọn đã chốt. Không nhận thời gian thực.
 
 ## Pipeline hiện tại
 
-`survey` (agent vẽ map → `artifacts/`) → `discover` (liệt kê link theo khối `discovery`: `search_pages` hoặc `sitemap`) → `batch` (crawl → CSV + JSON) → `audit` (evidence gate) → `publish` (Supabase tour). Lệnh chạy ở `README.md`; hợp đồng profile/discovery ở `src/ingest/README.md`.
+Runner `python -m ingest.run` thực hiện `survey` (agent tạo profile, `--promote`) → `discover` → `batch` (crawl và kiểm chứng field từng tour) → `migrate` → `publish` (Supabase tour), dừng ở bước đầu tiên có lỗi. Không có bước `audit` trong runner: self-test toàn inventory và holdout `audit` là kiểm tra thủ công khi onboarding hoặc thay đổi profile/nguồn; runner không chặn publish nếu các bước đó chưa chạy. Audit bổ sung holdout và không thay thế kiểm chứng theo từng tour trong batch. Lệnh và hợp đồng chi tiết ở `README.md` và [`src/ingest/README.md`](../src/ingest/README.md).
+
+`docs/idea.md` là đề xuất sản phẩm đã khóa, không phải nguồn cấu hình runtime. Đề xuất ghi `scan_limit` 1000 và mô tả tối đa 3 gợi ý mới cho URL tham chiếu; hiện config đặt scan limit 2000 và agent trả tối đa 5 tour duy nhất. Hãy dùng config và backend contract làm nguồn chuẩn cho giới hạn đang chạy.
 
 ## Quyết định kỹ thuật
 

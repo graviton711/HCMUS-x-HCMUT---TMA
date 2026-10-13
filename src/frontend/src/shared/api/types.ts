@@ -69,10 +69,7 @@ export interface CurrentOffer {
   price: number | null;
   currency: string;
   price_basis: 'exact' | 'from' | 'contact';
-  price_trusted: boolean;
-  price_freshness: 'fresh' | 'stale' | 'unknown';
   departure_freshness: 'fresh' | 'stale' | 'unknown';
-  pricing_metadata_state: 'missing' | 'validated' | 'invalid' | 'untrusted';
   availability: string;
   conditions: string;
   evidence: { url: string; method: string; observed_at: string; record_ref: string };
@@ -86,8 +83,6 @@ export interface CurrentTourSnapshot {
   destinations: string[];
   raw_destinations: string[];
   route: string[];
-  destination_countries: string[];
-  destination_country_complete: boolean;
   departure_city: string;
   duration_days: number | null;
   transport: string;

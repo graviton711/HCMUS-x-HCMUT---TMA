@@ -6,6 +6,7 @@ import json
 import re
 import unicodedata
 from datetime import date
+from functools import wraps
 from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
@@ -14,6 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.agent.results import limit_comparison
 from backend.data.catalog import for_settings
 from backend.decide.engine import passing_offers
+from backend.error_logging import log_app_error, log_unexpected_error
+from backend.errors import AppError
 from backend.input.lunar import resolve_lunar
 from backend.models import Requirement, State
 from backend.settings import Settings
@@ -77,11 +80,7 @@ class AgentTools:
 
     def _canonical_destination(self, value: str) -> str:
         if self._destination_names is None:
-            try:
-                names = self.catalog.list_destinations()
-            except Exception:
-                self._destination_names = {}
-                return value
+            names = self.catalog.list_destinations()
             folded: dict[str, set[str]] = {}
             for name in names:
                 if isinstance(name, str) and name.strip():
@@ -273,14 +272,33 @@ def create_server(settings: Settings | None = None) -> FastMCP:
     tools = AgentTools(settings, catalog, workflows)
     server = FastMCP("tour-catalog")
 
-    server.tool()(tools.ask_choice)
-    server.tool()(tools.catalog_facets)
-    server.tool()(tools.query_tours)
-    server.tool()(tools.tour_detail)
-    server.tool()(tools.score_soft)
-    server.tool()(tools.relax_criterion)
-    server.tool()(tools.clarify_date)
+    server.tool()(_guard_tool("ask_choice", tools.ask_choice))
+    server.tool()(_guard_tool("catalog_facets", tools.catalog_facets))
+    server.tool()(_guard_tool("query_tours", tools.query_tours))
+    server.tool()(_guard_tool("tour_detail", tools.tour_detail))
+    server.tool()(_guard_tool("score_soft", tools.score_soft))
+    server.tool()(_guard_tool("relax_criterion", tools.relax_criterion))
+    server.tool()(_guard_tool("clarify_date", tools.clarify_date))
     return server
+
+
+def _guard_tool(name: str, function: Any) -> Any:
+    """Convert tool exceptions to a safe JSON error and log them once."""
+
+    @wraps(function)
+    def guarded(*args: Any, **kwargs: Any) -> str:
+        try:
+            return function(*args, **kwargs)
+        except AppError as exc:
+            log_app_error(exc, transport="mcp", operation=name)
+            return _json(exc.payload())
+        except Exception as exc:
+            log_unexpected_error(exc, transport="mcp", operation=name)
+            return _json(
+                {"error": {"code": "INTERNAL_ERROR", "message": "An internal error occurred."}}
+            )
+
+    return guarded
 
 
 def main() -> None:

@@ -4,7 +4,7 @@ import type {
   CurrentOffer,
   CurrentTourSnapshot,
 } from '../../../shared/api';
-import { safeUrl } from '../../../shared/lib';
+import { observedLabel, safeUrl } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import {
   conditionState,
@@ -27,9 +27,10 @@ function TourCard({
   index: number;
   nearMiss: boolean;
 }) {
-  const { t } = usePreferences();
+  const { t, locale } = usePreferences();
   const state = conditionState(comparison, offer.id);
   const url = safeUrl(tour.url || tour.evidence.url);
+  const observed = observedLabel(offer.evidence.observed_at || tour.observed_at, locale);
   const details = evaluationsForOffer(comparison, offer.id);
   const failed = failedDetailsForOffer(comparison, offer.id);
   return (
@@ -43,12 +44,12 @@ function TourCard({
                   ? 'Đã kiểm tra'
                   : state === 'fail'
                     ? 'Không đạt'
-                    : 'Cần xác minh',
+                    : 'Chưa đủ dữ liệu',
                 state === 'pass'
                   ? 'Checked'
                   : state === 'fail'
                     ? 'Does not match'
-                    : 'Needs verification',
+                    : 'More data needed',
               )}
         </span>
         <span>#{index + 1}</span>
@@ -84,16 +85,13 @@ function TourCard({
           <dd>
             {offer.price == null
               ? t('Liên hệ / chưa có giá', 'Contact / price unavailable')
-              : `${offer.price.toLocaleString('vi-VN')} ${offer.currency} (${offer.price_basis})`}
+              : `${offer.price.toLocaleString('vi-VN')} ${offer.currency || t('chưa rõ tiền tệ', 'currency unknown')} (${offer.price_basis})`}
           </dd>
         </div>
         <div>
-          <dt>{t('Độ mới / tin cậy', 'Freshness / trust')}</dt>
+          <dt>{t('Thời điểm ghi nhận', 'Recorded at')}</dt>
           <dd>
-            {offer.price_freshness} ·{' '}
-            {offer.price_trusted
-              ? t('đã xác thực metadata', 'metadata trusted')
-              : t('chưa xác thực', 'not trusted')}
+            {observed || t('Chưa rõ', 'Unknown')}
           </dd>
         </div>
       </dl>
@@ -197,8 +195,8 @@ export function ComparisonView({ comparison }: { comparison: CurrentComparison }
       {comparison.ranked.length === 0 && nearMiss.length === 0 ? (
         <p className="notice">
           {t(
-            'Chưa có offer nào chứng minh đủ điều kiện. Đây không đồng nghĩa không có tour phù hợp; hãy kiểm tra dữ kiện thiếu hoặc chưa xác minh.',
-            'No offer could prove it meets the requirements. This does not prove no suitable tour exists; check missing or unverified data.',
+            'Chưa có offer nào đáp ứng đủ điều kiện theo dữ liệu hiện có. Điều này không đồng nghĩa không có tour phù hợp; hãy kiểm tra dữ kiện còn thiếu.',
+            'No offer meets all requirements based on available data. This does not mean no suitable tour exists; check which information is missing.',
           )}
         </p>
       ) : (

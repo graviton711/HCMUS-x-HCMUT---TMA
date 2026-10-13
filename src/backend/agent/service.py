@@ -13,9 +13,7 @@ from backend.data.sessions import BaseStore
 from backend.errors import AppError
 from backend.models import Comparison, Requirement
 from backend.settings import Settings
-from shared import get_logger
 
-log = get_logger("agent.service")
 _LOCAL_ID = re.compile(r"^agt_[A-Za-z0-9]{16,40}$")
 _OPENCODE_ID = re.compile(r"^ses_[A-Za-z0-9_-]{8,120}$")
 
@@ -169,10 +167,6 @@ class AgentService:
                     final_comparison = comparison
         except AppError:
             raise
-        except Exception as exc:
-            log.exception("Unexpected OpenCode agent failure")
-            raise AppError("OPENCODE_RUN_FAILED", "OpenCode could not complete this turn.", 502,
-                           retryable=True) from exc
 
         response: dict[str, Any] = {
             "assistant_text": "".join(assistant_text).strip(),
@@ -198,6 +192,12 @@ class AgentService:
                 "OpenCode completed without returning a message or tool result.",
                 502,
                 retryable=True,
+            )
+        if not response["assistant_text"] and choices is None and final_comparison is None:
+            # Tools ran (possibly with errors) but produced nothing user-facing.
+            # Never hand the UI an empty turn; the user can simply retry.
+            response["assistant_text"] = (
+                "Tôi chưa lấy được kết quả vừa rồi. Bạn thử gửi lại nhé."
             )
         yield {"type": "result", "response": response}
 

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CurrentComparison, CurrentCondition, CurrentEvaluation } from '../../../shared/api';
-import { safeUrl } from '../../../shared/lib';
+import { observedLabel, safeUrl } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import {
   conditionState,
@@ -12,16 +12,6 @@ import {
 } from '../lib/format';
 import { rise, staggerParent } from './motion';
 import styles from './chat.module.css';
-
-function observedLabel(value: string, locale: 'vi' | 'en'): string | null {
-  const time = Date.parse(value);
-  if (!Number.isFinite(time)) return null;
-  return new Intl.DateTimeFormat(locale === 'vi' ? 'vi-VN' : 'en-GB', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(time);
-}
 
 function uniqueTours<T extends { tour_id: string }>(candidates: T[]): T[] {
   const seen = new Set<string>();
@@ -94,30 +84,23 @@ function TourCard({
   const observed = observedLabel(offer.evidence.observed_at || tour.observed_at, locale);
   const details = evaluationsForOffer(comparison, offer.id);
   const failed = failedDetailsForOffer(comparison, offer.id);
-  const freshness =
-    offer.price_freshness === 'fresh'
-      ? t('Mới ghi nhận', 'Recently observed')
-      : offer.price_freshness === 'stale'
-        ? t('Dữ liệu cũ', 'Outdated data')
-        : t('Chưa rõ', 'Unknown');
   const priceLabel =
     offer.price == null
       ? t('Liên hệ', 'Contact')
       : [
           offer.price_basis === 'from' ? t('Từ ', 'From ') : '',
           offer.price.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-GB'),
-          ` ${offer.currency}`,
+          offer.currency
+            ? ` ${offer.currency}`
+            : ` · ${t('chưa rõ tiền tệ', 'currency unknown')}`,
         ].join('');
-  const trustLabel = offer.price_trusted
-    ? t('Nguồn tin cậy', 'Trusted source')
-    : t('Chưa xác minh độc lập', 'Not independently verified');
   const label = missing
     ? t(`Gần đạt · thiếu ${failed.length}`, `Near miss · missing ${failed.length}`)
     : state === 'pass'
       ? t('Đã kiểm tra', 'Checked')
       : state === 'fail'
         ? t('Không đạt', 'Does not match')
-        : t('Cần xác minh', 'Needs verification');
+        : t('Chưa đủ dữ liệu', 'More data needed');
 
   return (
     <motion.article
@@ -177,13 +160,6 @@ function TourCard({
             {tour.duration_days == null
               ? t('Chưa có dữ liệu', 'Not listed')
               : t(`${tour.duration_days} ngày`, `${tour.duration_days} days`)}
-          </dd>
-        </div>
-        <div>
-          <dt>{t('Giá và độ mới', 'Price and freshness')}</dt>
-          <dd>
-            {freshness}
-            {` · ${trustLabel}`}
           </dd>
         </div>
       </dl>
@@ -253,8 +229,8 @@ export function ResultCards({
         <p className="muted" role="status">
           {empty
             ? t(
-                'Chưa có offer nào chứng minh đủ điều kiện. Hãy kiểm tra dữ kiện thiếu hoặc nới 1 điều kiện.',
-                'No offer could prove it meets the requirements. Check missing data or relax one condition.',
+                'Chưa có offer nào đáp ứng đủ điều kiện theo dữ liệu hiện có. Hãy kiểm tra dữ kiện thiếu hoặc nới một điều kiện.',
+                'No offer meets all requirements based on available data. Check missing data or relax one condition.',
               )
             : t(
                 `${ranked.length} tour đạt đủ · ${nearMiss.length} tour suýt đạt trong ${comparison.candidates_considered} tour đã xem.`,

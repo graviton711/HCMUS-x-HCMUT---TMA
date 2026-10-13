@@ -12,9 +12,6 @@ from typing import Any
 
 from backend.errors import AppError
 from backend.settings import Settings
-from shared import get_logger
-
-log = get_logger("agent.opencode")
 
 
 def raise_for_error_event(event: dict[str, Any]) -> None:
@@ -96,25 +93,19 @@ class OpenCodeRunner:
 
         assert proc.stdout is not None
         try:
-            async with asyncio.timeout(self.settings.opencode_timeout_seconds):
-                while line := await proc.stdout.readline():
-                    try:
-                        event = json.loads(line.decode("utf-8", errors="replace"))
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        continue
-                    if isinstance(event, dict):
-                        raise_for_error_event(event)
-                        yield event
-                return_code = await proc.wait()
+            while line := await proc.stdout.readline():
+                try:
+                    event = json.loads(line.decode("utf-8", errors="replace"))
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                if isinstance(event, dict):
+                    raise_for_error_event(event)
+                    yield event
+            return_code = await proc.wait()
             if return_code != 0:
-                log.warning("OpenCode exited with code %s.", return_code)
-                raise AppError("OPENCODE_RUN_FAILED", "OpenCode could not complete this turn.", 502,
-                               retryable=True)
-        except TimeoutError as exc:
-            proc.kill()
-            await proc.wait()
-            raise AppError("OPENCODE_TIMEOUT", "OpenCode took too long to respond.", 504,
-                           retryable=True) from exc
+                raise AppError(
+                    "OPENCODE_RUN_FAILED", "OpenCode could not complete this turn.", 502, retryable=True
+                )
         finally:
             if proc.returncode is None:
                 proc.kill()

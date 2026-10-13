@@ -10,14 +10,36 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.routing import APIRoute
 
 from backend.agent.service import AgentService
 from backend.data.catalog import for_settings
 from backend.data.sessions import SessionStore
+from backend.error_logging import log_app_error, log_unexpected_error
 from backend.errors import AppError
 from backend.input.pipeline import validate_requirement
 from backend.settings import Settings
 from backend.workflows import TourWorkflows
+
+
+class SafeAPIRoute(APIRoute):
+    """Normalize route exceptions before Starlette logs raw server errors."""
+
+    def get_route_handler(self):
+        original_handler = super().get_route_handler()
+
+        async def safe_handler(request: Request):
+            try:
+                return await original_handler(request)
+            except AppError as exc:
+                log_app_error(exc, transport="http", operation=self.path)
+                return JSONResponse(status_code=exc.status, content=exc.payload())
+            except Exception as exc:
+                log_unexpected_error(exc, transport="http", operation=self.path)
+                error = AppError("INTERNAL_ERROR", "An internal error occurred.", 500)
+                return JSONResponse(status_code=error.status, content=error.payload())
+
+        return safe_handler
 
 
 def _version() -> str:
@@ -38,6 +60,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     agent = AgentService(settings, store)
 
     app = FastAPI(title="Tour Decision Backend", version=_version())
+    app.router.route_class = SafeAPIRoute
 
     app.add_middleware(
         CORSMiddleware,
@@ -47,8 +70,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "Accept"],
     )
 
+    def operation(request: Request) -> str:
+        route = request.scope.get("route")
+        return str(getattr(route, "path", "unknown"))
+
     @app.exception_handler(AppError)
-    async def app_error(_: Request, exc: AppError) -> JSONResponse:
+    async def app_error(request: Request, exc: AppError) -> JSONResponse:
+        log_app_error(exc, transport="http", operation=operation(request))
         return JSONResponse(status_code=exc.status, content=exc.payload())
 
     @app.get("/", response_class=HTMLResponse)
@@ -120,6 +148,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if owner_id is None:
             raise AppError("SESSION_REQUIRED", "A guest access session is required for chat.", 401)
         if "text/event-stream" in request.headers.get("accept", ""):
+
             async def stream_events():
                 try:
                     async for event in agent.stream_message(
@@ -134,8 +163,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
                         yield f"event: {event_type}\ndata: {data}\n\n"
                 except AppError as exc:
+                    log_app_error(exc, transport="sse", operation="agent_message")
                     data = json.dumps(
                         {"code": exc.code, "message": exc.message},
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    yield f"event: error\ndata: {data}\n\n"
+                except Exception as exc:
+                    log_unexpected_error(exc, transport="sse", operation="agent_message")
+                    data = json.dumps(
+                        {"code": "INTERNAL_ERROR", "message": "An internal error occurred."},
                         ensure_ascii=False,
                         separators=(",", ":"),
                     )
