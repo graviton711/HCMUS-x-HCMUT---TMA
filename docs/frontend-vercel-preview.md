@@ -75,7 +75,8 @@ ping `/health` backend và `/global/health` opencode.
 
 1. **Migration (một lần):** `uv run python -c "from ingest.pipeline import migrate_db; migrate_db()"` với `.env` có `SUPABASE_TOUR_DB_URL`.
 2. **Render:** blueprint `render.yaml` build image lần đầu (điểm verify Dockerfile);
-  kiểm tra `/health`, rồi chat thử 1 turn end-to-end (SSE) trước demo.
+  `start.sh` warm sẵn MCP một lần lúc boot vì box 0.1 CPU boot lạnh quá 30s
+  (`opencode.json` nới `timeout` MCP lên 120s). Kiểm tra `/health`, rồi chat thử 1 turn end-to-end (SSE) trước demo.
 3. **Vercel:** import repo, preset Services (Root Directory `.`); set
   `VITE_API_BASE_URL` trên service `web`.
 4. **Kiểm sau deploy:** `/health` Render trả `{status: ok}`; SPA mở được;

@@ -12,6 +12,7 @@
         "-m",
         "backend.agent.mcp_server"
       ],
+      "timeout": 120000,
       "enabled": true
     }
   }
