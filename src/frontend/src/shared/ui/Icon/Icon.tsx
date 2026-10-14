@@ -16,7 +16,8 @@ export type IconName =
   | 'panel'
   | 'route'
   | 'help'
-  | 'bookmark';
+  | 'bookmark'
+  | 'stop';
 
 const shapes: Record<IconName, ReactNode> = {
   arrow: <path d="M4 12h15m-6-6 6 6-6 6" />,
@@ -43,6 +44,7 @@ const shapes: Record<IconName, ReactNode> = {
   bookmark: (
     <path d="M6 4.75A1.75 1.75 0 0 1 7.75 3h8.5A1.75 1.75 0 0 1 18 4.75V21l-6-3.8L6 21V4.75Z" />
   ),
+  stop: <rect x="7" y="7" width="10" height="10" rx="1.5" />,
   sun: (
     <>
       <circle cx="12" cy="12" r="4" />

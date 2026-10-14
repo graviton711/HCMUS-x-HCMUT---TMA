@@ -94,6 +94,7 @@ export class CurrentBackendClient {
     agentSessionId: string,
     message: string,
     onEvent: (event: CurrentAgentProgressEvent) => void,
+    signal?: AbortSignal,
   ): Promise<CurrentAgentResponse> {
     const headers: Record<string, string> = {
       Accept: 'text/event-stream',
@@ -109,9 +110,11 @@ export class CurrentBackendClient {
           headers,
           body: JSON.stringify({ message }),
           credentials: 'omit',
+          signal,
         },
       );
-    } catch {
+    } catch (cause) {
+      if (signal?.aborted) throw cause;
       throw new CurrentApiError('NETWORK_ERROR', 'Không kết nối được backend.', 0);
     }
 

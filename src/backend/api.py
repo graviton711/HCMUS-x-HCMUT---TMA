@@ -109,7 +109,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         owner_id = owner_session(request)
         if isinstance(body.get("conditions"), list):
             req = validate_requirement(
-                body.get("raw_text", ""), body["conditions"], body.get("travelers", 1)
+                body.get("raw_text", ""),
+                body["conditions"],
+                body.get("travelers", 1),
+                ranking=body.get("ranking"),
             )
         else:
             from backend.input.pipeline import requirement_from_form

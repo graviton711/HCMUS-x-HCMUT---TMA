@@ -5,8 +5,10 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from dataclasses import dataclass, field
 from datetime import date
 from functools import wraps
+from threading import RLock
 from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
@@ -14,15 +16,15 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.agent.results import limit_comparison
 from backend.data.catalog import for_settings
-from backend.decide.engine import passing_offers
+from backend.decide.engine import compare, soft_review_candidates
 from backend.error_logging import log_app_error, log_unexpected_error
 from backend.errors import AppError
 from backend.input.lunar import resolve_lunar
-from backend.models import Requirement, State
+from backend.models import Comparison, Requirement, State, TourSnapshot, uid
 from backend.settings import Settings
 from backend.workflows import TourWorkflows
 
-_VERDICT_STATES = {"fit": "pass", "unknown": "unknown", "not_fit": "fail"}
+_VERDICT_STATES: dict[str, State] = {"fit": "pass", "unknown": "unknown", "not_fit": "fail"}
 
 
 class QueryConditionInput(BaseModel):
@@ -45,6 +47,48 @@ class QueryConditionInput(BaseModel):
     quote: str = Field(description="Exact substring copied from raw_text that supports this condition.")
 
 
+class RankingKeyInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    field: Literal["price", "departure_date", "duration_days", "tour_name", "soft_fit"] = Field(
+        description="A ranking field supported by the catalog decision engine."
+    )
+    direction: Literal["asc", "desc"] = Field(description="Sort direction for this field.")
+
+
+class QueryRankingInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    order_by: list[RankingKeyInput] = Field(
+        min_length=1,
+        max_length=5,
+        description="Ordered ranking keys; earlier fields always take priority.",
+    )
+
+
+class SoftVerdictInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    offer_id: str = Field(description="Offer ID from the active soft_review batch.")
+    condition_id: str = Field(description="Soft condition ID from the active soft_review batch.")
+    verdict: Literal["fit", "unknown", "not_fit"] = Field(
+        description="Whether the tour evidence supports this soft preference."
+    )
+    quote: str = Field(default="", description="Exact short quote from the candidate evidence.")
+    reason: str = Field(default="", description="At most two concise sentences grounded in the quote.")
+
+
+@dataclass
+class _RankingContext:
+    id: str
+    requirement: Requirement
+    comparison: Comparison
+    candidates: list[tuple[TourSnapshot, str]]
+    batches: list[list[tuple[TourSnapshot, str]]]
+    batch_index: int = 0
+    verdicts: dict[tuple[str, str], tuple[State, str, str]] = field(default_factory=dict)
+
+
 def _json(payload: Any) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
@@ -55,6 +99,8 @@ class AgentTools:
         self.catalog = catalog
         self.workflows = workflows
         self._destination_names: dict[str, str] | None = None
+        self._ranking_contexts: dict[str, _RankingContext] = {}
+        self._ranking_context_lock = RLock()
 
     def ask_choice(
         self, question: str, options: list[dict[str, str]], allow_custom: bool = True
@@ -110,7 +156,11 @@ class AgentTools:
         })
 
     def query_tours(
-        self, raw_text: str, conditions: list[QueryConditionInput], travelers: int = 1
+        self,
+        raw_text: str,
+        conditions: list[QueryConditionInput],
+        travelers: int = 1,
+        ranking: QueryRankingInput | None = None,
     ) -> str:
         structured_conditions = [
             item.model_dump(mode="json")
@@ -118,38 +168,21 @@ class AgentTools:
             else QueryConditionInput.model_validate(item).model_dump(mode="json")
             for item in conditions
         ]
-        requirement = self.workflows.requirement(raw_text, structured_conditions, travelers)
+        ranking_value = (
+            ranking.model_dump(mode="json")
+            if isinstance(ranking, QueryRankingInput)
+            else QueryRankingInput.model_validate(ranking).model_dump(mode="json")
+            if ranking is not None
+            else None
+        )
+        requirement = self.workflows.requirement(
+            raw_text,
+            structured_conditions,
+            travelers,
+            ranking_value,
+        )
         comparison = self.workflows.comparison(requirement, self.settings.supabase_scan_limit)
-        hard_ids = {condition.id for condition in requirement.hard()}
-        evaluations: dict[str, list[Any]] = {}
-        for item in comparison.evaluations:
-            if item.condition_id not in hard_ids:
-                continue
-            evaluations.setdefault(item.offer_id, []).append(item)
-        candidates = []
-        for tour in comparison.tour_snapshots:
-            for offer in tour.offers:
-                items = evaluations.get(offer.id, [])
-                states = [item.state for item in items]
-                state: State = (
-                    "fail" if "fail" in states else
-                    "unknown" if "unknown" in states else "pass"
-                )
-                candidates.append({
-                    "tour_id": tour.id,
-                    "offer_id": offer.id,
-                    "hard_state": state,
-                    "reason_codes": [item.reason_code for item in items if item.reason_code],
-                })
-        limited_comparison = limit_comparison(comparison)
-        return _json({
-            "requirement": requirement.model_dump(mode="json"),
-            "comparison": limited_comparison.model_dump(mode="json"),
-            "candidates": candidates,
-            "candidate_count": len(candidates),
-            "scanned_tours": len(comparison.tour_snapshots),
-            "scan_limit": self.settings.supabase_scan_limit,
-        })
+        return self._comparison_payload(requirement, comparison)
 
     def tour_detail(self, tour_id: str) -> str:
         tours = self.workflows.snapshots(self.settings.supabase_scan_limit)
@@ -160,55 +193,147 @@ class AgentTools:
 
     def score_soft(
         self,
-        requirement: dict[str, Any],
-        verdicts: list[dict[str, Any]],
+        context_id: str,
+        verdicts: list[SoftVerdictInput],
     ) -> str:
-        req = _validate_requirement_object(self.workflows, requirement)
-        if not req.soft():
-            return _json({"error": "No soft preferences were supplied."})
-        base = self.workflows.comparison(req, self.settings.supabase_scan_limit)
-        allowed = {offer_id for _, offer_id in passing_offers(req, base.tour_snapshots, base.evaluations)}
-        conditions = {condition.id for condition in req.soft()}
-        text_by_offer: dict[str, str] = {}
-        for tour in base.tour_snapshots:
-            raw = "\n".join(
-                str(getattr(tour, field, "")) for field in self.settings.tuning.decide.soft_fields
+        with self._ranking_context_lock:
+            context = self._ranking_contexts.get(context_id)
+            if context is None:
+                raise AppError(
+                    "RANKING_CONTEXT_NOT_FOUND",
+                    "The ranking context is no longer available. Run the catalog query again.",
+                    409,
+                )
+            batch = context.batches[context.batch_index]
+            expected = {
+                (offer_id, condition.id)
+                for _, offer_id in batch
+                for condition in context.requirement.soft()
+            }
+            parsed = [
+                item if isinstance(item, SoftVerdictInput) else SoftVerdictInput.model_validate(item)
+                for item in verdicts
+            ]
+            supplied = [(item.offer_id, item.condition_id) for item in parsed]
+            if len(supplied) != len(set(supplied)) or set(supplied) != expected:
+                raise AppError(
+                    "SOFT_BATCH_INCOMPLETE",
+                    "Submit exactly one verdict for every candidate and soft condition in the active batch.",
+                    422,
+                )
+
+            batch_tour_by_offer = {offer_id: tour for tour, offer_id in batch}
+            max_quote = min(self.settings.tuning.decide.quote_chars, 200)
+            for item in parsed:
+                key = (item.offer_id, item.condition_id)
+                tour = batch_tour_by_offer[item.offer_id]
+                source = "\n".join(
+                    str(getattr(tour, name, ""))
+                    for name in self.settings.tuning.decide.soft_fields
+                )
+                if item.verdict == "unknown":
+                    state: State = "unknown"
+                    quote, reason = "", item.reason.strip()[:500]
+                else:
+                    quote_is_grounded = bool(item.quote) and len(item.quote) <= max_quote and item.quote in source
+                    reason_is_bounded = (
+                        bool(item.reason.strip())
+                        and len(item.reason) <= 500
+                        and _sentence_count(item.reason) <= 2
+                    )
+                    if quote_is_grounded and reason_is_bounded:
+                        state = _VERDICT_STATES[item.verdict]
+                        quote, reason = item.quote, item.reason.strip()
+                    else:
+                        state, quote, reason = "unknown", "", "Chưa có trích dẫn hợp lệ để xác nhận."
+                context.verdicts[key] = (state, quote, reason)
+                for same_tour_offer in tour.offers:
+                    context.verdicts[(same_tour_offer.id, item.condition_id)] = (state, quote, reason)
+
+            context.batch_index += 1
+            if context.batch_index < len(context.batches):
+                return _json({
+                    "requirement": context.requirement.model_dump(mode="json"),
+                    "soft_review": self._soft_review_payload(context),
+                })
+
+            comparison = compare(
+                context.requirement,
+                context.comparison.tour_snapshots,
+                cfg=self.settings.tuning.decide,
+                soft_verdicts=context.verdicts,
             )
-            for offer in tour.offers:
-                text_by_offer[offer.id] = raw
+            self._ranking_contexts.pop(context_id, None)
+            return _json({
+                "requirement": context.requirement.model_dump(mode="json"),
+                "comparison": limit_comparison(comparison).model_dump(mode="json"),
+                "ranking_complete": True,
+            })
 
-        validated: dict[tuple[str, str], tuple[State, str, str]] = {}
-        seen: set[tuple[str, str]] = set()
-        max_quote = min(self.settings.tuning.decide.quote_chars, 200)
-        for item in verdicts:
-            offer_id = str(item.get("offer_id", ""))
-            condition_id = str(item.get("condition_id", ""))
-            key = (offer_id, condition_id)
-            if key in seen:
-                continue
-            seen.add(key)
-            if offer_id not in allowed or condition_id not in conditions:
-                continue
-            state = _VERDICT_STATES.get(str(item.get("verdict", "")))
-            quote = item.get("quote") if isinstance(item.get("quote"), str) else ""
-            reason = item.get("reason") if isinstance(item.get("reason"), str) else ""
-            quote_is_grounded = bool(quote) and len(quote) <= max_quote and quote in text_by_offer[offer_id]
-            reason_is_bounded = bool(reason.strip()) and len(reason) <= 500 and _sentence_count(reason) <= 2
-            if state is None or not quote_is_grounded or not reason_is_bounded:
-                validated[key] = ("unknown", "", "Chưa có trích dẫn hợp lệ để xác nhận.")
-            else:
-                validated[key] = (state, quote, reason.strip())
+    def _soft_review_payload(self, context: _RankingContext) -> dict[str, Any]:
+        batch = context.batches[context.batch_index]
+        candidates = []
+        for tour, offer_id in batch:
+            offer = next(item for item in tour.offers if item.id == offer_id)
+            snippets = [
+                f"{name}: {str(getattr(tour, name, '')).strip()}"
+                for name in self.settings.tuning.decide.soft_fields
+                if str(getattr(tour, name, "")).strip()
+            ]
+            evidence = "\n".join(snippets)[:2400]
+            candidates.append({
+                "offer_id": offer_id,
+                "tour_name": tour.name,
+                "departure_date": offer.departure_date,
+                "price": offer.price,
+                "currency": offer.currency,
+                "price_basis": offer.price_basis,
+                "evidence": evidence,
+            })
+        return {
+            "context_id": context.id,
+            "batch_index": context.batch_index + 1,
+            "batch_count": len(context.batches),
+            "review_candidate_count": len(context.candidates),
+            "soft_conditions": [
+                {"id": item.id, "preference": item.value}
+                for item in context.requirement.soft()
+            ],
+            "candidates": candidates,
+        }
 
-        comparison = self.workflows.comparison(
-            req,
-            candidate_limit=self.settings.supabase_scan_limit,
-            soft_verdicts=validated,
-        )
-        return _json({
-            "requirement": req.model_dump(mode="json"),
-            "comparison": limit_comparison(comparison).model_dump(mode="json"),
-            "accepted_verdicts": len(validated),
-        })
+    def _comparison_payload(
+        self,
+        requirement: Requirement,
+        comparison: Comparison,
+        additional: dict[str, Any] | None = None,
+    ) -> str:
+        review_candidates = soft_review_candidates(
+            requirement, comparison.tour_snapshots, comparison.evaluations
+        ) if requirement.soft() else []
+        payload: dict[str, Any] = {
+            "requirement": requirement.model_dump(mode="json"),
+            "scanned_tours": len(comparison.tour_snapshots),
+            "scan_limit": self.settings.supabase_scan_limit,
+        }
+        if review_candidates:
+            context_id = uid("rank")
+            batches = [review_candidates[i:i + 5] for i in range(0, len(review_candidates), 5)]
+            context = _RankingContext(
+                id=context_id,
+                requirement=requirement,
+                comparison=comparison,
+                candidates=review_candidates,
+                batches=batches,
+            )
+            with self._ranking_context_lock:
+                self._ranking_contexts[context_id] = context
+            payload["soft_review"] = self._soft_review_payload(context)
+        else:
+            payload["comparison"] = limit_comparison(comparison).model_dump(mode="json")
+        if additional:
+            payload.update(additional)
+        return _json(payload)
 
     def relax_criterion(self, requirement: dict[str, Any], condition_id: str) -> str:
         req = _validate_requirement_object(self.workflows, requirement)
@@ -219,15 +344,14 @@ class AgentTools:
             req.raw_text,
             [item.model_dump(mode="json") for item in req.conditions if item.id != condition_id],
             req.travelers,
+            req.ranking.model_dump(mode="json") if req.ranking else None,
         )
-        comparison = limit_comparison(self.workflows.comparison(
-            updated, self.settings.supabase_scan_limit
-        ))
-        return _json({
-            "removed_condition": condition.model_dump(mode="json"),
-            "requirement": updated.model_dump(mode="json"),
-            "comparison": comparison.model_dump(mode="json"),
-        })
+        comparison = self.workflows.comparison(updated, self.settings.supabase_scan_limit)
+        return self._comparison_payload(
+            updated,
+            comparison,
+            {"removed_condition": condition.model_dump(mode="json")},
+        )
 
     def clarify_date(self, calendar: str, year: int, month: int, day: int, leap: bool = False) -> str:
         if calendar == "lunar":
@@ -244,7 +368,10 @@ class AgentTools:
 
 def _validate_requirement_object(workflows: TourWorkflows, value: dict[str, Any]) -> Requirement:
     return workflows.requirement(
-        str(value.get("raw_text", "")), value.get("conditions"), value.get("travelers", 1)
+        str(value.get("raw_text", "")),
+        value.get("conditions"),
+        value.get("travelers", 1),
+        value.get("ranking"),
     )
 
 

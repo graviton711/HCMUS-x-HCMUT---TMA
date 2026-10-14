@@ -8,7 +8,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from backend.errors import AppError
-from backend.models import Condition, Requirement, uid
+from backend.models import Condition, RankingKey, RankingSpec, Requirement, uid
 
 _HARD_FIELDS = {
     "destination",
@@ -32,6 +32,7 @@ def validate_requirement(
     conditions: Any,
     travelers: Any = 1,
     requirement_id: str | None = None,
+    ranking: Any = None,
 ) -> Requirement:
     """Validate agent-produced conditions without guessing or coercing values."""
     if not isinstance(raw_text, str) or not raw_text.strip() or len(raw_text) > 8000:
@@ -65,12 +66,30 @@ def validate_requirement(
             _validate_hard(condition)
         cleaned.append(condition)
 
+    ranking_spec = None
+    if ranking is not None:
+        try:
+            ranking_spec = RankingSpec.model_validate(ranking)
+        except ValidationError as exc:
+            raise _invalid("Ranking must contain supported ordered fields and directions.") from exc
+        ranking_fields = [key.field for key in ranking_spec.order_by]
+        if len(ranking_fields) != len(set(ranking_fields)):
+            raise _invalid("Ranking fields must not be repeated.")
+        if any(condition.strength == "soft" for condition in cleaned) and "soft_fit" not in ranking_fields:
+            if len(ranking_fields) == 5:
+                raise _invalid("Leave one ranking position for soft_fit when soft preferences are present.")
+            ranking_spec = RankingSpec(order_by=[
+                *ranking_spec.order_by,
+                RankingKey(field="soft_fit", direction="desc"),
+            ])
+
     return Requirement(
         id=requirement_id or uid("req"),
         conditions=cleaned,
         missing=[],
         raw_text=raw_text,
         travelers=travelers,
+        ranking=ranking_spec,
     )
 
 

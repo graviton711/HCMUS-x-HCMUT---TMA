@@ -2,7 +2,7 @@
 
 ## Trách nhiệm
 
-Áp hard rules xác định trên từng offer, freshness ngày khởi hành, near-miss và phân tích dữ kiện tour. Giá catalog được dùng trực tiếp theo `price`, `price_type` và `currency`; engine không xác minh trust hay suy luận country/place. Sau hard pass, áp verdict mềm do agent gửi và xếp theo số `fit`, rồi giá exact VND.
+Áp hard rules xác định trên từng offer, freshness ngày khởi hành, near-miss và phân tích dữ kiện tour. Giá catalog dùng trực tiếp price, price_type và currency. Sau hard pass, engine sắp theo ranking.order_by nhiều khóa; soft_fit là số soft verdict pass đã được xác thực, còn giá xếp theo số tiền niêm yết và giữ nguyên basis.
 
 ## Input/output
 
@@ -10,7 +10,7 @@ Vào: `Requirement`, snapshots đã normalize và verdict map `(offer_id, condit
 
 ## Workflow
 
-`hard_filter` đánh giá mọi hard condition. Với destination, engine chỉ so điều kiện tường minh với nhãn trong snapshot sau chuẩn hóa chữ tổng quát; danh sách có dữ liệu nhưng không khớp là fail, còn thiếu danh sách là unknown. Agent chịu trách nhiệm ánh xạ quốc gia/vùng sang nhãn thực từ catalog. `passing_offers` chỉ nhận offer nếu tất cả điều kiện hard đều `pass`; unknown và fail đều bị loại khỏi ranked. `score_soft` chỉ chấm offer trong tập này; quote sai hoặc thiếu được thay bằng unknown trước khi gọi `compare`. `rank` đếm soft `pass`, tie-break bằng giá exact; `near_miss` giữ riêng offer fail ít điều kiện hoặc còn unknown; `analyze` tóm tắt phụ phí, điều khoản, rủi ro và quyền lợi.
+hard_filter đánh giá mọi hard condition. Destination được so với nhãn tường minh sau chuẩn hóa chuỗi tổng quát; có nhãn nhưng không khớp là fail, thiếu nhãn là unknown. passing_offers chỉ giữ offer khi mọi hard condition đều pass. Agent hiểu yêu cầu và gửi ranking.order_by; score_soft chỉ nhận verdict có quote khớp nguyên văn với snapshot. Engine áp dụng ranking theo thứ tự, xếp dữ liệu thiếu cuối và dùng ID làm tie-break ổn định. Mặc định là soft_fit giảm dần rồi price tăng dần nếu có soft condition; không có soft condition thì price tăng dần. near_miss giữ riêng; analyze tóm tắt phụ phí, điều khoản, rủi ro và quyền lợi.
 
 ## Interface với module khác
 

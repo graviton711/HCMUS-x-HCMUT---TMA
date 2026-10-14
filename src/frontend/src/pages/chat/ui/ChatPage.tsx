@@ -176,18 +176,13 @@ function ActiveChat({
                         className="btn btn-primary"
                         onClick={() => onStart(draftText || undefined)}
                       >
-                        {draftText
-                          ? t(
-                              'Tạo phiên mới và gửi lại bản nháp',
-                              'Start a new session and resend the draft',
-                            )
-                          : t('Tạo phiên mới', 'Start a new session')}
+                        {t('Tạo phiên mới', 'Start a new session')}
                       </button>
                       {draftText && (
                         <span className={styles['error-note']}>
                           {t(
-                            'Phiên mới gửi lại bản nháp; ngữ cảnh hội thoại cũ không được chuyển sang.',
-                            'The new session resends the draft; the old conversation context is not transferred.',
+                            'Phiên mới gửi lại bản nháp, không chuyển lịch sử chat.',
+                            'The new session resends the draft without the old chat history.',
                           )}
                         </span>
                       )}
@@ -206,7 +201,12 @@ function ActiveChat({
       </div>
 
       <div className={styles['composer-dock']}>
-        <Composer busy={chat.busy || !chat.client || expired} onSend={chat.send} />
+        <Composer
+          busy={chat.busy || !chat.client || expired}
+          canStop={chat.phase === 'working'}
+          onSend={chat.send}
+          onStop={chat.stop}
+        />
       </div>
     </div>
   );

@@ -25,6 +25,22 @@ function uniqueTours<T extends { tour_id: string }>(candidates: T[]): T[] {
   });
 }
 
+function rankingValue(
+  field: string,
+  tour: CurrentComparison['tour_snapshots'][number] | undefined,
+  offer: CurrentComparison['tour_snapshots'][number]['offers'][number] | undefined,
+): string | number | null {
+  if (field === 'price') {
+    return offer?.price == null || offer.price_basis === 'contact' || !offer.currency.trim()
+      ? null
+      : `${offer.currency.toUpperCase()}:${offer.price}`;
+  }
+  if (field === 'departure_date') return offer?.departure_date || null;
+  if (field === 'duration_days') return tour?.duration_days ?? null;
+  if (field === 'tour_name') return tour?.name.toLocaleLowerCase() || null;
+  return null;
+}
+
 function EvaluationRow({
   evaluation,
   condition,
@@ -261,6 +277,15 @@ export function ResultCards({
   const softConditions = comparison.requirement.conditions.filter(
     (condition) => condition.strength === 'soft',
   );
+  const rankingKeys = comparison.requirement.ranking?.order_by ?? (softConditions.length
+    ? [{ field: 'soft_fit', direction: 'desc' as const }, { field: 'price', direction: 'asc' as const }]
+    : [{ field: 'price', direction: 'asc' as const }]);
+  const softFitIndex = rankingKeys.findIndex((key) => key.field === 'soft_fit');
+  const precedingKeys = rankingKeys.slice(0, softFitIndex < 0 ? rankingKeys.length : softFitIndex);
+  const tourById = new Map(comparison.tour_snapshots.map((tour) => [tour.id, tour]));
+  const offerById = new Map(
+    comparison.tour_snapshots.flatMap((tour) => tour.offers.map((offer) => [offer.id, offer] as const)),
+  );
   const originalOrder = new Map(
     rankedOriginal.map((candidate, index) => [candidate.offer_id, index]),
   );
@@ -271,22 +296,33 @@ export function ResultCards({
     passed.add(evaluation.condition_id);
     evaluations.set(evaluation.offer_id, passed);
   }
-  const ranked = [...rankedOriginal].sort((left, right) => {
-    const leftPassed = evaluations.get(left.offer_id) ?? new Set<string>();
-    const rightPassed = evaluations.get(right.offer_id) ?? new Set<string>();
-    const leftScore = softConditions.reduce(
-      (sum, condition) => sum + (leftPassed.has(condition.id) ? (weights[condition.id] ?? 1) : 0),
+  const samePrimaryRank = (left: (typeof rankedOriginal)[number], right: (typeof rankedOriginal)[number]) =>
+    precedingKeys.every((key) => rankingValue(
+      key.field,
+      tourById.get(left.tour_id),
+      offerById.get(left.offer_id),
+    ) === rankingValue(
+      key.field,
+      tourById.get(right.tour_id),
+      offerById.get(right.offer_id),
+    ));
+  const weightedScore = (candidate: (typeof rankedOriginal)[number]) => {
+    const passed = evaluations.get(candidate.offer_id) ?? new Set<string>();
+    return softConditions.reduce(
+      (sum, condition) => sum + (passed.has(condition.id) ? (weights[condition.id] ?? 1) : 0),
       0,
     );
-    const rightScore = softConditions.reduce(
-      (sum, condition) => sum + (rightPassed.has(condition.id) ? (weights[condition.id] ?? 1) : 0),
-      0,
-    );
-    return (
-      rightScore - leftScore ||
+  };
+  const ranked: typeof rankedOriginal = [];
+  for (let start = 0; start < rankedOriginal.length;) {
+    let end = start + 1;
+    while (end < rankedOriginal.length && samePrimaryRank(rankedOriginal[start], rankedOriginal[end])) end += 1;
+    ranked.push(...rankedOriginal.slice(start, end).sort((left, right) => (
+      weightedScore(right) - weightedScore(left) ||
       (originalOrder.get(left.offer_id) ?? 0) - (originalOrder.get(right.offer_id) ?? 0)
-    );
-  });
+    )));
+    start = end;
+  }
   const worst = mostFailedField(comparison);
   const empty = ranked.length === 0 && nearMiss.length === 0;
   const customOrder = softConditions.some((condition) => (weights[condition.id] ?? 1) !== 1);
@@ -374,13 +410,22 @@ export function ResultCards({
                 'No offer meets all requirements based on available data. Check missing data or relax one condition.',
               )
             : t(
-                `${ranked.length} tour đạt đủ · ${nearMiss.length} tour suýt đạt trong ${comparison.candidates_considered} tour đã xem.`,
-                `${ranked.length} qualified · ${nearMiss.length} near miss of ${comparison.candidates_considered} considered.`,
+                `Đang hiển thị ${ranked.length} tour đạt đủ và ${nearMiss.length} tour gần đạt trong ${comparison.candidates_considered} tour đã xem.`,
+                `Showing ${ranked.length} qualified tours and ${nearMiss.length} near misses from ${comparison.candidates_considered} tours scanned.`,
               )}
         </p>
+        {comparison.ranking_currencies && comparison.ranking_currencies.length > 1 &&
+          rankingKeys.some((key) => key.field === 'price') && (
+            <p className="muted">
+              {t(
+                'Giá được xếp riêng theo từng đơn vị tiền tệ; chưa quy đổi để so sánh mức rẻ nhất.',
+                'Prices are ranked within each currency; no exchange conversion is applied.',
+              )}
+            </p>
+          )}
         <div className={styles['result-counts']}>
           <span className="tag tag-quiet">
-            {ranked.length} {t('đạt đủ', 'qualified')}
+            {ranked.length} {t('đạt đủ · hiển thị', 'qualified · shown')}
           </span>
           {nearMiss.length > 0 && (
             <span className="tag tag-warn">
@@ -396,8 +441,8 @@ export function ResultCards({
             <span>{t('Điều chỉnh mức ưu tiên', 'Adjust priorities')}</span>
             <span>
               {t(
-                'Chỉ đổi thứ tự tour đạt đủ đang hiển thị',
-                'Reorders displayed qualified tours only',
+              'Chỉ đổi thứ tự khi các khóa ưu tiên trước bằng nhau',
+              'Only reorders tours tied on earlier ranking keys',
               )}
             </span>
           </summary>
@@ -454,12 +499,12 @@ export function ResultCards({
             <span>
               {customOrder
                 ? t(
-                    'ưu tiên bạn chọn · hòa thì theo thứ tự ban đầu',
-                    'your priorities · ties keep the original order',
+                    'trọng số chỉ phá hòa trong nhóm cùng thứ tự ưu tiên',
+                    'weights only break ties within a ranking group',
                   )
                 : t(
-                    'tiêu chí phù hợp · hòa thì theo giá',
-                    'matching preferences · ties go to price',
+                    'theo thứ tự xếp hạng của yêu cầu',
+                    'ordered by the request ranking',
                   )}
             </span>
           </h3>

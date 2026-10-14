@@ -33,14 +33,14 @@ function errorText(cause: unknown, fallback: string, locale: Locale) {
     }
     if (cause.code === 'OPENCODE_RESPONSE_EMPTY') {
       return t(
-        'Agent chưa trả lời cho lượt tìm này. Nội dung của bạn vẫn được giữ; hãy thử lại.',
-        'The agent did not return a response. Your message is kept; please try again.',
+        'Mình chưa lấy được kết quả lần này.',
+        'I couldn’t retrieve the results this time.',
       );
     }
     if (cause.code === 'NETWORK_ERROR') {
       return t(
-        'Không kết nối được dịch vụ tìm tour. Hãy kiểm tra mạng rồi thử lại.',
-        'Could not connect to the tour service. Check your connection and try again.',
+        'Không kết nối được dịch vụ tìm tour.',
+        'Could not connect to the tour service.',
       );
     }
   }
@@ -68,6 +68,8 @@ export function useChat(
   const lastMessageRef = useRef('');
   const toolActivityIdRef = useRef<string | null>(null);
   const hasLiveToolEventsRef = useRef(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const mountedRef = useRef(true);
   sessionRef.current = session;
   onChangeSessionRef.current = onChangeSession;
   const busy = phase !== 'idle';
@@ -77,6 +79,14 @@ export function useChat(
     const transcript = [...transcriptRef.current, message];
     transcriptRef.current = transcript;
     onChangeSessionRef.current({ messages: transcript });
+  }, []);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      abortControllerRef.current?.abort('unmount');
+    };
   }, []);
 
   const upsertToolActivity = useCallback(
@@ -137,6 +147,17 @@ export function useChat(
     if (activity?.kind !== 'tool_activity') return;
     const tools = activity.tools.map((tool) =>
       tool.status === 'running' ? { ...tool, status: 'error' as const } : tool,
+    );
+    upsertToolActivity({ ...activity, tools });
+  }, [upsertToolActivity]);
+
+  const cancelRunningTools = useCallback(() => {
+    const activity = transcriptRef.current.find(
+      (message) => message.id === toolActivityIdRef.current && message.kind === 'tool_activity',
+    );
+    if (activity?.kind !== 'tool_activity') return;
+    const tools = activity.tools.map((tool) =>
+      tool.status === 'running' ? { ...tool, status: 'cancelled' as const } : tool,
     );
     upsertToolActivity({ ...activity, tools });
   }, [upsertToolActivity]);
@@ -266,7 +287,10 @@ export function useChat(
     async (text: string, showUserMessage: boolean) => {
       const api = client;
       const agentSessionId = sessionRef.current.agentSessionId;
-      if (sessionExpired || !api || !agentSessionId || !text.trim()) return;
+      if (sessionExpired || !api || !agentSessionId || !text.trim() || abortControllerRef.current)
+        return;
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
       setFailedStep(null);
       setPhase('working');
       toolActivityIdRef.current = null;
@@ -286,34 +310,58 @@ export function useChat(
           agentSessionId,
           text.trim(),
           recordToolProgress,
+          controller.signal,
         );
         applyResponse(response, text);
       } catch (cause) {
-        failRunningTools();
-        const expired = isSessionExpired(cause);
-        push({
-          id: uid(),
-          kind: 'error',
-          text: errorText(
-            cause,
-            localeRef.current === 'vi'
-              ? 'Chưa thể hoàn tất lượt tìm tour. Nội dung của bạn vẫn được giữ; hãy thử lại.'
-              : 'The search could not be completed. Your message is kept; please try again.',
-            localeRef.current,
-          ),
-          expired,
-        });
-        setSessionExpired(expired);
-        setFailedStep('message');
+        if (controller.signal.aborted) {
+          if (controller.signal.reason === 'user' && mountedRef.current) {
+            cancelRunningTools();
+            push({
+              id: uid(),
+              kind: 'notice',
+              text: localeRef.current === 'vi' ? 'Đã dừng lượt tìm.' : 'Response stopped.',
+            });
+          }
+        } else {
+          failRunningTools();
+          const expired = isSessionExpired(cause);
+          push({
+            id: uid(),
+            kind: 'error',
+            text: errorText(
+              cause,
+              localeRef.current === 'vi'
+                ? 'Mình chưa lấy được kết quả lần này.'
+                : 'I couldn’t retrieve the results this time.',
+              localeRef.current,
+            ),
+            expired,
+          });
+          setSessionExpired(expired);
+          setFailedStep('message');
+        }
       } finally {
-        onChangeSessionRef.current({ messages: transcriptRef.current });
-        setPhase('idle');
+        if (abortControllerRef.current === controller) abortControllerRef.current = null;
+        if (mountedRef.current) {
+          onChangeSessionRef.current({ messages: transcriptRef.current });
+          setPhase('idle');
+        }
       }
     },
-    [applyResponse, client, failRunningTools, push, recordToolProgress, sessionExpired],
+    [
+      applyResponse,
+      cancelRunningTools,
+      client,
+      failRunningTools,
+      push,
+      recordToolProgress,
+      sessionExpired,
+    ],
   );
 
   const send = useCallback((text: string) => void sendMessage(text, true), [sendMessage]);
+  const stop = useCallback(() => abortControllerRef.current?.abort('user'), []);
 
   const relax = useCallback(
     (field: string) =>
@@ -338,6 +386,7 @@ export function useChat(
     sessionExpired,
     retry,
     send,
+    stop,
     relax,
   };
 }

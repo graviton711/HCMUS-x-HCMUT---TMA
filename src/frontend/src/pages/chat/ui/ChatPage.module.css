@@ -64,6 +64,12 @@
   animation: entry-fade 350ms 180ms ease both;
 }
 
+.error-note {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+}
+
 .examples-title {
   margin-bottom: 9px;
   color: var(--muted);

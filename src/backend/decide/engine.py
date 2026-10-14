@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from datetime import date
+from functools import cmp_to_key
 
 from backend.models import (
     Analysis,
@@ -13,12 +14,15 @@ from backend.models import (
     Evaluation,
     OfferSnapshot,
     RankedCandidate,
+    RankingKey,
     Requirement,
     State,
     TourSnapshot,
     uid,
 )
 from backend.settings import DecideCfg
+
+RankValue = int | str | tuple[str, int]
 
 
 def _contains(haystack: str, needle: str) -> bool:
@@ -211,18 +215,187 @@ def rank(
     surviving: list[tuple[TourSnapshot, str]],
     soft_verdicts: dict[tuple[str, str], tuple[State, str, str]],
 ) -> list[RankedCandidate]:
-    soft_ids = [c.id for c in req.soft()]
-    scored = []
-    for tour, offer_id in surviving:
-        offer = next(o for o in tour.offers if o.id == offer_id)
-        fit_count = sum(
-            soft_verdicts.get((offer_id, cid), ("unknown", "", ""))[0] == "pass"
-            for cid in soft_ids
+    offers_by_id = {
+        offer.id: offer
+        for tour, offer_id in surviving
+        for offer in tour.offers
+        if offer.id == offer_id
+    }
+    soft_fit_by_offer = {
+        offer_id: _soft_fit_count(req, offer_id, soft_verdicts)
+        for _, offer_id in surviving
+    }
+    ordered = sorted(
+        surviving,
+        key=cmp_to_key(lambda left, right: _compare_candidates(
+            left, right, _ranking_order(req), soft_fit_by_offer, offers_by_id
+        )),
+    )
+    return [
+        RankedCandidate(
+            tour_id=tour.id,
+            offer_id=offer_id,
+            score=float(soft_fit_by_offer[offer_id]),
         )
-        price_key = offer.price if (offer.price is not None and offer.price_basis == "exact") else 10**15
-        scored.append((fit_count, -price_key, tour.id, offer_id))
-    scored.sort(key=lambda r: (r[0], r[1]), reverse=True)
-    return [RankedCandidate(tour_id=t, offer_id=o, score=float(fits)) for fits, _, t, o in scored]
+        for tour, offer_id in ordered
+    ]
+
+
+def soft_review_candidates(
+    req: Requirement,
+    tours: list[TourSnapshot],
+    evaluations: list[Evaluation],
+    limit: int = 5,
+) -> list[tuple[TourSnapshot, str]]:
+    """Return every distinct tour that may enter the visible top N after soft scoring.
+
+    Candidates are first grouped by the ordered keys before soft_fit. All tours in
+    the boundary group are included so soft scoring cannot change the top-N cutoff.
+    """
+    order = _ranking_order(req)
+    soft_index = next((i for i, key in enumerate(order) if key.field == "soft_fit"), None)
+    if soft_index is None:
+        return []
+    prefix = order[:soft_index]
+    passing = passing_offers(req, tours, evaluations)
+    if not passing:
+        return []
+
+    offers_by_id = {
+        offer.id: offer
+        for tour, offer_id in passing
+        for offer in tour.offers
+        if offer.id == offer_id
+    }
+    best_by_tour: dict[str, tuple[TourSnapshot, str]] = {}
+    for pair in passing:
+        tour, offer_id = pair
+        prior = best_by_tour.get(tour.id)
+        if prior is None or _compare_candidates(pair, prior, prefix, {}, offers_by_id) < 0:
+            best_by_tour[tour.id] = pair
+
+    groups: dict[tuple[object, ...], list[tuple[TourSnapshot, str]]] = {}
+    for pair in best_by_tour.values():
+        tour, offer_id = pair
+        offer = offers_by_id[offer_id]
+        key = tuple(_group_value(item.field, tour, offer) for item in prefix)
+        groups.setdefault(key, []).append(pair)
+
+    group_items = list(groups.values())
+    group_items.sort(key=cmp_to_key(
+        lambda left, right: _compare_candidates(left[0], right[0], prefix, {}, offers_by_id)
+    ))
+    selected: list[tuple[TourSnapshot, str]] = []
+    for group in group_items:
+        group.sort(key=cmp_to_key(
+            lambda left, right: _compare_candidates(left, right, prefix, {}, offers_by_id)
+        ))
+        selected.extend(group)
+        if len(selected) >= limit:
+            break
+    return selected
+
+
+def _ranking_order(req: Requirement) -> list[RankingKey]:
+    if req.ranking is not None:
+        return req.ranking.order_by
+    if req.soft():
+        return [RankingKey(field="soft_fit", direction="desc"), RankingKey(field="price", direction="asc")]
+    return [RankingKey(field="price", direction="asc")]
+
+
+def _soft_fit_count(
+    req: Requirement,
+    offer_id: str,
+    soft_verdicts: dict[tuple[str, str], tuple[State, str, str]],
+) -> int:
+    return sum(
+        soft_verdicts.get((offer_id, condition.id), ("unknown", "", ""))[0] == "pass"
+        for condition in req.soft()
+    )
+
+
+def _group_value(field: str, tour: TourSnapshot, offer: OfferSnapshot) -> RankValue | None:
+    if field == "price":
+        if offer.price is None or offer.price_basis == "contact" or not offer.currency.strip():
+            return None
+        return (offer.currency.upper(), offer.price)
+    return _candidate_value(field, tour, offer, 0)
+
+
+def _candidate_value(
+    field: str,
+    tour: TourSnapshot,
+    offer: OfferSnapshot,
+    soft_fit: int,
+) -> RankValue | None:
+    if field == "price":
+        return (
+            offer.price
+            if offer.price is not None and offer.price_basis != "contact" and offer.currency.strip()
+            else None
+        )
+    if field == "departure_date":
+        return offer.departure_date if _is_iso_date(offer.departure_date) else None
+    if field == "duration_days":
+        return tour.duration_days
+    if field == "tour_name":
+        return tour.name.casefold() or None
+    if field == "soft_fit":
+        return soft_fit
+    return None
+
+
+def _compare_candidates(
+    left: tuple[TourSnapshot, str],
+    right: tuple[TourSnapshot, str],
+    order: list[RankingKey],
+    soft_fit_by_offer: dict[str, int],
+    offers_by_id: dict[str, OfferSnapshot],
+) -> int:
+    left_tour, left_id = left
+    right_tour, right_id = right
+    left_offer = offers_by_id[left_id]
+    right_offer = offers_by_id[right_id]
+    for item in order:
+        left_fit = soft_fit_by_offer.get(left_id, 0) if item.field == "soft_fit" else 0
+        right_fit = soft_fit_by_offer.get(right_id, 0) if item.field == "soft_fit" else 0
+        left_value = _candidate_value(item.field, left_tour, left_offer, left_fit)
+        right_value = _candidate_value(item.field, right_tour, right_offer, right_fit)
+        if left_value is None and right_value is not None:
+            return 1
+        if right_value is None and left_value is not None:
+            return -1
+        if left_value is None or right_value is None:
+            continue
+        if item.field == "price" and left_offer.currency.upper() != right_offer.currency.upper():
+            compared = _compare_values(left_offer.currency.upper(), right_offer.currency.upper())
+        else:
+            compared = _compare_values(left_value, right_value)
+        if compared:
+            return compared if item.field == "price" and left_offer.currency.upper() != right_offer.currency.upper() else (
+                compared if item.direction == "asc" else -compared
+            )
+    left_key = (left_tour.id, left_id)
+    right_key = (right_tour.id, right_id)
+    return 0 if left_key == right_key else (-1 if left_key < right_key else 1)
+
+
+def _compare_values(left: RankValue, right: RankValue) -> int:
+    if isinstance(left, int) and isinstance(right, int):
+        return 0 if left == right else (-1 if left < right else 1)
+    if isinstance(left, str) and isinstance(right, str):
+        return 0 if left == right else (-1 if left < right else 1)
+    if isinstance(left, tuple) and isinstance(right, tuple):
+        return _compare_values(left[0], right[0]) or _compare_values(left[1], right[1])
+    raise TypeError("Ranking values for the same field must have the same type.")
+
+
+def _is_iso_date(value: str) -> bool:
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
 
 
 def analyze(tours: list[TourSnapshot], ranked: list[RankedCandidate], cfg: DecideCfg) -> Analysis:
@@ -290,4 +463,11 @@ def compare(
         evaluations=evaluations,
         analysis=analyze(tours, ranked + near, cfg),
         candidates_considered=len(tours),
+        ranking_currencies=sorted({
+            offer.currency.upper()
+            for tour, offer_id in surviving
+            for offer in tour.offers
+            if offer.id == offer_id and offer.price is not None
+            and offer.price_basis != "contact" and offer.currency.strip()
+        }),
     )

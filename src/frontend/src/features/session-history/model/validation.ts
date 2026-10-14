@@ -22,7 +22,8 @@ export function validDraft(v: unknown): v is SearchDraft {
 
 export function validChatMsg(v: unknown): boolean {
   if (!record(v) || typeof v.id !== 'string' || typeof v.kind !== 'string') return false;
-  if (v.kind === 'user' || v.kind === 'assistant') return typeof v.text === 'string';
+  if (v.kind === 'user' || v.kind === 'assistant' || v.kind === 'notice')
+    return typeof v.text === 'string';
   if (v.kind === 'error') {
     return (
       typeof v.text === 'string' && (v.expired === undefined || typeof v.expired === 'boolean')
@@ -51,7 +52,7 @@ export function validChatMsg(v: unknown): boolean {
           record(tool) &&
           typeof tool.id === 'string' &&
           typeof tool.name === 'string' &&
-          ['running', 'completed', 'error'].includes(String(tool.status)),
+          ['running', 'completed', 'error', 'cancelled'].includes(String(tool.status)),
       )
     );
   }

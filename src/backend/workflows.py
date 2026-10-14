@@ -14,8 +14,8 @@ class TourWorkflows:
         self.settings = settings
         self.catalog = catalog
 
-    def requirement(self, raw_text: str, conditions, travelers=1) -> Requirement:
-        return validate_requirement(raw_text, conditions, travelers)
+    def requirement(self, raw_text: str, conditions, travelers=1, ranking=None) -> Requirement:
+        return validate_requirement(raw_text, conditions, travelers, ranking=ranking)
 
     def snapshots(self, candidate_limit: int | None = None) -> list[TourSnapshot]:
         high = self.settings.supabase_scan_limit

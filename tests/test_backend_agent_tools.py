@@ -3,9 +3,12 @@
 import asyncio
 import json
 
+import pytest
+
 from backend.agent.mcp_server import AgentTools, create_server
 from backend.agent.results import limit_comparison
 from backend.data.catalog import FixtureCatalog
+from backend.errors import AppError
 from backend.models import Comparison, Evaluation, RankedCandidate, TourSnapshot
 from backend.workflows import TourWorkflows
 
@@ -108,7 +111,6 @@ def test_query_accepts_country_expansion_as_any_catalog_destination(settings):
     ))
 
     assert len(labels) >= 2
-    assert {item["hard_state"] for item in result["candidates"]} == {"pass"}
     assert {item["tour_id"] for item in result["comparison"]["ranked"]} == {
         "dlv-dalat-3n", "vtr-phuquoc-4n", "sgt-halong-3n",
     }
@@ -151,7 +153,7 @@ def test_limited_comparison_shows_each_tour_once_across_departure_offers(setting
     assert {item.offer_id for item in limited.evaluations} == {"a1", "b1", "c1"}
 
 
-def test_query_returns_tri_state_and_only_catalog_candidates(settings):
+def test_query_keeps_candidate_payload_bounded(settings):
     tools = _tools(settings)
     result = json.loads(tools.query_tours(
         raw_text="Ngân sách tối đa 10 triệu VND",
@@ -161,29 +163,24 @@ def test_query_returns_tri_state_and_only_catalog_candidates(settings):
             "strength": "hard", "quote": "10 triệu VND",
         }],
     ))
-    candidates = result["candidates"]
-    assert candidates
-    assert {item["hard_state"] for item in candidates} == {"pass", "unknown", "fail"}
-    assert {item["tour_id"] for item in candidates} == {
-        "dlv-dalat-3n", "vtr-phuquoc-4n", "sgt-halong-3n",
-    }
-    assert all(set(item) == {"tour_id", "offer_id", "hard_state", "reason_codes"}
-               for item in candidates)
+    assert "candidates" not in result
+    assert result["scanned_tours"] == 3
+    assert result["comparison"]["candidates_considered"] == 3
     assert result["comparison"]["ranked"]
 
 
 def test_score_soft_accepts_verbatim_quote_for_hard_pass_offer(settings):
     tools = _tools(settings)
     query = json.loads(tools.query_tours(**_phu_requirement()))
-    candidate = next(item for item in query["candidates"] if item["hard_state"] == "pass")
-    result = json.loads(tools.score_soft(query["requirement"], [{
+    review = query["soft_review"]
+    candidate = review["candidates"][0]
+    result = json.loads(tools.score_soft(review["context_id"], [{
         "offer_id": candidate["offer_id"],
         "condition_id": "s1",
         "verdict": "fit",
         "quote": "VinWonders",
         "reason": "Có điểm vui chơi VinWonders trong lịch trình.",
     }]))
-    assert result["accepted_verdicts"] == 1
     evaluation = next(
         item for item in result["comparison"]["evaluations"]
         if item["offer_id"] == candidate["offer_id"] and item["condition_id"] == "s1"
@@ -195,8 +192,9 @@ def test_score_soft_accepts_verbatim_quote_for_hard_pass_offer(settings):
 def test_score_soft_rejects_quote_not_present_verbatim(settings):
     tools = _tools(settings)
     query = json.loads(tools.query_tours(**_phu_requirement()))
-    candidate = next(item for item in query["candidates"] if item["hard_state"] == "pass")
-    result = json.loads(tools.score_soft(query["requirement"], [{
+    review = query["soft_review"]
+    candidate = review["candidates"][0]
+    result = json.loads(tools.score_soft(review["context_id"], [{
         "offer_id": candidate["offer_id"],
         "condition_id": "s1",
         "verdict": "fit",
@@ -214,18 +212,16 @@ def test_score_soft_rejects_quote_not_present_verbatim(settings):
 def test_score_soft_does_not_accept_verdict_for_hard_rejected_offer(settings):
     tools = _tools(settings)
     query = json.loads(tools.query_tours(**_phu_requirement()))
-    result = json.loads(tools.score_soft(query["requirement"], [{
-        "offer_id": "sgt-halong-3n-20261227",
-        "condition_id": "s1",
-        "verdict": "fit",
-        "quote": "Ngày 2: Vịnh Lan Hạ",
-        "reason": "Có hoạt động tham quan trên vịnh.",
-    }]))
-    assert result["accepted_verdicts"] == 0
-    assert all(
-        not (item["offer_id"] == "sgt-halong-3n-20261227" and item["condition_id"] == "s1")
-        for item in result["comparison"]["evaluations"]
-    )
+    review = query["soft_review"]
+    with pytest.raises(AppError) as error:
+        tools.score_soft(review["context_id"], [{
+            "offer_id": "sgt-halong-3n-20261227",
+            "condition_id": "s1",
+            "verdict": "fit",
+            "quote": "Ngày 2: Vịnh Lan Hạ",
+            "reason": "Có hoạt động tham quan trên vịnh.",
+        }])
+    assert error.value.code == "SOFT_BATCH_INCOMPLETE"
 
 
 def test_relax_removes_only_the_requested_hard_condition(settings):

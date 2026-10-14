@@ -60,6 +60,12 @@ export interface CurrentRequirement {
   missing: string[];
   raw_text: string;
   travelers: number;
+  ranking?: {
+    order_by: {
+      field: 'price' | 'departure_date' | 'duration_days' | 'tour_name' | 'soft_fit';
+      direction: 'asc' | 'desc';
+    }[];
+  } | null;
 }
 
 export interface CurrentOffer {
@@ -122,6 +128,7 @@ export interface CurrentComparison {
     benefits: string[];
   };
   candidates_considered: number;
+  ranking_currencies?: string[];
 }
 
 export interface CurrentHistoryItem {

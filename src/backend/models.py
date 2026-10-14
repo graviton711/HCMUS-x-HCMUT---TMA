@@ -11,6 +11,8 @@ State = Literal["pass", "fail", "unknown"]
 Strength = Literal["hard", "soft"]
 PriceBasis = Literal["exact", "from", "contact"]
 Freshness = Literal["fresh", "stale", "unknown"]
+RankingField = Literal["price", "departure_date", "duration_days", "tour_name", "soft_fit"]
+SortDirection = Literal["asc", "desc"]
 
 
 def uid(prefix: str) -> str:
@@ -26,12 +28,22 @@ class Condition(BaseModel):
     quote: str = ""
 
 
+class RankingKey(BaseModel):
+    field: RankingField
+    direction: SortDirection
+
+
+class RankingSpec(BaseModel):
+    order_by: list[RankingKey] = Field(min_length=1, max_length=5)
+
+
 class Requirement(BaseModel):
     id: str
     conditions: list[Condition] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
     raw_text: str = ""
     travelers: int = 1
+    ranking: RankingSpec | None = None
 
     def hard(self) -> list[Condition]:
         return [c for c in self.conditions if c.strength == "hard"]
@@ -119,6 +131,7 @@ class Comparison(BaseModel):
     evaluations: list[Evaluation] = Field(default_factory=list)
     analysis: Analysis = Field(default_factory=Analysis)
     candidates_considered: int = 0
+    ranking_currencies: list[str] = Field(default_factory=list)
 
 
 class TourRow(BaseModel):

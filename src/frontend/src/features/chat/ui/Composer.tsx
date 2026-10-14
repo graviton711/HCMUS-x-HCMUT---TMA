@@ -5,12 +5,16 @@ import styles from './chat.module.css';
 
 export function Composer({
   busy,
+  canStop = false,
   onSend,
+  onStop,
   size = 'regular',
   hint,
 }: {
   busy: boolean;
+  canStop?: boolean;
   onSend: (text: string) => void;
+  onStop?: () => void;
   size?: 'regular' | 'large';
   hint?: [string, string];
 }) {
@@ -62,13 +66,17 @@ export function Composer({
         </span>
         <button
           type="button"
-          className={styles['composer-submit']}
-          aria-label={t('Gửi', 'Send')}
-          disabled={!ready}
-          onClick={submit}
+          className={`${styles['composer-submit']} ${canStop ? styles['composer-stop'] : ''}`}
+          data-action={canStop ? 'stop' : 'send'}
+          aria-label={canStop ? t('Dừng', 'Stop') : t('Gửi', 'Send')}
+          title={canStop ? t('Dừng lượt tìm', 'Stop this response') : undefined}
+          disabled={canStop ? !onStop : !ready}
+          onClick={canStop ? onStop : submit}
         >
-          <span className="sr-only">{t('Tìm tour', 'Find tours')}</span>
-          <Icon name="arrow" size={17} />
+          <span className="sr-only">
+            {canStop ? t('Dừng lượt tìm', 'Stop response') : t('Tìm tour', 'Find tours')}
+          </span>
+          <Icon name={canStop ? 'stop' : 'arrow'} size={17} />
         </button>
       </div>
     </div>

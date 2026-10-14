@@ -78,6 +78,12 @@ export function Thread({
                   </ReactMarkdown>
                 </motion.div>
               );
+            case 'notice':
+              return (
+                <motion.p key={message.id} {...rise} className={styles['msg-notice']}>
+                  {message.text}
+                </motion.p>
+              );
             case 'choice':
               return (
                 <motion.section key={message.id} {...rise} className={styles.choice}>
@@ -97,8 +103,15 @@ export function Thread({
                 .reverse()
                 .find((tool) => tool.status === 'running');
               const failedSteps = message.tools.filter((tool) => tool.status === 'error').length;
+              const cancelledSteps = message.tools.filter((tool) => tool.status === 'cancelled').length;
               const isCurrentActivity = busy && message.id === currentActivityId;
-              const state = isCurrentActivity ? 'running' : failedSteps > 0 ? 'error' : 'completed';
+              const state = isCurrentActivity
+                ? 'running'
+                : failedSteps > 0
+                  ? 'error'
+                  : cancelledSteps > 0
+                    ? 'cancelled'
+                    : 'completed';
               const summary = isCurrentActivity
                 ? activeTool
                   ? activeTool.message ||
@@ -109,7 +122,9 @@ export function Thread({
                       ]),
                     )
                   : t('Đang tổng hợp kết quả', 'Putting the results together')
-                : failedSteps > 0
+                : cancelledSteps > 0
+                  ? t('Đã dừng lượt tìm', 'Search stopped')
+                  : failedSteps > 0
                   ? t(
                       `Có ${failedSteps} bước tra cứu chưa hoàn tất`,
                       `${failedSteps} search step${failedSteps === 1 ? '' : 's'} did not complete`,
@@ -143,6 +158,8 @@ export function Thread({
                                 ? styles['dot-active']
                                 : tool.status === 'error'
                                   ? styles['dot-error']
+                                  : tool.status === 'cancelled'
+                                    ? styles['dot-cancelled']
                                   : styles['dot-done']
                             }`}
                             aria-hidden="true"
@@ -161,7 +178,9 @@ export function Thread({
                               ? t('Đang chạy', 'Working')
                               : tool.status === 'error'
                                 ? t('Chưa hoàn tất', 'Incomplete')
-                                : t('Hoàn tất', 'Done')}
+                                : tool.status === 'cancelled'
+                                  ? t('Đã dừng', 'Stopped')
+                                  : t('Hoàn tất', 'Done')}
                           </span>
                         </li>
                       ))}
@@ -185,19 +204,22 @@ export function Thread({
               );
             case 'error':
               return (
-                <motion.div key={message.id} {...rise} className={styles['msg-error']} role="alert">
+                <motion.div
+                  key={message.id}
+                  {...rise}
+                  className={styles['msg-error']}
+                  data-expired={message.expired || undefined}
+                  role="alert"
+                >
                   <span className={styles['error-copy']}>
-                    <strong className={styles['error-title']}>
-                      {message.expired
-                        ? t('Phiên khách đã hết hạn', 'Guest session expired')
-                        : t('Chưa thể hoàn tất lượt tìm tour', 'The search did not finish')}
-                    </strong>
+                    {message.expired && (
+                      <strong className={styles['error-title']}>
+                        {t('Phiên hết hạn.', 'Session expired.')}
+                      </strong>
+                    )}
                     <span className={styles['error-description']}>
                       {message.expired
-                        ? t(
-                            'Bản nháp vẫn còn. Tạo phiên mới để tiếp tục.',
-                            'Your draft is still here. Start a new session to continue.',
-                          )
+                        ? t('Bản nháp vẫn còn.', 'Your draft is still here.')
                         : message.text}
                     </span>
                   </span>
