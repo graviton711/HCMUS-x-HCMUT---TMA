@@ -68,6 +68,24 @@ def test_form_adapter_uses_explicit_fields_only():
     ]
 
 
+def test_reviewed_soft_weights_must_total_100():
+    raw = "thích thiên nhiên và biển"
+    conditions = [
+        {**condition("preference", "thiên nhiên", "thiên nhiên", strength="soft", condition_id="s1"),
+         "weight_percent": 65},
+        {**condition("preference", "biển", "biển", strength="soft", condition_id="s2"),
+         "weight_percent": 35},
+    ]
+    requirement = validate_requirement(raw, conditions, require_weights=True)
+    assert sum(item.weight_percent or 0 for item in requirement.soft()) == 100
+
+    with pytest.raises(AppError, match="exactly 100"):
+        validate_requirement(raw, [
+            {**conditions[0], "weight_percent": 70},
+            {**conditions[1], "weight_percent": 20},
+        ], require_weights=True)
+
+
 def test_lunar_date_requires_valid_round_trip():
     assert resolve_lunar({"year": 2026, "month": 12, "day": 27}) == "2027-02-03"
     assert resolve_lunar({"year": 2027, "month": 1, "day": 4}) == "2027-02-09"

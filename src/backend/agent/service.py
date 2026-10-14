@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import AsyncIterator
+from secrets import token_hex
 from typing import Any
 
 from backend.agent.results import json_candidates, limit_comparison
@@ -72,8 +73,66 @@ class AgentService:
             async for event in self._message_events(owner_id, local_id, message.strip()):
                 yield event
 
+    async def decision(
+        self, owner_id: str, local_id: str, requirement: Requirement
+    ) -> dict[str, Any]:
+        response: dict[str, Any] | None = None
+        async for event in self.stream_decision(owner_id, local_id, requirement):
+            if event.get("type") == "result" and isinstance(event.get("response"), dict):
+                response = event["response"]
+        if response is None:
+            raise AppError(
+                "OPENCODE_RESPONSE_EMPTY",
+                "OpenCode completed without returning a decision comparison.",
+                502,
+                retryable=True,
+            )
+        return response
+
+    async def stream_decision(
+        self, owner_id: str, local_id: str, requirement: Requirement
+    ) -> AsyncIterator[dict[str, Any]]:
+        if not _LOCAL_ID.fullmatch(local_id):
+            raise AppError("AGENT_SESSION_INVALID", "Invalid agent session ID.", 400)
+        decision_run_id = f"dec_{token_hex(16)}"
+        payload = requirement.model_dump_json(exclude_none=True)
+        message = (
+            "[REVIEWED DECISION RUN]\n"
+            "The user has reviewed and confirmed this requirement. Run it exactly as given; "
+            "call query_tours with the same requirement_id and fields plus the exact "
+            "decision_run_id below, then evaluate every soft-review batch using score_soft. "
+            "The final tool call stores the comparison for the backend; do not repeat its full "
+            "JSON or claim completion before the tools finish. "
+            "Do not ask for more information unless a tool reports a real validation error.\n"
+            f"DECISION_RUN_ID={decision_run_id}\n"
+            f"REQUIREMENT_JSON={payload}"
+        )
+        key = (owner_id, local_id)
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            try:
+                async for event in self._message_events(
+                    owner_id,
+                    local_id,
+                    message,
+                    expected_requirement=requirement,
+                    decision_run_id=decision_run_id,
+                ):
+                    yield event
+            finally:
+                try:
+                    self.store.delete_decision_result(decision_run_id)
+                except Exception:
+                    # Best-effort cleanup must not replace a completed response or cancellation.
+                    pass
+
     async def _message_events(
-        self, owner_id: str, local_id: str, message: str
+        self,
+        owner_id: str,
+        local_id: str,
+        message: str,
+        expected_requirement: Requirement | None = None,
+        decision_run_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         assistant_text: list[str] = []
         tool_calls: list[dict[str, str]] = []
@@ -83,6 +142,7 @@ class AgentService:
         choices: dict[str, Any] | None = None
         final_requirement: Requirement | None = None
         final_comparison: Comparison | None = None
+        requirement_draft: Requirement | None = None
 
         try:
             session_id = self.store.get_agent_session(local_id, owner_id)
@@ -159,14 +219,38 @@ class AgentService:
                             "options": payload["options"],
                             "allow_custom": bool(payload.get("allow_custom", True)),
                         }
+                    if tool_name == "draft_requirement":
+                        draft = _requirement_draft(payload)
+                        if draft is not None:
+                            requirement_draft = draft
                     result = _comparison_result(payload)
                     if result is None:
                         continue
                     requirement, comparison = result
+                    if expected_requirement is not None and requirement != expected_requirement:
+                        raise AppError(
+                            "DECISION_REQUIREMENT_MISMATCH",
+                            "The agent returned a comparison for different criteria. Please run the reviewed brief again.",
+                            502,
+                        )
                     final_requirement = requirement
                     final_comparison = comparison
-        except AppError:
-            raise
+        except Exception:
+            if expected_requirement is None or decision_run_id is None:
+                raise
+            persisted = self.store.pop_decision_result(decision_run_id)
+            if persisted is None:
+                raise
+            final_requirement, final_comparison = self._validate_decision_result(
+                persisted, expected_requirement
+            )
+
+        if expected_requirement is not None and decision_run_id is not None and final_comparison is None:
+            persisted = self.store.pop_decision_result(decision_run_id)
+            if persisted is not None:
+                final_requirement, final_comparison = self._validate_decision_result(
+                    persisted, expected_requirement
+                )
 
         response: dict[str, Any] = {
             "assistant_text": "".join(assistant_text).strip(),
@@ -177,6 +261,10 @@ class AgentService:
         if final_requirement is not None:
             self.store.save_requirement(final_requirement, owner_id)
             response["requirement"] = final_requirement.model_dump(mode="json")
+        elif requirement_draft is not None:
+            self.store.save_requirement(requirement_draft, owner_id)
+            response["requirement"] = requirement_draft.model_dump(mode="json")
+            response["decision_draft"] = requirement_draft.model_dump(mode="json")
         if final_comparison is not None:
             if final_requirement is None:
                 final_requirement = final_comparison.requirement
@@ -185,6 +273,13 @@ class AgentService:
             final_comparison = limit_comparison(final_comparison)
             self.store.save_comparison(final_comparison, owner_id)
             response["comparison"] = final_comparison.model_dump(mode="json")
+        if expected_requirement is not None and final_comparison is None:
+            raise AppError(
+                "DECISION_INCOMPLETE",
+                "The agent did not complete the reviewed tour comparison.",
+                502,
+                retryable=True,
+            )
         if not any((response["assistant_text"], response["tool_calls"], choices, final_requirement,
                     final_comparison)):
             raise AppError(
@@ -200,6 +295,18 @@ class AgentService:
                 "Tôi chưa lấy được kết quả vừa rồi. Bạn thử gửi lại nhé."
             )
         yield {"type": "result", "response": response}
+
+    @staticmethod
+    def _validate_decision_result(
+        comparison: Comparison, expected_requirement: Requirement
+    ) -> tuple[Requirement, Comparison]:
+        if comparison.requirement != expected_requirement:
+            raise AppError(
+                "DECISION_REQUIREMENT_MISMATCH",
+                "The completed comparison does not match the reviewed criteria.",
+                502,
+            )
+        return comparison.requirement, comparison
 
 
 def _tool_name(value: str) -> str:
@@ -230,14 +337,6 @@ def _tool_progress_message(name: str, value: dict[str, Any]) -> str:
         verdicts = value.get("verdicts")
         count = len(verdicts) if isinstance(verdicts, list) else 0
         return f"Đánh giá mức phù hợp qua {count} lượt đối chiếu" if count else "Đánh giá mức độ phù hợp"
-    if name == "relax_criterion":
-        requirement = value.get("requirement")
-        conditions = requirement.get("conditions") if isinstance(requirement, dict) else None
-        condition_id = value.get("condition_id")
-        condition = next((item for item in conditions if isinstance(item, dict)
-                          and item.get("id") == condition_id), None) if isinstance(conditions, list) else None
-        summary = _condition_activity(condition) if condition else "một điều kiện"
-        return f"Tìm lại sau khi nới {summary}"
     if name == "clarify_date":
         calendar = value.get("calendar")
         year, month, day = (value.get(field) for field in ("year", "month", "day"))
@@ -263,7 +362,7 @@ def _condition_activity(value: Any) -> str:
         "accommodation": "lưu trú",
         "preference": "sở thích",
     }
-    label = labels.get(field)
+    label = labels.get(field) if isinstance(field, str) else None
     if label is None:
         return ""
     raw = value.get("value")
@@ -308,9 +407,29 @@ def _comparison_result(value: dict[str, Any]) -> tuple[Requirement, Comparison] 
         return None
     if comparison.requirement.id != requirement.id or comparison.requirement.raw_text != requirement.raw_text:
         return None
-    if len({tour.id for tour in comparison.tour_snapshots}) > 5:
+    max_snapshots = 20 if comparison.decision_views else 5
+    if len({tour.id for tour in comparison.tour_snapshots}) > max_snapshots:
+        return None
+    if any(len(view.candidates) > 5 for view in comparison.decision_views):
         return None
     return requirement, comparison
+
+
+def _requirement_draft(value: dict[str, Any]) -> Requirement | None:
+    raw = value.get("requirement_draft")
+    if not isinstance(raw, dict):
+        return None
+    try:
+        requirement = Requirement.model_validate(raw)
+    except (TypeError, ValueError):
+        return None
+    soft = requirement.soft()
+    if soft and (
+        any(condition.weight_percent is None for condition in soft)
+        or sum(condition.weight_percent or 0 for condition in soft) != 100
+    ):
+        return None
+    return requirement
 
 
 def _deduplicate_calls(values: list[dict[str, str]]) -> list[dict[str, str]]:

@@ -26,6 +26,7 @@ class Condition(BaseModel):
     value: Any = None
     strength: Strength = "hard"
     quote: str = ""
+    weight_percent: int | None = Field(default=None, ge=0, le=100)
 
 
 class RankingKey(BaseModel):
@@ -115,6 +116,13 @@ class RankedCandidate(BaseModel):
     score: float = 0.0
 
 
+class DecisionView(BaseModel):
+    kind: Literal["cheapest", "best_fit", "balanced"]
+    candidates: list[RankedCandidate] = Field(default_factory=list, max_length=5)
+    currencies: list[str] = Field(default_factory=list)
+    note: str = ""
+
+
 class Analysis(BaseModel):
     hidden_costs: list[str] = Field(default_factory=list)
     conditions: list[str] = Field(default_factory=list)
@@ -132,6 +140,7 @@ class Comparison(BaseModel):
     analysis: Analysis = Field(default_factory=Analysis)
     candidates_considered: int = 0
     ranking_currencies: list[str] = Field(default_factory=list)
+    decision_views: list[DecisionView] = Field(default_factory=list)
 
 
 class TourRow(BaseModel):

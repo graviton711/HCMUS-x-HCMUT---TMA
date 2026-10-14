@@ -11,6 +11,7 @@ from backend.models import (
     Analysis,
     Comparison,
     Condition,
+    DecisionView,
     Evaluation,
     OfferSnapshot,
     RankedCandidate,
@@ -245,55 +246,24 @@ def soft_review_candidates(
     req: Requirement,
     tours: list[TourSnapshot],
     evaluations: list[Evaluation],
-    limit: int = 5,
+    limit: int | None = None,
 ) -> list[tuple[TourSnapshot, str]]:
-    """Return every distinct tour that may enter the visible top N after soft scoring.
+    """Return one representative passing offer for every tour in the scan.
 
-    Candidates are first grouped by the ordered keys before soft_fit. All tours in
-    the boundary group are included so soft scoring cannot change the top-N cutoff.
+    Preference evidence belongs to the tour, not to a pre-ranked top-N slice.
+    Every hard-pass tour must be scored before weighted views can be computed.
+    ``limit`` remains accepted for callers from the previous interface but is
+    intentionally ignored.
     """
-    order = _ranking_order(req)
-    soft_index = next((i for i, key in enumerate(order) if key.field == "soft_fit"), None)
-    if soft_index is None:
-        return []
-    prefix = order[:soft_index]
     passing = passing_offers(req, tours, evaluations)
     if not passing:
         return []
-
-    offers_by_id = {
-        offer.id: offer
-        for tour, offer_id in passing
-        for offer in tour.offers
-        if offer.id == offer_id
-    }
-    best_by_tour: dict[str, tuple[TourSnapshot, str]] = {}
-    for pair in passing:
-        tour, offer_id = pair
-        prior = best_by_tour.get(tour.id)
-        if prior is None or _compare_candidates(pair, prior, prefix, {}, offers_by_id) < 0:
-            best_by_tour[tour.id] = pair
-
-    groups: dict[tuple[object, ...], list[tuple[TourSnapshot, str]]] = {}
-    for pair in best_by_tour.values():
-        tour, offer_id = pair
-        offer = offers_by_id[offer_id]
-        key = tuple(_group_value(item.field, tour, offer) for item in prefix)
-        groups.setdefault(key, []).append(pair)
-
-    group_items = list(groups.values())
-    group_items.sort(key=cmp_to_key(
-        lambda left, right: _compare_candidates(left[0], right[0], prefix, {}, offers_by_id)
-    ))
-    selected: list[tuple[TourSnapshot, str]] = []
-    for group in group_items:
-        group.sort(key=cmp_to_key(
-            lambda left, right: _compare_candidates(left, right, prefix, {}, offers_by_id)
-        ))
-        selected.extend(group)
-        if len(selected) >= limit:
-            break
-    return selected
+    representative: dict[str, tuple[TourSnapshot, str]] = {}
+    for tour, offer_id in passing:
+        previous = representative.get(tour.id)
+        if previous is None or offer_id < previous[1]:
+            representative[tour.id] = (tour, offer_id)
+    return [representative[key] for key in sorted(representative)]
 
 
 def _ranking_order(req: Requirement) -> list[RankingKey]:
@@ -310,9 +280,155 @@ def _soft_fit_count(
     soft_verdicts: dict[tuple[str, str], tuple[State, str, str]],
 ) -> int:
     return sum(
-        soft_verdicts.get((offer_id, condition.id), ("unknown", "", ""))[0] == "pass"
+        (condition.weight_percent if condition.weight_percent is not None else 1)
         for condition in req.soft()
+        if soft_verdicts.get((offer_id, condition.id), ("unknown", "", ""))[0] == "pass"
     )
+
+
+def _decision_views(
+    req: Requirement,
+    surviving: list[tuple[TourSnapshot, str]],
+    verdicts: dict[tuple[str, str], tuple[State, str, str]],
+) -> list[DecisionView]:
+    fit_by_offer = {
+        offer_id: _soft_fit_count(req, offer_id, verdicts)
+        for _, offer_id in surviving
+    }
+    exact = [
+        (tour, offer)
+        for tour, offer_id in surviving
+        for offer in tour.offers
+        if offer.id == offer_id and offer.price is not None
+        and offer.price_basis == "exact" and offer.currency.strip()
+    ]
+
+    cheapest_rows: list[tuple[TourSnapshot, OfferSnapshot]] = []
+    cheapest_by_currency: dict[str, list[tuple[TourSnapshot, OfferSnapshot]]] = {}
+    for tour, offer in exact:
+        cheapest_by_currency.setdefault(offer.currency.upper(), []).append((tour, offer))
+    for currency in sorted(cheapest_by_currency):
+        cheapest_by_currency[currency].sort(
+            key=lambda pair: (
+                pair[1].price,
+                -fit_by_offer[pair[1].id],
+                pair[0].id,
+                pair[1].id,
+            ),
+        )
+        cheapest_rows.extend(cheapest_by_currency[currency])
+    cheapest: list[tuple[TourSnapshot, OfferSnapshot]] = []
+    seen_tours: set[str] = set()
+
+    def add_unique(rows: list[tuple[TourSnapshot, OfferSnapshot]], limit: int = 5) -> None:
+        for pair in rows:
+            if pair[0].id in seen_tours:
+                continue
+            cheapest.append(pair)
+            seen_tours.add(pair[0].id)
+            if len(cheapest) == limit:
+                return
+
+    # Show a lowest-price representative for each currency before adding more
+    # options from any one currency, so the preview does not imply a global order.
+    add_unique([rows[0] for _, rows in sorted(cheapest_by_currency.items()) if rows])
+    add_unique(cheapest_rows)
+    cheapest_currencies = sorted({offer.currency.upper() for _, offer in cheapest})
+
+    best_offer_by_tour: dict[str, tuple[TourSnapshot, OfferSnapshot]] = {}
+    for tour, offer_id in surviving:
+        offer = next(item for item in tour.offers if item.id == offer_id)
+        prior = best_offer_by_tour.get(tour.id)
+        if prior is None or offer.id < prior[1].id:
+            best_offer_by_tour[tour.id] = (tour, offer)
+    best_fit_rows = sorted(
+        best_offer_by_tour.values(),
+        key=lambda pair: (-fit_by_offer[pair[1].id], pair[0].id, pair[1].id),
+    )[:5]
+    best_fit_currencies = sorted({
+        offer.currency.upper() for _, offer in best_fit_rows if offer.currency.strip()
+    })
+
+    per_currency_tour: dict[tuple[str, str], tuple[TourSnapshot, OfferSnapshot]] = {}
+    for tour, offer in exact:
+        key = (offer.currency.upper(), tour.id)
+        previous = per_currency_tour.get(key)
+        if previous is None or (offer.price, offer.id) < (previous[1].price, previous[1].id):
+            per_currency_tour[key] = (tour, offer)
+    frontier: list[tuple[TourSnapshot, OfferSnapshot]] = []
+    for currency in sorted({key[0] for key in per_currency_tour}):
+        rows = [pair for key, pair in per_currency_tour.items() if key[0] == currency]
+        for tour, offer in rows:
+            score = fit_by_offer[offer.id]
+            dominated = any(
+                other_offer.price <= offer.price
+                and fit_by_offer[other_offer.id] >= score
+                and (other_offer.price < offer.price or fit_by_offer[other_offer.id] > score)
+                for other_tour, other_offer in rows
+                if other_tour.id != tour.id
+            )
+            if not dominated:
+                frontier.append((tour, offer))
+    frontier.sort(key=lambda pair: (
+        pair[1].currency.upper(), -fit_by_offer[pair[1].id], pair[1].price, pair[0].id
+    ))
+    balanced: list[tuple[TourSnapshot, OfferSnapshot]] = []
+    seen_balanced: set[str] = set()
+
+    def add_balanced(rows: list[tuple[TourSnapshot, OfferSnapshot]]) -> None:
+        for pair in rows:
+            if pair[0].id in seen_balanced:
+                continue
+            balanced.append(pair)
+            seen_balanced.add(pair[0].id)
+            if len(balanced) == 5:
+                return
+
+    first_by_currency: dict[str, tuple[TourSnapshot, OfferSnapshot]] = {}
+    for pair in frontier:
+        first_by_currency.setdefault(pair[1].currency.upper(), pair)
+    add_balanced([first_by_currency[key] for key in sorted(first_by_currency)])
+    add_balanced(frontier)
+    balanced_currencies = sorted({offer.currency.upper() for _, offer in balanced})
+
+    def candidates(rows: list[tuple[TourSnapshot, OfferSnapshot]]) -> list[RankedCandidate]:
+        return [RankedCandidate(
+            tour_id=tour.id,
+            offer_id=offer.id,
+            score=float(fit_by_offer[offer.id]),
+        ) for tour, offer in rows]
+
+    soft = req.soft()
+    weights_valid = not soft or (
+        all(condition.weight_percent is not None for condition in soft)
+        and sum(condition.weight_percent or 0 for condition in soft) == 100
+    )
+    if not weights_valid:
+        return []
+    best_fit_note = (
+        "Chưa có sở thích mềm; chưa thể xếp mức độ phù hợp."
+        if not soft else "Điểm là tổng trọng số của các sở thích được đánh giá là phù hợp."
+    )
+    return [
+        DecisionView(
+            kind="cheapest",
+            candidates=candidates(cheapest),
+            currencies=cheapest_currencies,
+            note="Chỉ so sánh giá exact trong cùng đơn vị tiền tệ.",
+        ),
+        DecisionView(
+            kind="best_fit",
+            candidates=candidates(best_fit_rows) if soft else [],
+            currencies=best_fit_currencies,
+            note=best_fit_note,
+        ),
+        DecisionView(
+            kind="balanced",
+            candidates=candidates(balanced),
+            currencies=balanced_currencies,
+            note="Pareto giữa giá exact và điểm ưu tiên; giá chỉ so trong cùng đơn vị tiền tệ.",
+        ),
+    ]
 
 
 def _group_value(field: str, tour: TourSnapshot, offer: OfferSnapshot) -> RankValue | None:
@@ -470,4 +586,5 @@ def compare(
             if offer.id == offer_id and offer.price is not None
             and offer.price_basis != "contact" and offer.currency.strip()
         }),
+        decision_views=_decision_views(req, surviving, verdicts),
     )

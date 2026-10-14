@@ -107,6 +107,40 @@ class BaseStore:
     def get_comparison(self, cid: str, owner_session_id: str | None = None) -> Comparison:
         return Comparison.model_validate_json(self._load("comparison", cid, owner_session_id))
 
+    def save_decision_result(self, run_id: str, comparison: Comparison) -> None:
+        """Store a private MCP-to-API handoff under an opaque, one-run key."""
+        self._save("decision_result", run_id, comparison.model_dump_json(), run_id)
+
+    def pop_decision_result(self, run_id: str) -> Comparison | None:
+        rows = self._query(
+            self._sql(
+                f"SELECT payload FROM {self.records_table}"
+                " WHERE id = ? AND kind = 'decision_result' AND owner_session_id = ?"
+            ),
+            (run_id, run_id),
+        )
+        if not rows:
+            return None
+        self._execute(
+            self._sql(
+                f"DELETE FROM {self.records_table}"
+                " WHERE id = ? AND kind = 'decision_result' AND owner_session_id = ?"
+            ),
+            (run_id, run_id),
+        )
+        self._commit()
+        return Comparison.model_validate_json(str(rows[0][0]))
+
+    def delete_decision_result(self, run_id: str) -> None:
+        self._execute(
+            self._sql(
+                f"DELETE FROM {self.records_table}"
+                " WHERE id = ? AND kind = 'decision_result' AND owner_session_id = ?"
+            ),
+            (run_id, run_id),
+        )
+        self._commit()
+
     def create_agent_session(self, owner_session_id: str) -> str:
         local_id = f"agt_{uuid4().hex}"
         self._save("agent_session", local_id, json.dumps({"opencode_session_id": None}), owner_session_id)

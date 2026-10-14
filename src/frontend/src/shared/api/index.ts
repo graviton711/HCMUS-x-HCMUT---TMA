@@ -7,6 +7,7 @@ export type {
   CurrentAgentSession,
   CurrentCatalog,
   CurrentComparison,
+  CurrentDecisionView,
   CurrentCondition,
   CurrentEvaluation,
   CurrentHealth,

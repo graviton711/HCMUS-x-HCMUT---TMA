@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.agent.results import limit_comparison
 from backend.data.catalog import for_settings
+from backend.data.sessions import BaseStore, SessionStore
 from backend.decide.engine import compare, soft_review_candidates
 from backend.error_logging import log_app_error, log_unexpected_error
 from backend.errors import AppError
@@ -45,6 +46,12 @@ class QueryConditionInput(BaseModel):
     )
     strength: Literal["hard", "soft"] = Field(description="Whether this is a hard or soft condition.")
     quote: str = Field(description="Exact substring copied from raw_text that supports this condition.")
+    weight_percent: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="User-reviewed weight for a soft preference; all soft weights must total 100.",
+    )
 
 
 class RankingKeyInput(BaseModel):
@@ -85,6 +92,7 @@ class _RankingContext:
     comparison: Comparison
     candidates: list[tuple[TourSnapshot, str]]
     batches: list[list[tuple[TourSnapshot, str]]]
+    decision_run_id: str | None = None
     batch_index: int = 0
     verdicts: dict[tuple[str, str], tuple[State, str, str]] = field(default_factory=dict)
 
@@ -94,10 +102,17 @@ def _json(payload: Any) -> str:
 
 
 class AgentTools:
-    def __init__(self, settings: Settings, catalog: Any, workflows: TourWorkflows):
+    def __init__(
+        self,
+        settings: Settings,
+        catalog: Any,
+        workflows: TourWorkflows,
+        result_store: BaseStore | None = None,
+    ):
         self.settings = settings
         self.catalog = catalog
         self.workflows = workflows
+        self.result_store = result_store
         self._destination_names: dict[str, str] | None = None
         self._ranking_contexts: dict[str, _RankingContext] = {}
         self._ranking_context_lock = RLock()
@@ -159,9 +174,13 @@ class AgentTools:
         self,
         raw_text: str,
         conditions: list[QueryConditionInput],
+        decision_run_id: str,
         travelers: int = 1,
         ranking: QueryRankingInput | None = None,
+        requirement_id: str = "",
     ) -> str:
+        if not re.fullmatch(r"dec_[0-9a-f]{32}", decision_run_id):
+            raise AppError("DECISION_RUN_INVALID", "Invalid decision run ID.", 422)
         structured_conditions = [
             item.model_dump(mode="json")
             if isinstance(item, QueryConditionInput)
@@ -180,9 +199,53 @@ class AgentTools:
             structured_conditions,
             travelers,
             ranking_value,
+            requirement_id=requirement_id or None,
+            require_weights=True,
         )
         comparison = self.workflows.comparison(requirement, self.settings.supabase_scan_limit)
-        return self._comparison_payload(requirement, comparison)
+        return self._comparison_payload(
+            requirement, comparison, decision_run_id=decision_run_id or None
+        )
+
+    def draft_requirement(
+        self,
+        raw_text: str,
+        conditions: list[QueryConditionInput],
+        travelers: int = 1,
+        ranking: QueryRankingInput | None = None,
+    ) -> str:
+        """Validate a reviewable brief without reading the tour catalog."""
+        structured_conditions = [
+            item.model_dump(mode="json")
+            if isinstance(item, QueryConditionInput)
+            else QueryConditionInput.model_validate(item).model_dump(mode="json")
+            for item in conditions
+        ]
+        ranking_value = (
+            ranking.model_dump(mode="json")
+            if isinstance(ranking, QueryRankingInput)
+            else QueryRankingInput.model_validate(ranking).model_dump(mode="json")
+            if ranking is not None
+            else None
+        )
+        requirement = self.workflows.requirement(
+            raw_text, structured_conditions, travelers, ranking_value
+        )
+        soft = requirement.soft()
+        if soft:
+            base, remainder = divmod(100, len(soft))
+            weights = {
+                item.id: base + (1 if index < remainder else 0)
+                for index, item in enumerate(soft)
+            }
+            requirement = requirement.model_copy(update={
+                "conditions": [
+                    item.model_copy(update={"weight_percent": weights[item.id]})
+                    if item.strength == "soft" else item
+                    for item in requirement.conditions
+                ],
+            })
+        return _json({"requirement_draft": requirement.model_dump(mode="json")})
 
     def tour_detail(self, tour_id: str) -> str:
         tours = self.workflows.snapshots(self.settings.supabase_scan_limit)
@@ -252,10 +315,13 @@ class AgentTools:
 
             context.batch_index += 1
             if context.batch_index < len(context.batches):
-                return _json({
+                response: dict[str, Any] = {
                     "requirement": context.requirement.model_dump(mode="json"),
                     "soft_review": self._soft_review_payload(context),
-                })
+                }
+                if context.decision_run_id:
+                    response["decision_run_id"] = context.decision_run_id
+                return _json(response)
 
             comparison = compare(
                 context.requirement,
@@ -264,9 +330,13 @@ class AgentTools:
                 soft_verdicts=context.verdicts,
             )
             self._ranking_contexts.pop(context_id, None)
+            comparison = limit_comparison(comparison)
+            if context.decision_run_id:
+                self._save_decision_result(context.decision_run_id, comparison)
+                return _json(self._decision_receipt(context.decision_run_id, comparison))
             return _json({
                 "requirement": context.requirement.model_dump(mode="json"),
-                "comparison": limit_comparison(comparison).model_dump(mode="json"),
+                "comparison": comparison.model_dump(mode="json"),
                 "ranking_complete": True,
             })
 
@@ -296,7 +366,11 @@ class AgentTools:
             "batch_count": len(context.batches),
             "review_candidate_count": len(context.candidates),
             "soft_conditions": [
-                {"id": item.id, "preference": item.value}
+                {
+                    "id": item.id,
+                    "preference": item.value,
+                    "weight_percent": item.weight_percent,
+                }
                 for item in context.requirement.soft()
             ],
             "candidates": candidates,
@@ -307,6 +381,7 @@ class AgentTools:
         requirement: Requirement,
         comparison: Comparison,
         additional: dict[str, Any] | None = None,
+        decision_run_id: str | None = None,
     ) -> str:
         review_candidates = soft_review_candidates(
             requirement, comparison.tour_snapshots, comparison.evaluations
@@ -325,33 +400,39 @@ class AgentTools:
                 comparison=comparison,
                 candidates=review_candidates,
                 batches=batches,
+                decision_run_id=decision_run_id,
             )
             with self._ranking_context_lock:
                 self._ranking_contexts[context_id] = context
             payload["soft_review"] = self._soft_review_payload(context)
         else:
-            payload["comparison"] = limit_comparison(comparison).model_dump(mode="json")
+            comparison = limit_comparison(comparison)
+            if decision_run_id:
+                self._save_decision_result(decision_run_id, comparison)
+                return _json(self._decision_receipt(decision_run_id, comparison))
+            payload["comparison"] = comparison.model_dump(mode="json")
         if additional:
             payload.update(additional)
         return _json(payload)
 
-    def relax_criterion(self, requirement: dict[str, Any], condition_id: str) -> str:
-        req = _validate_requirement_object(self.workflows, requirement)
-        condition = next((item for item in req.hard() if item.id == condition_id), None)
-        if condition is None:
-            return _json({"error": "Only an existing hard condition can be relaxed."})
-        updated = self.workflows.requirement(
-            req.raw_text,
-            [item.model_dump(mode="json") for item in req.conditions if item.id != condition_id],
-            req.travelers,
-            req.ranking.model_dump(mode="json") if req.ranking else None,
-        )
-        comparison = self.workflows.comparison(updated, self.settings.supabase_scan_limit)
-        return self._comparison_payload(
-            updated,
-            comparison,
-            {"removed_condition": condition.model_dump(mode="json")},
-        )
+    def _save_decision_result(self, run_id: str, comparison: Comparison) -> None:
+        store = self.result_store or SessionStore(self.settings.database_url)
+        should_close = self.result_store is None
+        try:
+            store.save_decision_result(run_id, comparison)
+        finally:
+            if should_close:
+                store.close()
+
+    @staticmethod
+    def _decision_receipt(run_id: str, comparison: Comparison) -> dict[str, Any]:
+        return {
+            "decision_run_id": run_id,
+            "requirement_id": comparison.requirement.id,
+            "comparison_id": comparison.id,
+            "scanned_tours": comparison.candidates_considered,
+            "ranking_complete": True,
+        }
 
     def clarify_date(self, calendar: str, year: int, month: int, day: int, leap: bool = False) -> str:
         if calendar == "lunar":
@@ -364,15 +445,6 @@ class AgentTools:
         else:
             result = None
         return _json({"calendar": calendar, "iso_date": result, "valid": result is not None})
-
-
-def _validate_requirement_object(workflows: TourWorkflows, value: dict[str, Any]) -> Requirement:
-    return workflows.requirement(
-        str(value.get("raw_text", "")),
-        value.get("conditions"),
-        value.get("travelers", 1),
-        value.get("ranking"),
-    )
 
 
 def _is_iso_date(value: str) -> bool:
@@ -401,10 +473,10 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     server.tool()(_guard_tool("ask_choice", tools.ask_choice))
     server.tool()(_guard_tool("catalog_facets", tools.catalog_facets))
+    server.tool()(_guard_tool("draft_requirement", tools.draft_requirement))
     server.tool()(_guard_tool("query_tours", tools.query_tours))
     server.tool()(_guard_tool("tour_detail", tools.tour_detail))
     server.tool()(_guard_tool("score_soft", tools.score_soft))
-    server.tool()(_guard_tool("relax_criterion", tools.relax_criterion))
     server.tool()(_guard_tool("clarify_date", tools.clarify_date))
     return server
 

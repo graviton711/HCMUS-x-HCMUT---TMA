@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { CurrentComparison } from '../../../shared/api';
 import { PreferencesProvider } from '../../../shared/preferences';
@@ -55,6 +55,25 @@ const comparison = {
   candidates_considered: 1,
 } satisfies CurrentComparison;
 
+const decisionComparison = {
+  ...comparison,
+  decision_views: [
+    {
+      kind: 'cheapest' as const,
+      candidates: [{ tour_id: 'tour-a', offer_id: 'offer-a-1', score: 0 }],
+      currencies: ['VND'],
+      note: 'Only exact prices.',
+    },
+    { kind: 'best_fit' as const, candidates: [], currencies: [], note: 'Add a preference.' },
+    {
+      kind: 'balanced' as const,
+      candidates: [{ tour_id: 'tour-a', offer_id: 'offer-a-1', score: 0 }],
+      currencies: ['VND'],
+      note: 'Pareto options.',
+    },
+  ],
+} satisfies CurrentComparison;
+
 afterEach(cleanup);
 
 describe('ResultCards', () => {
@@ -67,5 +86,21 @@ describe('ResultCards', () => {
 
     expect(screen.getAllByRole('article')).toHaveLength(1);
     expect(screen.getByRole('status').textContent).toContain('1 tour đạt đủ');
+  });
+
+  it('renders the three explainable decision views from backend candidates', () => {
+    render(
+      <PreferencesProvider>
+        <ResultCards comparison={decisionComparison} busy={false} onRelax={() => {}} />
+      </PreferencesProvider>,
+    );
+
+    expect(screen.getByRole('tab', { name: /Giá thấp nhất/ }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByRole('tab', { name: /Hợp ưu tiên nhất/ })).toBeTruthy();
+    expect(screen.getByText('Tour Mộc Châu')).toBeTruthy();
+    expect(screen.getByText(/1 tour đã quét/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('tab', { name: /Cân bằng/ }));
+    expect(screen.getByText('Pareto options.')).toBeTruthy();
   });
 });

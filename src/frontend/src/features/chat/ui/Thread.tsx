@@ -2,17 +2,19 @@ import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ReactNode } from 'react';
-import type { CurrentComparison } from '../../../shared/api';
+import type { CurrentComparison, CurrentRequirement } from '../../../shared/api';
 import { usePreferences } from '../../../shared/preferences';
 import type { ChatMsg } from '../model/types';
 import { QuickReplies } from './QuickReplies';
 import { rise } from './motion';
 import { ResultCards } from './ResultCards';
+import { DecisionBrief } from './DecisionBrief';
 import styles from './chat.module.css';
 
 const TOOL_LABEL: Record<string, [string, string]> = {
   ask_choice: ['Làm rõ lựa chọn', 'Clarify a choice'],
   catalog_facets: ['Kiểm tra lựa chọn có trong dữ liệu', 'Check catalog options'],
+  draft_requirement: ['Chuẩn bị bản tiêu chí để bạn xem', 'Prepare criteria for review'],
   query_tours: ['Đối chiếu tour theo điều kiện', 'Filter tours by requirements'],
   tour_detail: ['Đọc chi tiết và nguồn dữ kiện', 'Read tour details and evidence'],
   score_soft: ['Đánh giá mức độ phù hợp', 'Assess preference fit'],
@@ -29,6 +31,8 @@ export function Thread({
   renderRecovery,
   isSavedTour,
   onToggleSavedTour,
+  onUpdateDecisionDraft,
+  onRunDecision,
 }: {
   messages: ChatMsg[];
   busy: boolean;
@@ -38,6 +42,8 @@ export function Thread({
   renderRecovery?: (expired: boolean) => ReactNode;
   isSavedTour?: (tourId: string, offerId: string) => boolean;
   onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
+  onUpdateDecisionDraft?: (id: string, requirement: CurrentRequirement) => void;
+  onRunDecision?: (id: string, requirement: CurrentRequirement) => void;
 }) {
   const { t } = usePreferences();
   const latestActivityId = [...messages]
@@ -199,6 +205,17 @@ export function Thread({
                     isSavedTour={isSavedTour}
                     onToggleSavedTour={onToggleSavedTour}
                     onAsk={onSend}
+                  />
+                </motion.div>
+              );
+            case 'decision_draft':
+              return (
+                <motion.div key={message.id} {...rise}>
+                  <DecisionBrief
+                    message={message}
+                    busy={busy}
+                    onChange={(requirement) => onUpdateDecisionDraft?.(message.id, requirement)}
+                    onRun={(requirement) => onRunDecision?.(message.id, requirement)}
                   />
                 </motion.div>
               );

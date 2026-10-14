@@ -7,6 +7,7 @@ import {
   type CurrentAgentProgressEvent,
   type CurrentAgentResponse,
   type CurrentComparison,
+  type CurrentRequirement,
 } from '../../../shared/api';
 import { accessFor, isSessionExpired } from '../../../features/session-history';
 import { sessionTitle } from '../../../shared/lib';
@@ -17,6 +18,23 @@ const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `msg-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+
+function withEqualSoftWeights(requirement: CurrentRequirement): CurrentRequirement {
+  const soft = requirement.conditions.filter((condition) => condition.strength === 'soft');
+  if (!soft.length || soft.every((condition) => typeof condition.weight_percent === 'number'))
+    return requirement;
+  const base = Math.floor(100 / soft.length);
+  const remainder = 100 % soft.length;
+  const weights = new Map(soft.map((condition, index) => [condition.id, base + Number(index < remainder)]));
+  return {
+    ...requirement,
+    conditions: requirement.conditions.map((condition) =>
+      condition.strength === 'soft'
+        ? { ...condition, weight_percent: weights.get(condition.id) ?? base }
+        : condition,
+    ),
+  };
+}
 
 function isChatMsg(value: unknown): value is ChatMsg {
   return validChatMsg(value);
@@ -59,13 +77,14 @@ export function useChat(
   const [phase, setPhase] = useState<ChatPhase>('idle');
   const [activeToolActivityId, setActiveToolActivityId] = useState<string | null>(null);
   const [initialSendPending, setInitialSendPending] = useState(false);
-  const [failedStep, setFailedStep] = useState<'init' | 'message' | null>(null);
+  const [failedStep, setFailedStep] = useState<'init' | 'message' | 'decision' | null>(null);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [reload, setReload] = useState(0);
   const transcriptRef = useRef<ChatMsg[]>(session.messages.filter(isChatMsg));
   const sessionRef = useRef(session);
   const onChangeSessionRef = useRef(onChangeSession);
   const lastMessageRef = useRef('');
+  const lastDecisionRef = useRef<{ messageId: string; requirement: CurrentRequirement } | null>(null);
   const toolActivityIdRef = useRef<string | null>(null);
   const hasLiveToolEventsRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -263,6 +282,21 @@ export function useChat(
         push({ id: uid(), kind: 'assistant', text: response.assistant_text.trim() });
       }
       if (response.choices) push({ id: uid(), kind: 'choice', choice: response.choices });
+      if (response.decision_draft) {
+        const requirement = withEqualSoftWeights(response.decision_draft);
+        const message: ChatMsg = {
+          id: uid(),
+          kind: 'decision_draft',
+          requirement,
+          status: 'draft',
+        };
+        onChangeSessionRef.current({
+          requirementId: requirement.id,
+          comparisonId: null,
+          title: sessionTitle(requirement, text),
+        });
+        push(message);
+      }
       if (response.requirement) {
         onChangeSessionRef.current({
           requirementId: response.requirement.id,
@@ -282,6 +316,31 @@ export function useChat(
     },
     [push, upsertToolActivity],
   );
+
+  const updateDecisionDraft = useCallback(
+    (messageId: string, requirement: CurrentRequirement) => {
+      const updated = transcriptRef.current.map((message) =>
+        message.id === messageId && message.kind === 'decision_draft'
+          ? { ...message, requirement: withEqualSoftWeights(requirement), status: 'draft' as const }
+          : message,
+      );
+      transcriptRef.current = updated;
+      setMsgs(updated);
+      onChangeSessionRef.current({ messages: updated });
+    },
+    [],
+  );
+
+  const setDecisionDraftStatus = useCallback((messageId: string, status: 'draft' | 'running' | 'complete') => {
+    const updated = transcriptRef.current.map((message) =>
+      message.id === messageId && message.kind === 'decision_draft'
+        ? { ...message, status }
+        : message,
+    );
+    transcriptRef.current = updated;
+    setMsgs(updated);
+    onChangeSessionRef.current({ messages: updated });
+  }, []);
 
   const sendMessage = useCallback(
     async (text: string, showUserMessage: boolean) => {
@@ -363,6 +422,82 @@ export function useChat(
   const send = useCallback((text: string) => void sendMessage(text, true), [sendMessage]);
   const stop = useCallback(() => abortControllerRef.current?.abort('user'), []);
 
+  const runDecision = useCallback(
+    (messageId: string, requirementInput: CurrentRequirement) => {
+      const api = client;
+      const agentSessionId = sessionRef.current.agentSessionId;
+      if (sessionExpired || !api || !agentSessionId || abortControllerRef.current) return;
+      const requirement = withEqualSoftWeights(requirementInput);
+      lastDecisionRef.current = { messageId, requirement };
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      setFailedStep(null);
+      setDecisionDraftStatus(messageId, 'running');
+      setPhase('working');
+      toolActivityIdRef.current = null;
+      setActiveToolActivityId(null);
+      hasLiveToolEventsRef.current = false;
+      void (async () => {
+        try {
+          const response = await api.agentDecisionStream(
+            agentSessionId,
+            requirement,
+            recordToolProgress,
+            controller.signal,
+          );
+          applyResponse(response, requirement.raw_text);
+          setDecisionDraftStatus(messageId, 'complete');
+        } catch (cause) {
+          if (controller.signal.aborted) {
+            setDecisionDraftStatus(messageId, 'draft');
+            if (controller.signal.reason === 'user' && mountedRef.current) {
+              cancelRunningTools();
+              push({
+                id: uid(),
+                kind: 'notice',
+                text: localeRef.current === 'vi' ? 'Đã dừng lượt so sánh.' : 'Comparison stopped.',
+              });
+            }
+          } else {
+            failRunningTools();
+            setDecisionDraftStatus(messageId, 'draft');
+            const expired = isSessionExpired(cause);
+            push({
+              id: uid(),
+              kind: 'error',
+              text: errorText(
+                cause,
+                localeRef.current === 'vi'
+                  ? 'Chưa thể hoàn tất lượt so sánh.'
+                  : 'The comparison could not be completed.',
+                localeRef.current,
+              ),
+              expired,
+            });
+            setSessionExpired(expired);
+            setFailedStep('decision');
+          }
+        } finally {
+          if (abortControllerRef.current === controller) abortControllerRef.current = null;
+          if (mountedRef.current) {
+            onChangeSessionRef.current({ messages: transcriptRef.current });
+            setPhase('idle');
+          }
+        }
+      })();
+    },
+    [
+      applyResponse,
+      cancelRunningTools,
+      client,
+      failRunningTools,
+      push,
+      recordToolProgress,
+      sessionExpired,
+      setDecisionDraftStatus,
+    ],
+  );
+
   const relax = useCallback(
     (field: string) =>
       void sendMessage(`Hãy nới điều kiện ${field.replaceAll('_', ' ')} rồi tìm lại tour.`, true),
@@ -372,8 +507,10 @@ export function useChat(
   const retry = useCallback(() => {
     if (sessionExpired) return;
     if (failedStep === 'init') setReload((value) => value + 1);
+    else if (failedStep === 'decision' && lastDecisionRef.current)
+      runDecision(lastDecisionRef.current.messageId, lastDecisionRef.current.requirement);
     else if (lastMessageRef.current) void sendMessage(lastMessageRef.current, false);
-  }, [failedStep, sendMessage, sessionExpired]);
+  }, [failedStep, runDecision, sendMessage, sessionExpired]);
 
   return {
     client,
@@ -388,5 +525,7 @@ export function useChat(
     send,
     stop,
     relax,
+    updateDecisionDraft,
+    runDecision,
   };
 }

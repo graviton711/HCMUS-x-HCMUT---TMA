@@ -189,6 +189,64 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
         return await agent.message(owner_id, agent_session_id, body.get("message", ""))
 
+    @app.post("/agent/sessions/{agent_session_id}/decisions")
+    async def agent_decision(agent_session_id: str, body: dict[str, Any], request: Request):
+        owner_id = owner_session(request)
+        if owner_id is None:
+            raise AppError("SESSION_REQUIRED", "A guest access session is required for chat.", 401)
+        value = body.get("requirement")
+        if not isinstance(value, dict):
+            raise AppError("REQUIREMENT_REQUIRED", "A reviewed requirement is required.", 422)
+        requirement_id = value.get("id")
+        if not isinstance(requirement_id, str) or not requirement_id.strip():
+            raise AppError("REQUIREMENT_REQUIRED", "A reviewed requirement ID is required.", 422)
+        store.get_agent_session(agent_session_id, owner_id)
+        requirement = workflows.requirement(
+            value.get("raw_text", ""),
+            value.get("conditions"),
+            value.get("travelers", 1),
+            value.get("ranking"),
+            requirement_id=requirement_id,
+            require_weights=True,
+        )
+        store.save_requirement(requirement, owner_id)
+        if "text/event-stream" in request.headers.get("accept", ""):
+
+            async def stream_events():
+                try:
+                    async for event in agent.stream_decision(owner_id, agent_session_id, requirement):
+                        event_type = event.get("type", "progress")
+                        payload = (
+                            event.get("response", {})
+                            if event_type == "result"
+                            else {key: item for key, item in event.items() if key != "type"}
+                        )
+                        data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                        yield f"event: {event_type}\ndata: {data}\n\n"
+                except AppError as exc:
+                    log_app_error(exc, transport="sse", operation="agent_decision")
+                    data = json.dumps(
+                        {"code": exc.code, "message": exc.message},
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    yield f"event: error\ndata: {data}\n\n"
+                except Exception as exc:
+                    log_unexpected_error(exc, transport="sse", operation="agent_decision")
+                    data = json.dumps(
+                        {"code": "INTERNAL_ERROR", "message": "An internal error occurred."},
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    yield f"event: error\ndata: {data}\n\n"
+
+            return StreamingResponse(
+                stream_events(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+            )
+        return await agent.decision(owner_id, agent_session_id, requirement)
+
     @app.get("/comparisons/{cid}")
     async def get_comparison(cid: str, request: Request) -> dict[str, Any]:
         return {"comparison": store.get_comparison(cid, owner_session(request)).model_dump()}

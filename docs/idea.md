@@ -1,71 +1,27 @@
-# Proposal: Hỗ trợ quyết định chọn tour
+# TourLens — hỗ trợ quyết định chọn tour
 
-**Trạng thái:** Đã chốt phạm vi sản phẩm theo xác nhận ngày 03/10/2026.
+**Định vị:** Không gian quyết định cho người Việt chọn tour. Chat giúp diễn đạt và làm rõ nhu cầu; việc review điều kiện, xem đánh đổi và chọn phương án diễn ra trong decision workspace.
 
-**Định vị:** Decision support cho người Việt chọn tour và nhà cung cấp; không phải công cụ lập kế hoạch chuyến đi.
+## Luồng chính
 
-## Tóm tắt
+1. Người dùng mô tả điểm đến, ngày đi, ngân sách, nhóm đi và sở thích trong chat.
+2. Agent tạo requirement draft gồm điều kiện cứng, sở thích mềm và phần còn thiếu. Draft chưa truy vấn tour.
+3. Người dùng review/sửa điều kiện và phân bổ đúng 100 điểm giữa các sở thích mềm; có thể chia đều.
+4. Khi xác nhận, hệ thống quét catalog trong giới hạn cấu hình, áp hard filter rồi agent đánh giá từng sở thích trên mọi ứng viên hard-pass theo batch, kèm evidence.
+5. Decision workspace trình bày ba góc nhìn có thể đối chiếu: giá thấp nhất, hợp ưu tiên nhất và tập phương án Pareto cân bằng. Người dùng xem bằng chứng/đánh đổi rồi tự quyết định.
 
-Hệ thống giúp người dùng thu thập, xác minh và so sánh các tour phù hợp với nhu cầu cá nhân. Kết quả nêu rõ dữ liệu, nguồn, thời điểm ghi nhận, lợi ích, hạn chế và rủi ro của từng lựa chọn để người dùng tự quyết định.
+## Quy tắc quyết định
 
-## Phân tích bài toán
+- Hard conditions là cổng đủ điều kiện; thay đổi trọng số mềm không làm đổi eligibility.
+- Giá thấp nhất chỉ so sánh giá exact cùng currency. Giá `from`, `contact` hoặc thiếu giá không được xem là giá thấp nhất.
+- Mức khớp ưu tiên là tổng `weight_percent` của các sở thích có verdict `pass`; `fail` và `unknown` không được cộng điểm. `unknown` vẫn được trình bày riêng.
+- Cân bằng là Pareto frontier giữa giá exact thấp và mức khớp ưu tiên cao; không ép thành một điểm tổng hợp hay quán quân duy nhất.
+- Kết quả nêu số tour đã quét trong phạm vi cấu hình, không suy ra tổng kích thước catalog. Mọi kết luận giữ evidence từ snapshot catalog.
+- Điểm khớp là phép xếp hạng minh bạch theo verdict và trọng số người dùng, không phải xác suất hay điểm tin cậy đã hiệu chuẩn.
+- Không quy đổi currency để tuyên bố tour rẻ nhất toàn cục. Tour thiếu giá exact vẫn có thể xuất hiện ở góc nhìn mức khớp, nhưng giá được ghi là chưa so sánh được.
 
-- **Người dùng mục tiêu:** Người ở Việt Nam đang cân nhắc tour trọn gói, cần chọn giữa nhiều tour hoặc công ty lữ hành.
-- **Quyết định cần hỗ trợ:** Tour/nhà cung cấp nào phù hợp với ngân sách, thời gian, điểm đi, sở thích và mức rủi ro người dùng chấp nhận?
-- **Vấn đề hiện tại (giả thuyết cần kiểm chứng):** Thông tin nằm rải rác trên website nhà cung cấp và nguồn đánh giá; tên gọi, cách trình bày và mức độ cập nhật không đồng nhất. Người dùng khó so sánh cùng tiêu chí và phân biệt thông tin quảng bá với thông tin đã xác minh.
-- **Giá trị cần tạo:** Giảm công sức tìm và đối chiếu; làm lộ rõ đánh đổi và dữ liệu còn thiếu, thay vì đưa ra một gợi ý không giải thích được.
+## Phạm vi
 
-## Luồng người dùng và kết quả
+Trong demo, agent diễn giải yêu cầu và evidence; backend kiểm tra điều kiện, áp hard filter và tính các góc nhìn. Database là nguồn dữ liệu có thẩm quyền. Không làm booking, ingest mới, tích hợp production, điểm tin cậy, dashboard độ phủ hay chỉ số di chuyển khi catalog chưa có dữ liệu cần thiết.
 
-Một màn nhập chung nhận nhu cầu và URL tùy chọn:
-
-1. Nhập nhu cầu/ràng buộc: điểm đến, ngày hoặc độ linh hoạt, nơi khởi hành, ngân sách, số người/độ tuổi, sở thích và điều kiện quan trọng.
-2. Thêm các tour/URL đang cân nhắc, kể cả chỉ một URL; hệ thống phân tích tour cung cấp và tìm thêm tour để đối chiếu chung. Có thể chỉ nhập URL nếu chưa có nhu cầu rõ.
-
-Người dùng review nhu cầu/phạm vi → hệ thống tìm/đánh giá/rank/tự chọn tối đa ba gợi ý và dựng bảng so sánh ngay → xem lý do/evidence hoặc tìm phương án khác/sửa yêu cầu. Không yêu cầu sàng lọc danh sách/chọn ba tour. Thiếu tour đủ điều kiện thì hiển thị đúng số có được; người dùng tự quyết định chọn tour cuối cùng.
-
-Khi chỉ có URL, dữ kiện tour gợi ý phạm vi để review, không tự thành sở thích/ràng buộc. Đề xuất giữ tour URL làm tham chiếu và so với tối đa ba gợi ý mới; một URL + ba gợi ý = bốn tour đối chiếu. Agent quét catalog theo `backend.data.scan_limit` (mặc định 1000) để không biến ngân sách mặc định 20 của API comparison thành số lượng toàn catalog; UI chỉ trả tối đa năm tour và có thể benchmark giới hạn quét bằng dữ liệu thật.
-
-## Phân biệt với recommendation và lập kế hoạch
-
-- **Decision support:** Truy xuất dữ liệu nguồn, kiểm tra mức độ tin cậy, so sánh theo tiêu chí minh bạch và giải thích vì sao các lựa chọn khác nhau.
-- **Recommendation thuần túy:** Đưa ra một gợi ý mà không chứng minh bằng dữ liệu và trade-off cụ thể — không phải mục tiêu sản phẩm.
-- **Lập kế hoạch du lịch:** Tạo lịch trình cá nhân từ đầu — ngoài phạm vi.
-
-AI có thể giúp hiểu yêu cầu ngôn ngữ tự nhiên và trình bày so sánh; không được dùng để bịa hoặc lấp dữ liệu tour còn thiếu.
-
-## Dữ liệu và độ tin cậy
-
-- **Hồ sơ tour:** Tuyến, thời lượng, lịch trình, phương tiện, dịch vụ bao gồm/không bao gồm và chính sách.
-- **Lượt khởi hành/offer:** Ngày, giá, phụ thu và tình trạng chỗ; các trường này biến động, phải lưu `observed_at` và không gọi là thời gian thực nếu nguồn không bảo đảm.
-- **Hồ sơ nhà cung cấp:** Tên pháp nhân, giấy phép/phạm vi hoạt động, đánh giá và tín hiệu rủi ro. Tách rõ nội dung nhà cung cấp tự khai báo với thông tin xác minh từ nguồn độc lập.
-- Mỗi dữ kiện hiển thị phải có nguồn, thời điểm lấy và trạng thái xác minh. Không tìm thấy dữ liệu thì ghi rõ chưa có; không suy diễn từ nội dung chung của trang.
-
-## Nguyên tắc thu thập
-
-Ưu tiên dữ liệu có cấu trúc (JSON-LD/JSON/API được phép truy cập). Kiểm tra robots.txt và điều khoản nguồn trước khi gọi endpoint. Không dùng matching trên toàn bộ text trang cho field quyết định như giá, ngày khởi hành hay điểm xuất phát. Nếu nguồn không cung cấp dữ liệu đủ sạch hoặc không cho phép truy cập, đánh dấu thiếu/không hỗ trợ thay vì coi kết quả phỏng đoán là dữ kiện.
-
-## Ngoài phạm vi
-
-- Tự tạo lịch trình và đặt tour/thanh toán thay người dùng.
-- Xếp hạng bằng điểm số bí mật hoặc gợi ý không kèm lý do, nguồn và trade-off.
-- Khẳng định nhà cung cấp uy tín, có giấy phép hoặc còn chỗ nếu chưa có bằng chứng phù hợp.
-- Cam kết giá và tình trạng chỗ luôn mới theo thời gian thực.
-
-## Tiêu chí thành công sơ bộ
-
-1. Có thể so sánh ít nhất một nhóm tour theo cùng tiêu chí, đồng thời giữ nguyên nguồn gốc và thời điểm của từng dữ kiện.
-2. Giá/ngày/tình trạng chỗ cũ hoặc chưa xác minh được hiển thị cảnh báo; dữ liệu thiếu không bị tự điền.
-3. Người dùng hiểu được vì sao các lựa chọn khác nhau và có thể tự chọn dựa trên trade-off.
-4. Đánh giá crawler trên bộ trang được gán nhãn thủ công; đo độ chính xác theo field và tỷ lệ nguồn đủ điều kiện, không chỉ đo số trang crawl được.
-
-## Rủi ro và giả định cần kiểm chứng
-
-- Mỗi nhà cung cấp có cấu trúc và mức độ công khai dữ liệu khác nhau; không mặc định một parser/API dùng được cho tất cả.
-- Một số endpoint bị robots chặn hoặc không cung cấp dữ liệu đủ chi tiết; cần quyết định nguồn nào thực sự đủ điều kiện cho sản phẩm.
-- Đánh giá uy tín/giấy phép cần nguồn độc lập đáng tin cậy; không thể suy ra chỉ từ website bán tour.
-- Cần kiểm chứng với người dùng xem bảng so sánh và trade-off có giúp họ quyết định tốt hơn quy trình tìm tour hiện tại hay không.
-
-## Phạm vi tài liệu liên quan
-
-Tài liệu này chốt bài toán và nguyên tắc sản phẩm. Kiến trúc ở `docs/system-architecture.md`.
+Tài liệu kiến trúc: [system-architecture](system-architecture.md). API: [backend-contract](backend-contract.md). Giao diện: [ui-design-brief](ui-design-brief.md).

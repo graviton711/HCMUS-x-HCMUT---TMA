@@ -1,6 +1,11 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
-import type { CurrentComparison, CurrentCondition, CurrentEvaluation } from '../../../shared/api';
+import type {
+  CurrentComparison,
+  CurrentCondition,
+  CurrentDecisionView,
+  CurrentEvaluation,
+} from '../../../shared/api';
 import { observedLabel, safeUrl } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import {
@@ -87,6 +92,7 @@ function TourCard({
   offerId,
   index,
   missing,
+  decisionScore,
   selectedForCompare,
   compareDisabled,
   isSaved,
@@ -98,6 +104,7 @@ function TourCard({
   offerId: string;
   index: number;
   missing: boolean;
+  decisionScore?: number;
   selectedForCompare: boolean;
   compareDisabled: boolean;
   isSaved: boolean;
@@ -152,6 +159,11 @@ function TourCard({
           </span>
           <span className={styles['tour-rank']}>#{index + 1}</span>
         </div>
+        {decisionScore !== undefined && (
+          <p className={styles['decision-score']}>
+            {t(`${decisionScore}/100 điểm ưu tiên`, `${decisionScore}/100 preference points`)}
+          </p>
+        )}
         <h3 className={styles['tour-name']}>{tour.name || tour.id}</h3>
         <p className={styles['tour-supplier']}>
           {tour.supplier || t('Chưa rõ nhà cung cấp', 'Supplier not listed')}
@@ -326,6 +338,19 @@ export function ResultCards({
   const worst = mostFailedField(comparison);
   const empty = ranked.length === 0 && nearMiss.length === 0;
   const customOrder = softConditions.some((condition) => (weights[condition.id] ?? 1) !== 1);
+
+  if (comparison.decision_views?.length === 3) {
+    return (
+      <DecisionViews
+        comparison={comparison}
+        busy={busy}
+        onRelax={onRelax}
+        isSavedTour={isSavedTour}
+        onToggleSavedTour={onToggleSavedTour}
+        onAsk={onAsk}
+      />
+    );
+  }
 
   function toggleCompare(tourId: string, offerId: string) {
     setSelected((current) => {
@@ -631,6 +656,253 @@ export function ResultCards({
         open={compareOpen}
         onClose={() => setCompareOpen(false)}
       />
+    </section>
+  );
+}
+
+function DecisionViews({
+  comparison,
+  busy,
+  onRelax,
+  isSavedTour,
+  onToggleSavedTour,
+  onAsk,
+}: {
+  comparison: CurrentComparison;
+  busy: boolean;
+  onRelax: (field: string) => void;
+  isSavedTour?: (tourId: string, offerId: string) => boolean;
+  onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
+  onAsk?: (text: string) => void;
+}) {
+  const { t } = usePreferences();
+  const views = comparison.decision_views ?? [];
+  const hasSoft = comparison.requirement.conditions.some((condition) => condition.strength === 'soft');
+  const [activeKind, setActiveKind] = useState<CurrentDecisionView['kind']>(hasSoft ? 'best_fit' : 'cheapest');
+  const [selected, setSelected] = useState<ComparedOffer[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
+  const activeView = views.find((view) => view.kind === activeKind) ?? views[0];
+  const entries = activeView.candidates;
+  const entryGroups = (() => {
+    if (activeView.kind === 'best_fit' || activeView.currencies.length < 2)
+      return [{ currency: '', entries }];
+    const groups = new Map<string, typeof entries>();
+    for (const entry of entries) {
+      const tour = comparison.tour_snapshots.find((item) => item.id === entry.tour_id);
+      const offer = tour?.offers.find((item) => item.id === entry.offer_id);
+      const currency = offer?.currency.toUpperCase() || t('Chưa rõ tiền tệ', 'Currency unknown');
+      groups.set(currency, [...(groups.get(currency) ?? []), entry]);
+    }
+    return [...groups].map(([currency, grouped]) => ({ currency, entries: grouped }));
+  })();
+  const nearMiss = uniqueTours(comparison.near_miss ?? []).filter(
+    (candidate) => !comparison.ranked.some((ranked) => ranked.tour_id === candidate.tour_id),
+  );
+  const worst = mostFailedField(comparison);
+  const labels: Record<CurrentDecisionView['kind'], [string, string]> = {
+    cheapest: ['Giá thấp nhất', 'Lowest exact price'],
+    best_fit: ['Hợp ưu tiên nhất', 'Best fit'],
+    balanced: ['Cân bằng', 'Balanced'],
+  };
+
+  function toggleCompare(tourId: string, offerId: string) {
+    setSelected((current) => {
+      const existing = current.some((item) => item.tourId === tourId && item.offerId === offerId);
+      if (existing) return current.filter((item) => item.tourId !== tourId || item.offerId !== offerId);
+      if (current.length >= 3) return current;
+      return [...current, { tourId, offerId }];
+    });
+  }
+
+  const prompt = t(
+    'Giải thích các điểm phù hợp, chưa rõ và đánh đổi trong góc nhìn này bằng dữ kiện của từng tour.',
+    'Explain the matches, unknowns and trade-offs in this view using each tour’s evidence.',
+  );
+  return (
+    <section className={`${styles.result} ${styles['decision-workspace']}`} aria-label={t('Không gian so sánh quyết định', 'Decision comparison workspace')}>
+      <header className={styles['decision-heading']}>
+        <div>
+          <span className={styles['brief-eyebrow']}>{t('SO SÁNH THEO NHIỀU GÓC NHÌN', 'COMPARE ACROSS VIEWS')}</span>
+          <h2>{t('Các lựa chọn phù hợp', 'Options that meet your criteria')}</h2>
+        </div>
+        <span className="tag tag-quiet">
+          {t(`${comparison.candidates_considered} tour đã quét`, `${comparison.candidates_considered} tours scanned`)}
+        </span>
+      </header>
+
+      <div className={styles['decision-tabs']} role="tablist" aria-label={t('Góc nhìn so sánh', 'Comparison views')}>
+        {views.map((view) => (
+          <button
+            key={view.kind}
+            type="button"
+            role="tab"
+            aria-selected={view.kind === activeView.kind}
+            className={styles['decision-tab']}
+            onClick={() => setActiveKind(view.kind)}
+          >
+            {t(...labels[view.kind])}
+            <span>{view.candidates.length}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className={styles['decision-view-copy']}>
+        <p>{activeView.note}</p>
+        {activeView.kind !== 'best_fit' && activeView.currencies.length > 1 && (
+          <p className="muted">
+            {t(
+              `Đang chia theo ${activeView.currencies.join(', ')}; không quy đổi để chọn một mức giá chung.`,
+              `Grouped by ${activeView.currencies.join(', ')}; currencies are not converted into one price ranking.`,
+            )}
+          </p>
+        )}
+      </div>
+
+      {entries.length > 0 ? (
+        <div className={styles['decision-option-groups']}>
+          {entryGroups.map((group) => (
+            <section className={styles['decision-option-group']} key={group.currency || activeView.kind}>
+              {group.currency && <h3>{group.currency}</h3>}
+              <div className={styles['result-grid']}>
+                {group.entries.map((entry, index) => (
+                  <TourCard
+                    key={`${activeView.kind}-${entry.tour_id}-${entry.offer_id}`}
+                    comparison={comparison}
+                    tourId={entry.tour_id}
+                    offerId={entry.offer_id}
+                    index={index}
+                    missing={false}
+                    decisionScore={activeView.kind === 'cheapest' ? undefined : entry.score}
+                    selectedForCompare={selected.some((item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id)}
+                    compareDisabled={selected.length >= 3 && !selected.some((item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id)}
+                    isSaved={isSavedTour?.(entry.tour_id, entry.offer_id) ?? false}
+                    onToggleCompare={() => toggleCompare(entry.tour_id, entry.offer_id)}
+                    onToggleSaved={onToggleSavedTour
+                      ? () => onToggleSavedTour(comparison, entry.tour_id, entry.offer_id)
+                      : undefined}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : (
+        <p className={styles['decision-empty']} role="status">
+          {activeView.kind === 'best_fit' && !hasSoft
+            ? t('Thêm một sở thích mềm để xếp tour theo mức hợp ưu tiên.', 'Add a preference to rank tours by fit.')
+            : activeView.kind === 'balanced'
+              ? t('Chưa có đủ giá exact cùng tiền tệ để tạo phương án Pareto.', 'There is not enough same-currency exact-price data to form a Pareto set.')
+              : t('Chưa có tour qua toàn bộ điều kiện bắt buộc trong phạm vi đã quét.', 'No scanned tours pass every must-have criterion.')}
+        </p>
+      )}
+
+      {hasSoft && entries.length > 0 && (
+        <details className={styles['decision-matrix']}>
+          <summary>
+            {t(
+              `Ma trận tiêu chí · ${comparison.requirement.conditions.filter((condition) => condition.strength === 'soft').length} ưu tiên`,
+              `Criteria matrix · ${comparison.requirement.conditions.filter((condition) => condition.strength === 'soft').length} preferences`,
+            )}
+          </summary>
+          <div className={styles['decision-matrix-scroll']}>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">{t('Tiêu chí / trọng số', 'Preference / weight')}</th>
+                  {entries.map((entry) => (
+                    <th scope="col" key={entry.offer_id}>
+                      {comparison.tour_snapshots.find((tour) => tour.id === entry.tour_id)?.name ?? entry.tour_id}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {comparison.requirement.conditions
+                  .filter((condition) => condition.strength === 'soft')
+                  .map((condition) => (
+                    <tr key={condition.id}>
+                      <th scope="row">
+                        {String(condition.value)} <span>{condition.weight_percent ?? 0}%</span>
+                      </th>
+                      {entries.map((entry) => {
+                        const evaluation = comparison.evaluations.find((item) =>
+                          item.offer_id === entry.offer_id && item.condition_id === condition.id,
+                        );
+                        const state = evaluation?.state ?? 'unknown';
+                        return (
+                          <td key={`${entry.offer_id}-${condition.id}`}>
+                            <span className={styles['matrix-state']} data-state={state}>
+                              {state === 'pass'
+                                ? t('Đạt', 'Pass')
+                                : state === 'fail'
+                                  ? t('Không đạt', 'Fail')
+                                  : t('Chưa rõ', 'Unknown')}
+                            </span>
+                            {evaluation?.quote && <q>{evaluation.quote}</q>}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
+
+      <div className={styles['result-actions']}>
+        {selected.length > 0 && (
+          <button type="button" className={`btn ${styles['result-action']}`} disabled={selected.length < 2} onClick={() => setCompareOpen(true)}>
+            {t(`So sánh lựa chọn (${selected.length}/3)`, `Compare choices (${selected.length}/3)`)}
+          </button>
+        )}
+        {selected.length > 0 && (
+          <button type="button" className={styles['clear-comparison']} onClick={() => setSelected([])}>
+            {t('Bỏ chọn', 'Clear selection')}
+          </button>
+        )}
+        {worst && (
+          <button type="button" className={`btn ${styles['result-action']}`} disabled={busy} onClick={() => onRelax(worst.field)}>
+            {t(`Xem nếu nới ${fieldLabel(worst.field, t)}`, `Explore relaxing ${fieldLabel(worst.field, t)}`)}
+          </button>
+        )}
+      </div>
+
+      {nearMiss.length > 0 && (
+        <details className={styles['decision-near-miss']}>
+          <summary>{t(`Xem ${nearMiss.length} tour gần đạt`, `Review ${nearMiss.length} near matches`)}</summary>
+          <div className={styles['result-grid']}>
+            {nearMiss.map((entry, index) => (
+              <TourCard
+                key={`near-${entry.tour_id}-${entry.offer_id}`}
+                comparison={comparison}
+                tourId={entry.tour_id}
+                offerId={entry.offer_id}
+                index={index}
+                missing
+                selectedForCompare={selected.some((item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id)}
+                compareDisabled={selected.length >= 3 && !selected.some(
+                  (item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id,
+                )}
+                isSaved={isSavedTour?.(entry.tour_id, entry.offer_id) ?? false}
+                onToggleCompare={() => toggleCompare(entry.tour_id, entry.offer_id)}
+                onToggleSaved={onToggleSavedTour
+                  ? () => onToggleSavedTour(comparison, entry.tour_id, entry.offer_id)
+                  : undefined}
+              />
+            ))}
+          </div>
+        </details>
+      )}
+
+      {onAsk && (
+        <div className={styles['follow-up']}>
+          <span>{t('Hỏi về đánh đổi', 'Ask about the trade-offs')}</span>
+          <QuickReplies options={[{ label: t('Giải thích góc nhìn này', 'Explain this view'), value: prompt }]} onPick={onAsk} disabled={busy} />
+        </div>
+      )}
+
+      <DecisionComparisonDialog comparison={comparison} selected={selected} open={compareOpen} onClose={() => setCompareOpen(false)} />
     </section>
   );
 }

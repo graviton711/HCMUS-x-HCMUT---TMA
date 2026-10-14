@@ -1,46 +1,58 @@
 # Kiến trúc hệ thống
 
-Frontend, backend và ingest cùng một project; frontend chỉ gọi HTTP API, backend không import UI. Ingest xuất bản catalog; backend đọc catalog và trả kết quả so sánh. Guest session/basic history chạy trên runtime hiện tại. Chat dùng một OpenCode conversation cho mỗi local chat; agent quyết định khi nào gọi MCP, còn backend tools xác thực dữ liệu, áp hard rules, xác minh evidence và lưu kết quả. Account/Auth, proposals/jobs/what-if vẫn chưa runtime-complete.
+Frontend gọi backend qua HTTP. Chat chỉ thu thập và làm rõ yêu cầu; so sánh tour chỉ bắt đầu khi người dùng xác nhận Decision Brief đã review. Agent diễn giải ngôn ngữ và đánh giá evidence; backend kiểm tra schema, áp điều kiện cứng và tính các góc nhìn quyết định.
 
 ```mermaid
 flowchart LR
-    Client[src/frontend: UI React] --> API[backend/api: HTTP mỏng]
-    API --> Agent[backend/agent: OpenCode runner + session manager]
-    Agent --> OpenCode[opencode serve: agent + MCP]
-    OpenCode --> Agent
-    API --> Workflow[backend/workflows: application services]
-    Agent --> MCP[backend/agent: 7 grounded MCP tools]
-    MCP --> Input[backend/input: validate điều kiện cấu trúc]
-    MCP --> Workflow
-    Workflow --> Decide[backend/decide: hard filter, soft verdict, rank, phân tích]
-    Decide --> Norm[backend/normalize: rows catalog thành snapshot]
-    Decide --> Data[backend/data: SQLite ứng dụng, đọc Supabase]
-    Agent --> Data
-    Ingest[src/ingest: pipeline crawl] --> Catalog[(Supabase catalog)]
+    User[Người dùng] --> UI[src/frontend: chat + decision workspace]
+    UI --> API[backend/api]
+    API --> Agent[backend/agent: OpenCode session]
+    Agent --> MCP[MCP tools]
+    MCP --> Input[backend/input: validate requirement]
+    MCP --> Workflow[backend/workflows]
+    Workflow --> Data[backend/data: read-only catalog]
+    Workflow --> Normalize[backend/normalize: snapshot + evidence]
+    Workflow --> Decide[backend/decide: hard filter + views]
+    Decide --> MCP
+    MCP --> Agent
+    Agent --> API
+    API --> UI
+    Ingest[src/ingest] --> Catalog[(Tour catalog)]
     Data --> Catalog
-    Data --> SQLite[(SQLite sessions, owned records, history, agent mapping)]
 ```
 
-Luồng: input tự do → OpenCode agent hỏi thêm hoặc gọi MCP → agent ánh xạ yêu cầu sang nhãn catalog thực và ranking có thứ tự → tool kiểm tra điều kiện → `decide` lấy ứng viên qua `data`, chuẩn hóa qua `normalize`, hard-filter trả pass/unknown/fail → rank theo `ranking.order_by`. Nếu soft_fit có thể ảnh hưởng top 5, MCP trả evidence theo batch cho toàn bộ ứng viên có thể lọt top, gồm cả nhóm đồng hạng ở ranh giới; chỉ kết quả comparison giới hạn được gửi về UI. Engine không suy luận country/place aliases. Thiếu là unknown, không bao giờ tính là đạt.
+## Workflow
 
-## Ranh giới runtime
+1. Người dùng gửi mô tả tự do qua chat. Agent có thể hỏi thêm hoặc tạo requirement draft; ở bước này không gọi truy vấn tour.
+2. Frontend lưu draft cùng phiên để khôi phục sau reload. Người dùng chỉnh điều kiện và phân bổ 100 điểm giữa các sở thích mềm.
+3. Frontend gửi requirement đã review tới `POST /agent/sessions/{id}/decisions`. Backend validate lại và mở lượt agent để chấm evidence.
+4. `query_tours` quét catalog đến `data.scan_limit`, chuẩn hóa snapshot, áp hard filter trên toàn bộ ứng viên đã quét và tạo context. Các ứng viên hard-pass được gửi cho agent theo batch để đánh giá từng soft condition.
+5. Engine xác thực quote, gắn verdict `pass|fail|unknown`, tính điểm trọng số và trả `decision_views`: giá thấp nhất, hợp ưu tiên nhất và Pareto cân bằng. Kết quả giữ `ranked`/`near_miss` cho consumer hiện tại. MCP ghi Comparison hoàn tất vào runtime store theo `decision_run_id`.
+6. Agent service lấy Comparison theo `decision_run_id`, kiểm tra requirement, lưu dưới owner của phiên và stream kết quả. Nội dung model không phải nguồn xác nhận hoàn tất.
 
-| Phần | Giữ | Không giữ |
+## Ranh giới module
+
+| Module | Trách nhiệm | Không làm |
 |---|---|---|
-| `backend/data` | Guest sessions, owner-scoped records/history, đọc catalog chỉ đọc | Rank, LLM, HTTP |
-| `backend/input` | Validate điều kiện có cấu trúc, tiền VND integer, ngày ISO | Text extraction, catalog, so sánh |
-| `backend/normalize` | Rows catalog thành snapshot + evidence, lọc endpoint trùng nhãn sau chuẩn hóa tổng quát | Country/place aliases, input người dùng, rank |
-| `backend/decide` | Lọc cứng trên điều kiện tường minh, áp soft verdict có evidence, rank nhiều khóa theo requirement, phân tích | Lưu trữ, HTTP, gọi LLM, suy luận địa danh |
-| `backend/workflows` | Ghép input/catalog/decide thành use case dùng chung | HTTP, UI |
-| `backend/agent` | Gọi OpenCode CLI không deadline tổng, giữ owner-scoped session, diễn giải yêu cầu và validate tool results | Quyết định hard eligibility ngoài tools, truy cập UI |
-| `backend/api` | Routes mỏng, validate, envelope lỗi | Logic nghiệp vụ |
-| `frontend` | Guest search/session/results; gọi backend qua HTTP | Truy cập SQLite/Supabase trực tiếp, quyết định eligibility |
-| `ingest` | Crawl, làm sạch, xuất bản catalog | Mọi thứ lúc request |
+| `backend/agent` | Hội thoại, draft requirement, gọi MCP, semantic evaluation có evidence | Quyết định hard eligibility, tự tính điểm hoặc truy cập UI |
+| `backend/input` | Validate cấu trúc requirement, `weight_percent`, giá trị tiền/ngày | Parse business decision từ free text |
+| `backend/data` | Đọc catalog; lưu owner-scoped session/records và kết quả tạm theo decision run để MCP bàn giao cho API | Rank hoặc gọi LLM |
+| `backend/normalize` | Chuyển row thành snapshot/evidence | Alias địa danh hoặc quyết định |
+| `backend/decide` | Hard filter, xác thực soft evidence, weighted views, Pareto, near-miss | LLM, HTTP, storage |
+| `backend/workflows` | Ghép input/catalog/normalize/decide, quản lý scan context và batch | UI hoặc giao thức HTTP |
+| `backend/api` | Auth owner, route, SSE/JSON envelope | Logic ra quyết định |
+| `frontend` | Draft review, trọng số, decision workspace, saved tours | Truy cập database hoặc tự suy eligibility |
+| `ingest` | Xuất bản catalog | Chạy trong request demo |
 
-Backend hiện tại là nguồn chuẩn cho API và model. Frontend phải dùng contract hiện tại; không duy trì backend v2 song song. Tour catalog vẫn chỉ đọc. Chat cần OpenCode server và không rơi về keyword/NIM extraction khi thiếu. MCP `query_tours`, `score_soft` và `relax_criterion` gọi cùng pipeline `input`/`decide`; backend lưu kết quả tool đã validate. Agent endpoint mặc định trả JSON, đồng thời hỗ trợ SSE để đẩy trạng thái tool lên giao diện theo thời gian thực.
+## Quy tắc kỹ thuật
 
-Đích port account history, revisions/proposals và what-if nối vào modules hiện có: `data` lưu record/ownership; `input` dựng requirement revision; `decide` chạy compare/what-if; `normalize` xác thực giá/freshness. Guest history hiện chỉ có list/detail/pagination. Những năng lực chưa có phải được đánh dấu rõ trong contract, không mô tả như runtime đã triển khai.
+- Database catalog là nguồn có thẩm quyền. Hard filter luôn chạy trước soft ranking.
+- Soft evaluation bao phủ mọi ứng viên hard-pass trong scan, không chỉ các tour có thể lọt top N theo ranking cũ. Batching giới hạn context model; scan limit vẫn giới hạn số record được đọc.
+- Giá rẻ nhất chỉ dùng giá exact cùng currency. Không quy đổi currency và không coi `from` là giá exact.
+- Điểm phù hợp là tổng trọng số các verdict `pass`; `unknown` không được đổi thành `fail` và không đóng góp điểm. Evidence quote phải khớp snapshot.
+- Pareto giữ các phương án không bị trội đồng thời về exact price và preference score; không tạo điểm tổng hợp bí ẩn.
+- Không đặt deadline tổng cho agent. Giữ timeout riêng cho MCP/data calls và hủy process khi client disconnect.
+- Kết quả quyết định đi từ MCP tới API qua runtime store bằng `decision_run_id`; không phụ thuộc OpenCode có lặp lại JSON của tool trong output model hay không.
+- Thêm field model có default để dữ liệu comparison cũ vẫn đọc được; không cần migration database cho `decision_views`.
 
-## Hợp đồng chung
-
-Field/evidence: [data-contract](data-contract.md). API: [backend-contract](backend-contract.md). Crawler xuất bản catalog qua `src/ingest`, backend chỉ đọc. Backend không bao giờ trigger crawl, không fallback fixture khi nguồn live lỗi, không suy giá exact từ giá "from". Frontend được đặt cùng `src/` như module sibling có README riêng; không tạo project/repo layout riêng cho UI.
+Contract chi tiết: [backend-contract](backend-contract.md). Field/evidence: [data-contract](data-contract.md).

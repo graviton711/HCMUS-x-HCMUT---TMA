@@ -27,8 +27,8 @@ describe('ChatPage expired-session recovery', () => {
       </PreferencesProvider>,
     );
 
-    const action = await screen.findByRole('button', { name: 'Tạo phiên mới và gửi lại bản nháp' });
-    expect(screen.getByRole('alert').textContent).toContain('Phiên khách đã hết hạn');
+    const action = await screen.findByRole('button', { name: 'Tạo phiên mới' });
+    expect(screen.getByRole('alert').textContent).toContain('Phiên hết hạn.');
     expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull();
     expect((screen.getByLabelText('Nhắn cho TourLens') as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(action);

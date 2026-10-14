@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const frontendDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const viteCli = resolve(frontendDir, 'node_modules/vite/bin/vite.js');
 const baseURL = process.env.E2E_BASE_URL ?? 'http://127.0.0.1:5173';
 
 export default defineConfig({
@@ -20,7 +21,7 @@ export default defineConfig({
   webServer: process.env.E2E_BASE_URL
     ? undefined
     : {
-        command: 'pnpm dev',
+        command: `"${process.execPath}" "${viteCli}" --config config/vite.config.ts --host 127.0.0.1`,
         cwd: frontendDir,
         url: baseURL,
         reuseExistingServer: !process.env.CI,

@@ -166,6 +166,8 @@ function ActiveChat({
           onRelax={chat.relax}
           isSavedTour={isSavedTour}
           onToggleSavedTour={onToggleSavedTour}
+          onUpdateDecisionDraft={chat.updateDecisionDraft}
+          onRunDecision={chat.runDecision}
           renderRecovery={
             chat.failedStep
               ? (expired) =>

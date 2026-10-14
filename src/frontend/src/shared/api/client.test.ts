@@ -52,6 +52,32 @@ describe('CurrentBackendClient', () => {
     });
   });
 
+  it('sends the reviewed brief to the dedicated decision endpoint', async () => {
+    const requirement = {
+      id: 'req_reviewed',
+      conditions: [{
+        id: 's1', field: 'preference', operator: 'contains', value: 'thiên nhiên',
+        strength: 'soft' as const, quote: 'thiên nhiên', weight_percent: 100,
+      }],
+      missing: [],
+      raw_text: 'thích thiên nhiên',
+      travelers: 1,
+    };
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      jsonResponse({ assistant_text: '', tool_calls: [], comparison: {} }),
+    );
+    const client = new CurrentBackendClient('guest-token', '', fetcher);
+
+    await client.agentDecisionStream('agent-1', requirement, () => {});
+
+    expect(fetcher.mock.calls[0]?.[0]).toBe('/agent/sessions/agent-1/decisions');
+    expect(JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body))).toEqual({ requirement });
+    expect(fetcher.mock.calls[0]?.[1]?.headers).toMatchObject({
+      Authorization: 'Bearer guest-token',
+      Accept: 'text/event-stream',
+    });
+  });
+
   it('keeps history cursors in the query string and URL-encodes resource ids', async () => {
     const fetcher = vi
       .fn<typeof fetch>()

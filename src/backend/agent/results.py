@@ -28,13 +28,36 @@ def limit_comparison(comparison: Comparison, limit: int = 5) -> Comparison:
         selected_near.append(candidate)
         seen.add(candidate.tour_id)
         remaining -= 1
-    offer_ids = {candidate.offer_id for candidate in (*selected_ranked, *selected_near)}
+    limited_views = [
+        view.model_copy(update={
+            "candidates": view.candidates[:limit],
+            "currencies": sorted({currency.upper() for currency in view.currencies}),
+        })
+        for view in comparison.decision_views
+    ]
+    view_candidates = [candidate for view in limited_views for candidate in view.candidates]
+    seen.update(candidate.tour_id for candidate in view_candidates)
+    offer_ids = {
+        candidate.offer_id
+        for candidate in (*selected_ranked, *selected_near, *view_candidates)
+    }
+    selected_tours = {
+        candidate.tour_id
+        for candidate in (*selected_ranked, *selected_near, *view_candidates)
+    }
     return comparison.model_copy(
         update={
             "ranked": selected_ranked,
             "near_miss": selected_near,
-            "tour_snapshots": [tour for tour in comparison.tour_snapshots if tour.id in seen],
+            "tour_snapshots": [
+                tour.model_copy(update={
+                    "offers": [offer for offer in tour.offers if offer.id in offer_ids],
+                })
+                for tour in comparison.tour_snapshots
+                if tour.id in selected_tours
+            ],
             "evaluations": [item for item in comparison.evaluations if item.offer_id in offer_ids],
+            "decision_views": limited_views,
         }
     )
 

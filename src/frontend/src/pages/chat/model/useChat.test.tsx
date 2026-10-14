@@ -61,6 +61,16 @@ function makeBackend(modelDenied = false) {
     if (path === '/health') return response({ status: 'ok', version: 'test' });
     if (path === '/agent/sessions' && method === 'POST')
       return response({ agent_session_id: 'agt_0123456789abcdef0123456789abcdef' }, 201);
+    if (path.endsWith('/decisions') && method === 'POST')
+      return response({
+        assistant_text: 'Đã so sánh theo tiêu chí đã xác nhận.',
+        tool_calls: [
+          { name: 'query_tours', status: 'completed' },
+          { name: 'score_soft', status: 'completed' },
+        ],
+        requirement,
+        comparison,
+      });
     if (path.endsWith('/messages') && method === 'POST') {
       if (modelDenied)
         return response(
@@ -81,10 +91,10 @@ function makeBackend(modelDenied = false) {
           tool_calls: [{ name: 'ask_choice', status: 'completed' }],
         });
       return response({
-        assistant_text: 'Mình đã tìm được lựa chọn phù hợp.',
-        tool_calls: [{ name: 'query_tours', status: 'completed' }],
+        assistant_text: 'Mình đã chuẩn bị bản tiêu chí để bạn xem lại.',
+        tool_calls: [{ name: 'draft_requirement', status: 'completed' }],
         requirement,
-        comparison,
+        decision_draft: requirement,
       });
     }
     return response({ error: { code: 'NOT_FOUND', message: 'not found' } }, 404);
@@ -152,7 +162,7 @@ afterEach(() => {
 });
 
 describe('useChat OpenCode agent loop', () => {
-  it('reuses one agent session, renders choices, and stores the final comparison', async () => {
+  it('reuses one agent session, reviews a draft, and sends the confirmed requirement to comparison', async () => {
     vi.stubGlobal('fetch', makeBackend());
     const apiRef: { current: ChatApi | null } = { current: null };
     render(<Probe initial={newSession()} apiRef={apiRef} />);
@@ -168,10 +178,15 @@ describe('useChat OpenCode agent loop', () => {
     apiRef.current?.send('tháng 12');
     await waitFor(() =>
       expect(screen.getByTestId('msgs').textContent).toBe(
-        'user,tool_activity,assistant,choice,user,tool_activity,assistant,comparison',
+        'user,tool_activity,assistant,choice,user,tool_activity,assistant,decision_draft',
       ),
     );
     expect(screen.getByTestId('title').textContent).toBe('Đà Lạt');
+
+    const draft = apiRef.current?.msgs.find((message) => message.kind === 'decision_draft');
+    expect(draft?.kind).toBe('decision_draft');
+    if (draft?.kind === 'decision_draft') apiRef.current?.runDecision(draft.id, draft.requirement);
+    await waitFor(() => expect(screen.getByTestId('msgs').textContent).toContain('comparison'));
 
     const messages = calls.filter((call) => call.path.endsWith('/messages'));
     expect(messages.map((call) => (call.body as { message: string }).message)).toEqual([
@@ -179,6 +194,9 @@ describe('useChat OpenCode agent loop', () => {
       'tháng 12',
     ]);
     expect(messages[0].path).toBe(messages[1].path);
+    const decisions = calls.filter((call) => call.path.endsWith('/decisions'));
+    expect(decisions).toHaveLength(1);
+    expect((decisions[0]?.body as { requirement: { id: string } }).requirement.id).toBe('req_dalat');
   });
 
   it('restores the full transcript after remount without sending the prompt again', async () => {
@@ -195,6 +213,9 @@ describe('useChat OpenCode agent loop', () => {
       expect(screen.getByTestId('msgs').textContent).toContain('assistant,choice'),
     );
     firstApiRef.current?.send('tháng 12');
+    await waitFor(() => expect(screen.getByTestId('msgs').textContent).toContain('decision_draft'));
+    const draft = firstApiRef.current?.msgs.find((message) => message.kind === 'decision_draft');
+    if (draft?.kind === 'decision_draft') firstApiRef.current?.runDecision(draft.id, draft.requirement);
     await waitFor(() => expect(screen.getByTestId('msgs').textContent).toContain('comparison'));
 
     const saved = sessionRef.current;
@@ -206,6 +227,9 @@ describe('useChat OpenCode agent loop', () => {
       'user',
       'tool_activity',
       'assistant',
+      'decision_draft',
+      'tool_activity',
+      'assistant',
       'comparison',
     ]);
     const sentBeforeReload = calls.filter((call) => call.path.endsWith('/messages')).length;
@@ -215,7 +239,7 @@ describe('useChat OpenCode agent loop', () => {
     render(<Probe initial={saved!} apiRef={restoredApiRef} />);
     await waitFor(() =>
       expect(screen.getByTestId('msgs').textContent).toBe(
-        'user,tool_activity,assistant,choice,user,tool_activity,assistant,comparison',
+        'user,tool_activity,assistant,choice,user,tool_activity,assistant,decision_draft,tool_activity,assistant,comparison',
       ),
     );
     expect(calls.filter((call) => call.path.endsWith('/messages'))).toHaveLength(sentBeforeReload);

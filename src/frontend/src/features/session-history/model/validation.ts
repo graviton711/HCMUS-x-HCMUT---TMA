@@ -69,6 +69,14 @@ export function validChatMsg(v: unknown): boolean {
       record(comparison.analysis)
     );
   }
+  if (v.kind === 'decision_draft') {
+    return (
+      record(v.requirement) &&
+      typeof v.requirement.id === 'string' &&
+      Array.isArray(v.requirement.conditions) &&
+      ['draft', 'running', 'complete'].includes(String(v.status))
+    );
+  }
   return false;
 }
 

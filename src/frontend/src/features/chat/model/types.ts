@@ -1,4 +1,4 @@
-import type { CurrentAgentChoice, CurrentComparison } from '../../../shared/api';
+import type { CurrentAgentChoice, CurrentComparison, CurrentRequirement } from '../../../shared/api';
 
 export type ChatPhase = 'idle' | 'thinking' | 'working';
 
@@ -21,5 +21,11 @@ export type ChatMsg =
       id: string;
       kind: 'comparison';
       comparison: CurrentComparison;
+    }
+  | {
+      id: string;
+      kind: 'decision_draft';
+      requirement: CurrentRequirement;
+      status: 'draft' | 'running' | 'complete';
     }
   | { id: string; kind: 'error'; text: string; expired?: boolean };

@@ -132,3 +132,7 @@ JSON Lines (`.jsonl`): mỗi dòng 1 Tour hoàn chỉnh, giữ native types (`in
 ## Giao diện backend
 
 Backend mới không còn endpoint compare theo URL. Contract request/response hiện tại ở [backend-contract](backend-contract.md); schema live ở `/openapi.json`.
+
+## Decision Brief (runtime contract)
+
+Trọng số không phải field catalog và không cần migration database. Trong requirement của một lượt quyết định, mỗi soft condition có `weight_percent` là số nguyên từ 0 đến 100; khi có soft condition, tổng phải bằng 100 trước khi chạy. Hard condition không có trọng số. Nếu người dùng sửa giá trị trong Decision Brief, requirement cập nhật `quote` và `raw_text` để trích dẫn vẫn khớp với bản đã review. Comparison có `decision_views` tùy chọn (`cheapest`, `best_fit`, `balanced`); model cũ mặc định danh sách này rỗng. Các view tham chiếu candidate bằng `tour_id`/`offer_id`, còn giá và evidence vẫn lấy từ snapshot chuẩn của catalog.

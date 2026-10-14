@@ -2,41 +2,37 @@
 
 ## Trách nhiệm
 
-Giữ một OpenCode conversation cho mỗi chat local, cung cấp MCP tools grounded vào catalog, hard-filter và evidence, và trả lời nhiều lượt tự nhiên. Agent quyết định khi cần hỏi thêm, tìm tour, xem chi tiết hoặc nới tiêu chí.
+Điều phối hội thoại, làm rõ nhu cầu, tạo requirement draft chưa truy vấn catalog, và đánh giá mức phù hợp của từng sở thích dựa trên evidence trong tour snapshot. Agent không quyết định hard eligibility hoặc tự tính ranking cuối.
 
 ## Input/output
 
-- Tạo session: guest owner từ Bearer token; trả `agent_session_id` local.
-- Gửi tin nhắn: `agent_session_id` + nội dung lượt mới; backend gắn OpenCode session tương ứng. Hỗ trợ JSON response cho client cũ và SSE khi client gửi `Accept: text/event-stream`.
-- Tool inputs là điều kiện có cấu trúc. Tiền chỉ nhận integer VND, ngày chỉ nhận ISO; giá trị sai định dạng bị loại hoặc thành `unknown`, không suy đoán.
-- Trả về câu trả lời cuối của assistant (bỏ commentary trung gian), lựa chọn hỏi thêm, thông tin tour có evidence, soft verdicts và tối đa 5 tour.
+- Chat: owner-scoped `agent_session_id` và message; có thể trả text, choices, progress, requirement draft hoặc comparison.
+- Decision run: requirement đã được người dùng review, gồm hard/soft conditions và `weight_percent` cho từng soft condition.
+- Tool evaluation: verdict `pass|fail|unknown`, quote evidence nguyên văn và reason gắn với candidate/condition.
+- Kết quả cuối: `ranked`, `near_miss`, `decision_views`, evidence và số candidate đã quét.
 
 ## Workflow
 
-1. `POST /agent/sessions` tạo local session cho owner.
-2. `POST /agent/sessions/{id}/messages` chạy `opencode run --attach`; lượt đầu chưa có OpenCode ID, backend lấy ID từ JSON events và lưu mapping trong runtime store. Không đặt deadline tổng cho lượt agent; khi client ngắt kết nối, backend hủy tiến trình đang chạy. Khi dùng SSE, trạng thái bắt đầu và từng tool call (`running`, `completed`, `error`) được gửi ngay khi nhận từ OpenCode, kèm mô tả hành động dựng từ tên tool và input cấu trúc đã cho phép; không đưa private reasoning hay message tự do do model viết vào tiến độ. Backend và OpenCode/MCP không tự reload code, cần khởi động lại sau khi sửa.
-3. Agent gọi MCP tools tùy hội thoại: `ask_choice`, `catalog_facets`, `query_tours`, `tour_detail`, `score_soft`, `relax_criterion`, `clarify_date`.
-4. query_tours kiểm tra requirement và ranking.order_by, hard-filter trước, rồi sắp theo các khóa đã khai báo. Tool không trả candidate list đầy đủ. Nếu soft_fit có thể ảnh hưởng top 5, query_tours tạo context và trả evidence theo batch có giới hạn; score_soft xác thực quote và yêu cầu đủ verdict cho batch rồi trả trang kế tiếp hoặc comparison cuối. Việc chấm bao phủ toàn bộ ứng viên có thể vào top 5, kể cả mọi ứng viên trong nhóm đồng hạng liên quan; candidate ngoài vùng đó không làm phình context model.
-5. Backend lưu requirement/comparison thuộc guest owner; kết quả hiển thị tối đa 5 tour.
+1. Chat tạo hoặc cập nhật Decision Brief; chưa gọi tour query cho tới khi người dùng xác nhận.
+2. `POST /agent/sessions/{id}/decisions` validate lại requirement và tổng trọng số 100.
+3. `query_tours` nhận `decision_run_id` do backend cấp, áp hard filter lên catalog scan và mở context chứa toàn bộ hard-pass candidates.
+4. Agent gọi `score_soft` theo batch tới khi mọi candidate/soft condition trong context được đánh giá. Quote phải có trong snapshot; verdict chưa rõ là `unknown`.
+5. Backend engine tính weighted view, cheapest view và Pareto view; MCP ghi Comparison cuối vào runtime store theo `decision_run_id`.
+6. Sau khi OpenCode dừng, service lấy Comparison theo mã lượt, kiểm tra khớp requirement, lưu owner-scoped rồi stream kết quả. Không dựa vào model lặp lại JSON kết quả trong output.
+7. SSE có progress/tool events an toàn. Không đặt deadline tổng cho agent; client disconnect sẽ hủy process. Giữ timeout riêng của tool/data call.
 
 ## Interface với module khác
 
-`api` xác thực owner và gọi agent service. `data` cung cấp catalog và runtime store. MCP tools dùng `models`, `decide.engine`, `normalize` và `input.lunar`; không có quyền ghi catalog hoặc gọi crawler. Frontend gửi từng lượt và render text, `ask_choice`, tool progress và ResultCards.
+`api` xác thực owner và gọi agent service. MCP gọi `input`, `workflows`, `normalize` và `decide`; `data` cung cấp catalog và runtime store. Frontend lưu draft trong transcript và gửi bản đã review qua decisions endpoint.
 
 ## Quyết định kỹ thuật
 
-- Một `opencode serve` local được giữ chạy; backend tạo tiến trình nhẹ `opencode run --attach` cho mỗi lượt, không khởi chạy daemon riêng.
-- Mapping owner/local session/OpenCode session được giữ trong runtime store; client không gửi hay nhận OpenCode ID.
-- Agent/model prompt không thay đổi theo destination. `catalog_facets` chỉ trả dữ liệu thực tế đã quét; `scanned_tours` là số bản ghi đã đọc, không phải tổng số tour trong catalog. `scan_limit` là trần truy xuất có cấu hình, không phải khẳng định catalog chỉ có từng ấy tour.
-- Với yêu cầu quốc gia/vùng, agent dùng hiểu biết địa lý để chọn destination label thực có trong `catalog_facets`; gửi một nhãn bằng `contains`, nhiều nhãn bằng `any`. Nếu không xác định được nhãn phù hợp, agent hỏi lại; không kết luận toàn catalog không có kết quả từ facets đã quét.
-- Nội dung hướng tới người dùng phải dùng tiếng Việt có dấu. `ask_choice` chuẩn hóa chính tả lựa chọn trùng khớp duy nhất với tên destination trong catalog; giá trị không khớp hoặc mơ hồ được giữ nguyên. Tiến độ tool được tạo từ loại thao tác và input an toàn, các lần gọi có cùng mô tả được gom ở UI và hiện số lần thay vì lặp dòng.
-- Tên điểm đến cụ thể phải được xác nhận đúng theo `catalog_facets`; không được biến điểm đến cấp tỉnh thành xác nhận cho địa danh nhỏ hơn. Khi không có tour đạt đủ nhưng có `near_miss`, câu trả lời phải phân biệt “chưa có tour được xác minh đạt đủ điều kiện” với “không có tour ở điểm đến đó”. Lượt chat mới cập nhật điều kiện trong cùng chuyến đi, thay điều kiện mâu thuẫn thay vì giữ cả hai.
-- Hard filter, evidence, freshness ngày khởi hành, near-miss và phân tích rủi ro vẫn là quy tắc xác định. Giá ngân sách dùng trường giá catalog trực tiếp, không qua domain/metadata trust gate; tuổi giá không chặn quyết định. Free-text keyword/NIM extraction và slot state machine bị loại.
-- Tool responses được xác thực trước lưu/hiển thị; lỗi soft scoring trở thành `unknown`, không làm hỏng hard-filter result.
-- Không lọc danh sách tool bằng `tools: { "*": false }`: cấu hình đó làm Muse Spark free trả 403 qua CLI, kể cả khi bật lại `read`. Giữ schema tool mặc định để tương thích; đặt permission `*` thành `ask` và chỉ cho phép `tour-catalog_*`. Runner không duyệt permission, nên tool hệ thống không thể chạy tự động; agent chỉ được gọi MCP catalog trong các lượt chat.
-- Local-first: cùng MCP server và agent config được dùng khi triển khai server OpenCode riêng. Cùng endpoint giữ chế độ JSON mặc định và thương lượng SSE qua `Accept`, tránh đổi contract client cũ.
-- Không có timeout tổng cho agent; timeout riêng của từng MCP call và kết nối dữ liệu vẫn được giữ.
+- Mỗi chat gắn một OpenCode session owner-scoped; ID OpenCode không lộ client.
+- Agent đánh giá semantic fit; engine kiểm tra hard rules, evidence, trọng số và kết quả xếp hạng.
+- Không gửi toàn bộ candidate evidence vào một prompt; dùng batch tuần tự trong evaluation context.
+- `candidates_considered` là số tour đã quét, không phải tổng catalog.
+- Không lưu hoặc hiển thị private reasoning. Tiến độ chỉ mô tả thao tác tool thực tế.
 
 ## Chạy local
 
-Đảm bảo `.env` có `OPENCODE_SERVER_URL=http://127.0.0.1:4098` như `.env.example`, rồi chạy `opencode serve --hostname 127.0.0.1 --port 4098` trước backend.
+Cấu hình `OPENCODE_SERVER_URL` theo `.env.example`; chạy `opencode serve` trước backend.

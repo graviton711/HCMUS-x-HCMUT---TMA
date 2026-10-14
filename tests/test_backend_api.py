@@ -234,6 +234,34 @@ def test_agent_session_is_owner_scoped_and_uses_request_response(tmp_path, monke
     assert client.get("/history", headers=own_headers).json()["items"] == []
 
 
+def test_agent_decision_endpoint_rejects_unbalanced_soft_weights(tmp_path, monkeypatch):
+    monkeypatch.setattr(OpenCodeRunner, "_executable", lambda _self: "opencode")
+    client = _client(tmp_path, opencode_server_url="http://127.0.0.1:4098")
+    guest = client.post("/sessions").json()
+    headers = {"Authorization": f"Bearer {guest['token']}"}
+    agent_id = client.post("/agent/sessions", headers=headers).json()["agent_session_id"]
+    requirement = {
+        "id": "req_reviewed",
+        "raw_text": "Thích thiên nhiên và biển",
+        "travelers": 1,
+        "conditions": [
+            {"id": "s1", "field": "preference", "operator": "contains", "value": "thiên nhiên",
+             "strength": "soft", "quote": "thiên nhiên", "weight_percent": 60},
+            {"id": "s2", "field": "preference", "operator": "contains", "value": "biển",
+             "strength": "soft", "quote": "biển", "weight_percent": 30},
+        ],
+    }
+
+    response = client.post(
+        f"/agent/sessions/{agent_id}/decisions",
+        headers=headers,
+        json={"requirement": requirement},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "REQUIREMENT_INVALID"
+
+
 def test_agent_sse_includes_safe_tool_activity_summary(tmp_path, monkeypatch):
     monkeypatch.setattr(OpenCodeRunner, "_executable", lambda _self: "opencode")
 

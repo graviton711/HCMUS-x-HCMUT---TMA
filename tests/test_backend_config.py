@@ -116,5 +116,5 @@ def test_repo_configs_load():
     assert "model: opencode/muse-spark-1.3-contributor-free" in agent
     prompt = yaml.safe_load(Path("configs/prompts/agent.yaml").read_text(encoding="utf-8"))
     assert agent.split("---", 2)[2].strip() == prompt["system"].strip()
-    assert "operator any" in prompt["system"]
-    assert "cannot prove the full catalog" in prompt["system"]
+    assert "`any` for multiple alternatives" in prompt["system"]
+    assert "cannot prove absence from the full catalog" in prompt["system"]

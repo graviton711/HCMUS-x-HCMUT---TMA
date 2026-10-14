@@ -88,7 +88,7 @@ $env:OPENCODE_SERVER_URL='http://127.0.0.1:4098'
 uv run tour-backend serve
 ```
 
-Ở terminal khác chạy `corepack pnpm@11.25.0 --dir src/frontend dev`, rồi chạy `corepack pnpm@11.25.0 --dir src/frontend test:e2e`. Playwright cần Chrome; không dùng production data.
+Chạy `corepack pnpm@11.25.0 --dir src/frontend test:e2e`; Playwright tự khởi động và dừng frontend. Backend fixture phải chạy riêng theo cấu hình trên. Playwright cần Chrome; không dùng production data.
 
 ## Ghi nguồn asset
 

@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from backend.data.catalog import FixtureCatalog
 from backend.decide.engine import compare
 from backend.input.pipeline import requirement_from_form
-from backend.models import Condition, Requirement, TourRow, uid
+from backend.models import Condition, OfferSnapshot, Requirement, TourRow, TourSnapshot, uid
 from backend.normalize.snapshots import rows_to_snapshots
 
 
@@ -191,6 +191,74 @@ def test_soft_verdict_count_ranks_before_price_and_keeps_quote_reason(decide_cfg
     assert by_id["s1"].state == "pass"
     assert by_id["s1"].quote == "VinWonders"
     assert by_id["s1"].reason == "Có công viên giải trí trong lịch trình."
+
+
+def test_weighted_views_are_explainable_currency_safe_and_pareto(decide_cfg):
+    req = Requirement(
+        id="req_views",
+        raw_text="Ưu tiên thiên nhiên, sau đó biển",
+        conditions=[
+            Condition(id="nature", field="preference", value="thiên nhiên", strength="soft",
+                      quote="thiên nhiên", weight_percent=80),
+            Condition(id="beach", field="preference", value="biển", strength="soft",
+                      quote="biển", weight_percent=20),
+        ],
+    )
+
+    def tour(key, price, currency="VND", basis="exact"):
+        return TourSnapshot(
+            id=key,
+            name=f"Tour {key}",
+            itinerary=f"Evidence for {key}",
+            offers=[OfferSnapshot(
+                id=f"offer-{key}", tour_id=key, price=price, currency=currency,
+                price_basis=basis,
+            )],
+        )
+
+    tours = [
+        tour("a", 100), tour("b", 200), tour("c", 150), tour("d", 40, "USD"),
+        tour("e", 100),
+        tour("from", 1, "VND", "from"), tour("contact", 5, "VND", "contact"),
+        tour("missing", None),
+    ]
+    verdicts = {
+        ("offer-a", "nature"): ("pass", "Evidence for a", "Có bằng chứng phù hợp."),
+        ("offer-a", "beach"): ("fail", "Evidence for a", "Không thấy nội dung về biển."),
+        ("offer-b", "nature"): ("pass", "Evidence for b", "Có bằng chứng phù hợp."),
+        ("offer-b", "beach"): ("pass", "Evidence for b", "Có bằng chứng phù hợp."),
+        ("offer-c", "nature"): ("pass", "Evidence for c", "Có bằng chứng phù hợp."),
+        ("offer-c", "beach"): ("fail", "Evidence for c", "Không thấy nội dung về biển."),
+        ("offer-d", "nature"): ("unknown", "", "Thiếu dữ liệu."),
+        ("offer-d", "beach"): ("pass", "Evidence for d", "Có bằng chứng phù hợp."),
+        ("offer-e", "nature"): ("pass", "Evidence for e", "Có bằng chứng phù hợp."),
+        ("offer-e", "beach"): ("pass", "Evidence for e", "Có bằng chứng phù hợp."),
+        ("offer-from", "nature"): ("pass", "Evidence for from", "Có bằng chứng phù hợp."),
+        ("offer-from", "beach"): ("pass", "Evidence for from", "Có bằng chứng phù hợp."),
+        ("offer-contact", "nature"): ("pass", "Evidence for contact", "Có bằng chứng phù hợp."),
+        ("offer-contact", "beach"): ("pass", "Evidence for contact", "Có bằng chứng phù hợp."),
+        ("offer-missing", "nature"): ("pass", "Evidence for missing", "Có bằng chứng phù hợp."),
+        ("offer-missing", "beach"): ("pass", "Evidence for missing", "Có bằng chứng phù hợp."),
+    }
+
+    comparison = compare(req, tours, decide_cfg, verdicts)
+    views = {view.kind: view for view in comparison.decision_views}
+
+    assert [item.tour_id for item in views["cheapest"].candidates[:3]] == ["d", "e", "a"]
+    assert views["cheapest"].currencies == ["USD", "VND"]
+    best_fit_ids = [item.tour_id for item in views["best_fit"].candidates]
+    assert {"b", "from", "contact", "missing"}.issubset(best_fit_ids)
+    cheapest_ids = {item.tour_id for item in views["cheapest"].candidates}
+    assert not {"from", "contact", "missing"} & cheapest_ids
+    balanced_ids = {item.tour_id for item in views["balanced"].candidates}
+    assert not {"from", "contact", "missing"} & balanced_ids
+    assert "c" not in {item.tour_id for item in views["balanced"].candidates}
+    assert balanced_ids == {"d", "e"}
+    assert [item.tour_id for item in views["best_fit"].candidates] == [
+        item.tour_id for item in compare(req, tours, decide_cfg, verdicts).decision_views[1].candidates
+    ]
+    assert next(item for item in comparison.evaluations
+                if item.offer_id == "offer-d" and item.condition_id == "nature").state == "unknown"
 
 
 def test_analysis_surfaces_costs_risks_benefits(decide_cfg):

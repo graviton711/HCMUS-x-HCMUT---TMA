@@ -32,6 +32,7 @@ export interface CurrentAgentResponse {
   choices?: CurrentAgentChoice;
   tool_calls: { name: string; status: string }[];
   requirement?: CurrentRequirement;
+  decision_draft?: CurrentRequirement;
   comparison?: CurrentComparison;
 }
 
@@ -52,6 +53,7 @@ export interface CurrentCondition {
   value: unknown;
   strength: 'hard' | 'soft';
   quote: string;
+  weight_percent?: number | null;
 }
 
 export interface CurrentRequirement {
@@ -129,6 +131,14 @@ export interface CurrentComparison {
   };
   candidates_considered: number;
   ranking_currencies?: string[];
+  decision_views?: CurrentDecisionView[];
+}
+
+export interface CurrentDecisionView {
+  kind: 'cheapest' | 'best_fit' | 'balanced';
+  candidates: { tour_id: string; offer_id: string; score: number }[];
+  currencies: string[];
+  note: string;
 }
 
 export interface CurrentHistoryItem {

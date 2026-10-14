@@ -33,6 +33,7 @@ def validate_requirement(
     travelers: Any = 1,
     requirement_id: str | None = None,
     ranking: Any = None,
+    require_weights: bool = False,
 ) -> Requirement:
     """Validate agent-produced conditions without guessing or coercing values."""
     if not isinstance(raw_text, str) or not raw_text.strip() or len(raw_text) > 8000:
@@ -62,9 +63,17 @@ def validate_requirement(
                 raise _invalid("Soft conditions must use the preference field.")
             if not isinstance(condition.value, str) or not condition.value.strip():
                 raise _invalid("A soft preference must be non-empty text.")
+        elif condition.weight_percent is not None:
+            raise _invalid("Only soft preferences can have a weight.")
         else:
             _validate_hard(condition)
         cleaned.append(condition)
+
+    soft_conditions = [condition for condition in cleaned if condition.strength == "soft"]
+    if require_weights and soft_conditions:
+        weights = [condition.weight_percent for condition in soft_conditions]
+        if any(weight is None for weight in weights) or sum(weight or 0 for weight in weights) != 100:
+            raise _invalid("Soft preference weights must add up to exactly 100.")
 
     ranking_spec = None
     if ranking is not None:

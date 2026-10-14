@@ -10,7 +10,7 @@ Vào: điều kiện JSON có field/operator/value/strength/quote đã được 
 
 ## Workflow
 
-Agent gửi điều kiện đã cấu trúc tới tool; validator kiểm tra field/operator/value và giữ quote làm chứng cứ cho nguồn user. Điều kiện nhiều lựa chọn dùng operator `any`. `clarify_date` dùng `vi_lunaire` và kiểm tra round-trip trước khi trả ISO. `relax_criterion` xóa đúng một hard condition rồi chạy lại hard filter.
+Agent gửi điều kiện đã cấu trúc tới tool; validator kiểm tra field/operator/value và giữ quote làm chứng cứ cho nguồn user. Điều kiện nhiều lựa chọn dùng operator `any`. `clarify_date` dùng `vi_lunaire` và kiểm tra round-trip trước khi trả ISO. Thay đổi một hard condition tạo requirement draft mới; chỉ endpoint decision sau khi người dùng review mới chạy hard filter.
 
 ## Interface với module khác
 

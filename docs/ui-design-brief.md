@@ -80,11 +80,12 @@ Chụp cùng trạng thái ở desktop 1440×1000 và mobile 390×844: trang cha
 
 Thay đổi chỉ đạt khi các ảnh trước/sau thể hiện được cải thiện ở cả sáu mục mà không làm sai lệch nội dung, trạng thái hay luồng quyết định của agent.
 
-## Tương tác quyết định từ kết quả thật
+## Decision workspace
 
-- Tham khảo `artifacts/aura-travel-—-quyết-định-tour-thông-minh.zip`: ý tưởng so sánh, trọng số, tour đã lưu và gợi ý chat có ích, nhưng điểm số mẫu và catalog cố định của prototype không phải bằng chứng từ catalog hiện tại.
-- So sánh tối đa ba lựa chọn trong cùng một kết quả, theo các thuộc tính và điều kiện/evidence trả về từ backend. Không tạo điểm tương thích mới.
-- Trọng số chỉ gắn với các điều kiện `soft` mà agent đã cấu trúc và đánh giá. Chúng chỉ đổi thứ tự những tour đã qua toàn bộ điều kiện `hard` trong nhóm kết quả đang hiển thị; không làm thay đổi yêu cầu, kết luận đạt hay nhóm gần đạt. Khi có ít nhất một tiêu chí mềm và hai tour đạt đủ, bảng điều chỉnh mở sẵn lần đầu để người dùng nhận ra; vẫn có thể thu gọn sau đó.
-- Tour đã lưu là snapshot dữ liệu gọn, có nguồn và thời điểm ghi nhận, lưu cục bộ theo profile trình duyệt. Không lưu token hay ngữ cảnh hội thoại.
-- Gợi ý chat trước tìm kiếm giúp bắt đầu yêu cầu; gợi ý sau kết quả lấy từ tour, rủi ro và dữ kiện chưa rõ trong kết quả. Nếu không có tình huống đặc biệt, vẫn đưa ra một câu hỏi giải thích có căn cứ từ chính kết quả; không giả lập tiến độ hoặc kết luận thay agent.
-- Các tương tác phải giữ ngôn ngữ bề mặt phẳng, phân cấp nhẹ, thao tác bàn phím và màu sắc tương đương ở light/dark mode; bảng so sánh mở rộng theo nội dung nhưng cuộn ngang được trên màn hình hẹp.
+- Chat thu thập nhu cầu; sau đó hiển thị Decision Brief inline để review điều kiện cứng và sở thích mềm trước khi truy vấn catalog. Có thể sửa hoặc bỏ điều kiện trước khi chạy.
+- Trọng số soft dùng tổng 100 điểm. Mặc định chia đều, có thao tác “Chia đều”, và trạng thái xác nhận bị khóa khi tổng khác 100. Mỗi tiêu chí cho thấy trọng số và mô tả ngắn; không dùng gauge hay điểm tin cậy.
+- Kết quả chuyển khỏi hình thức một đoạn chat đơn thành workspace có ba tab/góc nhìn: “Giá thấp nhất”, “Hợp ưu tiên nhất”, “Cân bằng”. Mỗi góc nhìn nêu tiêu chí xếp hạng, currency/phạm vi so sánh và số tour đã quét.
+- Góc nhìn giá chỉ xếp giá exact trong cùng currency; `from`, `contact` và thiếu giá có nhãn rõ, không bị gọi là rẻ nhất. Góc nhìn ưu tiên giải thích tổng trọng số pass và giữ unknown riêng. Góc nhìn cân bằng trình bày các phương án Pareto mà không chọn hộ một quán quân.
+- Mỗi view mở đầu bằng lựa chọn đại diện và hiển thị tối đa năm tour. Điểm hợp ưu tiên nêu tổng weight pass; ma trận tiêu chí cho thấy pass/fail/unknown và quote theo từng tour. Tour cards tiếp tục cho phép mở evidence, so sánh/lưu tour; không tạo chỉ số hoặc thuộc tính thiếu trong dữ liệu.
+- Có thể giữ saved tours và chat suggestions hiện có như công cụ phụ trợ quanh workspace, không để chúng cạnh tranh với review/so sánh làm luồng chính.
+- Thành phần và trạng thái cần hoạt động với bàn phím, mobile, light/dark mode. Unknown, không có kết quả, đang chạy, dừng và lỗi dùng cùng ngôn ngữ thị giác hiện có; không biến chúng thành card phụ trang trí.

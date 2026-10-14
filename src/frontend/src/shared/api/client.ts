@@ -90,9 +90,37 @@ export class CurrentBackendClient {
     );
   }
 
-  async agentMessageStream(
+  agentMessageStream(
     agentSessionId: string,
     message: string,
+    onEvent: (event: CurrentAgentProgressEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<CurrentAgentResponse> {
+    return this.agentStream(
+      `/agent/sessions/${encodeURIComponent(agentSessionId)}/messages`,
+      { message },
+      onEvent,
+      signal,
+    );
+  }
+
+  agentDecisionStream(
+    agentSessionId: string,
+    requirement: CurrentRequirement,
+    onEvent: (event: CurrentAgentProgressEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<CurrentAgentResponse> {
+    return this.agentStream(
+      `/agent/sessions/${encodeURIComponent(agentSessionId)}/decisions`,
+      { requirement },
+      onEvent,
+      signal,
+    );
+  }
+
+  private async agentStream(
+    path: string,
+    body: unknown,
     onEvent: (event: CurrentAgentProgressEvent) => void,
     signal?: AbortSignal,
   ): Promise<CurrentAgentResponse> {
@@ -104,11 +132,11 @@ export class CurrentBackendClient {
     let response: Response;
     try {
       response = await this.fetcher(
-        `${this.baseUrl}/agent/sessions/${encodeURIComponent(agentSessionId)}/messages`,
+        `${this.baseUrl}${path}`,
         {
           method: 'POST',
           headers,
-          body: JSON.stringify({ message }),
+          body: JSON.stringify(body),
           credentials: 'omit',
           signal,
         },

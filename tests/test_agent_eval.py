@@ -8,7 +8,7 @@ from backend.settings import Settings
 
 
 @pytest.mark.asyncio
-async def test_local_agent_searches_and_returns_grounded_cards(tmp_path):
+async def test_local_agent_builds_a_reviewable_brief_without_querying_tours(tmp_path):
     settings = Settings.load().model_copy(
         update={"database_url": f"sqlite:///{tmp_path / 'agent-eval.db'}"}
     )
@@ -27,7 +27,7 @@ async def test_local_agent_searches_and_returns_grounded_cards(tmp_path):
         "tôi thích có công viên giải trí.",
     )
     assert result["assistant_text"]
-    assert result["comparison"]
-    assert len(result["comparison"]["tour_snapshots"]) <= 5
-    assert any(call["name"] == "query_tours" for call in result["tool_calls"])
+    assert result["decision_draft"]["conditions"]
+    assert any(call["name"] == "draft_requirement" for call in result["tool_calls"])
+    assert not any(call["name"] == "query_tours" for call in result["tool_calls"])
     service.store.close()
