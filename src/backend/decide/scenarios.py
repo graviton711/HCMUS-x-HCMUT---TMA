@@ -111,16 +111,14 @@ def _scenario_item(
 
     priced_total = sum(item.calculated_total or 0 for item in priced)
     known_total = base + priced_total if base is not None else None
-    lower_bound = offer.price_basis == "from"
-    complete = base is not None and not lower_bound and not any(
+    complete = base is not None and not any(
         item.obligation != "optional" for item in unresolved
     )
     baseline_profile = next((p for p in comparison.metric_profiles
                              if p.offer_id == offer.id and p.cost.currency.upper() == offer.currency.upper()), None)
     baseline = (
         baseline_profile.cost.group_total_calculated
-        if baseline_profile and baseline_profile.cost.state == "observed"
-        and not baseline_profile.cost.total_is_lower_bound else None
+        if baseline_profile and baseline_profile.cost.state == "observed" else None
     )
     return CostScenarioItem(
         tour_id=tour.id,
@@ -132,7 +130,7 @@ def _scenario_item(
         group_base_calculated=base,
         priced_mandatory_extras=priced,
         known_total=known_total,
-        total_is_lower_bound=lower_bound,
+        total_is_lower_bound=False,
         unresolved_exposures=unresolved,
         delta_from_original=known_total - baseline if known_total is not None and baseline is not None else None,
         state="observed" if complete else "partial" if known_total is not None else "unknown",
@@ -143,7 +141,7 @@ def _scenario_item(
 def _party_base(
     offer: OfferSnapshot, assumptions: CostScenarioAssumptions
 ) -> tuple[int | None, list[MetricEvidence]]:
-    if offer.price is None or offer.price_basis not in ("exact", "from") or not offer.currency:
+    if offer.price is None or not offer.currency:
         return None, []
     mix = assumptions.traveler_mix
     if not mix or sum(mix.values()) != assumptions.travelers:

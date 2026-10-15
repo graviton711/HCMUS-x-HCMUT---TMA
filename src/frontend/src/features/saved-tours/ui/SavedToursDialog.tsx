@@ -55,19 +55,13 @@ function priceText(
   locale: string,
   t: (vi: string, en: string) => string,
 ) {
-  if (tour.price == null || tour.priceBasis === "contact")
+  if (tour.price == null)
     return t("Liên hệ", "Contact");
   const amount = tour.price.toLocaleString(locale === "vi" ? "vi-VN" : "en-GB");
   const currency = tour.currency
     ? ` ${tour.currency}`
     : t(" · chưa rõ tiền tệ", " · currency unknown");
-  const prefix =
-    tour.priceBasis === "from"
-      ? t("Từ ", "From ")
-      : tour.priceBasis === "unknown"
-        ? t("Cơ sở giá chưa rõ: ", "Price basis unknown: ")
-        : "";
-  return `${prefix}${amount}${currency}`;
+  return `${amount}${currency}`;
 }
 
 export function SavedToursDialog({

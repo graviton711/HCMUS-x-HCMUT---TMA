@@ -68,7 +68,7 @@ const decisionComparison = {
       kind: "cheapest" as const,
       candidates: [{ tour_id: "tour-a", offer_id: "offer-a-1", score: 0 }],
       currencies: ["VND"],
-      note: "Only exact prices.",
+      note: "Only numeric published prices in one currency.",
     },
     {
       kind: "best_fit" as const,

@@ -2,7 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
-from backend.data.catalog import FixtureCatalog
+from sample_rows import sample_rows
+
 from backend.decide.engine import compare
 from backend.decide.scenarios import cost_scenario
 from backend.input.pipeline import requirement_from_form
@@ -21,7 +22,7 @@ from backend.normalize.snapshots import rows_to_snapshots
 
 
 def _snapshots():
-    return rows_to_snapshots(FixtureCatalog().list_tours(10))
+    return rows_to_snapshots(sample_rows())
 
 
 def _req(form):
@@ -36,15 +37,15 @@ def test_budget_hard_filter_per_offer(decide_cfg):
     assert ("dlv-dalat-3n", "dlv-dalat-3n-20261225") not in kept
 
 
-def test_from_price_is_unknown_and_never_passes_budget(decide_cfg):
+def test_numeric_from_price_is_compared_to_budget(decide_cfg):
     req = _req({"destinations": ["Hạ Long"], "budget_max": 10_000_000})
     comparison = compare(req, _snapshots(), decide_cfg)
     budget_id = next(condition.id for condition in req.conditions if condition.field == "budget_max")
     states = {(item.offer_id, item.condition_id): item.state for item in comparison.evaluations}
     offer_id = "sgt-halong-3n-20261227"
-    assert states[(offer_id, budget_id)] == "unknown"
-    assert offer_id not in {item.offer_id for item in comparison.ranked}
-    assert offer_id in {item.offer_id for item in comparison.near_miss}
+    assert states[(offer_id, budget_id)] == "pass"
+    assert offer_id in {item.offer_id for item in comparison.ranked}
+    assert offer_id not in {item.offer_id for item in comparison.near_miss}
 
 
 def test_from_price_above_budget_fails(decide_cfg):
@@ -65,10 +66,10 @@ def test_from_price_above_budget_fails(decide_cfg):
     budget_id = next(c.id for c in comparison.requirement.conditions if c.field == "budget_max")
     evaluation = next(e for e in comparison.evaluations if e.condition_id == budget_id)
     assert evaluation.state == "fail"
-    assert evaluation.reason_code == "PRICE_LOWER_BOUND_OVER_BUDGET"
+    assert evaluation.reason_code == "PRICE_OVER_BUDGET"
 
 
-def test_missing_contact_and_non_vnd_prices_are_unknown(decide_cfg):
+def test_missing_and_non_vnd_prices_are_unknown_but_numeric_contact_is_used(decide_cfg):
     observed = datetime.now(UTC).isoformat()
     row = TourRow(
         tour={"record_key": "price-cases", "price_type": "fixed"},
@@ -84,7 +85,7 @@ def test_missing_contact_and_non_vnd_prices_are_unknown(decide_cfg):
     budget_id = next(c.id for c in comparison.requirement.conditions if c.field == "budget_max")
     states = {(e.offer_id, e.state, e.reason_code) for e in comparison.evaluations}
     assert ("missing", "unknown", "PRICE_MISSING") in states
-    assert ("contact", "unknown", "PRICE_NOT_EXACT") in states
+    assert ("contact", "pass", "") in states
     assert ("foreign-currency", "unknown", "PRICE_CURRENCY_MISMATCH") in states
     assert all(e.condition_id == budget_id for e in comparison.evaluations)
 
@@ -157,7 +158,7 @@ def test_missing_destination_data_is_unknown(decide_cfg):
 def test_date_matching_uses_catalog_date_regardless_of_crawl_freshness(decide_cfg):
     future = datetime.now(UTC) + timedelta(days=2)
     stale_tours = rows_to_snapshots(
-        FixtureCatalog().list_tours(10),
+        sample_rows(),
         freshness_seconds={"departure_date": 86400},
         now=future,
     )
@@ -280,16 +281,18 @@ def test_weighted_views_are_explainable_currency_safe_and_pareto(decide_cfg):
     comparison = compare(req, tours, decide_cfg, verdicts)
     views = {view.kind: view for view in comparison.decision_views}
 
-    assert [item.tour_id for item in views["cheapest"].candidates[:3]] == ["d", "e", "a"]
+    assert [item.tour_id for item in views["cheapest"].candidates[:3]] == ["d", "from", "contact"]
     assert views["cheapest"].currencies == ["USD", "VND"]
     best_fit_ids = [item.tour_id for item in views["best_fit"].candidates]
     assert {"b", "from", "contact", "missing"}.issubset(best_fit_ids)
     cheapest_ids = {item.tour_id for item in views["cheapest"].candidates}
-    assert not {"from", "contact", "missing"} & cheapest_ids
+    assert {"from", "contact"}.issubset(cheapest_ids)
+    assert "missing" not in cheapest_ids
     balanced_ids = {item.tour_id for item in views["balanced"].candidates}
-    assert not {"from", "contact", "missing"} & balanced_ids
+    assert "from" in balanced_ids
+    assert "missing" not in balanced_ids
     assert "c" not in {item.tour_id for item in views["balanced"].candidates}
-    assert balanced_ids == {"d", "e"}
+    assert balanced_ids == {"d", "from"}
     assert [item.tour_id for item in views["best_fit"].candidates] == [
         item.tour_id for item in compare(req, tours, decide_cfg, verdicts).decision_views[1].candidates
     ]

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
 import hashlib
 import json
+import re
+import unicodedata
 
 from backend.models import (
     ActivityFact,
@@ -48,7 +48,7 @@ def _fold(value: str) -> str:
 
 
 def _party_base(req: Requirement, tour: TourSnapshot, offer) -> tuple[int | None, str]:
-    if offer.price is None or offer.price_basis not in ("exact", "from") or not offer.currency:
+    if offer.price is None or not offer.currency:
         return None, ""
     mix = req.traveler_mix
     if not mix or sum(mix.values()) != req.travelers:
@@ -96,14 +96,6 @@ def _price_exposures(
         item = source.model_copy(deep=True)
         currency = item.currency.upper()
         qty = _exposure_quantity(item.unit, req, tour)
-        applicable = (
-            item.obligation == "mandatory"
-            and item.amount is not None
-            and item.unit != "unknown"
-            and qty is not None
-            and bool(currency)
-            and currency == offer.currency.upper()
-        )
         if item.obligation in ("optional", "conditional"):
             optional.append(item)
             if item.obligation == "conditional":
@@ -111,7 +103,13 @@ def _price_exposures(
                 if item.amount is None or item.unit == "unknown" or qty is None or not currency:
                     unpriced.append(item)
         elif item.obligation == "mandatory":
-            if applicable:
+            if (
+                item.amount is not None
+                and item.unit != "unknown"
+                and qty is not None
+                and bool(currency)
+                and currency == offer.currency.upper()
+            ):
                 item.calculated_total = item.amount * qty
                 priced_total += item.calculated_total
                 priced.append(item)
@@ -199,7 +197,6 @@ def build_metric_profiles(
             unresolved = True
         group_total = None
         total_scope = group_note
-        total_is_lower_bound = offer.price_basis == "from"
         cost_state = "unknown"
         if group_base is not None:
             group_total = group_base + extra_total
@@ -207,7 +204,7 @@ def build_metric_profiles(
                 "Tạm tính theo khoản bắt buộc đã biết; còn chi phí chưa xác định"
                 if unresolved else "Tổng nhóm theo giá và khoản bắt buộc đã biết"
             )
-            cost_state = "partial" if unresolved or total_is_lower_bound else "observed"
+            cost_state = "partial" if unresolved else "observed"
         elif offer.price is not None:
             cost_state = "partial"
         cost = CostProfile(
@@ -216,7 +213,7 @@ def build_metric_profiles(
             currency=offer.currency,
             group_total_calculated=group_total,
             group_total_scope=total_scope,
-            total_is_lower_bound=total_is_lower_bound,
+            total_is_lower_bound=False,
             priced_extras=priced,
             unpriced_exclusions=unpriced,
             optional_or_conditional=optional,
@@ -253,7 +250,7 @@ def build_metric_profiles(
             route_count = len(facts.route_legs)
             route_evidence = [leg.evidence for leg in facts.route_legs]
         modes = [leg.mode.casefold() for leg in facts.route_legs if leg.mode.strip()]
-        mode_changes = sum(left != right for left, right in zip(modes, modes[1:])) if modes else None
+        mode_changes = sum(left != right for left, right in zip(modes, modes[1:], strict=False)) if modes else None
         measures["route_complexity"] = MetricMeasure(
             value={"explicit_legs": route_count, "transport_changes": mode_changes},
             unit="legs_and_changes",

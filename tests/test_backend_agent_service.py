@@ -5,6 +5,8 @@ import json
 import logging
 import re
 
+from sample_rows import StaticCatalog
+
 from backend.agent.mcp_server import AgentTools
 from backend.agent.service import (
     AgentService,
@@ -12,7 +14,6 @@ from backend.agent.service import (
     _tool_name,
     _tool_progress_message,
 )
-from backend.data.catalog import FixtureCatalog
 from backend.data.sessions import SessionStore
 from backend.models import uid
 from backend.workflows import TourWorkflows
@@ -28,6 +29,64 @@ def test_discovery_progress_describes_the_catalog_filter():
     assert _tool_progress_message("discover_destinations", {}) == "Lọc điểm đến theo các điều kiện đã biết"
 
 
+def test_message_uses_final_text_message_and_deduplicates_parts(settings, caplog):
+    settings = settings.model_copy(update={"database_url": "sqlite:///:memory:"})
+    store = SessionStore(settings.database_url)
+    service = AgentService(settings, store)
+    owner_id = store.create_session(3600)["id"]
+    local_id = store.create_agent_session(owner_id)
+
+    async def fake_events(_message, _session_id):
+        yield {"type": "text", "part": {
+            "id": "part-1", "messageID": "message-1", "text": "Chào bạn, tôi sẽ kiểm tra."
+        }}
+        yield {"type": "text", "part": {
+            "id": "part-2", "messageID": "message-2", "text": "Chào bạn, tôi sẵn sàng hỗ trợ."
+        }}
+        final_part = {
+            "id": "part-3", "messageID": "message-3", "text": "Chào bạn, rất vui được hỗ trợ."
+        }
+        yield {"type": "text", "part": final_part}
+        yield {"type": "text", "part": final_part}
+        yield {"type": "text", "part": {
+            "id": "part-4", "messageID": "message-3", "text": "Bạn muốn đi đâu?"
+        }}
+        yield {"type": "text", "part": {
+            "id": "synthetic", "messageID": "message-3", "text": "internal", "synthetic": True
+        }}
+        yield {"type": "text", "part": {
+            "id": "ignored", "messageID": "message-3", "text": "ignored", "ignored": True
+        }}
+        yield {"type": "text", "part": {
+            "id": "commentary", "messageID": "message-3", "text": "working",
+            "metadata": {"openai": {"phase": "commentary"}},
+        }}
+
+    service.runner.events = fake_events
+    caplog.set_level(logging.INFO, logger="mlai.backend.agent.service")
+
+    response = asyncio.run(service.message(owner_id, local_id, "chào"))
+
+    assert response["assistant_text"] == "Chào bạn, rất vui được hỗ trợ.\n\nBạn muốn đi đâu?"
+    assert "tôi sẽ kiểm tra" not in response["assistant_text"]
+    assert "tôi sẵn sàng hỗ trợ" not in response["assistant_text"]
+    assert "agent_text_aggregation message_count=3 part_count=4 duplicate_events=1 filtered_parts=3" in caplog.text
+    assert "Chào bạn" not in caplog.text
+    assert "Bạn muốn đi đâu?" not in caplog.text
+    store.close()
+
+
+def test_departure_date_range_progress_does_not_call_the_upper_bound_a_return_date():
+    from backend.agent.service import _condition_activity
+
+    assert _condition_activity({"field": "date_from", "value": "2026-11-21"}) == (
+        "ngày đi 2026-11-21"
+    )
+    assert _condition_activity({"field": "date_to", "value": "2026-11-30"}) == (
+        "ngày khởi hành đến 2026-11-30"
+    )
+
+
 def test_normalizes_opencode_sanitized_mcp_tool_names():
     assert _tool_name("tour_catalog_draft_requirement") == "draft_requirement"
     assert _tool_name("tour-catalog_query_tours") == "query_tours"
@@ -41,7 +100,7 @@ def test_code_mode_execute_recovers_nested_draft_result(settings, caplog):
     service = AgentService(settings, store)
     owner_id = store.create_session(3600)["id"]
     local_id = store.create_agent_session(owner_id)
-    catalog = FixtureCatalog()
+    catalog = StaticCatalog()
     workflows = TourWorkflows(settings, catalog)
     tools = AgentTools(settings, catalog, workflows, result_store=store)
     raw_text = "Group of five, duration 2 days, departing TP.HCM."
@@ -167,7 +226,7 @@ def test_decision_uses_persisted_result_when_opencode_turn_errors_after_tools(se
     service = AgentService(settings, store)
     owner_id = store.create_session(3600)["id"]
     local_id = store.create_agent_session(owner_id)
-    catalog = FixtureCatalog()
+    catalog = StaticCatalog()
     workflows = TourWorkflows(settings, catalog)
     requirement = workflows.requirement(
         "Tour Phú Quốc, thích công viên",

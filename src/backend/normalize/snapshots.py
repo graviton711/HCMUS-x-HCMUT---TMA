@@ -9,7 +9,7 @@ import unicodedata
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from backend.models import Evidence, OfferSnapshot, TourRow, TourSnapshot
+from backend.models import Evidence, Freshness, OfferSnapshot, TourRow, TourSnapshot
 
 _TRANSPORTS = {"flight", "bus", "train", "cruise", "mixed"}
 _DEFAULT_FRESHNESS_SECONDS: dict[str, int | None] = {"departure_date": None}
@@ -66,7 +66,7 @@ def _parsed_time(value: object) -> datetime | None:
     return parsed.astimezone(UTC) if parsed.tzinfo else None
 
 
-def _freshness(value: object, ttl: int | None, now: datetime) -> str:
+def _freshness(value: object, ttl: int | None, now: datetime) -> Freshness:
     observed = _parsed_time(value)
     if observed is None or observed > now:
         return "unknown"
@@ -206,6 +206,7 @@ def rows_to_snapshots(
                 evidence=_evidence(url, str(t.get("observed_at", "")), tour_id),
                 observed_at=str(t.get("observed_at", "")),
                 verification=_text(t.get("verification_status")) or "provider_claimed",
+                detail_state=("index" if t.get("_detail_state") == "index" else "complete"),
                 offers=snapshots,
             )
         )

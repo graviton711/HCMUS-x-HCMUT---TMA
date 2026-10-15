@@ -15,25 +15,37 @@ function canonical(value: unknown): string {
 
 /** Compare decision content while ignoring the server identity of a requirement. */
 export function sameDecision(left: CurrentRequirement, right: CurrentRequirement): boolean {
-  const withoutServerId = (requirement: CurrentRequirement) =>
-    Object.fromEntries(Object.entries(requirement).filter(([key]) => key !== 'id'));
+  const withoutServerId = (requirement: CurrentRequirement) => ({
+    ...Object.fromEntries(Object.entries(requirement).filter(([key]) => key !== 'id')),
+    alternatives: requirement.alternatives ?? [],
+    assumptions: requirement.assumptions ?? [],
+  });
   const leftDecision = withoutServerId(left);
   const rightDecision = withoutServerId(right);
   return canonical(leftDecision) === canonical(rightDecision);
 }
 
 export function latestDecisionArtifact(messages: ChatMsg[]) {
-  return [...messages].reverse().find(
-    (message): message is Extract<ChatMsg, { kind: 'decision_draft' | 'comparison' }> =>
-      message.kind === 'decision_draft' || message.kind === 'comparison',
-  ) ?? null;
+  return (
+    [...messages]
+      .reverse()
+      .find(
+        (message): message is Extract<ChatMsg, { kind: 'decision_draft' | 'comparison' }> =>
+          message.kind === 'decision_draft' || message.kind === 'comparison',
+      ) ?? null
+  );
 }
 
 export function draftForComparison(messages: ChatMsg[], comparison: CurrentComparison) {
-  return [...messages].reverse().find(
-    (message): message is Extract<ChatMsg, { kind: 'decision_draft' }> =>
-      message.kind === 'decision_draft' && sameDecision(message.requirement, comparison.requirement),
-  ) ?? null;
+  return (
+    [...messages]
+      .reverse()
+      .find(
+        (message): message is Extract<ChatMsg, { kind: 'decision_draft' }> =>
+          message.kind === 'decision_draft' &&
+          sameDecision(message.requirement, comparison.requirement),
+      ) ?? null
+  );
 }
 
 /** New comparisons include the metric contract even when no candidates have metric rows. */

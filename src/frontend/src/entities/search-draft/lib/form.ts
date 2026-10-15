@@ -34,8 +34,10 @@ export function currentForm(draft: SearchDraft, catalog: CurrentCatalog): Record
     throw new Error('Adult count must be a whole number from 0 to 100.');
   if (draft.departureDate) checkDate('Departure date', draft.departureDate);
   if (draft.returnDate) checkDate('Return date', draft.returnDate);
-  if (draft.departureDate && draft.returnDate && draft.returnDate < draft.departureDate)
-    throw new Error('Return date must be on or after the departure date.');
+  if (draft.returnDate)
+    throw new Error(
+      'The backend date_to field means latest departure date, not return date. Use the chat brief for trip dates.',
+    );
 
   const destination = draft.destinations[0]?.trim();
   if (destination && !catalog.destinations.includes(destination))
@@ -44,7 +46,6 @@ export function currentForm(draft: SearchDraft, catalog: CurrentCatalog): Record
   if (draft.destinations.length) form.destinations = draft.destinations;
   if (draft.departureOrigin.trim()) form.departure_city = draft.departureOrigin.trim();
   if (draft.departureDate) form.date_from = draft.departureDate;
-  if (draft.returnDate) form.date_to = draft.returnDate;
   if (draft.budget) form.budget_max = Number(draft.budget);
   if (draft.durationDays) form.duration_days = Number(draft.durationDays);
   if (draft.transport.length === 1) form.transport = draft.transport[0];

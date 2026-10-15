@@ -1,8 +1,8 @@
-import type { CurrentCondition, CurrentComparison } from "../../../shared/api";
+import type { CurrentCondition, CurrentComparison } from '../../../shared/api';
 
 export interface SavedTourEvaluation {
   condition: CurrentCondition;
-  state: "pass" | "partial" | "fail" | "unknown";
+  state: 'pass' | 'partial' | 'fail' | 'unknown';
   quote: string;
   reasonCode: string;
   reason: string;
@@ -23,7 +23,7 @@ export interface SavedTour {
   departureDate: string;
   price: number | null;
   currency: string;
-  priceBasis: "exact" | "from" | "contact" | "unknown";
+  priceBasis: 'exact' | 'from' | 'contact' | 'unknown';
   availability: string;
   conditions: string;
   sourceUrl: string;
@@ -40,9 +40,7 @@ export function savedTourFromComparison(
   tourId: string,
   offerId: string,
 ): SavedTour | null {
-  const tour = comparison.tour_snapshots.find(
-    (candidate) => candidate.id === tourId,
-  );
+  const tour = comparison.tour_snapshots.find((candidate) => candidate.id === tourId);
   const offer = tour?.offers.find((candidate) => candidate.id === offerId);
   if (!tour || !offer) return null;
   const evaluations = new Map(
@@ -57,7 +55,7 @@ export function savedTourFromComparison(
     tourId,
     offerId,
     name: tour.name || tour.id,
-    supplier: tour.supplier || "",
+    supplier: tour.supplier || '',
     destinations: [...tour.destinations],
     route: [...tour.route],
     departureCity: tour.departure_city,
@@ -71,14 +69,19 @@ export function savedTourFromComparison(
     conditions: offer.conditions,
     sourceUrl: offer.evidence.url || tour.url || tour.evidence.url,
     observedAt: offer.evidence.observed_at || tour.observed_at,
-    evaluations: comparison.requirement.conditions.map((condition) => {
+    evaluations: [
+      ...comparison.requirement.conditions,
+      ...(comparison.requirement.alternatives ?? []).flatMap(
+        (alternative) => alternative.conditions,
+      ),
+    ].map((condition) => {
       const evaluation = evaluations.get(condition.id);
       return {
         condition: { ...condition },
-        state: evaluation?.state ?? "unknown",
-        quote: evaluation?.quote ?? "",
-        reasonCode: evaluation?.reason_code ?? "",
-        reason: evaluation?.reason ?? "",
+        state: evaluation?.state ?? 'unknown',
+        quote: evaluation?.quote ?? '',
+        reasonCode: evaluation?.reason_code ?? '',
+        reason: evaluation?.reason ?? '',
       };
     }),
   };

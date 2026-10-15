@@ -28,8 +28,14 @@ def _fresh_import():
 
 
 def test_adapter_exposes_wsgi_app(monkeypatch):
+    from sample_rows import StaticCatalog
+
+    import backend.api as backend_api
+
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
     monkeypatch.delenv("VERCEL", raising=False)
+    # No SUPABASE_TOUR_DB_URL offline: serve the in-memory sample catalog.
+    monkeypatch.setattr(backend_api, "for_settings", lambda _settings: StaticCatalog())
     try:
         module = _fresh_import()
         assert getattr(module.app, "title", "") == "Tour Decision Backend"

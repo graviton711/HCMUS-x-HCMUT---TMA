@@ -42,7 +42,7 @@ quality:
   fill_fields: [tour_name, departure_city, destinations, duration_days,
     price, currency, itinerary, inclusions, exclusions]
 backend:
-  data_provider: fixture
+  data_provider: supabase
   database_url: sqlite:///data/backend.db
   cors_origins: ["http://127.0.0.1:5173", "http://localhost:5173"]
   cors_origin_regex: "https://[a-z0-9-]+\\.vercel\\.app"

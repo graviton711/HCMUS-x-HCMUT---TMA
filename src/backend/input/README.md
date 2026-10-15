@@ -6,11 +6,11 @@ Chuẩn hóa và kiểm tra `Requirement` có cấu trúc do agent tools gửi. 
 
 ## Input/output
 
-Vào: điều kiện JSON có field/operator/value/strength/quote đã được agent xác định. Ra: `Requirement` hợp lệ. Tiền chỉ là integer VND; ngày chỉ là ISO dương lịch; dữ liệu lỗi định dạng bị từ chối hoặc trở thành `unknown`, không tự quy đổi/đoán. Lunar date được chuyển đổi riêng qua tool `clarify_date`.
+Vào: điều kiện JSON có field/operator/value/strength/quote đã được agent xác định, cùng điều kiện chung, các nhóm lựa chọn OR và date assumptions (nếu có). Ra: `Requirement` hợp lệ. Tiền chỉ là integer VND; ngày chỉ là ISO dương lịch; dữ liệu lỗi định dạng bị từ chối hoặc trở thành `unknown`, không tự quy đổi/đoán. Lunar date được chuyển đổi riêng qua tool `clarify_date`.
 
 ## Workflow
 
-Agent gửi điều kiện đã cấu trúc tới tool; validator kiểm tra field/operator/value và giữ quote làm chứng cứ cho nguồn user. Điều kiện nhiều lựa chọn dùng operator `any`. `clarify_date` dùng `vi_lunaire` và kiểm tra round-trip trước khi trả ISO. Thay đổi một hard condition tạo requirement draft mới; chỉ endpoint decision sau khi người dùng review mới chạy hard filter.
+Agent gửi điều kiện đã cấu trúc tới tool; validator kiểm tra field/operator/value và giữ quote làm chứng cứ cho nguồn user. `conditions` là điều kiện dùng chung (AND); mỗi `alternative` là một nhánh AND và các nhánh được OR với nhau. Các chiều lựa chọn độc lập được kết hợp thành các nhánh tương ứng; cặp lựa chọn người dùng nói rõ phải đi cùng nhau thì ở cùng nhánh. Điều kiện nhiều giá trị tương đương trong cùng một field vẫn có thể dùng operator `any`. `date_from`/`date_to` là hai biên bao gồm của khoảng ngày khởi hành trong catalog; ngày khởi hành đơn lẻ dùng cùng một ngày cho cả hai biên. Các trường này không xác minh ngày về. Mỗi date assumption liên kết đúng một cặp ngày trong cùng phạm vi chung hoặc cùng nhánh; các nhánh có khoảng riêng cần assumption riêng. `clarify_date` dùng `vi_lunaire` và kiểm tra round-trip trước khi trả ISO. Date assumptions phải có quote, khoảng ISO cụ thể và múi giờ; chúng hiển thị cho người dùng sửa trong Brief. Thay đổi điều kiện tạo requirement draft mới; chỉ endpoint decision sau khi người dùng review mới chạy hard filter.
 
 ## Interface với module khác
 
@@ -21,4 +21,5 @@ Agent MCP tools gọi validator trước `decide`; không có keyword parser ho�
 - Không trích xuất điều kiện bằng regex, từ khóa hoặc LLM phụ; agent là hội thoại và công cụ là ranh giới dữ liệu có cấu trúc.
 - Chỉ chấp nhận tiền VND dạng integer và ngày ISO; không có heuristic đổi đơn vị/định dạng.
 - Lịch âm được tính bằng thư viện xác định và kiểm tra round-trip.
-- Nhiều lựa chọn trong cùng một field là một condition OR (`any`).
+- Nhiều giá trị đồng nghĩa trong một field dùng condition OR (`any`); các tổ hợp lựa chọn được ghép cặp rõ ràng phải nằm trong các alternative branch riêng để tránh tạo tổ hợp sai.
+- `alternatives=[]` giữ tương thích: mọi hard condition trong `conditions` tiếp tục được AND như trước.

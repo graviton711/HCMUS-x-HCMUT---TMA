@@ -79,16 +79,15 @@ Tích hợp browser dùng database SQLite chỉ cho test. Chạy OpenCode server
 opencode serve --hostname 127.0.0.1 --port 4098
 ```
 
-Ở terminal backend:
+Ở terminal backend (chỉ khi muốn chạy backend thật song song; e2e mock mọi response backend nên không bắt buộc):
 
 ```powershell
-$env:DATA_PROVIDER='fixture'
 $env:DATABASE_URL='sqlite:///./artifacts/frontend-e2e.db'
 $env:OPENCODE_SERVER_URL='http://127.0.0.1:4098'
 uv run tour-backend serve
 ```
 
-Chạy `corepack pnpm@11.25.0 --dir src/frontend test:e2e`; Playwright tự khởi động và dừng frontend. Backend fixture phải chạy riêng theo cấu hình trên. Playwright cần Chrome; không dùng production data.
+Chạy `corepack pnpm@11.25.0 --dir src/frontend test:e2e`; Playwright tự khởi động và dừng frontend, mọi gọi backend đều được mock trong spec. Playwright cần Chrome; không dùng production data. Catalog live (khi cần) luôn là Supabase chỉ-đọc qua `SUPABASE_TOUR_DB_URL`; không còn provider fixture.
 
 ## Ghi nguồn asset
 

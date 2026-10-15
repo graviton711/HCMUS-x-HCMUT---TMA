@@ -132,5 +132,5 @@ def test_repo_configs_load():
     assert "model" not in yaml.safe_load(Path("configs/settings.yaml").read_text(encoding="utf-8"))["survey"]
     prompt = yaml.safe_load(Path("configs/prompts/agent.yaml").read_text(encoding="utf-8"))
     assert agent.split("---", 2)[2].strip() == prompt["system"].strip()
-    assert "`any` for multiple alternatives" in prompt["system"]
+    assert "Same-field equivalent labels may use `any`." in prompt["system"]
     assert "cannot prove absence from the full catalog" in prompt["system"]

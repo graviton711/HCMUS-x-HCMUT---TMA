@@ -54,7 +54,7 @@ uv run tour-frontend dev
 
 Mở <http://127.0.0.1:5173>. Vite proxy API tới backend ở cổng `8000`. Giữ cả ba terminal chạy khi dùng web; dừng từng dịch vụ bằng `Ctrl+C`.
 
-Mặc định local dùng SQLite và catalog fixture. Khi có `SUPABASE_TOUR_DB_URL`, backend dùng cùng URL cho runtime store (đọc/ghi) và catalog Supabase (chỉ đọc catalog); không cần `DATABASE_URL` hay `DATA_PROVIDER`.
+Mặc định local dùng SQLite cho runtime store. Catalog luôn là Supabase chỉ-đọc qua `SUPABASE_TOUR_DB_URL`; thiếu URL thì backend báo `CATALOG_NOT_CONFIGURED`, không có fallback offline. Tests dùng rows inline trong `tests/sample_rows.py`, không đọc file fixture.
 
 ## Frontend
 
