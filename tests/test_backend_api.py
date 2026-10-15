@@ -64,6 +64,21 @@ def test_full_compare_flow(tmp_path):
         ).json()
         assert next_page["items"][0]["offer"]["id"] != page["items"][0]["offer"]["id"]
 
+    filtered = client.get(
+        f"/comparisons/{comp['id']}/eliminated?condition_id=h1"
+    ).json()
+    assert filtered["total"] >= 1
+    assert filtered["total"] == len(filtered["items"])
+    for item in filtered["items"]:
+        assert any(
+            condition["condition_id"] == "h1" for condition in item["conditions"]
+        )
+    empty = client.get(
+        f"/comparisons/{comp['id']}/eliminated?condition_id=nope"
+    ).json()
+    assert empty == {"comparison_id": comp["id"], "items": [], "limit": 25,
+                     "next_cursor": None, "total": 0}
+
     cost_scenario = client.post(
         f"/comparisons/{comp['id']}/scenarios",
         json={"kind": "cost", "assumptions": {

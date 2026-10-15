@@ -367,6 +367,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request: Request,
         limit: int = 25,
         cursor: str | None = None,
+        condition_id: str | None = None,
     ) -> dict[str, Any]:
         owner_id = owner_session(request)
         comparison = store.get_comparison(cid, owner_id)
@@ -383,14 +384,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         safe_limit = min(max(limit, 1), 100)
         offset = _decode_page_cursor(cursor)
         entries = _eliminated_offers(snapshot)
+        if condition_id:
+            entries = [
+                entry for entry in entries
+                if any(condition.get("condition_id") == condition_id
+                       for condition in entry.get("conditions", []))
+            ]
         page = entries[offset:offset + safe_limit]
         next_offset = offset + len(page)
+        total = (
+            comparison.decision_trace.excluded_offers
+            if comparison.decision_trace and not condition_id else len(entries)
+        )
         return {
             "comparison_id": cid,
             "items": page,
             "limit": safe_limit,
             "next_cursor": _encode_page_cursor(next_offset) if next_offset < len(entries) else None,
-            "total": comparison.decision_trace.excluded_offers if comparison.decision_trace else len(entries),
+            "total": total,
         }
 
     @app.post("/comparisons/{cid}/scenarios")

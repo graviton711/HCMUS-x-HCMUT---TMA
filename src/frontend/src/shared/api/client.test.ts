@@ -84,9 +84,9 @@ describe('CurrentBackendClient', () => {
       .mockResolvedValueOnce(jsonResponse({ items: [], next_cursor: null }));
     const client = new CurrentBackendClient('guest-token', '', fetcher);
 
-    await client.eliminatedOffers('cmp /one', 'cursor /?', 20);
+    await client.eliminatedOffers('cmp /one', 'cursor /?', 20, 'h2');
     expect(fetcher.mock.calls[0][0]).toBe(
-      '/comparisons/cmp%20%2Fone/eliminated?limit=20&cursor=cursor+%2F%3F',
+      '/comparisons/cmp%20%2Fone/eliminated?limit=20&cursor=cursor+%2F%3F&condition_id=h2',
     );
   });
 

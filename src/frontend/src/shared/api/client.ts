@@ -79,9 +79,10 @@ export class CurrentBackendClient {
     return this.request<CurrentHealth>('/health');
   }
 
-  eliminatedOffers(comparisonId: string, cursor?: string | null, limit = 25) {
+  eliminatedOffers(comparisonId: string, cursor?: string | null, limit = 25, conditionId?: string) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (cursor) params.set('cursor', cursor);
+    if (conditionId) params.set('condition_id', conditionId);
     return this.request<CurrentEliminatedPage>(
       `/comparisons/${encodeURIComponent(comparisonId)}/eliminated?${params.toString()}`,
     );
