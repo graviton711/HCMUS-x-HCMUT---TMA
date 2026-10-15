@@ -103,7 +103,7 @@ function currentComparison() {
         kind: 'cheapest',
         candidates: [{ tour_id: 'tour-dalat', offer_id: 'offer-dalat', score: 0 }],
         currencies: ['VND'],
-        note: 'Chỉ so sánh giá exact trong cùng đơn vị tiền tệ.',
+        note: 'Xếp giá công bố dạng số trong cùng đơn vị tiền tệ.',
       },
       {
         kind: 'best_fit',
@@ -115,7 +115,7 @@ function currentComparison() {
         kind: 'balanced',
         candidates: [{ tour_id: 'tour-dalat', offer_id: 'offer-dalat', score: 100 }],
         currencies: ['VND'],
-        note: 'Pareto giữa giá exact và điểm ưu tiên.',
+        note: 'Pareto giữa giá công bố và điểm ưu tiên.',
       },
     ],
   };

@@ -71,6 +71,13 @@ def main() -> None:
         parser.error(str(exc))
 
     hostname = args.hostname or "127.0.0.1"
+    # Pin the serve password so local CLI runs can authenticate: the runner
+    # passes the same value via OPENCODE_PASSWORD. Random per-boot passwords
+    # would lock the backend out of its own agent server.
+    password = (environment.get("OPENCODE_PASSWORD", "").strip()
+                or environment.get("OPENCODE_SERVER_PASSWORD", "").strip())
+    if password:
+        environment["OPENCODE_PASSWORD"] = password
     command = [
         executable,
         "serve",

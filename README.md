@@ -28,33 +28,15 @@ uv sync
 pnpm.cmd --dir src/frontend install
 ```
 
-Đặt `OPENCODE_SERVER_URL` và `OPENCODE_SERVER_PASSWORD` trong `.env`. Model OpenCode dùng chung cho chat và ingest nằm tại `opencode.model` trong `configs/settings.yaml`. Sau đó mở ba terminal tại repo root và chạy:
-
-**Terminal 1 — OpenCode**
+Đặt `OPENCODE_SERVER_URL` và `OPENCODE_SERVER_PASSWORD` trong `.env`. Model OpenCode dùng chung cho chat và ingest nằm tại `opencode.model` trong `configs/settings.yaml`. Sau đó chạy một lệnh duy nhất tại repo root (backend tự reload khi sửa code, web tự HMR):
 
 ```powershell
-uv run tour-opencode serve
+corepack pnpm --dir src/frontend dev:all
 ```
 
-Lệnh tự nạp `.env` và lấy cổng từ `OPENCODE_SERVER_URL`.
+Ba service (backend `8000` + opencode (cổng theo `OPENCODE_SERVER_URL` trong `.env`) + web `5173`) chạy chung một terminal với log gắn màu riêng; `Ctrl+C` một lần dừng cả ba. Chạy lẻ từng service khi cần debug riêng: `uv run tour-opencode serve`, `uv run tour-backend serve --reload`, `uv run tour-frontend dev`.
 
-**Terminal 2 — Backend**
-
-```powershell
-uv run tour-backend serve
-```
-
-API: <http://127.0.0.1:8000/docs>. Backend tự truyền mật khẩu cho CLI attach.
-
-**Terminal 3 — Frontend**
-
-```powershell
-uv run tour-frontend dev
-```
-
-Mở <http://127.0.0.1:5173>. Vite proxy API tới backend ở cổng `8000`. Giữ cả ba terminal chạy khi dùng web; dừng từng dịch vụ bằng `Ctrl+C`.
-
-Mặc định local dùng SQLite và catalog fixture. Khi có `SUPABASE_TOUR_DB_URL`, backend dùng cùng URL cho runtime store (đọc/ghi) và catalog Supabase (chỉ đọc catalog); không cần `DATABASE_URL` hay `DATA_PROVIDER`.
+Mặc định local dùng SQLite cho runtime store. Catalog luôn là Supabase chỉ-đọc qua `SUPABASE_TOUR_DB_URL`; thiếu URL thì backend báo `CATALOG_NOT_CONFIGURED`, không có fallback offline. Tests dùng rows inline trong `tests/sample_rows.py`, không đọc file fixture.
 
 ## Frontend
 

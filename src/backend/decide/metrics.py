@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
 import hashlib
 import json
 
+from backend.decide.costing import age_group_total, exposure_quantity
+from backend.decide.parse import count_activities, count_legs, full_refund_cutoff
 from backend.models import (
     ActivityFact,
     CostExposure,
@@ -16,12 +16,13 @@ from backend.models import (
     MetricEvidence,
     MetricMeasure,
     MetricProfile,
+    MetricState,
     PreferenceScore,
     Requirement,
     TourSnapshot,
 )
+from shared.text import fold_vi as _fold
 
-_AGE_GROUPS = ("adult", "child", "small_child", "infant")
 _FACT_EXTRACTOR_VERSION = "tour-facts-v3"
 
 
@@ -41,47 +42,25 @@ def fact_cache_id(tour: TourSnapshot) -> str:
     return "metric_" + hashlib.sha256(f"{_FACT_EXTRACTOR_VERSION}:{source_hash}".encode()).hexdigest()
 
 
-def _fold(value: str) -> str:
-    decomposed = unicodedata.normalize("NFD", value.casefold().replace("đ", "d"))
-    plain = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
-    return re.sub(r"[^a-z0-9]", "", plain)
-
-
-def _party_base(req: Requirement, tour: TourSnapshot, offer) -> tuple[int | None, str]:
-    if offer.price is None or offer.price_basis not in ("exact", "from") or not offer.currency:
+def _party_base(req: Requirement, offer) -> tuple[int | None, str]:
+    if offer.price is None or not offer.currency:
         return None, ""
     mix = req.traveler_mix
     if not mix or sum(mix.values()) != req.travelers:
         return None, "Chưa có cơ cấu độ tuổi; chỉ có giá niêm yết."
-    total = 0
-    for age_group in _AGE_GROUPS:
-        count = mix.get(age_group, 0)
-        if not count:
-            continue
-        age_price = offer.price_by_age.get(age_group)
-        if age_price is None and age_group == "adult":
-            age_price = offer.price
-        if age_price is None:
-            return None, f"Thiếu giá cho nhóm {age_group}."
-        total += age_price * count
+    total, missing = age_group_total(offer.price_by_age, offer.price, mix)
+    if total is None:
+        return None, f"Thiếu giá cho nhóm {missing}."
     return total, ""
 
 
 def _exposure_quantity(unit: str, req: Requirement, tour: TourSnapshot) -> int | None:
     mix = req.traveler_mix
-    if unit == "per_booking":
-        return 1
-    if unit == "per_person":
-        return req.travelers if mix and sum(mix.values()) == req.travelers else None
-    if unit == "per_adult":
-        return mix.get("adult") if mix and "adult" in mix else None
-    if unit == "per_child":
-        return (mix.get("child", 0) + mix.get("small_child", 0)) if mix else None
-    if unit == "per_day":
-        return tour.duration_days
-    if unit == "per_night":
-        return tour.duration_nights
-    return None
+    party = req.travelers if mix and sum(mix.values()) == req.travelers else None
+    return exposure_quantity(
+        unit, mix=mix, party=party,
+        duration_days=tour.duration_days, duration_nights=tour.duration_nights,
+    )
 
 
 def _price_exposures(
@@ -96,14 +75,6 @@ def _price_exposures(
         item = source.model_copy(deep=True)
         currency = item.currency.upper()
         qty = _exposure_quantity(item.unit, req, tour)
-        applicable = (
-            item.obligation == "mandatory"
-            and item.amount is not None
-            and item.unit != "unknown"
-            and qty is not None
-            and bool(currency)
-            and currency == offer.currency.upper()
-        )
         if item.obligation in ("optional", "conditional"):
             optional.append(item)
             if item.obligation == "conditional":
@@ -111,7 +82,13 @@ def _price_exposures(
                 if item.amount is None or item.unit == "unknown" or qty is None or not currency:
                     unpriced.append(item)
         elif item.obligation == "mandatory":
-            if applicable:
+            if (
+                item.amount is not None
+                and item.unit != "unknown"
+                and qty is not None
+                and bool(currency)
+                and currency == offer.currency.upper()
+            ):
                 item.calculated_total = item.amount * qty
                 priced_total += item.calculated_total
                 priced.append(item)
@@ -193,13 +170,12 @@ def build_metric_profiles(
         facts = facts_by_tour.get(tour.id, ExtractedTourFacts(tour_id=tour.id))
         if facts.tour_id != tour.id:
             facts = ExtractedTourFacts(tour_id=tour.id)
-        group_base, group_note = _party_base(req, tour, offer)
+        group_base, group_note = _party_base(req, offer)
         priced, unpriced, optional, extra_total, unresolved = _price_exposures(facts, req, tour, offer)
         if not {"exclusions", "surcharges"}.issubset(facts.reviewed_fields):
             unresolved = True
         group_total = None
         total_scope = group_note
-        total_is_lower_bound = offer.price_basis == "from"
         cost_state = "unknown"
         if group_base is not None:
             group_total = group_base + extra_total
@@ -207,7 +183,7 @@ def build_metric_profiles(
                 "Tạm tính theo khoản bắt buộc đã biết; còn chi phí chưa xác định"
                 if unresolved else "Tổng nhóm theo giá và khoản bắt buộc đã biết"
             )
-            cost_state = "partial" if unresolved or total_is_lower_bound else "observed"
+            cost_state = "partial" if unresolved else "observed"
         elif offer.price is not None:
             cost_state = "partial"
         cost = CostProfile(
@@ -216,7 +192,6 @@ def build_metric_profiles(
             currency=offer.currency,
             group_total_calculated=group_total,
             group_total_scope=total_scope,
-            total_is_lower_bound=total_is_lower_bound,
             priced_extras=priced,
             unpriced_exclusions=unpriced,
             optional_or_conditional=optional,
@@ -228,6 +203,14 @@ def build_metric_profiles(
             unique_activities.setdefault(_fold(activity.name), activity)
         activity_count = len(unique_activities)
         activity_evidence = [activity.evidence for activity in unique_activities.values()]
+        activity_version = facts.method_version
+        if not activity_count and tour.itinerary.strip():
+            activity_count, activity_quotes = count_activities(tour.itinerary)
+            activity_evidence = [MetricEvidence(
+                source_field="itinerary", quote=quote,
+                observed_at=tour.observed_at, url=tour.url,
+            ) for quote in activity_quotes]
+            activity_version = "code-parse-v1"
         experience_state = "observed" if activity_count else "unknown"
         measures: dict[str, MetricMeasure] = {
             "experience_density": MetricMeasure(
@@ -239,7 +222,7 @@ def build_metric_profiles(
                 unit="distinct_stated_activities",
                 state=experience_state,
                 evidence=activity_evidence,
-                method_version=facts.method_version,
+                method_version=activity_version,
             ),
         }
 
@@ -249,17 +232,26 @@ def build_metric_profiles(
                 source_field="route", quote=" → ".join(tour.route),
                 observed_at=tour.observed_at, url=tour.url,
             )]
+            route_version = facts.method_version
         else:
             route_count = len(facts.route_legs)
             route_evidence = [leg.evidence for leg in facts.route_legs]
+            route_version = facts.method_version
+            if not route_evidence and tour.itinerary.strip():
+                route_count, leg_quotes = count_legs(tour.itinerary)
+                route_evidence = [MetricEvidence(
+                    source_field="itinerary", quote=quote,
+                    observed_at=tour.observed_at, url=tour.url,
+                ) for quote in leg_quotes]
+                route_version = "code-parse-v1"
         modes = [leg.mode.casefold() for leg in facts.route_legs if leg.mode.strip()]
-        mode_changes = sum(left != right for left, right in zip(modes, modes[1:])) if modes else None
+        mode_changes = sum(left != right for left, right in zip(modes, modes[1:], strict=False)) if modes else None
         measures["route_complexity"] = MetricMeasure(
             value={"explicit_legs": route_count, "transport_changes": mode_changes},
             unit="legs_and_changes",
             state="observed" if route_evidence else "unknown",
             evidence=route_evidence,
-            method_version=facts.method_version,
+            method_version=route_version,
         )
 
         coverage_counts = {status: 0 for status in ("included", "partial", "excluded", "unknown")}
@@ -322,21 +314,53 @@ def build_metric_profiles(
             rule.days_before_departure for rule in facts.cancellation_rules
             if rule.refund_percent == 100 and rule.days_before_departure is not None
         ]
+        cancellation_evidence = [rule.evidence for rule in facts.cancellation_rules]
+        cancellation_version = facts.method_version
+        if not cancellation_evidence and tour.cancellation_policy.strip():
+            parsed_days, parsed_quote = full_refund_cutoff(tour.cancellation_policy)
+            if parsed_days is not None and parsed_quote:
+                full_refund_days = [parsed_days]
+                cancellation_evidence = [MetricEvidence(
+                    source_field="cancellation_policy", quote=parsed_quote,
+                    observed_at=tour.observed_at, url=tour.url,
+                )]
+                cancellation_version = "code-parse-v1"
         measures["cancellation_flexibility"] = MetricMeasure(
             value=min(full_refund_days) if full_refund_days else None,
             unit="days_before_departure_for_full_refund",
-            state="observed" if facts.cancellation_rules else "unknown",
-            evidence=[rule.evidence for rule in facts.cancellation_rules],
-            method_version=facts.method_version,
+            state="observed" if cancellation_evidence else "unknown",
+            evidence=cancellation_evidence,
+            method_version=cancellation_version,
         )
 
         family_evidence = [fact.evidence for fact in facts.family_facts]
+        family_ratio: float | None = None
+        family_state: MetricState = "unknown"
+        mix = req.traveler_mix
+        if mix and sum(mix.values()) == req.travelers:
+            child_groups = [
+                group for group in ("child", "small_child", "infant")
+                if mix.get(group, 0) > 0
+            ]
+            if child_groups:
+                priced_groups = set((offer.price_by_age or {}).keys())
+                covered = [group for group in child_groups if group in priced_groups]
+                for group in covered:
+                    family_evidence.append(MetricEvidence(
+                        source_field="offers.price_by_age",
+                        quote=f"{offer.price_by_age[group]} {offer.currency}",
+                        observed_at=offer.evidence.observed_at,
+                        url=offer.evidence.url or tour.url,
+                    ))
+                if covered or family_evidence:
+                    family_ratio = len(covered) / len(child_groups)
+                    family_state = "observed"
         measures["family_suitability"] = MetricMeasure(
-            value=None,
+            value=family_ratio,
             unit="age_eligibility_and_party_match",
-            state="unknown",
+            state=family_state,
             evidence=family_evidence,
-            method_version=facts.method_version,
+            method_version=facts.method_version or "party-price-v1",
         )
         measures["family_policy_coverage"] = MetricMeasure(
             value=len(facts.family_facts),

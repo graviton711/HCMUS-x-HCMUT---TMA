@@ -41,9 +41,8 @@ export function Thread({
   const latestActivityId = [...messages]
     .reverse()
     .find((message) => message.kind === 'tool_activity')?.id;
-  const currentActivityId = activeToolActivityId === undefined
-    ? latestActivityId
-    : activeToolActivityId;
+  const currentActivityId =
+    activeToolActivityId === undefined ? latestActivityId : activeToolActivityId;
   return (
     <div className={styles.thread} aria-live="polite">
       <AnimatePresence initial={false}>
@@ -101,7 +100,9 @@ export function Thread({
                 .reverse()
                 .find((tool) => tool.status === 'running');
               const failedCalls = message.tools.filter((tool) => tool.status === 'error').length;
-              const cancelledSteps = message.tools.filter((tool) => tool.status === 'cancelled').length;
+              const cancelledSteps = message.tools.filter(
+                (tool) => tool.status === 'cancelled',
+              ).length;
               const isCurrentActivity = busy && message.id === currentActivityId;
               const state = isCurrentActivity
                 ? 'running'
@@ -172,7 +173,7 @@ export function Thread({
                                   ? styles['dot-error']
                                   : tool.status === 'cancelled'
                                     ? styles['dot-cancelled']
-                                  : styles['dot-done']
+                                    : styles['dot-done']
                             }`}
                             aria-hidden="true"
                           />
@@ -237,7 +238,10 @@ export function Thread({
                         : t('Mở bản yêu cầu để duyệt', 'Open brief for review')}
                     </span>
                     <span className={styles['decision-link-detail']}>
-                      {t(`${message.requirement.conditions.length} điều kiện`, `${message.requirement.conditions.length} criteria`)}
+                      {t(
+                        `${message.requirement.conditions.length + (message.requirement.alternatives ?? []).reduce((sum, item) => sum + item.conditions.length, 0)} điều kiện${(message.requirement.alternatives ?? []).length ? ` · ${message.requirement.alternatives!.length} phương án` : ''}`,
+                        `${message.requirement.conditions.length + (message.requirement.alternatives ?? []).reduce((sum, item) => sum + item.conditions.length, 0)} criteria${(message.requirement.alternatives ?? []).length ? ` · ${message.requirement.alternatives!.length} options` : ''}`,
+                      )}
                     </span>
                   </button>
                 </motion.div>

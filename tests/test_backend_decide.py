@@ -1,8 +1,10 @@
 """Hard rules, tri-state eligibility, soft verdict ranking and analysis."""
 
+import re
 from datetime import UTC, datetime, timedelta
 
-from backend.data.catalog import FixtureCatalog
+from sample_rows import sample_rows
+
 from backend.decide.engine import compare
 from backend.decide.scenarios import cost_scenario
 from backend.input.pipeline import requirement_from_form
@@ -21,7 +23,7 @@ from backend.normalize.snapshots import rows_to_snapshots
 
 
 def _snapshots():
-    return rows_to_snapshots(FixtureCatalog().list_tours(10))
+    return rows_to_snapshots(sample_rows())
 
 
 def _req(form):
@@ -36,15 +38,15 @@ def test_budget_hard_filter_per_offer(decide_cfg):
     assert ("dlv-dalat-3n", "dlv-dalat-3n-20261225") not in kept
 
 
-def test_from_price_is_unknown_and_never_passes_budget(decide_cfg):
+def test_numeric_from_price_is_compared_to_budget(decide_cfg):
     req = _req({"destinations": ["Hạ Long"], "budget_max": 10_000_000})
     comparison = compare(req, _snapshots(), decide_cfg)
     budget_id = next(condition.id for condition in req.conditions if condition.field == "budget_max")
     states = {(item.offer_id, item.condition_id): item.state for item in comparison.evaluations}
     offer_id = "sgt-halong-3n-20261227"
-    assert states[(offer_id, budget_id)] == "unknown"
-    assert offer_id not in {item.offer_id for item in comparison.ranked}
-    assert offer_id in {item.offer_id for item in comparison.near_miss}
+    assert states[(offer_id, budget_id)] == "pass"
+    assert offer_id in {item.offer_id for item in comparison.ranked}
+    assert offer_id not in {item.offer_id for item in comparison.near_miss}
 
 
 def test_from_price_above_budget_fails(decide_cfg):
@@ -65,10 +67,10 @@ def test_from_price_above_budget_fails(decide_cfg):
     budget_id = next(c.id for c in comparison.requirement.conditions if c.field == "budget_max")
     evaluation = next(e for e in comparison.evaluations if e.condition_id == budget_id)
     assert evaluation.state == "fail"
-    assert evaluation.reason_code == "PRICE_LOWER_BOUND_OVER_BUDGET"
+    assert evaluation.reason_code == "PRICE_OVER_BUDGET"
 
 
-def test_missing_contact_and_non_vnd_prices_are_unknown(decide_cfg):
+def test_missing_and_non_vnd_prices_are_unknown_but_numeric_contact_is_used(decide_cfg):
     observed = datetime.now(UTC).isoformat()
     row = TourRow(
         tour={"record_key": "price-cases", "price_type": "fixed"},
@@ -84,7 +86,7 @@ def test_missing_contact_and_non_vnd_prices_are_unknown(decide_cfg):
     budget_id = next(c.id for c in comparison.requirement.conditions if c.field == "budget_max")
     states = {(e.offer_id, e.state, e.reason_code) for e in comparison.evaluations}
     assert ("missing", "unknown", "PRICE_MISSING") in states
-    assert ("contact", "unknown", "PRICE_NOT_EXACT") in states
+    assert ("contact", "pass", "") in states
     assert ("foreign-currency", "unknown", "PRICE_CURRENCY_MISMATCH") in states
     assert all(e.condition_id == budget_id for e in comparison.evaluations)
 
@@ -157,7 +159,7 @@ def test_missing_destination_data_is_unknown(decide_cfg):
 def test_date_matching_uses_catalog_date_regardless_of_crawl_freshness(decide_cfg):
     future = datetime.now(UTC) + timedelta(days=2)
     stale_tours = rows_to_snapshots(
-        FixtureCatalog().list_tours(10),
+        sample_rows(),
         freshness_seconds={"departure_date": 86400},
         now=future,
     )
@@ -280,16 +282,18 @@ def test_weighted_views_are_explainable_currency_safe_and_pareto(decide_cfg):
     comparison = compare(req, tours, decide_cfg, verdicts)
     views = {view.kind: view for view in comparison.decision_views}
 
-    assert [item.tour_id for item in views["cheapest"].candidates[:3]] == ["d", "e", "a"]
+    assert [item.tour_id for item in views["cheapest"].candidates[:3]] == ["d", "from", "contact"]
     assert views["cheapest"].currencies == ["USD", "VND"]
     best_fit_ids = [item.tour_id for item in views["best_fit"].candidates]
     assert {"b", "from", "contact", "missing"}.issubset(best_fit_ids)
     cheapest_ids = {item.tour_id for item in views["cheapest"].candidates}
-    assert not {"from", "contact", "missing"} & cheapest_ids
+    assert {"from", "contact"}.issubset(cheapest_ids)
+    assert "missing" not in cheapest_ids
     balanced_ids = {item.tour_id for item in views["balanced"].candidates}
-    assert not {"from", "contact", "missing"} & balanced_ids
+    assert "from" in balanced_ids
+    assert "missing" not in balanced_ids
     assert "c" not in {item.tour_id for item in views["balanced"].candidates}
-    assert balanced_ids == {"d", "e"}
+    assert balanced_ids == {"d", "from"}
     assert [item.tour_id for item in views["best_fit"].candidates] == [
         item.tour_id for item in compare(req, tours, decide_cfg, verdicts).decision_views[1].candidates
     ]
@@ -425,3 +429,89 @@ def test_cost_scenario_recalculates_room_and_age_costs_from_source_values(decide
     assert scenario.items[0].known_total == 2_250_000
     assert scenario.items[0].state == "observed"
     assert scenario.items[0].evidence
+
+
+
+def test_option_tradeoff_sentence_is_grounded_in_numbers(decide_cfg):
+    comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    assert comparison.decision_options, "sample rows must yield options"
+    sentence = comparison.decision_options[0].tradeoffs[0]
+    assert sentence.startswith("Đánh đổi:")
+    assert re.search(r"\d", sentence), "tradeoff sentence must carry numbers"
+
+
+def test_option_tradeoff_sentence_changes_with_trace(decide_cfg):
+    from sample_rows import sample_rows
+
+    base = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    subset = rows_to_snapshots(sample_rows()[:1])
+    narrowed = compare(_req({"destinations": ["Đà Lạt"]}), subset, decide_cfg)
+    base_sentence = base.decision_options[0].tradeoffs[0]
+    narrowed_sentence = narrowed.decision_options[0].tradeoffs[0]
+    assert "trong 3" in base_sentence
+    assert "trong 1" in narrowed_sentence
+
+
+def test_near_miss_offers_get_metric_profiles(decide_cfg):
+    comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    assert comparison.near_miss, "sample rows must yield near-miss offers"
+    by_offer = {item.offer_id: item for item in comparison.near_miss_profiles}
+    for candidate in comparison.near_miss:
+        assert candidate.offer_id in by_offer
+    halong = by_offer["sgt-halong-3n-20261227"]
+    assert halong.cost.listed_price == 8_900_000
+    assert halong.cost.state in {"partial", "observed", "unknown"}
+
+
+def test_family_suitability_observed_with_child_pricing(decide_cfg):
+    from backend.input.pipeline import validate_requirement
+
+    row = TourRow(
+        provider={},
+        tour={
+            "record_key": "fam-1",
+            "url": "https://example.test/fam",
+            "departure_city": "Sài Gòn",
+            "destinations": ["Đà Lạt"],
+            "child_policy": "Trẻ em 5-10 tuổi tính 50%.",
+            "observed_at": "2026-10-15T00:00:00+07:00",
+        },
+        offers=[{
+            "record_key": "fam-1-offer",
+            "departure_date": "2026-12-25",
+            "price": 7000000,
+            "currency": "VND",
+            "price_type": "fixed",
+            "availability": "available",
+            "price_by_age": {"adult": 7000000, "child": 3500000},
+            "observed_at": "2026-10-15T00:00:00+07:00",
+        }],
+    )
+    req = validate_requirement(
+        "Đà Lạt cho gia đình 2 người lớn 1 trẻ em",
+        [{"id": "h1", "field": "destination", "operator": "contains",
+          "value": "Đà Lạt", "strength": "hard", "quote": "Đà Lạt"}],
+        travelers=3, traveler_mix={"adult": 2, "child": 1},
+    )
+    comparison = compare(req, rows_to_snapshots([row]), decide_cfg)
+    metric = comparison.metric_profiles[0].metrics["family_suitability"]
+    assert metric.state == "observed"
+    assert metric.value == 1.0
+    assert metric.evidence
+
+
+def test_family_suitability_unknown_without_child_groups(decide_cfg):
+    comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    for profile in comparison.metric_profiles:
+        metric = profile.metrics["family_suitability"]
+        assert metric.state == "unknown"
+        assert metric.value is None
+
+
+def test_assumptions_cover_party_costs_and_snapshot(decide_cfg):
+    comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    text = " ".join(comparison.assumptions)
+    assert "3 khách" in text or "1 khách" in text
+    assert "Giá công bố" in text
+    assert "snapshot" in text
+    assert comparison.assumptions

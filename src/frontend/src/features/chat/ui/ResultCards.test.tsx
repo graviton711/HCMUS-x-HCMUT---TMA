@@ -68,7 +68,7 @@ const decisionComparison = {
       kind: "cheapest" as const,
       candidates: [{ tour_id: "tour-a", offer_id: "offer-a-1", score: 0 }],
       currencies: ["VND"],
-      note: "Only exact prices.",
+      note: "Only numeric published prices in one currency.",
     },
     {
       kind: "best_fit" as const,
@@ -95,12 +95,6 @@ const decisionComparison = {
       note: "No cancellation data.",
     },
     {
-      kind: "family_friendly" as const,
-      candidates: [],
-      currencies: [],
-      note: "No family data.",
-    },
-    {
       kind: "included_value" as const,
       candidates: [],
       currencies: [],
@@ -123,7 +117,6 @@ const decisionComparison = {
         currency: "VND",
         group_total_calculated: 5_000_000,
         group_total_scope: "Tổng theo giá niêm yết; chưa xác nhận exclusions.",
-        total_is_lower_bound: false,
         priced_extras: [],
         unpriced_exclusions: [
           {

@@ -77,6 +77,11 @@ prompt: |
   - duration_days/duration_nights are integers parsed from text like
     "3 ngay 4 dem" or ISO-8601 "P3D".
   - price_type is one of: fixed | from | contact.
+    fixed = the site shows a concrete numeric price (headline price, per-departure
+    prices in a schedule/calendar JSON, or a minPrice-style field). from = ONLY
+    when the site itself marks the price as a starting price ("giá từ", "chỉ từ",
+    "từ ...", "starting from"); a schedule or a minPrice field alone is fixed,
+    never from. contact = no numeric price published ("liên hệ", empty).
   - offers is the fixed-date layer: list of dicts, one per published departure.
     Required keys: {"departure_date": "YYYY-MM-DD", "price": <int>, "availability":
     "available"|"sold_out"|"unknown"}. Optionally, when the source exposes them

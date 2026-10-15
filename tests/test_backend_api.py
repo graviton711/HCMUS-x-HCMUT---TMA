@@ -1,8 +1,9 @@
-"""API: health → requirement → comparison → fetch. Fixture provider."""
+"""API: health → requirement → comparison → fetch. Static offline catalog."""
 
 import logging
 
 from fastapi.testclient import TestClient
+from sample_rows import StaticCatalog
 
 from backend.agent.runner import OpenCodeRunner
 from backend.agent.service import AgentService
@@ -10,11 +11,14 @@ from backend.api import create_app
 
 
 def _client(tmp_path, **overrides):
+    from unittest.mock import patch
+
     from backend.settings import Settings
 
     settings = Settings.load(database_url=f"sqlite:///{tmp_path / 'api.db'}", **overrides)
-    assert settings.data_provider == "fixture"
-    return TestClient(create_app(settings))
+    assert settings.data_provider == "supabase"
+    with patch("backend.api.for_settings", return_value=StaticCatalog()):
+        return TestClient(create_app(settings))
 
 
 def test_health_includes_a_correlated_request_id(tmp_path, caplog):
@@ -43,7 +47,7 @@ def test_full_compare_flow(tmp_path):
     assert "destination" not in req["missing"]
 
     comp = client.post("/comparisons", json={"requirement_id": req["id"]}).json()["comparison"]
-    assert comp["ranked"], "fixture Đà Lạt under 8tr must rank"
+    assert comp["ranked"], "sample Đà Lạt under 8tr must rank"
     assert comp["tour_snapshots"]
     assert comp["analysis"]["benefits"]
     assert comp["decision_trace"]["scanned_tours"] == comp["candidates_considered"]
@@ -59,6 +63,21 @@ def test_full_compare_flow(tmp_path):
             f"/comparisons/{comp['id']}/eliminated?limit=1&cursor={page['next_cursor']}"
         ).json()
         assert next_page["items"][0]["offer"]["id"] != page["items"][0]["offer"]["id"]
+
+    filtered = client.get(
+        f"/comparisons/{comp['id']}/eliminated?condition_id=h1"
+    ).json()
+    assert filtered["total"] >= 1
+    assert filtered["total"] == len(filtered["items"])
+    for item in filtered["items"]:
+        assert any(
+            condition["condition_id"] == "h1" for condition in item["conditions"]
+        )
+    empty = client.get(
+        f"/comparisons/{comp['id']}/eliminated?condition_id=nope"
+    ).json()
+    assert empty == {"comparison_id": comp["id"], "items": [], "limit": 25,
+                     "next_cursor": None, "total": 0}
 
     cost_scenario = client.post(
         f"/comparisons/{comp['id']}/scenarios",
@@ -190,6 +209,8 @@ def test_history_requires_valid_guest_session_and_catalog_is_read_only(tmp_path)
 
 
 def _cors_client(tmp_path):
+    from unittest.mock import patch
+
     from backend.settings import Settings
 
     settings = Settings.load(
@@ -197,7 +218,8 @@ def _cors_client(tmp_path):
         cors_origins=["https://app.example.test"],
         cors_origin_regex=r"https://[a-z0-9-]+\.vercel\.app",
     )
-    return TestClient(create_app(settings))
+    with patch("backend.api.for_settings", return_value=StaticCatalog()):
+        return TestClient(create_app(settings))
 
 
 def test_cors_allows_configured_origin_and_vercel_previews(tmp_path):

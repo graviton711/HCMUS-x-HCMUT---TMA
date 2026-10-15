@@ -4,16 +4,12 @@ export interface CurrentSession {
   id: string;
   session_id: string;
   token: string;
-  token_type: "Bearer";
+  token_type: 'Bearer';
   expires_at: string;
 }
 
-export interface CurrentCatalog {
-  destinations: string[];
-}
-
 export interface CurrentHealth {
-  status: "ok";
+  status: 'ok';
   version: string;
 }
 
@@ -37,13 +33,13 @@ export interface CurrentAgentResponse {
 }
 
 export type CurrentAgentProgressEvent =
-  | { type: "progress"; status: string }
+  | { type: 'progress'; status: string }
   | {
-      type: "tool";
+      type: 'tool';
       id: string;
       name: string;
       message?: string;
-      status: "running" | "completed" | "error";
+      status: 'running' | 'completed' | 'error';
     };
 
 export interface CurrentCondition {
@@ -51,7 +47,7 @@ export interface CurrentCondition {
   field: string;
   operator: string;
   value: unknown;
-  strength: "hard" | "soft";
+  strength: 'hard' | 'soft';
   quote: string;
   weight_percent?: number | null;
 }
@@ -59,19 +55,36 @@ export interface CurrentCondition {
 export interface CurrentRequirement {
   id: string;
   conditions: CurrentCondition[];
+  alternatives?: CurrentRequirementAlternative[];
+  assumptions?: CurrentRequirementAssumption[];
   missing: string[];
   raw_text: string;
   travelers: number;
-  traveler_mix?: Partial<
-    Record<"adult" | "child" | "small_child" | "infant", number>
-  >;
+  traveler_mix?: Partial<Record<'adult' | 'child' | 'small_child' | 'infant', number>>;
   ranking?: {
     order_by: {
-      field:
-        "price" | "departure_date" | "duration_days" | "tour_name" | "soft_fit";
-      direction: "asc" | "desc";
+      field: 'price' | 'departure_date' | 'duration_days' | 'tour_name' | 'soft_fit';
+      direction: 'asc' | 'desc';
     }[];
   } | null;
+}
+
+export interface CurrentRequirementAlternative {
+  id: string;
+  label: string;
+  conditions: CurrentCondition[];
+}
+
+export interface CurrentRequirementAssumption {
+  id: string;
+  kind: 'date_window';
+  label: string;
+  quote: string;
+  date_from: string;
+  date_to: string;
+  condition_ids: string[];
+  timezone: 'Asia/Ho_Chi_Minh';
+  edited?: boolean;
 }
 
 export interface CurrentOffer {
@@ -80,13 +93,11 @@ export interface CurrentOffer {
   departure_date: string;
   price: number | null;
   currency: string;
-  price_basis: "exact" | "from" | "contact" | "unknown";
-  price_by_age?: Partial<
-    Record<"adult" | "child" | "small_child" | "infant", number | null>
-  >;
+  price_basis: 'exact' | 'from' | 'contact' | 'unknown';
+  price_by_age?: Partial<Record<'adult' | 'child' | 'small_child' | 'infant', number | null>>;
   single_supplement?: number | null;
   supplements?: string;
-  departure_freshness: "fresh" | "stale" | "unknown";
+  departure_freshness: 'fresh' | 'stale' | 'unknown';
   availability: string;
   conditions: string;
   evidence: {
@@ -125,13 +136,15 @@ export interface CurrentTourSnapshot {
   };
   observed_at: string;
   verification: string;
+  detail_state?: 'index' | 'complete';
   offers: CurrentOffer[];
 }
 
 export interface CurrentEvaluation {
   offer_id: string;
   condition_id: string;
-  state: "pass" | "partial" | "fail" | "unknown";
+  alternative_id?: string | null;
+  state: 'pass' | 'partial' | 'fail' | 'unknown';
   quote: string;
   reason_code: string;
   reason: string;
@@ -156,20 +169,19 @@ export interface CurrentComparison {
   decision_views?: CurrentDecisionView[];
   metric_profiles?: CurrentMetricProfile[];
   decision_options?: CurrentDecisionOption[];
-  recommendation?: CurrentDecisionOption | null;
-  extracted_facts?: unknown[];
+  near_miss_profiles?: CurrentMetricProfile[];
+  assumptions?: string[];
 }
 
 export interface CurrentDecisionView {
   kind:
-    | "cheapest"
-    | "best_fit"
-    | "experience_rich"
-    | "fewest_legs"
-    | "cancellation_flexible"
-    | "family_friendly"
-    | "included_value"
-    | "balanced";
+    | 'cheapest'
+    | 'best_fit'
+    | 'experience_rich'
+    | 'fewest_legs'
+    | 'cancellation_flexible'
+    | 'included_value'
+    | 'balanced';
   candidates: { tour_id: string; offer_id: string; score: number }[];
   currencies: string[];
   note: string;
@@ -191,14 +203,7 @@ export interface CurrentCancellationRule {
 }
 
 export interface CurrentFamilyFact {
-  kind:
-    | "age_range"
-    | "age_price"
-    | "discount"
-    | "room"
-    | "bed"
-    | "eligibility"
-    | "other";
+  kind: 'age_range' | 'age_price' | 'discount' | 'room' | 'bed' | 'eligibility' | 'other';
   min_age: number | null;
   max_age: number | null;
   amount: number | null;
@@ -212,14 +217,14 @@ export interface CurrentMetricMeasure {
   lower_bound: number | null;
   upper_bound: number | null;
   unit: string;
-  state: "observed" | "partial" | "unknown";
+  state: 'observed' | 'partial' | 'unknown';
   evidence: CurrentMetricEvidence[];
   method_version: string;
 }
 
 export interface CurrentCostExposure {
   name: string;
-  obligation: "mandatory" | "optional" | "conditional" | "unknown";
+  obligation: 'mandatory' | 'optional' | 'conditional' | 'unknown';
   amount: number | null;
   currency: string;
   unit: string;
@@ -234,21 +239,20 @@ export interface CurrentMetricProfile {
   offer_id: string;
   cost: {
     listed_price: number | null;
-    price_basis: "exact" | "from" | "contact" | "unknown";
+    price_basis: 'exact' | 'from' | 'contact' | 'unknown';
     currency: string;
     group_total_calculated: number | null;
     group_total_scope: string;
-    total_is_lower_bound: boolean;
     priced_extras: CurrentCostExposure[];
     unpriced_exclusions: CurrentCostExposure[];
     optional_or_conditional: CurrentCostExposure[];
-    state: "observed" | "partial" | "unknown";
+    state: 'observed' | 'partial' | 'unknown';
   };
   preference_fit: {
     condition_id: string;
     lower_score: number;
     upper_score: number;
-    state: "observed" | "partial" | "unknown";
+    state: 'observed' | 'partial' | 'unknown';
     evidence: CurrentMetricEvidence[];
   }[];
   metrics: Record<string, CurrentMetricMeasure>;
@@ -275,8 +279,8 @@ export interface CurrentOptionMetricComparison {
   unit: string;
   currency: string;
   scope: string;
-  state: "observed" | "partial" | "unknown";
-  relation: "favorable" | "tradeoff" | "similar" | "unknown";
+  state: 'observed' | 'partial' | 'unknown';
+  relation: 'favorable' | 'tradeoff' | 'similar' | 'unknown';
   higher_is_better: boolean | null;
   evidence: CurrentMetricEvidence[];
 }
@@ -298,6 +302,8 @@ export interface CurrentDecisionTrace {
   }[];
   sequential_funnel: {
     condition_id: string;
+    label?: string;
+    group_id?: string;
     stage: number;
     offers_before: number;
     offers_after: number;
@@ -306,9 +312,15 @@ export interface CurrentDecisionTrace {
   }[];
   first_blockers: {
     condition_id: string;
-    state: "fail" | "unknown";
+    state: 'fail' | 'unknown';
     offers: number;
     tours: number;
+  }[];
+  alternative_counts?: {
+    alternative_id: string;
+    label: string;
+    eligible_offers: number;
+    eligible_tours: number;
   }[];
   snapshot_available: boolean;
 }
@@ -321,9 +333,10 @@ export interface CurrentEliminatedOffer {
   offer: CurrentOffer;
   conditions: {
     condition_id: string;
+    alternative_id?: string | null;
     field: string;
     value: unknown;
-    state: "pass" | "fail" | "unknown";
+    state: 'pass' | 'fail' | 'unknown';
     reason_code: string;
     reason: string;
     quote: string;
@@ -340,7 +353,7 @@ export interface CurrentEliminatedPage {
 
 export interface CurrentCostScenarioAssumptions {
   travelers: number;
-  traveler_mix: Partial<Record<"adult" | "child" | "small_child" | "infant", number>>;
+  traveler_mix: Partial<Record<'adult' | 'child' | 'small_child' | 'infant', number>>;
   rooms?: number | null;
   single_rooms?: number | null;
   nights?: number | null;
@@ -351,15 +364,14 @@ export interface CurrentCostScenarioItem {
   tour_name: string;
   offer_id: string;
   currency: string;
-  price_basis: "exact" | "from" | "contact" | "unknown";
+  price_basis: 'exact' | 'from' | 'contact' | 'unknown';
   listed_price: number | null;
   group_base_calculated: number | null;
   priced_mandatory_extras: CurrentCostExposure[];
   known_total: number | null;
-  total_is_lower_bound: boolean;
   unresolved_exposures: CurrentCostExposure[];
   delta_from_original: number | null;
-  state: "observed" | "partial" | "unknown";
+  state: 'observed' | 'partial' | 'unknown';
   evidence: CurrentMetricEvidence[];
 }
 
@@ -368,15 +380,4 @@ export interface CurrentCostScenario {
   assumptions: CurrentCostScenarioAssumptions;
   scanned_offers: number;
   items: CurrentCostScenarioItem[];
-}
-
-export interface CurrentHistoryItem {
-  id: string;
-  kind: "requirement" | "comparison";
-  created_at: string;
-}
-
-export interface CurrentHistoryPage {
-  items: CurrentHistoryItem[];
-  next_cursor: string | null;
 }

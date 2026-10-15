@@ -8,7 +8,15 @@ from typing import Any
 from pydantic import ValidationError
 
 from backend.errors import AppError
-from backend.models import Condition, RankingKey, RankingSpec, Requirement, uid
+from backend.models import (
+    Condition,
+    RankingKey,
+    RankingSpec,
+    Requirement,
+    RequirementAlternative,
+    RequirementAssumption,
+    uid,
+)
 
 _HARD_FIELDS = {
     "destination",
@@ -35,6 +43,8 @@ def validate_requirement(
     ranking: Any = None,
     require_weights: bool = False,
     traveler_mix: Any = None,
+    alternatives: Any = None,
+    assumptions: Any = None,
 ) -> Requirement:
     """Validate agent-produced conditions without guessing or coercing values."""
     if not isinstance(raw_text, str) or not raw_text.strip() or len(raw_text) > 8000:
@@ -60,29 +70,113 @@ def validate_requirement(
 
     cleaned: list[Condition] = []
     seen_ids: set[str] = set()
-    for item in conditions:
-        if not isinstance(item, dict):
-            raise _invalid("Each condition must be an object.")
-        try:
-            condition = Condition.model_validate(item)
-        except ValidationError as exc:
-            raise _invalid("A condition has an invalid shape.") from exc
-        if condition.id in seen_ids:
-            raise _invalid("Condition IDs must be unique.")
-        seen_ids.add(condition.id)
-        if not condition.quote or condition.quote not in raw_text:
-            raise _invalid("Every condition needs an exact quote from the conversation.")
+    def parse_conditions(items: Any, *, alternative: bool = False) -> list[Condition]:
+        if not isinstance(items, list):
+            raise _invalid("Conditions must be a list.")
+        parsed: list[Condition] = []
+        for item in items:
+            if not isinstance(item, dict):
+                raise _invalid("Each condition must be an object.")
+            try:
+                condition = Condition.model_validate(item)
+            except ValidationError as exc:
+                raise _invalid("A condition has an invalid shape.") from exc
+            if condition.id in seen_ids:
+                raise _invalid("Condition IDs must be unique across the requirement.")
+            seen_ids.add(condition.id)
+            if not condition.quote or condition.quote not in raw_text:
+                raise _invalid("Every condition needs an exact quote from the conversation.")
 
-        if condition.strength == "soft":
-            if condition.field != "preference" or condition.operator != "contains":
-                raise _invalid("Soft conditions must use the preference field.")
-            if not isinstance(condition.value, str) or not condition.value.strip():
-                raise _invalid("A soft preference must be non-empty text.")
-        elif condition.weight_percent is not None:
-            raise _invalid("Only soft preferences can have a weight.")
-        else:
-            _validate_hard(condition)
-        cleaned.append(condition)
+            if alternative and condition.strength != "hard":
+                raise _invalid("Alternative branches may contain hard conditions only.")
+            if condition.strength == "soft":
+                if condition.field != "preference" or condition.operator != "contains":
+                    raise _invalid("Soft conditions must use the preference field.")
+                if not isinstance(condition.value, str) or not condition.value.strip():
+                    raise _invalid("A soft preference must be non-empty text.")
+            elif condition.weight_percent is not None:
+                raise _invalid("Only soft preferences can have a weight.")
+            else:
+                _validate_hard(condition)
+            parsed.append(condition)
+        return parsed
+
+    cleaned = parse_conditions(conditions)
+
+    if alternatives is None:
+        alternatives = []
+    if not isinstance(alternatives, list) or len(alternatives) > 20:
+        raise _invalid("Alternatives must be a list of at most 20 branches.")
+    parsed_alternatives: list[RequirementAlternative] = []
+    seen_alternative_ids: set[str] = set()
+    for item in alternatives:
+        if not isinstance(item, dict):
+            raise _invalid("Each alternative must be an object.")
+        alternative_id = item.get("id")
+        label = item.get("label")
+        if not isinstance(alternative_id, str) or not alternative_id.strip():
+            raise _invalid("Each alternative needs an ID.")
+        if alternative_id in seen_alternative_ids:
+            raise _invalid("Alternative IDs must be unique.")
+        if alternative_id == "common":
+            raise _invalid("Alternative ID 'common' is reserved for shared conditions.")
+        seen_alternative_ids.add(alternative_id)
+        if not isinstance(label, str) or not label.strip() or len(label) > 160:
+            raise _invalid("Each alternative needs a short label.")
+        branch_conditions = parse_conditions(item.get("conditions"), alternative=True)
+        if not branch_conditions:
+            raise _invalid("Each alternative needs at least one hard condition.")
+        parsed_alternatives.append(RequirementAlternative(
+            id=alternative_id,
+            label=label.strip(),
+            conditions=branch_conditions,
+        ))
+
+    if assumptions is None:
+        assumptions = []
+    if not isinstance(assumptions, list) or len(assumptions) > 20:
+        raise _invalid("Assumptions must be a list of at most 20 items.")
+    parsed_assumptions: list[RequirementAssumption] = []
+    condition_by_id = {
+        condition.id: condition
+        for condition in [*cleaned, *(c for a in parsed_alternatives for c in a.conditions)]
+    }
+    alternative_by_condition = {
+        condition.id: alternative.id
+        for alternative in parsed_alternatives
+        for condition in alternative.conditions
+    }
+    assumption_ids: set[str] = set()
+    for item in assumptions:
+        if not isinstance(item, dict):
+            raise _invalid("Each assumption must be an object.")
+        try:
+            assumption = RequirementAssumption.model_validate(item)
+            start = date.fromisoformat(assumption.date_from)
+            end = date.fromisoformat(assumption.date_to)
+        except (ValidationError, ValueError) as exc:
+            raise _invalid("A date assumption has an invalid shape or date range.") from exc
+        if assumption.id in assumption_ids:
+            raise _invalid("Assumption IDs must be unique.")
+        assumption_ids.add(assumption.id)
+        if start > end or not assumption.quote or assumption.quote not in raw_text:
+            raise _invalid("Date assumptions need an ordered range and an exact user quote.")
+        linked = [condition_by_id.get(condition_id) for condition_id in assumption.condition_ids]
+        if len(linked) != 2 or any(condition is None for condition in linked):
+            raise _invalid("A date assumption must link both date conditions.")
+        linked_conditions = [condition for condition in linked if condition is not None]
+        linked_dates = {condition.field: condition.value for condition in linked_conditions}
+        if set(linked_dates) != {"date_from", "date_to"}:
+            raise _invalid("A date assumption must link both date conditions.")
+        linked_groups = {
+            alternative_by_condition.get(condition.id, "common")
+            for condition in linked_conditions
+        }
+        if len(linked_groups) != 1:
+            raise _invalid("A date assumption cannot span separate option branches.")
+        if assumption.date_from != linked_dates["date_from"] or assumption.date_to != linked_dates["date_to"]:
+            raise _invalid("A date assumption must match its linked date conditions.")
+        parsed_assumptions.append(assumption)
 
     soft_conditions = [condition for condition in cleaned if condition.strength == "soft"]
     if require_weights and soft_conditions:
@@ -110,6 +204,8 @@ def validate_requirement(
     return Requirement(
         id=requirement_id or uid("req"),
         conditions=cleaned,
+        alternatives=parsed_alternatives,
+        assumptions=parsed_assumptions,
         missing=[],
         raw_text=raw_text,
         travelers=travelers,

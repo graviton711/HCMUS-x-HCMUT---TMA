@@ -6,17 +6,20 @@
 
 ## Input/output
 
-Vào: requirement đã validate, tour/offer snapshots, metric facts và preference evaluations `(offer_id, condition_id) -> score/unknown + quote`. Ra: hard evaluations, metric profiles, decision options, `ranked`, `near_miss`, snapshots, evidence, decision trace theo offer/tour và số lượng đã quét.
+Vào: requirement đã validate (điều kiện chung và các alternative branch), tour/offer snapshots, metric facts và preference evaluations `(offer_id, condition_id) -> score/unknown + quote`. Ra: hard evaluations, metric profiles (+ near-miss profiles), decision options kèm câu Đánh đổi/So với, `ranked`, `near_miss`, snapshots, evidence, decision trace, assumptions.
 
 ## Workflow
 
-1. Hard filter chạy trước; chỉ offers pass toàn bộ hard conditions vào soft evaluation.
+1. Hard filter chạy trước; offer đủ điều kiện khi mọi hard condition chung pass và ít nhất một nhánh alternative pass toàn bộ. Chỉ offer đủ điều kiện mới vào soft evaluation; unknown không phải pass.
 2. Metric facts chỉ hợp lệ khi evidence quote khớp đúng source field. Numeric/categorical normalization và phép tính do code thực hiện.
 3. Preference fit cộng trọng số theo mức `0`, `0.5`, `1`; unknown tạo khoảng điểm min/max và evidence coverage riêng.
-4. Cost view tách exact/from/contact, group total, khoản bắt buộc đã định giá và exclusions chưa định giá. Exclusion chỉ thành cost khi obligation, amount, unit và applicability có evidence.
-5. Objective views gồm cheapest, best-fit, experience-rich, fewest-legs, cancellation-flexible, family-friendly, included-value và balanced Pareto. Chỉ xếp trên metric có thể so sánh; unknown không được ép thành 0 hoặc pass.
+4. Giá số được so trong cùng currency bất kể metadata `price_basis`; cost view tách giá công bố, group total, khoản bắt buộc đã định giá và exclusions chưa định giá. Exclusion chỉ thành cost khi obligation, amount, unit và applicability có evidence.
+5. Objective views gồm cheapest, best-fit, experience-rich, fewest-legs, cancellation-flexible, included-value và balanced Pareto. Chỉ xếp trên metric có thể so sánh; unknown không được ép thành 0 hoặc pass.
 6. Mỗi view trả tối đa 5 lựa chọn, nhưng engine giữ đủ profile/evaluation cho explanations. Nếu có đủ candidates, kết quả có tối thiểu ba tour khác nhau; thiếu thì trả số thực có và relaxation scenarios riêng.
 7. Decision trace đếm riêng scan, điều kiện và blocker đầu tiên. Tổng theo condition có thể chồng lấp; unknown được đếm riêng. Mỗi option so metric với nhóm hard-pass cùng đơn vị/phạm vi, giữ evidence và trạng thái thiếu dữ liệu.
+8. Mỗi option có 1 câu "Đánh đổi:" ghép từ số trace (độ khan, blocker lớn nhất, khoản chưa định giá) và 1 câu "So với ..." chênh lệch vs rẻ nhất; không số thì không câu. Near-miss có profiles riêng (`near_miss_profiles`) cho what-if, không trộn vào xếp hạng.
+9. Metric đếm được (hoạt động, chặng, mốc hoàn tiền) parse bằng code từ text catalog kèm quote (`code-parse-v1`); facts LLM ưu tiên hơn. `family_suitability` tính từ cơ cấu đoàn + giá rõ theo nhóm tuổi; đoàn adult-only hoặc thiếu mix thì unknown.
+10. `assumptions` liệt kê giả định comparison đang dựa vào (đoàn, khoản chưa định giá/có điều kiện, giá công bố, snapshot-lock, phòng đơn).
 
 ## Interface với module khác
 
@@ -31,4 +34,5 @@ Vào: requirement đã validate, tour/offer snapshots, metric facts và preferen
 - Multi-currency không quy đổi; cheapest/Pareto được nhóm currency-wise.
 - Tie-break dùng khóa xác định để kết quả ổn định.
 - `ranked`/`near_miss` được giữ cho consumer cũ.
+- Trace và near-miss phải tính theo logic nhánh OR; không cộng fail từ các nhánh thay thế như thể chúng là điều kiện AND.
 - Scenario gọi lại engine thuần trên cùng snapshot; tiêu chí mới không tự nhận soft verdict nếu chưa được enrichment.

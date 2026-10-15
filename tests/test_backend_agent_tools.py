@@ -5,10 +5,10 @@ import json
 from secrets import token_hex
 
 import pytest
+from sample_rows import StaticCatalog
 
 from backend.agent.mcp_server import AgentTools, create_server
 from backend.agent.results import limit_comparison
-from backend.data.catalog import FixtureCatalog
 from backend.data.sessions import SessionStore
 from backend.errors import AppError
 from backend.models import Comparison, Evaluation, OfferSnapshot, RankedCandidate, TourRow, TourSnapshot
@@ -16,7 +16,7 @@ from backend.workflows import TourWorkflows
 
 
 def _tools(settings):
-    catalog = FixtureCatalog()
+    catalog = StaticCatalog()
     return AgentTools(settings, catalog, TourWorkflows(settings, catalog))
 
 
@@ -59,12 +59,12 @@ def _score_soft(tools, context_id, verdicts):
 
 class _RecordingCatalog:
     def __init__(self):
-        self.fixture = FixtureCatalog()
+        self.catalog = StaticCatalog()
         self.limits = []
 
     def list_tours(self, limit):
         self.limits.append(limit)
-        return self.fixture.list_tours(limit)
+        return self.catalog.list_tours(limit)
 
 
 def _phu_requirement():
@@ -80,7 +80,10 @@ def _phu_requirement():
     }
 
 
-def test_query_tours_mcp_schema_requires_complete_condition_contract(settings):
+def test_query_tours_mcp_schema_requires_complete_condition_contract(settings, monkeypatch):
+    import backend.agent.mcp_server as mcp_server
+
+    monkeypatch.setattr(mcp_server, "for_settings", lambda _settings: StaticCatalog())
     tools = asyncio.run(create_server(settings).list_tools())
     schema = next(tool.inputSchema for tool in tools if tool.name == "query_tours")
     condition = schema["$defs"]["QueryConditionInput"]
@@ -144,7 +147,7 @@ def test_scenario_query_reuses_retained_snapshot_instead_of_live_catalog(setting
         store.close()
 
 
-def test_catalog_facets_only_returns_values_from_active_fixture(settings):
+def test_catalog_facets_only_returns_values_from_active_catalog(settings):
     result = json.loads(_tools(settings).catalog_facets())
     assert result["destinations"] == ["Hạ Long", "Phú Quốc", "Đà Lạt"]
     assert result["departure_cities"] == ["Hà Nội", "Sài Gòn"]

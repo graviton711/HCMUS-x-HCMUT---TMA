@@ -1,65 +1,15 @@
-﻿"""Catalog readers. Fixture is explicit dev data; Supabase is read-only live."""
+﻿"""Catalog readers. Supabase is the only live catalog (read-only)."""
 
 from __future__ import annotations
 
-from pathlib import Path
+from collections.abc import Iterable
+from time import perf_counter
 
 from backend.errors import AppError
 from backend.models import TourRow
-from shared import now_vn_iso
+from shared import get_logger
 
-
-def _resolve_fixture(path: str | Path | None) -> Path:
-    if path is not None:
-        candidate = Path(path)
-        if candidate.is_file():
-            return candidate
-        raise AppError("FIXTURE_NOT_FOUND", f"Catalog fixture not found: {path}.", 500)
-    for candidate in (Path(__file__).resolve().parents[2] / "configs" / "fixture-catalog.yaml",
-                      Path.cwd() / "configs" / "fixture-catalog.yaml"):
-        if candidate.is_file():
-            return candidate
-    raise AppError("FIXTURE_NOT_FOUND", "Missing configs/fixture-catalog.yaml.", 500)
-
-
-def _fixture_rows(path: str | Path | None = None) -> list[TourRow]:
-    import yaml
-
-    data = yaml.safe_load(_resolve_fixture(path).read_text(encoding="utf-8")) or []
-    if not isinstance(data, list):
-        raise AppError("FIXTURE_INVALID", "Fixture catalog must be a list.", 500)
-    now = now_vn_iso()
-    rows: list[TourRow] = []
-    for entry in data:
-        if not isinstance(entry, dict):
-            raise AppError("FIXTURE_INVALID", "Each fixture entry must be a mapping.", 500)
-        tour = dict(entry.get("tour", {}))
-        tour.setdefault("observed_at", now)
-        offers = []
-        for offer in entry.get("offers", []):
-            row = dict(offer)
-            row.setdefault("observed_at", now)
-            offers.append(row)
-        rows.append(TourRow(provider=dict(entry.get("provider", {})), tour=tour, offers=offers))
-    return rows
-
-
-class FixtureCatalog:
-    """Explicit dev/test catalog. Never a silent fallback."""
-
-    def __init__(self, path: str | Path | None = None):
-        self._rows = _fixture_rows(path)
-
-    def list_tours(self, limit: int) -> list[TourRow]:
-        return self._rows[:limit]
-
-    def list_destinations(self) -> list[str]:
-        seen: list[str] = []
-        for row in self._rows:
-            for dest in row.tour.get("destinations", []):
-                if isinstance(dest, str) and dest not in seen:
-                    seen.append(dest)
-        return seen
+_log = get_logger("backend.catalog")
 
 
 class SupabaseCatalog:
@@ -74,11 +24,23 @@ class SupabaseCatalog:
         self._providers_limit = providers_limit
         self._timeout = connect_timeout_s
 
+    def _unavailable(self, operation: str, exc: Exception, started: float) -> AppError:
+        sqlstate = getattr(exc, "sqlstate", None) or getattr(exc, "pgcode", None)
+        _log.error(
+            "catalog_read_failed operation=%s duration_ms=%d exception_type=%s sqlstate=%s",
+            operation,
+            int((perf_counter() - started) * 1000),
+            type(exc).__name__,
+            sqlstate or "-",
+        )
+        return AppError("CATALOG_UNAVAILABLE", "Catalog is unavailable.", 502, retryable=True)
+
     def list_destinations(self) -> list[str]:
         try:
             import psycopg
         except ImportError as exc:
             raise AppError("CATALOG_DRIVER_MISSING", "Missing psycopg driver.", 500) from exc
+        started = perf_counter()
         try:
             with psycopg.connect(self._db_url, connect_timeout=self._timeout, autocommit=True) as conn:
                 with conn.cursor() as cur:
@@ -87,18 +49,47 @@ class SupabaseCatalog:
                         " FROM tours LIMIT %s",
                         (self._scan_limit,),
                     )
-                    return sorted({r[0] for r in cur.fetchall() if r[0]})
+                    result = sorted({r[0] for r in cur.fetchall() if r[0]})
+                    _log.info(
+                        "catalog_read_completed operation=list_destinations rows=%d duration_ms=%d",
+                        len(result),
+                        int((perf_counter() - started) * 1000),
+                    )
+                    return result
         except AppError:
             raise
         except Exception as exc:
-            raise AppError("CATALOG_UNAVAILABLE", "Catalog is unavailable.", 502, retryable=True) from exc
+            raise self._unavailable("list_destinations", exc, started) from exc
 
     def list_tours(self, limit: int) -> list[TourRow]:
+        """Compatibility read that returns full records for every requested tour."""
+        index = self.list_tour_index(limit)
+        keys = [str(row.tour.get("record_key") or row.tour.get("url") or "") for row in index]
+        details = self.list_tour_details(keys)
+        by_key = {
+            str(row.tour.get("record_key") or row.tour.get("url") or ""): row
+            for row in details
+        }
+        return [by_key[key] for key in keys if key in by_key]
+
+    def list_tour_index(self, limit: int) -> list[TourRow]:
+        """Load only fields needed to filter, count, and identify catalog candidates."""
+        return self._read_tours(limit=min(limit, self._scan_limit), details_for=None)
+
+    def list_tour_details(self, tour_keys: Iterable[str]) -> list[TourRow]:
+        """Load long evidence fields for selected record keys/URLs in one catalog read."""
+        keys = list(dict.fromkeys(key.strip() for key in tour_keys if isinstance(key, str) and key.strip()))
+        if not keys:
+            return []
+        return self._read_tours(details_for=keys)
+
+    def _read_tours(self, limit: int | None = None, details_for: list[str] | None = None) -> list[TourRow]:
         try:
             import psycopg
         except ImportError as exc:
             raise AppError("CATALOG_DRIVER_MISSING", "Missing psycopg driver.", 500) from exc
-        bound = min(limit, self._scan_limit)
+        operation = "list_tour_index" if details_for is None else "list_tour_details"
+        started = perf_counter()
         try:
             with psycopg.connect(self._db_url, connect_timeout=self._timeout, autocommit=True) as conn:
                 with conn.cursor() as cur:
@@ -107,24 +98,43 @@ class SupabaseCatalog:
                         (self._providers_limit,),
                     )
                     providers = {r[0]: {"source_key": r[1], "display_name": r[2]} for r in cur.fetchall()}
-                    cur.execute(
-                        "SELECT id, provider_id, record_key, url, tour_name, departure_city,"
-                        " destinations, route, transport, accommodation, duration_days,"
-                        " price, currency, price_type, field_meta, itinerary,"
-                        " inclusions, exclusions, cancellation_policy, surcharges, child_policy,"
-                        " verification_status, observed_at FROM tours"
-                        " ORDER BY observed_at DESC NULLS LAST LIMIT %s",
-                        (bound,),
-                    )
+                    if details_for is None:
+                        cur.execute(
+                            "SELECT id, provider_id, record_key, url, tour_name, departure_city,"
+                            " destinations, route, transport, accommodation, duration_days,"
+                            " duration_nights, price, currency, price_type, verification_status,"
+                            " observed_at, updated_at FROM tours"
+                            " ORDER BY observed_at DESC NULLS LAST LIMIT %s",
+                            (limit,),
+                        )
+                    else:
+                        cur.execute(
+                            "SELECT id, provider_id, record_key, url, tour_name, departure_city,"
+                            " destinations, route, transport, accommodation, duration_days, duration_nights,"
+                            " price, currency, price_type, field_meta, itinerary, inclusions, exclusions,"
+                            " cancellation_policy, surcharges, child_policy, verification_status,"
+                            " observed_at, updated_at FROM tours"
+                            " WHERE record_key = ANY(%s) OR url = ANY(%s)"
+                            " ORDER BY observed_at DESC NULLS LAST",
+                            (details_for, details_for),
+                        )
                     tour_cols = [d[0] for d in (cur.description or [])]
                     tours = [dict(zip(tour_cols, r, strict=False)) for r in cur.fetchall()]
                     if not tours:
+                        _log.info(
+                            "catalog_read_completed operation=%s rows=0 duration_ms=%d",
+                            operation,
+                            int((perf_counter() - started) * 1000),
+                        )
                         return []
+                    offer_fields = (
+                        "tour_id, record_key, departure_date, price, availability, price_type, observed_at, updated_at"
+                        if details_for is None
+                        else "tour_id, record_key, departure_date, price, availability, price_type, price_by_age, "
+                             "single_supplement, supplements, conditions, field_meta, observed_at, updated_at"
+                    )
                     cur.execute(
-                        "SELECT tour_id, record_key, departure_date, price, availability,"
-                        " price_type, price_by_age, single_supplement, supplements,"
-                        " conditions, field_meta, observed_at"
-                        " FROM offers WHERE tour_id = ANY(%s)",
+                        f"SELECT {offer_fields} FROM offers WHERE tour_id = ANY(%s)",
                         ([t["id"] for t in tours],),
                     )
                     offer_cols = [d[0] for d in (cur.description or [])]
@@ -137,20 +147,22 @@ class SupabaseCatalog:
                             row["price"] = int(row["price"])
                         if row.get("single_supplement") is not None:
                             row["single_supplement"] = int(row["single_supplement"])
-                        if row["observed_at"] is not None:
-                            row["observed_at"] = str(row["observed_at"])
+                        for key in ("observed_at", "updated_at"):
+                            if row.get(key) is not None:
+                                row[key] = str(row[key])
                         by_tour.setdefault(row.pop("tour_id"), []).append(row)
         except AppError:
             raise
         except Exception as exc:
-            raise AppError("CATALOG_UNAVAILABLE", "Catalog is unavailable.", 502, retryable=True) from exc
+            raise self._unavailable(operation, exc, started) from exc
         out: list[TourRow] = []
         for t in tours:
             tid = t.pop("id")
             pid = t.pop("provider_id")
-            for key in ("observed_at",):
+            for key in ("observed_at", "updated_at"):
                 if t.get(key) is not None:
                     t[key] = str(t[key])
+            t["_detail_state"] = "index" if details_for is None else "complete"
             out.append(
                 TourRow(
                     provider=providers.get(pid, {}),
@@ -158,13 +170,18 @@ class SupabaseCatalog:
                     offers=by_tour.get(tid, []),
                 )
             )
+        _log.info(
+            "catalog_read_completed operation=%s rows=%d offers=%d duration_ms=%d",
+            operation,
+            len(out),
+            sum(len(row.offers) for row in out),
+            int((perf_counter() - started) * 1000),
+        )
         return out
 
 
-def for_settings(settings) -> FixtureCatalog | SupabaseCatalog:
-    if settings.data_provider == "supabase":
-        return SupabaseCatalog(settings.supabase_tour_db_url, settings.supabase_scan_limit,
-                               settings.tuning.data.providers_limit,
-                               settings.tuning.data.connect_timeout_s)
-    return FixtureCatalog()
+def for_settings(settings) -> SupabaseCatalog:
+    return SupabaseCatalog(settings.supabase_tour_db_url, settings.supabase_scan_limit,
+                           settings.tuning.data.providers_limit,
+                           settings.tuning.data.connect_timeout_s)
 

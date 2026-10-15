@@ -39,9 +39,29 @@ class RankingSpec(BaseModel):
     order_by: list[RankingKey] = Field(min_length=1, max_length=5)
 
 
+class RequirementAlternative(BaseModel):
+    id: str
+    label: str
+    conditions: list[Condition] = Field(min_length=1)
+
+
+class RequirementAssumption(BaseModel):
+    id: str
+    kind: Literal["date_window"] = "date_window"
+    label: str
+    quote: str
+    date_from: str
+    date_to: str
+    condition_ids: list[str] = Field(min_length=1)
+    timezone: Literal["Asia/Ho_Chi_Minh"] = "Asia/Ho_Chi_Minh"
+    edited: bool = False
+
+
 class Requirement(BaseModel):
     id: str
     conditions: list[Condition] = Field(default_factory=list)
+    alternatives: list[RequirementAlternative] = Field(default_factory=list)
+    assumptions: list[RequirementAssumption] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
     raw_text: str = ""
     travelers: int = 1
@@ -51,7 +71,22 @@ class Requirement(BaseModel):
     ranking: RankingSpec | None = None
 
     def hard(self) -> list[Condition]:
+        return [
+            condition
+            for group in self.hard_groups()
+            for condition in group[1]
+        ]
+
+    def shared_hard(self) -> list[Condition]:
         return [c for c in self.conditions if c.strength == "hard"]
+
+    def hard_groups(self) -> list[tuple[str, list[Condition]]]:
+        groups = [("common", self.shared_hard())]
+        groups.extend(
+            (alternative.id, [c for c in alternative.conditions if c.strength == "hard"])
+            for alternative in self.alternatives
+        )
+        return [(group_id, conditions) for group_id, conditions in groups if conditions]
 
     def soft(self) -> list[Condition]:
         return [c for c in self.conditions if c.strength == "soft"]
@@ -107,12 +142,14 @@ class TourSnapshot(BaseModel):
     evidence: Evidence = Field(default_factory=Evidence)
     observed_at: str = ""
     verification: str = "provider_claimed"
+    detail_state: Literal["index", "complete"] = "complete"
     offers: list[OfferSnapshot] = Field(default_factory=list)
 
 
 class Evaluation(BaseModel):
     offer_id: str
     condition_id: str
+    alternative_id: str | None = None
     state: State = "unknown"
     quote: str = ""
     reason_code: str = ""
@@ -128,7 +165,7 @@ class RankedCandidate(BaseModel):
 class DecisionView(BaseModel):
     kind: Literal[
         "cheapest", "best_fit", "experience_rich", "fewest_legs",
-        "cancellation_flexible", "family_friendly", "included_value", "balanced",
+        "cancellation_flexible", "included_value", "balanced",
     ]
     candidates: list[RankedCandidate] = Field(default_factory=list, max_length=5)
     currencies: list[str] = Field(default_factory=list)
@@ -173,7 +210,6 @@ class CostProfile(BaseModel):
     currency: str = ""
     group_total_calculated: int | None = None
     group_total_scope: str = ""
-    total_is_lower_bound: bool = False
     priced_extras: list[CostExposure] = Field(default_factory=list)
     unpriced_exclusions: list[CostExposure] = Field(default_factory=list)
     optional_or_conditional: list[CostExposure] = Field(default_factory=list)
@@ -200,7 +236,6 @@ class CostScenarioItem(BaseModel):
     group_base_calculated: int | None = None
     priced_mandatory_extras: list[CostExposure] = Field(default_factory=list)
     known_total: int | None = None
-    total_is_lower_bound: bool = False
     unresolved_exposures: list[CostExposure] = Field(default_factory=list)
     delta_from_original: int | None = None
     state: MetricState = "unknown"
@@ -321,7 +356,9 @@ class DecisionConditionCount(BaseModel):
 
 
 class DecisionFunnelStep(BaseModel):
-    condition_id: str
+    condition_id: str = ""
+    label: str = ""
+    group_id: str = ""
     stage: int
     offers_before: int
     offers_after: int
@@ -336,6 +373,13 @@ class DecisionBlockerCount(BaseModel):
     tours: int = 0
 
 
+class DecisionAlternativeCount(BaseModel):
+    alternative_id: str
+    label: str
+    eligible_offers: int = 0
+    eligible_tours: int = 0
+
+
 class DecisionTrace(BaseModel):
     scanned_tours: int = 0
     scanned_offers: int = 0
@@ -345,6 +389,7 @@ class DecisionTrace(BaseModel):
     condition_counts: list[DecisionConditionCount] = Field(default_factory=list)
     sequential_funnel: list[DecisionFunnelStep] = Field(default_factory=list)
     first_blockers: list[DecisionBlockerCount] = Field(default_factory=list)
+    alternative_counts: list[DecisionAlternativeCount] = Field(default_factory=list)
     snapshot_available: bool = False
 
 
@@ -369,9 +414,9 @@ class Comparison(BaseModel):
     ranking_currencies: list[str] = Field(default_factory=list)
     decision_views: list[DecisionView] = Field(default_factory=list)
     metric_profiles: list[MetricProfile] = Field(default_factory=list)
+    near_miss_profiles: list[MetricProfile] = Field(default_factory=list)
     decision_options: list[DecisionOption] = Field(default_factory=list)
-    recommendation: DecisionOption | None = None
-    extracted_facts: list[ExtractedTourFacts] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
 
 
 class TourRow(BaseModel):

@@ -400,9 +400,13 @@ def _source_problem(field: str, value: object, source_raw: object) -> str:
             if expected not in stars:
                 return "accommodation_not_grounded_in_field_source"
     elif field == "price_type":
-        from_markers = ("gia tu", "starting at", "from")
+        from_markers = ("gia tu", "chi tu", "starting from", "starting at")
+        # Backstop for bare "Từ 2.000.000đ" / "From 2,000,000" without the full
+        # phrase. A lone "from" (flight legs, English prose, JSON keys) must NOT
+        # pass: only "từ/from" directly followed by a digit counts.
+        from_price = re.search(r"(?:tu|from)\s*\d", source) is not None
         contact_markers = ("lien he", "contact", "call for")
-        if value == "from" and not any(marker in source for marker in from_markers):
+        if value == "from" and not (any(marker in source for marker in from_markers) or from_price):
             return "price_type_not_grounded_in_field_source"
         if value == "contact" and not any(marker in source for marker in contact_markers):
             return "price_type_not_grounded_in_field_source"

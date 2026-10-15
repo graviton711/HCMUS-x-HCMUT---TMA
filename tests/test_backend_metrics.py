@@ -1,18 +1,17 @@
 """Cost totals stay conservative and expose excluded expenses separately."""
 
-from backend.decide.metrics import build_metric_profiles
 from backend.agent.mcp_server import CostExposureInput, TourMetricFactsInput, _validate_metric_facts
+from backend.decide.metrics import build_metric_profiles
 from backend.models import (
     CostExposure,
     ExtractedTourFacts,
-    MetricEvidence,
     OfferSnapshot,
     Requirement,
     TourSnapshot,
 )
 
 
-def _tour(*, price_basis="exact", currency="VND"):
+def _tour(*, price_basis="from", currency="VND"):
     offer = OfferSnapshot(
         id="offer-1",
         tour_id="tour-1",

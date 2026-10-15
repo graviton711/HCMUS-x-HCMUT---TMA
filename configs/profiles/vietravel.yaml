@@ -58,7 +58,7 @@ fields:
   price_type:
     source: css
     selector: 'script:-soup-contains("tourInfoData")'
-    clean: '("from" if research(r''\\"minPrice\\":([0-9]+)'', str(val)) else "contact")'
+    clean: '("fixed" if research(r''\\"minPrice\\":([0-9]+)'', str(val)) else "contact")'
   departure_pattern:
     status: not_observed
   offers:

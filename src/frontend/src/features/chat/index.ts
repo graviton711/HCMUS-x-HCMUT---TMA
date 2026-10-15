@@ -1,4 +1,6 @@
 export type { ChatMsg, ChatPhase } from './model/types';
+export type { WeightedItem } from './lib/weightAllocation';
+export { normalizeWeights } from './lib/weightAllocation';
 export {
   conditionState,
   conditionText,

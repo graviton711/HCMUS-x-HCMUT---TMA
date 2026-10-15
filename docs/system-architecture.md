@@ -1,6 +1,6 @@
 # Kiến trúc hệ thống
 
-Frontend gọi backend qua HTTP. Chat thu thập và làm rõ yêu cầu; trước khi gợi ý địa điểm, agent chạy preflight catalog theo hard condition đã biết. Sau khi người dùng duyệt Decision Brief, backend lọc ứng viên, tạo hồ sơ metric có bằng chứng cho từng tour còn lại, rồi xếp hạng theo các góc nhìn chuẩn và sở thích người dùng. Agent diễn giải yêu cầu; code xác thực evidence và tính metric.
+Frontend gọi backend qua HTTP. Chat thu thập yêu cầu; agent giữ các lựa chọn còn mở trong một Decision Brief thay vì buộc người dùng chốt một phương án. Preflight catalog dùng điều kiện đã biết để tạo lựa chọn có căn cứ. Sau khi người dùng duyệt Brief, backend lọc theo các nhánh lựa chọn, tạo hồ sơ metric có bằng chứng cho từng tour còn lại, rồi xếp hạng theo các góc nhìn chuẩn và sở thích người dùng. Agent diễn giải yêu cầu; code xác thực evidence và tính metric.
 
 ```mermaid
 flowchart LR
@@ -23,15 +23,17 @@ flowchart LR
 
 ## Workflow
 
-1. Agent trích hard conditions và soft preferences; `catalog_facets` phân giải nhãn thực, `discover_destinations` kiểm tra tính khả thi trước khi đề xuất.
-2. Người dùng review brief và trọng số. Final comparison chỉ bắt đầu sau khi xác nhận.
-3. Backend quét catalog, chuẩn hóa snapshot và áp hard filter trên toàn bộ scan. Offer chỉ qua khi mọi hard condition pass; unknown không được xem là pass.
+`date_from`/`date_to` là biên bao gồm của khoảng ngày khởi hành được ghi trong catalog, không xác minh ngày về. Nếu các nhánh có khoảng ngày riêng, lưu mỗi khoảng thành một date assumption riêng.
+
+1. Agent trích hard conditions, soft preferences và các lựa chọn còn mở. `catalog_facets` phân giải nhãn thực; `discover_destinations` kiểm tra điều kiện chung và từng nhánh lựa chọn trên cùng catalog scan. Preflight được chạy một lần cho cùng bộ điều kiện.
+2. Brief biểu diễn `conditions` dùng chung theo phép AND và `alternatives` theo phép OR; các điều kiện trong mỗi nhánh vẫn là AND. Các lựa chọn không ghép cặp được giữ như các giá trị OR; lựa chọn được người dùng ghép rõ ràng được giữ cùng một nhánh. Mốc thời gian mơ hồ được chuẩn hóa thành khoảng ngày có giả định năm/múi giờ hiển thị để người dùng sửa. Người dùng review Brief và trọng số; final comparison chỉ bắt đầu sau khi xác nhận.
+3. Backend đọc index nhẹ của toàn phạm vi quét, chuẩn hóa và áp hard filter trước. Offer chỉ qua khi mọi điều kiện chung pass và có ít nhất một nhánh pass đầy đủ; unknown không được xem là pass. Sau đó backend tải itinerary, exclusions, phụ phí và policy chỉ cho hard-pass candidates và nhóm near-miss cần hiển thị. Decision trace vẫn dùng index/evaluations của toàn bộ scan.
 4. Metric enrichment đọc riêng itinerary, inclusions, exclusions, surcharges, cancellation và child policy. Structured facts phải có quote khớp nguồn; code chuẩn hóa, tính cost/route/coverage và ghi unknown khi không đủ căn cứ. Kết quả được cache theo content hash và extractor version.
 5. Engine tạo metric vector chung cho từng tour: cost, preference fit, experience density, route complexity, inclusion coverage, cancellation flexibility, family suitability và evidence coverage. Từ đó tạo các góc nhìn khả dụng và ít nhất ba tour khác nhau nếu có.
 6. Nếu thiếu ba hard-pass tour, API trả số thực có và các kịch bản nới điều kiện có giải thích; không tự sửa brief hoặc tạo tour giả.
 7. Comparison, evidence, metric vectors và phương án được lưu cùng snapshot; frontend hiển thị phép tính, giới hạn dữ liệu và hỗ trợ what-if qua brief/trọng số đã review.
 
-Decision trace được dựng từ toàn bộ hard evaluations trước khi rút gọn response. Funnel tuần tự đếm offer và tour riêng; histogram theo từng condition có thể chồng lấp, còn blocker đầu tiên dùng thứ tự condition trong Brief. Snapshot scan và evaluations đầy đủ được giữ trong runtime record owner-scoped để phân trang offer bị loại và chạy scenario trên đúng snapshot.
+Decision trace được dựng từ toàn bộ hard evaluations trước khi rút gọn response. Funnel tuần tự đếm offer và tour riêng; histogram theo từng condition có thể chồng lấp, còn blocker đầu tiên dùng thứ tự condition trong Brief. Runtime snapshot owner-scoped giữ index nhẹ của mọi offer và detail của ứng viên đã tải. Nếu scenario làm một offer trong index lần đầu đạt điều kiện, backend tải detail theo khóa nguồn và chỉ dùng khi timestamp quan sát khớp snapshot; nếu catalog đã đổi, scenario dừng và yêu cầu chạy lại comparison gốc.
 
 Scenario điều kiện chạy lại hard filter trên snapshot gốc; scenario chi phí chỉ tính đơn giá có evidence theo giả định số khách/cơ cấu tuổi/phòng/đêm. Scenario không sửa comparison nguồn. Tour mới qua hard filter cần enrichment theo workflow agent trước khi có metric mềm; nếu chưa có evidence thì metric giữ `unknown`. Điều kiện scenario chỉ được đưa vào Brief dưới dạng bản nháp để người dùng review và xác nhận.
 
@@ -61,12 +63,13 @@ Scenario điều kiện chạy lại hard filter trên snapshot gốc; scenario 
 
 - Database catalog là nguồn có thẩm quyền. Hard filter luôn chạy trước soft ranking.
 - Soft evaluation bao phủ mọi ứng viên hard-pass trong scan, không chỉ các tour có thể lọt top N theo ranking cũ. Batching giới hạn context model; scan limit vẫn giới hạn số record được đọc.
-- Price vectors tách giá exact/from/contact, tổng đã tính, khoản đã định giá và khoản loại trừ chưa định giá; chỉ exact cùng currency được dùng để kết luận rẻ nhất.
+- Price vectors dùng mọi giá công bố dạng số trong cùng currency để lọc ngân sách và xếp giá; giá công bố, tổng đã tính, khoản đã định giá và exclusions chưa định giá vẫn hiển thị tách biệt. Không gọi giá công bố là tổng tiền cuối cùng.
 - Exclusion không tự động là khoản phát sinh. Phân loại bắt buộc/tùy chọn/có điều kiện; chỉ tính khoản có amount, unit và điều kiện áp dụng được xác nhận.
 - Metric dùng đơn vị/scale riêng và evidence. Không ép thành một điểm tổng; unknown tạo khoảng hoặc trạng thái chưa so sánh được.
 - Objective views tối ưu metric cụ thể hoặc người dùng; Pareto chỉ so trên dimensions có thứ tự/đơn vị hợp lệ và không bị thiếu evidence làm giả thứ hạng.
 - Metric cache được khóa bằng hash nội dung nguồn và phiên bản extractor; freshness và độ phủ hiển thị riêng, không gọi là xác suất tin cậy.
 - Ngày trong offer được so trực tiếp với khoảng ngày người dùng yêu cầu, không bị chặn bởi tuổi crawl; `observed_at` chỉ là nguồn gốc thời điểm ghi nhận. Demo dùng catalog hiện có làm snapshot dữ liệu mới nhất, không diễn đạt kết quả ngày là xác nhận tồn chỗ trực tiếp.
+- Điểm đến không được gắn nhãn “gần” nếu catalog không có dữ liệu địa lý để chứng minh. Khi thiếu nơi khởi hành, không tự thêm hard condition.
 - Kết quả có tối thiểu ba tour khác nhau nếu scan có đủ tour qua hard filter; thiếu thì báo số thực có và kịch bản nới điều kiện chờ duyệt. Nhiều góc nhìn không tự bảo đảm có ba phương án khác nhau.
 - Không đặt deadline tổng cho agent. Giữ timeout riêng cho MCP/data calls và hủy process khi client disconnect.
 - Kết quả quyết định đi từ MCP tới API qua runtime store bằng `decision_run_id`; không phụ thuộc OpenCode có lặp lại JSON của tool trong output model hay không.

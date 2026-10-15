@@ -85,6 +85,10 @@ def _eliminated_offers(comparison) -> list[dict[str, Any]]:
                 item = evaluations.get((offer.id, condition.id))
                 conditions.append({
                     "condition_id": condition.id,
+                    "alternative_id": next((
+                        branch.id for branch in comparison.requirement.alternatives
+                        if any(item.id == condition.id for item in branch.conditions)
+                    ), None),
                     "field": condition.field,
                     "value": condition.value,
                     "state": item.state if item else "unknown",
@@ -93,7 +97,23 @@ def _eliminated_offers(comparison) -> list[dict[str, Any]]:
                     else _evaluation_reason(item.reason_code if item else "EVALUATION_MISSING", condition.field),
                     "quote": item.quote if item else "",
                 })
-            if all(item["state"] == "pass" for item in conditions):
+            states = {
+                condition_id: item.state
+                for (candidate_offer_id, condition_id), item in evaluations.items()
+                if candidate_offer_id == offer.id
+            }
+            common_pass = all(
+                states.get(condition.id, "unknown") == "pass"
+                for condition in comparison.requirement.shared_hard()
+            )
+            alternatives_pass = (
+                not comparison.requirement.alternatives
+                or any(
+                    all(states.get(condition.id, "unknown") == "pass" for condition in branch.conditions)
+                    for branch in comparison.requirement.alternatives
+                )
+            )
+            if common_pass and alternatives_pass:
                 continue
             items.append({
                 "tour_id": tour.id,
@@ -123,10 +143,7 @@ def _evaluation_reason(code: str, field: str) -> str:
         "FIELD_UNSUPPORTED": f"Chưa hỗ trợ đối chiếu trường {field}.",
         "PRICE_MISSING": "Offer chưa có giá để đối chiếu ngân sách.",
         "PRICE_CURRENCY_MISMATCH": "Tiền tệ của giá không khớp điều kiện ngân sách.",
-        "PRICE_LOWER_BOUND_OVER_BUDGET": "Giá khởi điểm đã cao hơn ngân sách tối đa.",
-        "PRICE_FROM_LOWER_BOUND": "Giá là giá khởi điểm nên chưa thể xác nhận nằm trong ngân sách.",
-        "PRICE_NOT_EXACT": "Giá liên hệ hoặc chưa xác định nên không thể xác nhận ngân sách.",
-        "PRICE_OVER_BUDGET": "Giá chính xác cao hơn ngân sách tối đa.",
+        "PRICE_OVER_BUDGET": "Giá công bố cao hơn ngân sách tối đa.",
         "TRANSPORT_MISMATCH": "Phương tiện trong dữ liệu không khớp yêu cầu.",
         "ACCOMMODATION_MISMATCH": "Loại chỗ nghỉ trong dữ liệu không khớp yêu cầu.",
         "UNSUPPORTED_TRANSPORT": "Chưa hỗ trợ loại phương tiện này để đối chiếu.",
@@ -200,6 +217,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 body.get("travelers", 1),
                 ranking=body.get("ranking"),
                 traveler_mix=body.get("traveler_mix"),
+                alternatives=body.get("alternatives"),
+                assumptions=body.get("assumptions"),
             )
         else:
             from backend.input.pipeline import requirement_from_form
@@ -296,6 +315,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             value.get("ranking"),
             requirement_id=requirement_id,
             require_weights=True,
+            traveler_mix=value.get("traveler_mix"),
+            alternatives=value.get("alternatives"),
+            assumptions=value.get("assumptions"),
         )
         store.save_requirement(requirement, owner_id)
         if "text/event-stream" in request.headers.get("accept", ""):
@@ -345,6 +367,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         request: Request,
         limit: int = 25,
         cursor: str | None = None,
+        condition_id: str | None = None,
     ) -> dict[str, Any]:
         owner_id = owner_session(request)
         comparison = store.get_comparison(cid, owner_id)
@@ -361,14 +384,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         safe_limit = min(max(limit, 1), 100)
         offset = _decode_page_cursor(cursor)
         entries = _eliminated_offers(snapshot)
+        if condition_id:
+            entries = [
+                entry for entry in entries
+                if any(condition.get("condition_id") == condition_id
+                       for condition in entry.get("conditions", []))
+            ]
         page = entries[offset:offset + safe_limit]
         next_offset = offset + len(page)
+        total = (
+            comparison.decision_trace.excluded_offers
+            if comparison.decision_trace and not condition_id else len(entries)
+        )
         return {
             "comparison_id": cid,
             "items": page,
             "limit": safe_limit,
             "next_cursor": _encode_page_cursor(next_offset) if next_offset < len(entries) else None,
-            "total": comparison.decision_trace.excluded_offers if comparison.decision_trace else len(entries),
+            "total": total,
         }
 
     @app.post("/comparisons/{cid}/scenarios")
@@ -421,6 +454,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 requirement_id=uid("req"),
                 require_weights=True,
                 traveler_mix=value.get("traveler_mix"),
+                alternatives=value.get("alternatives"),
+                assumptions=value.get("assumptions"),
             )
         except (TypeError, ValueError) as exc:
             raise AppError("SCENARIO_INVALID", "Invalid scenario requirement.", 422) from exc

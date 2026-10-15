@@ -6,7 +6,7 @@
 
 Registry ghi kết quả khảo sát khả năng lấy dữ liệu theo từng nhà cung cấp. Đây là danh sách nguồn đã kiểm tra, không phải danh sách đã có crawler adapter production. `reviewed_at` cho biết lần kiểm tra gần nhất; khi dữ liệu/robots thay đổi phải kiểm tra lại trước khi crawl.
 
-Profiles `vietravel` và `dulichviet` có flow/alias/anchor nhưng không chứa đầy đủ access_status/checked_at/freshness_seconds của BE. Có profile không đồng nghĩa approved; phần survey artifacts đang ignore cũng không thay hồ sơ nguồn/fixture đã review trong repo.
+Profiles `vietravel` và `dulichviet` có flow/alias/anchor nhưng không chứa đầy đủ access_status/checked_at/freshness_seconds của BE. Có profile không đồng nghĩa approved; phần survey artifacts đang ignore cũng không thay hồ sơ nguồn đã review trong repo.
 
 ## Trường dữ liệu
 

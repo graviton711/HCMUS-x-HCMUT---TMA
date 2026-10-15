@@ -76,7 +76,8 @@ def test_promote_copies_profile_into_configs(tmp_path):
     assert _parse_args(["--source", "example", "--promote"]).promote is True
     assert _parse_args(["--source", "example"]).promote is False
     defaults = _parse_args(["--source", "example"])
-    assert defaults.model is None and defaults.variant is None and defaults.timeout_min is None
+    assert not hasattr(defaults, "model")
+    assert defaults.variant is None and defaults.timeout_min is None
 
 
 def test_settings_has_tunable_sections():

@@ -17,7 +17,7 @@ function session(value: unknown) {
 }
 
 describe('Current FastAPI contracts', () => {
-  it('validates real current-backend responses using SQLite fixture data only', () => {
+  it('validates real current-backend responses using in-memory sample rows only', () => {
     const root = resolve(import.meta.dirname, '../../../..');
     const python =
       process.platform === 'win32'

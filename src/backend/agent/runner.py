@@ -144,6 +144,8 @@ class OpenCodeRunner:
         process_env = os.environ.copy()
         if self.settings.opencode_server_password:
             process_env["OPENCODE_SERVER_PASSWORD"] = self.settings.opencode_server_password
+            # Current OpenCode CLI authenticates with OPENCODE_PASSWORD.
+            process_env["OPENCODE_PASSWORD"] = self.settings.opencode_server_password
 
         try:
             proc = await asyncio.create_subprocess_exec(

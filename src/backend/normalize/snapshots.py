@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import json
 import math
-import re
-import unicodedata
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from backend.models import Evidence, OfferSnapshot, TourRow, TourSnapshot
+from backend.models import Evidence, Freshness, OfferSnapshot, TourRow, TourSnapshot
+from shared.text import fold_vi as _place_key
 
 _TRANSPORTS = {"flight", "bus", "train", "cruise", "mixed"}
 _DEFAULT_FRESHNESS_SECONDS: dict[str, int | None] = {"departure_date": None}
@@ -37,12 +36,6 @@ def _evidence(url: str, observed_at: str, record_ref: str) -> Evidence:
     )
 
 
-def _place_key(value: str) -> str:
-    decomposed = unicodedata.normalize("NFD", value.replace("đ", "d").replace("Đ", "D"))
-    folded = "".join(c for c in decomposed if unicodedata.category(c) != "Mn").lower()
-    return re.sub(r"[^a-z0-9]", "", folded)
-
-
 def _destinations(values: object, origin: str) -> tuple[list[str], list[str]]:
     raw = [v.strip() for v in values if isinstance(v, str) and v.strip()] if isinstance(values, list) else []
     visit = list(raw)
@@ -66,7 +59,7 @@ def _parsed_time(value: object) -> datetime | None:
     return parsed.astimezone(UTC) if parsed.tzinfo else None
 
 
-def _freshness(value: object, ttl: int | None, now: datetime) -> str:
+def _freshness(value: object, ttl: int | None, now: datetime) -> Freshness:
     observed = _parsed_time(value)
     if observed is None or observed > now:
         return "unknown"
@@ -206,6 +199,7 @@ def rows_to_snapshots(
                 evidence=_evidence(url, str(t.get("observed_at", "")), tour_id),
                 observed_at=str(t.get("observed_at", "")),
                 verification=_text(t.get("verification_status")) or "provider_claimed",
+                detail_state=("index" if t.get("_detail_state") == "index" else "complete"),
                 offers=snapshots,
             )
         )

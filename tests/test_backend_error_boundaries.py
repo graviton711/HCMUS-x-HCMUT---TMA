@@ -3,22 +3,25 @@
 import logging
 
 from fastapi.testclient import TestClient
+from sample_rows import StaticCatalog
 
 from backend.agent.mcp_server import _guard_tool
 from backend.agent.runner import OpenCodeRunner
 from backend.api import create_app
-from backend.data.catalog import FixtureCatalog
 from backend.errors import AppError
 
 
 def _client(tmp_path):
+    from unittest.mock import patch
+
     from backend.settings import Settings
 
     settings = Settings.load(
         database_url=f"sqlite:///{tmp_path / 'errors.db'}",
         opencode_server_url="http://127.0.0.1:4098",
     )
-    return TestClient(create_app(settings))
+    with patch("backend.api.for_settings", return_value=StaticCatalog()):
+        return TestClient(create_app(settings))
 
 
 def _error_records(caplog):
@@ -36,7 +39,7 @@ def test_http_logs_retryable_app_error_once_without_message(tmp_path, monkeypatc
     def unavailable(_self):
         raise AppError("CATALOG_UNAVAILABLE", "secret connection detail", 502, retryable=True)
 
-    monkeypatch.setattr(FixtureCatalog, "list_destinations", unavailable)
+    monkeypatch.setattr(StaticCatalog, "list_destinations", unavailable)
     caplog.set_level(logging.WARNING, logger="mlai.backend.errors")
     response = _client(tmp_path).get("/catalog")
     records = _error_records(caplog)
@@ -51,7 +54,7 @@ def test_http_normalizes_unexpected_exception_and_logs_safe_metadata(tmp_path, m
     def broken(_self):
         raise RuntimeError("secret token detail")
 
-    monkeypatch.setattr(FixtureCatalog, "list_destinations", broken)
+    monkeypatch.setattr(StaticCatalog, "list_destinations", broken)
     caplog.set_level(logging.ERROR, logger="mlai.backend.errors")
     response = _client(tmp_path).get("/catalog")
     records = _error_records(caplog)

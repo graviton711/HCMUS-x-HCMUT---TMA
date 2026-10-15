@@ -6,17 +6,22 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(ROOT / "tests"))
 
 from fastapi.testclient import TestClient  # noqa: E402
+from sample_rows import StaticCatalog  # noqa: E402
 
+import backend.api as backend_api  # noqa: E402
 from backend.api import create_app  # noqa: E402
 from backend.settings import Settings  # noqa: E402
+
+# Offline contract capture: serve the in-memory sample catalog, no network.
+backend_api.for_settings = lambda _settings: StaticCatalog()
 
 
 def collect() -> list[dict[str, object]]:
     settings = Settings.load(
         database_url="sqlite:///:memory:",
-        data_provider="fixture",
     )
     captured: list[dict[str, object]] = []
 

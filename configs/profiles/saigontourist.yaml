@@ -53,7 +53,7 @@ fields:
   price_type:
     source: css
     selector: script:-soup-contains("tour_codes")
-    clean: '("from" if refindall(r"\\\"start_date\\\":\\\"20\d\d-", str(val)) else "contact")'
+    clean: '("fixed" if refindall(r"\\\"start_date\\\":\\\"20\d\d-", str(val)) else "contact")'
   departure_pattern:
     source: css
     selector: script:-soup-contains("tour_codes")

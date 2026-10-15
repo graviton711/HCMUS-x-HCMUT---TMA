@@ -15,11 +15,15 @@ import secrets
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING, LiteralString, cast
 from uuid import uuid4
 
 from backend.errors import AppError
 from backend.models import Comparison, Requirement
 from shared import now_vn_iso
+
+if TYPE_CHECKING:
+    from psycopg import Connection
 
 
 class BaseStore:
@@ -382,11 +386,12 @@ class _PostgresStore(BaseStore):
         self._database_url = database_url
         # Lazy connection: serverless imports must never dial the database.
         # The first query connects; failures surface as a 503 AppError.
-        self._conn = None
+        self._conn: Connection | None = None
 
-    def _connected(self):
+    def _connected(self) -> Connection:
         if self._conn is None:
             self._connect()
+        assert self._conn is not None
         return self._conn
 
     def _connect(self) -> None:
@@ -410,25 +415,25 @@ class _PostgresStore(BaseStore):
     def _execute(self, sql: str, params: tuple) -> object:
         try:
             cursor = self._connected().cursor()
-            cursor.execute(sql, params)
+            cursor.execute(cast(LiteralString, sql), params)
             return cursor
         except self._pg_operational_error:
             # Warm serverless instances outlive their DB connection; one
             # reconnect-and-retry beats a 500 on the first request after idle.
             self._reconnect()
             cursor = self._connected().cursor()
-            cursor.execute(sql, params)
+            cursor.execute(cast(LiteralString, sql), params)
             return cursor
 
     def _query(self, sql: str, params: tuple) -> list[tuple]:
         try:
             with self._connected().cursor() as cursor:
-                cursor.execute(sql, params)
+                cursor.execute(cast(LiteralString, sql), params)
                 return cursor.fetchall()
         except self._pg_operational_error:
             self._reconnect()
             with self._connected().cursor() as cursor:
-                cursor.execute(sql, params)
+                cursor.execute(cast(LiteralString, sql), params)
                 return cursor.fetchall()
 
     def _commit(self) -> None:

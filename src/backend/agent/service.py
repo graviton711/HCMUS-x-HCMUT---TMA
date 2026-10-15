@@ -31,6 +31,61 @@ _MCP_TOOL_NAMES = (
 _log = get_logger("backend.agent.service")
 
 
+class _AssistantTextCollector:
+    """Collect final OpenCode text by message and part identity."""
+
+    def __init__(self) -> None:
+        self._messages: dict[str, dict[str, str]] = {}
+        self.duplicate_events = 0
+        self.filtered_parts = 0
+
+    @property
+    def message_count(self) -> int:
+        return len(self._messages)
+
+    @property
+    def part_count(self) -> int:
+        return sum(len(parts) for parts in self._messages.values())
+
+    def add(self, part: dict[str, Any]) -> None:
+        text = part.get("text")
+        if not isinstance(text, str):
+            return
+
+        metadata = part.get("metadata")
+        metadata = metadata if isinstance(metadata, dict) else {}
+        provider_metadata = metadata.get("openai")
+        provider_metadata = provider_metadata if isinstance(provider_metadata, dict) else {}
+        if (
+            not text.strip()
+            or part.get("synthetic")
+            or part.get("ignored")
+            or provider_metadata.get("phase") == "commentary"
+        ):
+            self.filtered_parts += 1
+            return
+
+        message_id = part.get("messageID")
+        message_key = message_id if isinstance(message_id, str) and message_id else "__unattributed__"
+        part_id = part.get("id")
+        part_key = part_id if isinstance(part_id, str) and part_id else f"text:{text}"
+        message_parts = self._messages.setdefault(message_key, {})
+        if part_key in message_parts:
+            self.duplicate_events += 1
+        # OpenCode identifies updates with the same part ID. Replace the snapshot in place
+        # instead of appending it as another copy of the assistant's text.
+        message_parts[part_key] = text
+
+    def render(self) -> str:
+        # Earlier assistant messages can be intermediate drafts. The last completed
+        # user-facing assistant message is the response for this CLI turn.
+        for parts in reversed(tuple(self._messages.values())):
+            text = "\n\n".join(value.strip() for value in parts.values() if value.strip())
+            if text:
+                return text
+        return ""
+
+
 class AgentService:
     def __init__(self, settings: Settings, store: BaseStore):
         self.settings = settings
@@ -145,7 +200,9 @@ class AgentService:
                 "This is a comparison-only scenario. Keep the baseline unchanged. Call query_tours "
                 "with the exact requirement and decision_run_id below, and set the exact "
                 "snapshot_comparison_id to the supplied source comparison. Evaluate every soft-review "
-                "batch using score_soft before returning. Do not query the live catalog for this run. "
+                "batch using score_soft before returning. Do not start a fresh catalog scan; the backend "
+                "may hydrate selected source records only when their observed timestamps still match "
+                "the retained scan snapshot. "
                 "Do not ask for more information unless a tool reports a validation error.\n"
                 f"DECISION_RUN_ID={decision_run_id}\n"
                 f"SNAPSHOT_COMPARISON_ID={snapshot_comparison_id}\n"
@@ -184,7 +241,7 @@ class AgentService:
     ) -> AsyncIterator[dict[str, Any]]:
         operation = "decision" if expected_requirement is not None else "message"
         _log.info("agent_turn_started operation=%s", operation)
-        assistant_text: list[str] = []
+        assistant_text = _AssistantTextCollector()
         tool_calls: list[dict[str, str]] = []
         active_tool_ids: dict[str, str] = {}
         tool_messages: dict[str, str] = {}
@@ -212,13 +269,7 @@ class AgentService:
                     continue
                 kind = event.get("type")
                 if kind == "text" and isinstance(part.get("text"), str):
-                    metadata = part.get("metadata")
-                    metadata = metadata if isinstance(metadata, dict) else {}
-                    provider_metadata = metadata.get("openai")
-                    provider_metadata = provider_metadata if isinstance(provider_metadata, dict) else {}
-                    if provider_metadata.get("phase") == "commentary":
-                        continue
-                    assistant_text.append(part["text"])
+                    assistant_text.add(part)
                     continue
 
                 state = part.get("state")
@@ -312,6 +363,14 @@ class AgentService:
             final_requirement, final_comparison = self._validate_decision_result(
                 persisted, expected_requirement, snapshot_comparison_id
             )
+        finally:
+            _log.info(
+                "agent_text_aggregation message_count=%d part_count=%d duplicate_events=%d filtered_parts=%d",
+                assistant_text.message_count,
+                assistant_text.part_count,
+                assistant_text.duplicate_events,
+                assistant_text.filtered_parts,
+            )
 
         if expected_requirement is not None and decision_run_id is not None and final_comparison is None:
             persisted = self.store.pop_decision_result(decision_run_id)
@@ -321,7 +380,7 @@ class AgentService:
                 )
 
         response: dict[str, Any] = {
-            "assistant_text": "".join(assistant_text).strip(),
+            "assistant_text": assistant_text.render(),
             "tool_calls": _deduplicate_calls(tool_calls),
         }
         if choices is not None:
@@ -511,7 +570,7 @@ def _condition_activity(value: Any) -> str:
         "destination": "điểm đến",
         "departure_city": "nơi khởi hành",
         "date_from": "ngày đi",
-        "date_to": "ngày về",
+        "date_to": "ngày khởi hành đến",
         "budget_max": "ngân sách tối đa",
         "duration_days": "thời lượng",
         "transport": "phương tiện",

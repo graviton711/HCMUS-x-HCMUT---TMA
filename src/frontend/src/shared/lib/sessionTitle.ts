@@ -63,9 +63,14 @@ export function sessionTitle(requirement: CurrentRequirement, rawText: string): 
   const destination = requirement.conditions.find(
     (condition) => condition.field === 'destination' && condition.value != null,
   );
+  const alternativeDestination = requirement.alternatives
+    ?.flatMap((alternative) => alternative.conditions)
+    .find((condition) => condition.field === 'destination' && condition.value != null);
   const source =
     destination && typeof destination.value === 'string' && destination.value.trim()
       ? destination.value
-      : rawText;
+      : alternativeDestination && typeof alternativeDestination.value === 'string'
+        ? alternativeDestination.value
+        : requirement.alternatives?.[0]?.label || rawText;
   return displaySessionTitle(source, TITLE_FALLBACK);
 }

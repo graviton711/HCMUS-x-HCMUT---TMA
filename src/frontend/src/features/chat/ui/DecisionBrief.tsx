@@ -24,6 +24,11 @@ export function DecisionBrief({
   const editStartValues = useRef<Record<string, string>>({});
   const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
   const requirement = message.requirement;
+  const alternatives = requirement.alternatives ?? [];
+  const allConditions = [
+    ...requirement.conditions,
+    ...alternatives.flatMap((alternative) => alternative.conditions),
+  ];
   const soft = requirement.conditions.filter((condition) => condition.strength === 'soft');
   const hard = requirement.conditions.filter((condition) => condition.strength === 'hard');
   const confirmedIds = new Set((message.confirmedWeightIds ?? [])
@@ -54,15 +59,22 @@ export function DecisionBrief({
           `${100 - pendingTotal}% remains to reach 100%. Increase a weight to continue.`)
         : t(`Vượt ${pendingTotal - 100}%. Hãy giảm trọng số để tổng bằng 100%.`,
           `${pendingTotal - 100}% over the limit. Reduce weights to total 100%.`);
-  const valuesValid = requirement.conditions.every((condition) => {
-    if (!condition.quote.trim() || !requirement.raw_text.includes(condition.quote)) return false;
-    if (condition.field === 'destination' && condition.operator === 'any')
-      return Array.isArray(condition.value) && condition.value.length > 1
-        && condition.value.every((value) => typeof value === 'string' && value.trim());
-    if (typeof condition.value === 'string') return Boolean(condition.value.trim());
-    if (typeof condition.value === 'number') return Number.isFinite(condition.value) && condition.value > 0;
-    return Array.isArray(condition.value) && condition.value.length > 0;
-  }) && requirement.raw_text.length <= 8000;
+  const valuesValid =
+    allConditions.every((condition) => {
+      if (!condition.quote.trim() || !requirement.raw_text.includes(condition.quote)) return false;
+      if (condition.field === 'destination' && condition.operator === 'any')
+        return (
+          Array.isArray(condition.value) &&
+          condition.value.length > 1 &&
+          condition.value.every((value) => typeof value === 'string' && value.trim())
+        );
+      if (typeof condition.value === 'string') return Boolean(condition.value.trim());
+      if (typeof condition.value === 'number')
+        return Number.isFinite(condition.value) && condition.value > 0;
+      return Array.isArray(condition.value) && condition.value.length > 0;
+    }) &&
+    alternatives.every((alternative) => alternative.label.trim().length > 0) &&
+    requirement.raw_text.length <= 8000;
   const canRun = weightsValid && valuesValid && !busy && message.status !== 'running';
 
   function withWeights(weights: Map<string, number>): CurrentRequirement {
@@ -89,16 +101,55 @@ export function DecisionBrief({
   }
 
   function patchCondition(id: string, changes: Partial<CurrentCondition>) {
+    const conditions = requirement.conditions.map((condition) =>
+      condition.id === id ? { ...condition, ...changes } : condition,
+    );
+    const nextAlternatives = alternatives.map((alternative) => ({
+      ...alternative,
+      conditions: alternative.conditions.map((condition) =>
+        condition.id === id ? { ...condition, ...changes } : condition,
+      ),
+    }));
+    const conditionById = new Map(
+      [...conditions, ...nextAlternatives.flatMap((alternative) => alternative.conditions)].map(
+        (condition) => [condition.id, condition],
+      ),
+    );
     onChange({
       ...requirement,
-      conditions: requirement.conditions.map((condition) =>
-        condition.id === id ? { ...condition, ...changes } : condition,
+      conditions,
+      alternatives: nextAlternatives,
+      assumptions: requirement.assumptions?.map((assumption) => {
+        if (!assumption.condition_ids.includes(id)) return assumption;
+        const linked = assumption.condition_ids
+          .map((conditionId) => conditionById.get(conditionId))
+          .filter((condition): condition is CurrentCondition => Boolean(condition));
+        const start = linked.find((condition) => condition.field === 'date_from')?.value;
+        const end = linked.find((condition) => condition.field === 'date_to')?.value;
+        if (typeof start !== 'string' || typeof end !== 'string')
+          return { ...assumption, edited: true };
+        return { ...assumption, date_from: start, date_to: end, edited: true };
+      }),
+    });
+  }
+
+  function patchAlternativeLabel(id: string, label: string) {
+    onChange({
+      ...requirement,
+      alternatives: alternatives.map((alternative) =>
+        alternative.id === id ? { ...alternative, label } : alternative,
       ),
     });
   }
 
   function removeCondition(id: string) {
     const conditions = requirement.conditions.filter((condition) => condition.id !== id);
+    const nextAlternatives = alternatives
+      .map((alternative) => ({
+        ...alternative,
+        conditions: alternative.conditions.filter((condition) => condition.id !== id),
+      }))
+      .filter((alternative) => alternative.conditions.length > 0);
     const remainingSoft = conditions.filter((condition) => condition.strength === 'soft');
     const nextConfirmedIds = new Set([...confirmedIds].filter((confirmedId) => confirmedId !== id));
     const normalized = requirement.conditions.find((condition) => condition.id === id)?.strength === 'soft'
@@ -106,9 +157,15 @@ export function DecisionBrief({
       : null;
     onChange({
       ...requirement,
-      conditions: conditions.map((condition) => condition.strength === 'soft' && normalized
-        ? { ...condition, weight_percent: normalized.get(condition.id) ?? 0 }
-        : condition),
+      alternatives: nextAlternatives,
+      assumptions: requirement.assumptions?.filter(
+        (assumption) => !assumption.condition_ids.includes(id),
+      ),
+      conditions: conditions.map((condition) =>
+        condition.strength === 'soft' && normalized
+          ? { ...condition, weight_percent: normalized.get(condition.id) ?? 0 }
+          : condition,
+      ),
     }, [...nextConfirmedIds]);
     setWeightDrafts((current) => {
       const next = { ...current };
@@ -118,18 +175,18 @@ export function DecisionBrief({
   }
 
   function divideEvenly() {
+    if (soft.length === 0) return;
+
     const base = Math.floor(100 / soft.length);
     const remainder = 100 % soft.length;
-    const weights = new Map(soft.map((condition, index) => [
-      condition.id,
-      base + Number(index < remainder),
-    ]));
-    onChange({
-      ...requirement,
-      conditions: requirement.conditions.map((condition) => condition.strength === 'soft'
-        ? { ...condition, weight_percent: weights.get(condition.id) ?? base }
-        : condition),
-    }, []);
+    const weights = new Map(
+      soft.map((condition, index) => [
+        condition.id,
+        base + Number(index < remainder),
+      ]),
+    );
+
+    onChange(withWeights(weights), []);
     setWeightDrafts({});
   }
 
@@ -163,28 +220,40 @@ export function DecisionBrief({
     let next: unknown = value;
     if (typeof condition.value === 'number') next = value === '' ? 0 : Number(value);
     else if (Array.isArray(condition.value))
-      next = value.split(',').map((item) => item.trim()).filter(Boolean);
+      next = value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
     patchCondition(condition.id, { value: next });
   }
 
-  function commitReviewedValue(condition: CurrentCondition, inputValue: string, initialValue: string) {
+  function commitReviewedValue(
+    condition: CurrentCondition,
+    inputValue: string,
+    initialValue: string,
+  ) {
     const quote = inputValue.trim();
     if (!quote || inputValue === initialValue) return;
     let value: unknown = inputValue;
     if (typeof condition.value === 'number') value = Number(inputValue);
     else if (Array.isArray(condition.value))
-      value = inputValue.split(',').map((item) => item.trim()).filter(Boolean);
+      value = inputValue
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
 
-    const otherQuotes = requirement.conditions
+    const otherQuotes = allConditions
       .filter((item) => item.id !== condition.id)
       .map((item) => item.quote)
       .filter(Boolean);
-    const overlapsAnotherQuote = otherQuotes.some((other) =>
-      other.includes(condition.quote) || condition.quote.includes(other),
+    const overlapsAnotherQuote = otherQuotes.some(
+      (other) => other.includes(condition.quote) || condition.quote.includes(other),
     );
-    const canReplaceSourceQuote = condition.quote
-      && requirement.raw_text.includes(condition.quote)
-      && !overlapsAnotherQuote;
+    const canReplaceSourceQuote =
+      condition.quote &&
+      requirement.raw_text.includes(condition.quote) &&
+      !overlapsAnotherQuote &&
+      !(requirement.assumptions ?? []).some((assumption) => assumption.quote === condition.quote);
     const rawText = canReplaceSourceQuote
       ? requirement.raw_text.replace(condition.quote, quote)
       : `${requirement.raw_text}\n${quote}`;
@@ -192,9 +261,15 @@ export function DecisionBrief({
     onChange({
       ...requirement,
       raw_text: rawText,
-      conditions: requirement.conditions.map((item) => item.id === condition.id
-        ? { ...item, value, quote }
-        : item),
+      conditions: requirement.conditions.map((item) =>
+        item.id === condition.id ? { ...item, value, quote } : item,
+      ),
+      alternatives: alternatives.map((alternative) => ({
+        ...alternative,
+        conditions: alternative.conditions.map((item) =>
+          item.id === condition.id ? { ...item, value, quote } : item,
+        ),
+      })),
     });
   }
 
@@ -207,9 +282,9 @@ export function DecisionBrief({
       : typeof condition.value === 'number'
         ? String(condition.value)
         : display(condition.value);
-    const label = `${fieldLabel(condition.field, t)} — ${condition.strength === 'hard'
-      ? t('Bắt buộc', 'Required')
-      : t('Ưu tiên', 'Preference')}`;
+    const label = `${fieldLabel(condition.field, t)} — ${
+      condition.strength === 'hard' ? t('Bắt buộc', 'Required') : t('Ưu tiên', 'Preference')
+    }`;
     return (
       <div className={styles['brief-condition']} key={condition.id}>
         <label className={styles['brief-condition-field']}>
@@ -219,7 +294,9 @@ export function DecisionBrief({
               value={String(condition.value)}
               disabled={busy || message.status === 'running'}
               aria-label={label}
-              onFocus={() => { editStartValues.current[condition.id] = text; }}
+              onFocus={() => {
+                editStartValues.current[condition.id] = text;
+              }}
               onChange={(event) => patchCondition(condition.id, { value: event.target.value })}
               onBlur={(event) => {
                 commitReviewedValue(
@@ -237,19 +314,27 @@ export function DecisionBrief({
                 ['cruise', t('Du thuyền', 'Cruise')],
                 ['mixed', t('Kết hợp', 'Mixed')],
               ].map(([value, optionLabel]) => (
-                <option value={value} key={value}>{optionLabel}</option>
+                <option value={value} key={value}>
+                  {optionLabel}
+                </option>
               ))}
             </select>
           ) : (
             <input
-              type={condition.field === 'date_from' || condition.field === 'date_to'
-                ? 'date'
-                : typeof condition.value === 'number' ? 'number' : 'text'}
+              type={
+                condition.field === 'date_from' || condition.field === 'date_to'
+                  ? 'date'
+                  : typeof condition.value === 'number'
+                    ? 'number'
+                    : 'text'
+              }
               min={typeof condition.value === 'number' ? 1 : undefined}
               value={text}
               disabled={busy || message.status === 'running'}
               aria-label={label}
-              onFocus={() => { editStartValues.current[condition.id] = text; }}
+              onFocus={() => {
+                editStartValues.current[condition.id] = text;
+              }}
               onChange={(event) => changeValue(condition, event.target.value)}
               onBlur={(event) => {
                 commitReviewedValue(
@@ -308,7 +393,10 @@ export function DecisionBrief({
   }
 
   return (
-    <section className={styles['decision-brief']} aria-label={t('Bản tóm tắt quyết định', 'Decision brief')}>
+    <section
+      className={styles['decision-brief']}
+      aria-label={t('Bản tóm tắt quyết định', 'Decision brief')}
+    >
       <header className={styles['brief-header']}>
         <div>
           <span className={styles['brief-eyebrow']}>{t('BƯỚC 1 · REVIEW', 'STEP 1 · REVIEW')}</span>
@@ -324,18 +412,85 @@ export function DecisionBrief({
       </header>
 
       {hard.length > 0 && (
-        <fieldset className={styles['brief-section']} disabled={busy || message.status === 'running'}>
+        <fieldset
+          className={styles['brief-section']}
+          disabled={busy || message.status === 'running'}
+        >
           <legend>{t('Điều kiện bắt buộc', 'Must-haves')}</legend>
           {hard.map(conditionEditor)}
         </fieldset>
       )}
 
+      {requirement.assumptions && requirement.assumptions.length > 0 && (
+        <section
+          className={styles['brief-assumptions']}
+          aria-label={t('Giả định có thể chỉnh sửa', 'Editable assumptions')}
+        >
+          <h3>{t('Giả định ngày', 'Date assumptions')}</h3>
+          {requirement.assumptions.map((assumption) => (
+            <p key={assumption.id}>
+              <strong>
+                {assumption.edited
+                  ? t('Khoảng ngày đã chỉnh sửa', 'Edited date range')
+                  : assumption.label}
+              </strong>
+              <span>
+                {t(
+                  `Diễn giải từ: “${assumption.quote}” · ${assumption.date_from} đến ${assumption.date_to} · ${assumption.timezone}. Có thể chỉnh ngày trong bản yêu cầu.`,
+                  `Interpreted from “${assumption.quote}” · ${assumption.date_from} to ${assumption.date_to} · ${assumption.timezone}. You can edit the linked dates in this brief.`,
+                )}
+              </span>
+            </p>
+          ))}
+        </section>
+      )}
+
+      {alternatives.length > 0 && (
+        <section
+          className={styles['brief-section']}
+          aria-label={t('Các phương án lựa chọn', 'Alternative options')}
+        >
+          <h3 className={styles['brief-section-title']}>
+            {t('Các phương án · chọn sau khi so sánh', 'Options · decide after comparison')}
+          </h3>
+          <p className={styles['brief-empty']}>
+            {t(
+              'Điều kiện chung phải đạt; trong từng phương án, các tiêu chí phải cùng đạt. Chỉ cần một phương án đạt là tour đủ điều kiện.',
+              'Shared criteria must pass. All criteria within one option must pass; a tour is eligible if any option passes.',
+            )}
+          </p>
+          {alternatives.map((alternative, index) => (
+            <fieldset
+              key={alternative.id}
+              className={styles['brief-alternative']}
+              disabled={busy || message.status === 'running'}
+            >
+              <legend>{t(`Phương án ${index + 1}`, `Option ${index + 1}`)}</legend>
+              <label className={styles['brief-alternative-label']}>
+                <span>{t('Tên phương án', 'Option name')}</span>
+                <input
+                  value={alternative.label}
+                  maxLength={160}
+                  aria-label={t(`Tên phương án ${index + 1}`, `Option ${index + 1} name`)}
+                  onChange={(event) => patchAlternativeLabel(alternative.id, event.target.value)}
+                />
+              </label>
+              {alternative.conditions.map(conditionEditor)}
+            </fieldset>
+          ))}
+        </section>
+      )}
+
       <fieldset className={styles['brief-section']} disabled={busy || message.status === 'running'}>
         <legend>{t('Ưu tiên mềm', 'Preferences')}</legend>
-        {soft.length > 0 ? soft.map(conditionEditor) : (
+        {soft.length > 0 ? (
+          soft.map(conditionEditor)
+        ) : (
           <p className={styles['brief-empty']}>
-            {t('Chưa có sở thích mềm. Bạn vẫn có thể so giá và xem các phương án cân bằng.',
-              'No soft preferences yet. You can still compare prices and balanced options.')}
+            {t(
+              'Chưa có sở thích mềm. Bạn vẫn có thể so giá và xem các phương án cân bằng.',
+              'No soft preferences yet. You can still compare prices and balanced options.',
+            )}
           </p>
         )}
       </fieldset>
@@ -347,7 +502,11 @@ export function DecisionBrief({
               ? t('Đang chỉnh trọng số', 'Editing weights')
               : t(`Đã phân bổ ${total} / 100 điểm`, `${total} / 100 points assigned`)}
           </span>
-          <button type="button" disabled={busy || message.status === 'running'} onClick={divideEvenly}>
+          <button
+            type="button"
+            disabled={busy || message.status === 'running'}
+            onClick={divideEvenly}
+          >
             {t('Chia đều', 'Divide evenly')}
           </button>
         </div>
@@ -361,13 +520,20 @@ export function DecisionBrief({
 
       {requirement.missing.length > 0 && (
         <p className={styles['brief-empty']}>
-          {t(`Còn thiếu: ${requirement.missing.join(', ')}`, `Still missing: ${requirement.missing.join(', ')}`)}
+          {t(
+            `Còn thiếu: ${requirement.missing.join(', ')}`,
+            `Still missing: ${requirement.missing.join(', ')}`,
+          )}
         </p>
       )}
 
       <footer className={styles['brief-footer']}>
-        <span>{t('Điều kiện bắt buộc quyết định tour có đạt hay không.',
-          'Must-haves determine eligibility.')}</span>
+        <span>
+          {t(
+            'Điều kiện chung phải đạt; nếu có nhiều phương án thì chỉ cần đạt trọn vẹn một phương án.',
+            'Shared criteria must pass; when options exist, one complete option is enough.',
+          )}
+        </span>
         <button
           type="button"
           className="btn btn-primary"
@@ -386,8 +552,10 @@ export function DecisionBrief({
       )}
       {!valuesValid && (
         <p className={styles['brief-validation']} role="status">
-          {t('Kiểm tra lại giá trị tiêu chí hoặc xóa điều kiện không dùng.',
-            'Review criterion values or remove unused conditions.')}
+          {t(
+            'Kiểm tra lại giá trị tiêu chí hoặc xóa điều kiện không dùng.',
+            'Review criterion values or remove unused conditions.',
+          )}
         </p>
       )}
     </section>

@@ -42,7 +42,7 @@ quality:
   fill_fields: [tour_name, departure_city, destinations, duration_days,
     price, currency, itinerary, inclusions, exclusions]
 backend:
-  data_provider: fixture
+  data_provider: supabase
   database_url: sqlite:///data/backend.db
   cors_origins: ["http://127.0.0.1:5173", "http://localhost:5173"]
   cors_origin_regex: "https://[a-z0-9-]+\\.vercel\\.app"
@@ -59,7 +59,6 @@ backend:
     connect_timeout_s: 8
     freshness_seconds: {departure_date: null}
   decide:
-    soft_fields: [itinerary, inclusions, exclusions, child_policy, cancellation_policy]
     quote_chars: 200
     risk_words: ["không hoàn", "thu phí 100%", "sold_out", "unknown"]
     analysis_chars: 160

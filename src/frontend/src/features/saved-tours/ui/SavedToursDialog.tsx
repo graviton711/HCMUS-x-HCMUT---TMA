@@ -1,5 +1,6 @@
 import { usePreferences } from "../../../shared/preferences";
 import { safeUrl } from "../../../shared/lib";
+import { dateOnlyText, evaluationStateText, observedLabel, priceText } from "../../../shared/lib";
 import { Dialog, Icon } from "../../../shared/ui";
 import type { SavedTour } from "../model";
 import styles from "./SavedToursDialog.module.css";
@@ -25,49 +26,8 @@ function valueText(value: unknown, locale: string): string {
   return value == null ? "" : String(value);
 }
 
-function dateText(value: string, locale: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (!match) return value;
-  return new Date(
-    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
-  ).toLocaleDateString(locale === "vi" ? "vi-VN" : "en-GB", {
-    timeZone: "UTC",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function dateTimeText(value: string, locale: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(locale === "vi" ? "vi-VN" : "en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function priceText(
-  tour: SavedTour,
-  locale: string,
-  t: (vi: string, en: string) => string,
-) {
-  if (tour.price == null || tour.priceBasis === "contact")
-    return t("Liên hệ", "Contact");
-  const amount = tour.price.toLocaleString(locale === "vi" ? "vi-VN" : "en-GB");
-  const currency = tour.currency
-    ? ` ${tour.currency}`
-    : t(" · chưa rõ tiền tệ", " · currency unknown");
-  const prefix =
-    tour.priceBasis === "from"
-      ? t("Từ ", "From ")
-      : tour.priceBasis === "unknown"
-        ? t("Cơ sở giá chưa rõ: ", "Price basis unknown: ")
-        : "";
-  return `${prefix}${amount}${currency}`;
+  return observedLabel(value, locale === "vi" ? "vi" : "en") ?? value;
 }
 
 export function SavedToursDialog({
@@ -129,13 +89,13 @@ export function SavedToursDialog({
                     <dt>{t("Khởi hành", "Departure")}</dt>
                     <dd>
                       {tour.departureDate
-                        ? dateText(tour.departureDate, locale)
+                        ? dateOnlyText(tour.departureDate, locale)
                         : t("Chưa có ngày", "No date")}
                     </dd>
                   </div>
                   <div>
                     <dt>{t("Giá", "Price")}</dt>
-                    <dd>{priceText(tour, locale, t)}</dd>
+                    <dd>{priceText(tour.price, tour.currency, locale, t)}</dd>
                   </div>
                   {tour.durationDays != null && (
                     <div>
@@ -174,13 +134,7 @@ export function SavedToursDialog({
                             data-state={evaluation.state}
                             className={styles.state}
                           >
-                            {evaluation.state === "pass"
-                              ? t("Đạt", "Pass")
-                              : evaluation.state === "partial"
-                                ? t("Đạt một phần", "Partial")
-                                : evaluation.state === "fail"
-                                  ? t("Không đạt", "Fail")
-                                  : t("Chưa rõ", "Unknown")}
+                            {evaluationStateText(evaluation.state, t)}
                           </span>
                           <span>
                             {t(
