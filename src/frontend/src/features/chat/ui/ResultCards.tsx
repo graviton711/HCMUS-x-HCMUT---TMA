@@ -977,8 +977,23 @@ function MetricComparisonPanel({
   );
 }
 
-function DecisionViews({
-  comparison,
+const METRIC_NAMES: Record<string, [string, string]> = {
+  group_total: ['Tổng nhóm', 'Group total'],
+  preference_fit: ['Khớp ưu tiên', 'Preference fit'],
+  experience_density: ['Hoạt động được nêu', 'Stated activities'],
+  route_complexity: ['Số chặng được nêu', 'Stated route legs'],
+  included_coverage: ['Độ bao gồm đã biết', 'Known inclusion coverage'],
+  cancellation_flexibility: ['Mốc hoàn đủ tiền', 'Full-refund cutoff'],
+};
+
+const METRIC_RELATIONS: Record<string, [string, string]> = {
+  favorable: ['Thuận lợi hơn trung vị', 'More favorable than median'],
+  tradeoff: ['Đánh đổi so với trung vị', 'Trade-off vs median'],
+  similar: ['Gần trung vị', 'Near median'],
+  unknown: ['Chưa đủ dữ kiện so sánh', 'Not enough evidence to compare'],
+};
+
+function DecisionViews({  comparison,
   busy,
   onRelax,
   isSavedTour,
@@ -1036,6 +1051,40 @@ function DecisionViews({
     included_value: ['Dịch vụ bao gồm', 'Included services'],
     balanced: ['Cân bằng', 'Balanced'],
   };
+  const optimizes: Record<string, [string, string]> = {
+    cheapest: [
+      'Xếp theo giá công bố thấp nhất; chưa gồm phụ thu và loại trừ.',
+      'Ranks by lowest published price; excludes surcharges and exclusions.',
+    ],
+    best_fit: [
+      'Xếp theo điểm khớp ưu tiên có trọng số; khoảng điểm rộng nghĩa là dữ kiện còn thiếu.',
+      'Ranks by weighted preference fit; a wide range means missing evidence.',
+    ],
+    experience_rich: [
+      'Xếp theo số hoạt động được nêu rõ; số lượng không khẳng định chất lượng.',
+      'Ranks by stated activity count; count does not imply quality.',
+    ],
+    fewest_legs: [
+      'Xếp theo số chặng được nêu rõ; không suy ra thời gian hay quãng đường.',
+      'Ranks by stated leg count; not travel time or distance.',
+    ],
+    cancellation_flexible: [
+      'Xếp theo mốc gần ngày đi nhất vẫn được hoàn đủ tiền, khi điều khoản nêu rõ.',
+      'Ranks by the latest full-refund cutoff stated in the terms.',
+    ],
+    included_value: [
+      'Xếp theo tỷ lệ hạng mục bao gồm; loại trừ chưa định giá liệt kê riêng.',
+      'Ranks by included-category ratio; unpriced exclusions listed separately.',
+    ],
+    balanced: [
+      'Tập Pareto trên các metric có dữ kiện; không cộng thành một điểm tổng.',
+      'Pareto set over evidenced metrics; never merged into one score.',
+    ],
+    multi_objective: [
+      'Phương án dự phòng khi metric chưa đủ để xếp hạng riêng.',
+      'Fallback option when metrics cannot rank it separately.',
+    ],
+  };
 
   function toggleCompare(tourId: string, offerId: string) {
     setSelected((current) => {
@@ -1083,56 +1132,58 @@ function DecisionViews({
           aria-label={t('Các phương án để cân nhắc', 'Decision alternatives')}
         >
           <h3>
-            {(comparison.decision_options ?? []).length >= 3
-              ? t('Ba phương án để cân nhắc', 'Three alternatives to consider')
-              : t('Phương án có dữ kiện', 'Evidence-backed alternatives')}
+            {new Set((comparison.decision_options ?? []).map((option) => option.tour_id)).size <= 1
+              ? t('Tour duy nhất đạt điều kiện', 'The only matching tour')
+              : (comparison.decision_options ?? []).length >= 3
+                ? t('Ba phương án để cân nhắc', 'Three alternatives to consider')
+                : t('Phương án có dữ kiện', 'Evidence-backed alternatives')}
           </h3>
           <div className={styles['decision-choice-grid']}>
             {(comparison.decision_options ?? []).slice(0, 3).map((option, index) => {
               const tour = comparison.tour_snapshots.find((item) => item.id === option.tour_id);
+              const singleTour =
+                new Set((comparison.decision_options ?? []).map((item) => item.tour_id)).size <= 1;
               const objectiveLabel = labels[option.objective as CurrentDecisionView['kind']] ?? [
                 'Góc nhìn đa mục tiêu',
                 'Multi-objective view',
               ];
+              const optimizesLabel = optimizes[option.objective] ?? optimizes.multi_objective;
+              const lead = option.tradeoffs.find((tradeoff) => tradeoff.startsWith('Đánh đổi:'));
+              const rest = option.tradeoffs.filter((tradeoff) => tradeoff !== lead);
               return (
                 <article
                   className={styles['decision-choice']}
                   key={`${option.tour_id}-${option.offer_id}`}
                 >
                   <span>
-                    {t(
-                      `Phương án ${index + 1} · ${objectiveLabel[0]}`,
-                      `Option ${index + 1} · ${objectiveLabel[1]}`,
-                    )}
+                    {singleTour
+                      ? t('Phương án duy nhất', 'The only option')
+                      : t(
+                          `Phương án ${index + 1} · ${objectiveLabel[0]}`,
+                          `Option ${index + 1} · ${objectiveLabel[1]}`,
+                        )}
                   </span>
                   <h4>{tour?.name ?? option.tour_id}</h4>
                   <strong>{option.title}</strong>
                   <p>{option.reason}</p>
-                  {option.tradeoffs.length > 0 && (
-                    <ul>
-                      {option.tradeoffs.map((tradeoff) => (
-                        <li key={tradeoff}>{tradeoff}</li>
-                      ))}
-                    </ul>
+                  <small>{t(...optimizesLabel)}</small>
+                  {lead && <p>{lead}</p>}
+                  {rest.length > 0 && (
+                    <details>
+                      <summary>{t('Số liệu chi tiết', 'Detailed figures')}</summary>
+                      <ul>
+                        {rest.map((tradeoff) => (
+                          <li key={tradeoff}>{tradeoff}</li>
+                        ))}
+                      </ul>
+                    </details>
                   )}
                   {(option.metric_comparisons ?? []).length > 0 && (
                     <div className={styles['decision-metric-comparisons']}>
-                      {(option.metric_comparisons ?? []).map((metric) => {
-                        const metricNames: Record<string, [string, string]> = {
-                          group_total: ['Tổng nhóm', 'Group total'],
-                          preference_fit: ['Khớp ưu tiên', 'Preference fit'],
-                          experience_density: ['Hoạt động được nêu', 'Stated activities'],
-                          route_complexity: ['Số chặng được nêu', 'Stated route legs'],
-                          included_coverage: ['Độ bao gồm đã biết', 'Known inclusion coverage'],
-                          cancellation_flexibility: ['Mốc hoàn đủ tiền', 'Full-refund cutoff'],
-                        };
-                        const relationLabels: Record<string, [string, string]> = {
-                          favorable: ['Thuận lợi hơn trung vị', 'More favorable than median'],
-                          tradeoff: ['Đánh đổi so với trung vị', 'Trade-off vs median'],
-                          similar: ['Gần trung vị', 'Near median'],
-                          unknown: ['Chưa đủ dữ kiện so sánh', 'Not enough evidence to compare'],
-                        };
-                        const name = metricNames[metric.key] ?? [metric.key, metric.key];
+                      {(option.metric_comparisons ?? [])
+                        .filter((metric) => metric.relation !== 'unknown' || metric.value != null)
+                        .map((metric) => {
+                          const name = METRIC_NAMES[metric.key] ?? [metric.key, metric.key];
                         const format = (value: number | null) =>
                           value == null
                             ? t('Chưa rõ', 'Unknown')
@@ -1143,7 +1194,7 @@ function DecisionViews({
                                 : metric.key === 'preference_fit'
                                   ? `${value.toFixed(0)}/100`
                                   : `${value}${metric.unit === 'days before departure for full refund' ? ` ${t('ngày', 'days')}` : ''}`;
-                        const relation = relationLabels[metric.relation] ?? relationLabels.unknown;
+                        const relation = METRIC_RELATIONS[metric.relation] ?? METRIC_RELATIONS.unknown;
                         return (
                           <div key={metric.key} data-relation={metric.relation}>
                             <strong>{t(...name)}</strong>

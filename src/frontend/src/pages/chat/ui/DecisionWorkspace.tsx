@@ -239,6 +239,22 @@ export function DecisionWorkspace({
               />
             )}
             <DecisionTracePanel comparison={comparison} client={client} />
+            {(comparison.assumptions ?? []).length > 0 && (
+              <details className={styles.tracePanel}>
+                <summary>{t('Giả định & giới hạn — đọc trước khi tin', 'Assumptions & limits — read before trusting')}</summary>
+                <ul className={styles.traceList}>
+                  {(comparison.assumptions ?? []).map((assumption) => (
+                    <li key={assumption}>{assumption}</li>
+                  ))}
+                </ul>
+                <p className={styles.traceNote}>
+                  {t(
+                    'Bạn quyết định cuối cùng — kiểm chứng giá cuối với nhà cung cấp trước khi đặt.',
+                    'You decide in the end — verify the final price with the provider before booking.',
+                  )}
+                </p>
+              </details>
+            )}
           </>
         )}
       </div>
@@ -581,21 +597,29 @@ function DecisionTracePanel({
   const [page, setPage] = useState<CurrentEliminatedPage | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [activeCondition, setActiveCondition] = useState<string | null>(null);
 
-  async function load(cursor?: string | null) {
+  async function load(cursor?: string | null, conditionId?: string | null) {
     if (!client || loading) return;
     setLoading(true);
     setError('');
     try {
-      const next = await client.eliminatedOffers(comparison.id, cursor, 20);
+      const next = await client.eliminatedOffers(comparison.id, cursor, 20, conditionId ?? undefined);
       setPage((current) =>
         cursor && current ? { ...next, items: [...current.items, ...next.items] } : next,
       );
+      setActiveCondition(conditionId ?? null);
     } catch {
       setError(t('Không tải được danh sách tour bị loại.', 'Could not load excluded tours.'));
     } finally {
       setLoading(false);
     }
+  }
+
+  function inspectCondition(conditionId: string) {
+    setOpen(true);
+    setPage(null);
+    void load(null, conditionId);
   }
 
   const criterionLabel = (conditionId: string) => {
@@ -630,6 +654,15 @@ function DecisionTracePanel({
                   <strong>
                     {step.offers_before} → {step.offers_after} {t('offer còn lại', 'offers remain')}
                   </strong>
+                  {step.condition_id && (
+                    <button
+                      type="button"
+                      disabled={!client}
+                      onClick={() => inspectCondition(step.condition_id)}
+                    >
+                      {t('Xem tour rớt ở bước này', 'Inspect dropped tours')}
+                    </button>
+                  )}
                 </li>
               ))}
             </ol>
@@ -708,6 +741,21 @@ function DecisionTracePanel({
                 </button>
               ) : (
                 <>
+                  {activeCondition && (
+                    <p>
+                      {t('Đang lọc theo:', 'Filtered by:')} {criterionLabel(activeCondition)}{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPage(null);
+                          setActiveCondition(null);
+                          void load();
+                        }}
+                      >
+                        {t('Xem tất cả', 'Show all')}
+                      </button>
+                    </p>
+                  )}
                   {page?.items.map((item) => (
                     <article key={item.offer.id}>
                       <strong>{item.tour_name}</strong>
@@ -737,7 +785,7 @@ function DecisionTracePanel({
                     <button
                       type="button"
                       disabled={loading}
-                      onClick={() => void load(page.next_cursor)}
+                      onClick={() => void load(page.next_cursor, activeCondition)}
                     >
                       {loading ? t('Đang tải…', 'Loading…') : t('Xem thêm', 'Load more')}
                     </button>
