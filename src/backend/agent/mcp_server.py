@@ -39,6 +39,7 @@ from backend.models import (
 )
 from backend.settings import Settings
 from backend.workflows import TourWorkflows
+from shared.text import fold_vi
 
 _VERDICT_STATES: dict[str, State] = {
     "fit": "pass", "partial": "partial", "unknown": "unknown", "not_fit": "fail"
@@ -1270,7 +1271,7 @@ def _fold_catalog_text(value: str) -> str:
 
 def _fold_catalog_label(value: str) -> str:
     """Compare casing, accents and punctuation without guessing geographic aliases."""
-    return re.sub(r"[^a-z0-9]", "", _fold_catalog_text(value))
+    return fold_vi(value)
 
 
 def _unresolved_location_labels(

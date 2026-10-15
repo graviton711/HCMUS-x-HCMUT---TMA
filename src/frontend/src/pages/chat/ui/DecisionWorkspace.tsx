@@ -8,7 +8,7 @@ import type {
   CurrentRequirement,
 } from '../../../shared/api';
 import type { ChatMsg } from '../../../features/chat';
-import { DecisionBrief, ResultCards } from '../../../features/chat';
+import { DecisionBrief, ResultCards, conditionText, fieldLabel } from '../../../features/chat';
 import { usePreferences } from '../../../shared/preferences';
 import {
   draftForComparison,
@@ -607,10 +607,8 @@ function DecisionTracePanel({
       ...(comparison.requirement.alternatives ?? []).flatMap((item) => item.conditions),
     ].find((item) => item.id === conditionId);
     if (!condition) return conditionId;
-    const value = Array.isArray(condition.value)
-      ? condition.value.join(', ')
-      : String(condition.value ?? '');
-    return `${branch ? `${branch.label} · ` : ''}${condition.field}: ${value}`;
+    const text = `${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`;
+    return branch ? `${branch.label} · ${text}` : text;
   };
 
   return (

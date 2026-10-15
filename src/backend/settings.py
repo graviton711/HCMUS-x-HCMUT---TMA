@@ -20,7 +20,6 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 class DecideCfg(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
-    soft_fields: list[str]
     quote_chars: int
     risk_words: list[str]
     analysis_chars: int

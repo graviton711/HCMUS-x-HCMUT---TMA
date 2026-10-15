@@ -1,5 +1,6 @@
-import type { CurrentComparison, CurrentCondition, CurrentEvaluation } from '../../../shared/api';
+import type { CurrentComparison, CurrentCondition } from '../../../shared/api';
 import { safeUrl } from '../../../shared/lib';
+import { dateOnlyText, evaluationStateText, priceText } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import { Dialog } from '../../../shared/ui';
 import { conditionText, fieldLabel } from '../lib/format';
@@ -8,38 +9,6 @@ import styles from './DecisionComparisonDialog.module.css';
 export interface ComparedOffer {
   tourId: string;
   offerId: string;
-}
-
-function observedDate(value: string, locale: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
-  if (!match) return value;
-  return new Date(
-    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
-  ).toLocaleDateString(locale === 'vi' ? 'vi-VN' : 'en-GB', {
-    timeZone: 'UTC',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-function priceText(
-  price: number | null,
-  currency: string,
-  locale: string,
-  t: (vi: string, en: string) => string,
-) {
-  if (price == null) return t('Liên hệ', 'Contact');
-  const amount = price.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-GB');
-  const currencyLabel = currency ? ` ${currency}` : t(' · chưa rõ tiền tệ', ' · currency unknown');
-  return `${amount}${currencyLabel}`;
-}
-
-function statusText(state: CurrentEvaluation['state'], t: (vi: string, en: string) => string) {
-  if (state === 'pass') return t('Đạt', 'Pass');
-  if (state === 'partial') return t('Đạt một phần', 'Partial');
-  if (state === 'fail') return t('Không đạt', 'Fail');
-  return t('Chưa rõ', 'Unknown');
 }
 
 export function DecisionComparisonDialog({
@@ -187,7 +156,7 @@ export function DecisionComparisonDialog({
                   return (
                     <td key={candidate.entry.offerId}>
                       <span className={styles.state} data-state={state}>
-                        {statusText(state, t)}
+                        {evaluationStateText(state, t)}
                       </span>
                       {evaluation?.quote && <q className={styles.quote}>{evaluation.quote}</q>}
                     </td>
@@ -211,7 +180,7 @@ export function DecisionComparisonDialog({
                     )}
                     <span className={styles.observed}>
                       {observed
-                        ? observedDate(observed, locale)
+                        ? dateOnlyText(observed, locale)
                         : t('Chưa rõ thời điểm', 'Time unknown')}
                     </span>
                   </td>

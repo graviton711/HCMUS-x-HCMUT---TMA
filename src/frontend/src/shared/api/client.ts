@@ -3,7 +3,6 @@ import type {
   CurrentAgentResponse,
   CurrentAgentProgressEvent,
   CurrentAgentSession,
-  CurrentCatalog,
   CurrentComparison,
   CurrentCostScenario,
   CurrentCostScenarioAssumptions,
@@ -12,7 +11,6 @@ import type {
   CurrentRequirement,
   CurrentSession,
 } from './types';
-import type { CurrentHistoryPage } from './types';
 
 type Fetcher = typeof fetch;
 const defaultBase = () => (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '';
@@ -271,48 +269,15 @@ export class CurrentBackendClient {
     return result;
   }
 
-  catalog() {
-    return this.request<CurrentCatalog>('/catalog');
-  }
-
-  createRequirement(text: string, form?: Record<string, unknown>) {
-    return this.request<{ requirement: CurrentRequirement }>('/requirements', 'POST', {
-      text,
-      ...(form ? { form } : {}),
-    });
-  }
-
   requirement(id: string) {
     return this.request<{ requirement: CurrentRequirement }>(
       `/requirements/${encodeURIComponent(id)}`,
     );
   }
 
-  createComparison(requirementId: string, candidateLimit?: number) {
-    return this.request<{ comparison: CurrentComparison }>('/comparisons', 'POST', {
-      requirement_id: requirementId,
-      ...(candidateLimit === undefined ? {} : { candidate_limit: candidateLimit }),
-    });
-  }
-
   comparison(id: string) {
     return this.request<{ comparison: CurrentComparison }>(
       `/comparisons/${encodeURIComponent(id)}`,
     );
-  }
-
-  history(limit = 100, cursor?: string) {
-    const params = new URLSearchParams({ limit: String(limit) });
-    if (cursor) params.set('cursor', cursor);
-    return this.request<CurrentHistoryPage>(`/history?${params.toString()}`);
-  }
-
-  historyItem(id: string) {
-    return this.request<{
-      id: string;
-      kind: 'requirement' | 'comparison';
-      created_at: string;
-      resource: CurrentRequirement | CurrentComparison;
-    }>(`/history/${encodeURIComponent(id)}`);
   }
 }

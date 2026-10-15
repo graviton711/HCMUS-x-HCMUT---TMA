@@ -8,7 +8,7 @@ import type {
   CurrentEvaluation,
   CurrentMetricProfile,
 } from '../../../shared/api';
-import { observedLabel, safeUrl } from '../../../shared/lib';
+import { evaluationStateText, observedLabel, priceText, safeUrl } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import {
   conditionState,
@@ -108,13 +108,7 @@ function EvaluationRow({
 }) {
   const { t } = usePreferences();
   const label =
-    evaluation.state === 'pass'
-      ? t('Đạt', 'Pass')
-      : evaluation.state === 'partial'
-        ? t('Đạt một phần', 'Partial')
-        : evaluation.state === 'fail'
-          ? t('Không đạt', 'Fail')
-          : t('Chưa rõ', 'Unknown');
+    evaluationStateText(evaluation.state, t);
   return (
     <li>
       <div className={styles['evidence-row']}>
@@ -175,10 +169,7 @@ function TourCard({
   const failed = failedDetailsForOffer(comparison, offer.id);
   const failedCount = failed.filter(({ evaluation }) => evaluation.state === 'fail').length;
   const unknownCount = failed.filter(({ evaluation }) => evaluation.state === 'unknown').length;
-  const priceLabel =
-    offer.price == null
-      ? t('Liên hệ', 'Contact')
-      : `${offer.price.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-GB')}${offer.currency ? ` ${offer.currency}` : ` · ${t('chưa rõ tiền tệ', 'currency unknown')}`}`;
+  const priceLabel = priceText(offer.price, offer.currency, locale, t);
   const label = missing
     ? t(
         `Gần đạt · ${failedCount} không đạt, ${unknownCount} chưa rõ`,
@@ -1328,13 +1319,7 @@ function DecisionViews({
                             </dt>
                             <dd>
                               <span className={styles['matrix-state']} data-state={state}>
-                                {state === 'pass'
-                                  ? t('\u0110\u1ea1t', 'Pass')
-                                  : state === 'fail'
-                                    ? t('Kh\u00f4ng \u0111\u1ea1t', 'Fail')
-                                    : state === 'partial'
-                                      ? t('\u0110\u1ea1t m\u1ed9t ph\u1ea7n', 'Partial')
-                                      : t('Ch\u01b0a r\u00f5', 'Unknown')}
+                                {evaluationStateText(state, t)}
                               </span>
                               {evaluation?.quote && <q>{evaluation.quote}</q>}
                             </dd>

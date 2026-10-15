@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import re
-import unicodedata
 from collections.abc import Sequence
 from datetime import date
 from functools import cmp_to_key
@@ -34,18 +32,13 @@ from backend.models import (
     uid,
 )
 from backend.settings import DecideCfg
+from shared.text import fold_vi as _fold
 
 RankValue = int | float | str | tuple[str, int | float]
 
 
 def _contains(haystack: str, needle: str) -> bool:
     return _fold(needle) in _fold(haystack)
-
-
-def _fold(value: str) -> str:
-    text = value.replace("đ", "d").replace("Đ", "D")
-    text = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
-    return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
 def _destination_state(value: str, tour: TourSnapshot) -> State:
@@ -114,12 +107,8 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) ->
             return "unknown", "PRICE_MISSING"
         amount = v
         currency = "VND"
-        basis = "per_adult"
-        coverage = "tour_price"
         if currency and currency.upper() != offer.currency.upper():
             return "unknown", "PRICE_CURRENCY_MISMATCH"
-        if basis not in ("", "per_adult") or coverage not in ("", "tour_price"):
-            return "unknown", "PRICE_BASIS_MISMATCH"
         try:
             maximum = int(amount)
         except (TypeError, ValueError):
@@ -961,14 +950,6 @@ def _decision_options(
         if len(selected) >= 3:
             break
     return selected
-
-
-def _group_value(field: str, tour: TourSnapshot, offer: OfferSnapshot) -> RankValue | None:
-    if field == "price":
-        if offer.price is None or not offer.currency.strip():
-            return None
-        return (offer.currency.upper(), offer.price)
-    return _candidate_value(field, tour, offer, 0)
 
 
 def _candidate_value(

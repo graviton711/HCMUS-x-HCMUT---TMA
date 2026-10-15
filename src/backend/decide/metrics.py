@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
-import unicodedata
 
 from backend.models import (
     ActivityFact,
@@ -20,6 +18,7 @@ from backend.models import (
     Requirement,
     TourSnapshot,
 )
+from shared.text import fold_vi as _fold
 
 _AGE_GROUPS = ("adult", "child", "small_child", "infant")
 _FACT_EXTRACTOR_VERSION = "tour-facts-v3"
@@ -39,12 +38,6 @@ def fact_cache_id(tour: TourSnapshot) -> str:
         json.dumps(fields, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
     return "metric_" + hashlib.sha256(f"{_FACT_EXTRACTOR_VERSION}:{source_hash}".encode()).hexdigest()
-
-
-def _fold(value: str) -> str:
-    decomposed = unicodedata.normalize("NFD", value.casefold().replace("đ", "d"))
-    plain = "".join(char for char in decomposed if unicodedata.category(char) != "Mn")
-    return re.sub(r"[^a-z0-9]", "", plain)
 
 
 def _party_base(req: Requirement, tour: TourSnapshot, offer) -> tuple[int | None, str]:
@@ -213,7 +206,6 @@ def build_metric_profiles(
             currency=offer.currency,
             group_total_calculated=group_total,
             group_total_scope=total_scope,
-            total_is_lower_bound=False,
             priced_extras=priced,
             unpriced_exclusions=unpriced,
             optional_or_conditional=optional,

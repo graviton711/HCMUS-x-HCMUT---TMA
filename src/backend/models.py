@@ -210,7 +210,6 @@ class CostProfile(BaseModel):
     currency: str = ""
     group_total_calculated: int | None = None
     group_total_scope: str = ""
-    total_is_lower_bound: bool = False
     priced_extras: list[CostExposure] = Field(default_factory=list)
     unpriced_exclusions: list[CostExposure] = Field(default_factory=list)
     optional_or_conditional: list[CostExposure] = Field(default_factory=list)
@@ -237,7 +236,6 @@ class CostScenarioItem(BaseModel):
     group_base_calculated: int | None = None
     priced_mandatory_extras: list[CostExposure] = Field(default_factory=list)
     known_total: int | None = None
-    total_is_lower_bound: bool = False
     unresolved_exposures: list[CostExposure] = Field(default_factory=list)
     delta_from_original: int | None = None
     state: MetricState = "unknown"

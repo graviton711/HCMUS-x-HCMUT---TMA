@@ -10,6 +10,7 @@ import {
   type CurrentRequirement,
 } from '../../../shared/api';
 import { accessFor, isSessionExpired } from '../../../features/session-history';
+import { normalizeWeights } from '../../../features/chat';
 import { sessionTitle } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import type { Locale } from '../../../shared/preferences';
@@ -24,14 +25,12 @@ function withEqualSoftWeights(requirement: CurrentRequirement): CurrentRequireme
   const soft = requirement.conditions.filter((condition) => condition.strength === 'soft');
   if (!soft.length || soft.every((condition) => typeof condition.weight_percent === 'number'))
     return requirement;
-  const base = Math.floor(100 / soft.length);
-  const remainder = 100 % soft.length;
-  const weights = new Map(soft.map((condition, index) => [condition.id, base + Number(index < remainder)]));
+  const weights = normalizeWeights(soft);
   return {
     ...requirement,
     conditions: requirement.conditions.map((condition) =>
       condition.strength === 'soft'
-        ? { ...condition, weight_percent: weights.get(condition.id) ?? base }
+        ? { ...condition, weight_percent: weights.get(condition.id) ?? 0 }
         : condition,
     ),
   };

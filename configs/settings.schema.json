@@ -127,7 +127,6 @@
         "decide": {
           "type": "object",
           "properties": {
-            "soft_fields": {"type": "array", "items": {"type": "string"}},
             "quote_chars": {"type": "integer"},
             "risk_words": {"type": "array", "items": {"type": "string"}},
             "analysis_chars": {"type": "integer"},

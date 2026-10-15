@@ -130,7 +130,6 @@ def _scenario_item(
         group_base_calculated=base,
         priced_mandatory_extras=priced,
         known_total=known_total,
-        total_is_lower_bound=False,
         unresolved_exposures=unresolved,
         delta_from_original=known_total - baseline if known_total is not None and baseline is not None else None,
         state="observed" if complete else "partial" if known_total is not None else "unknown",

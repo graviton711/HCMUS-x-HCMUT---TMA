@@ -239,7 +239,7 @@ export function conditionText(
  * backend adds a field — unknown fields fall back to readable snake_case. */
 const FIELD_LABEL: Record<string, [string, string]> = {
   destination: ['điểm đến', 'destination'],
-  departure_city: ['nơi đi', 'departure city'],
+  departure_city: ['nơi khởi hành', 'departure city'],
   date_from: ['ngày khởi hành từ', 'departure date from'],
   date_to: ['ngày khởi hành đến', 'departure date through'],
   budget_max: ['ngân sách', 'budget'],

@@ -123,7 +123,6 @@ const decisionComparison = {
         currency: "VND",
         group_total_calculated: 5_000_000,
         group_total_scope: "Tổng theo giá niêm yết; chưa xác nhận exclusions.",
-        total_is_lower_bound: false,
         priced_extras: [],
         unpriced_exclusions: [
           {

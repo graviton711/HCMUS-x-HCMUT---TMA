@@ -34,21 +34,21 @@ describe('CurrentBackendClient', () => {
     );
   });
 
-  it('uses the active backend path and owner token for current requirement DTOs', async () => {
+  it('uses the active backend path and owner token for scenario posts', async () => {
+    const requirement = { id: 'req_1' };
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-      jsonResponse({
-        requirement: { id: 'req_1', conditions: [], missing: [], raw_text: '', travelers: 1 },
-      }),
+      jsonResponse({ assistant_text: '', tool_calls: [] }),
     );
     const client = new CurrentBackendClient('guest-token', '', fetcher);
 
-    await client.createRequirement('Da Lat', { destinations: ['Đà Lạt'] });
+    await client.criteriaScenario('cmp-1', 'agent-1', requirement as never);
     const [url, init] = fetcher.mock.calls[0];
-    expect(url).toBe('/requirements');
+    expect(url).toBe('/comparisons/cmp-1/scenarios');
     expect(init?.headers).toMatchObject({ Authorization: 'Bearer guest-token' });
     expect(JSON.parse(String(init?.body))).toEqual({
-      text: 'Da Lat',
-      form: { destinations: ['Đà Lạt'] },
+      kind: 'criteria',
+      agent_session_id: 'agent-1',
+      requirement,
     });
   });
 
@@ -78,24 +78,16 @@ describe('CurrentBackendClient', () => {
     });
   });
 
-  it('keeps history cursors in the query string and URL-encodes resource ids', async () => {
+  it('keeps eliminated cursors in the query string and URL-encodes comparison ids', async () => {
     const fetcher = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(jsonResponse({ items: [], next_cursor: null }))
-      .mockResolvedValueOnce(
-        jsonResponse({
-          id: 'req /one',
-          kind: 'requirement',
-          created_at: '2026-01-01T00:00:00+00:00',
-          resource: { id: 'req /one' },
-        }),
-      );
+      .mockResolvedValueOnce(jsonResponse({ items: [], next_cursor: null }));
     const client = new CurrentBackendClient('guest-token', '', fetcher);
 
-    await client.history(20, 'cursor /?');
-    await client.historyItem('req /one');
-    expect(fetcher.mock.calls[0][0]).toBe('/history?limit=20&cursor=cursor+%2F%3F');
-    expect(fetcher.mock.calls[1][0]).toBe('/history/req%20%2Fone');
+    await client.eliminatedOffers('cmp /one', 'cursor /?', 20);
+    expect(fetcher.mock.calls[0][0]).toBe(
+      '/comparisons/cmp%20%2Fone/eliminated?limit=20&cursor=cursor+%2F%3F',
+    );
   });
 
   it('surfaces backend error codes without retrying the mutation', async () => {
@@ -106,7 +98,9 @@ describe('CurrentBackendClient', () => {
       );
     const client = new CurrentBackendClient('expired-token', '', fetcher);
 
-    await expect(client.createRequirement('Da Lat')).rejects.toMatchObject({
+    await expect(
+      client.criteriaScenario('cmp-1', 'agent-1', { id: 'req_1' } as never),
+    ).rejects.toMatchObject({
       code: 'SESSION_EXPIRED',
       status: 401,
     } satisfies Partial<CurrentApiError>);

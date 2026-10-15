@@ -8,10 +8,6 @@ export interface CurrentSession {
   expires_at: string;
 }
 
-export interface CurrentCatalog {
-  destinations: string[];
-}
-
 export interface CurrentHealth {
   status: 'ok';
   version: string;
@@ -248,7 +244,6 @@ export interface CurrentMetricProfile {
     currency: string;
     group_total_calculated: number | null;
     group_total_scope: string;
-    total_is_lower_bound: boolean;
     priced_extras: CurrentCostExposure[];
     unpriced_exclusions: CurrentCostExposure[];
     optional_or_conditional: CurrentCostExposure[];
@@ -375,7 +370,6 @@ export interface CurrentCostScenarioItem {
   group_base_calculated: number | null;
   priced_mandatory_extras: CurrentCostExposure[];
   known_total: number | null;
-  total_is_lower_bound: boolean;
   unresolved_exposures: CurrentCostExposure[];
   delta_from_original: number | null;
   state: 'observed' | 'partial' | 'unknown';
@@ -387,15 +381,4 @@ export interface CurrentCostScenario {
   assumptions: CurrentCostScenarioAssumptions;
   scanned_offers: number;
   items: CurrentCostScenarioItem[];
-}
-
-export interface CurrentHistoryItem {
-  id: string;
-  kind: 'requirement' | 'comparison';
-  created_at: string;
-}
-
-export interface CurrentHistoryPage {
-  items: CurrentHistoryItem[];
-  next_cursor: string | null;
 }

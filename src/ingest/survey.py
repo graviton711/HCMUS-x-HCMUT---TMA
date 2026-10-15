@@ -32,7 +32,7 @@ from shared import ensure_utf8_stdout
 
 VARIANT = "xhigh"
 
-DEFAULT_AGENT_SPEC = Path(__file__).resolve().parents[2] / "configs" / "agents" / "site-surveyor.yaml"
+DEFAULT_AGENT_SPEC = Path(__file__).resolve().parents[2] / "configs" / "prompts" / "ingest-surveyor.yaml"
 
 
 def load_agent_spec(path: str | Path | None = None) -> str:

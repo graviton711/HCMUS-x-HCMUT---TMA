@@ -131,16 +131,12 @@ export function DecisionBrief({
   }
 
   function divideEvenly() {
-    const base = Math.floor(100 / soft.length);
-    const remainder = 100 % soft.length;
-    const weights = new Map(
-      soft.map((condition, index) => [condition.id, base + Number(index < remainder)]),
-    );
+    const weights = normalizeWeights(soft);
     onChange({
       ...requirement,
       conditions: requirement.conditions.map((condition) =>
         condition.strength === 'soft'
-          ? { ...condition, weight_percent: weights.get(condition.id) ?? base }
+          ? { ...condition, weight_percent: weights.get(condition.id) ?? 0 }
           : condition,
       ),
     });
