@@ -209,27 +209,59 @@ class BaseStore:
 
     def create_agent_session(self, owner_session_id: str) -> str:
         local_id = f"agt_{uuid4().hex}"
-        self._save("agent_session", local_id, json.dumps({"opencode_session_id": None}), owner_session_id)
+        self._save(
+            "agent_session",
+            local_id,
+            json.dumps({"opencode_session_id": None, "codex_thread_id": None}),
+            owner_session_id,
+        )
         return local_id
 
-    def get_agent_session(self, local_id: str, owner_session_id: str) -> str | None:
+    def get_agent_session(
+        self, local_id: str, owner_session_id: str, provider: str = "opencode"
+    ) -> str | None:
         payload = self._load("agent_session", local_id, owner_session_id)
         try:
-            value = json.loads(payload).get("opencode_session_id")
+            key = "codex_thread_id" if provider == "codex" else "opencode_session_id"
+            value = json.loads(payload).get(key)
         except (json.JSONDecodeError, AttributeError) as exc:
             raise AppError("RECORD_INVALID", "Invalid agent session record.", 500) from exc
         return value if isinstance(value, str) and value else None
 
     def save_agent_session(
-        self, local_id: str, owner_session_id: str, opencode_session_id: str
+        self,
+        local_id: str,
+        owner_session_id: str,
+        provider_session_id: str,
+        provider: str = "opencode",
     ) -> None:
-        current = self.get_agent_session(local_id, owner_session_id)
-        if current is not None and current != opencode_session_id:
-            raise AppError("SESSION_CONFLICT", "Agent session is already linked to OpenCode.", 409)
+        if provider not in {"codex", "opencode"}:
+            raise ValueError("Unknown agent provider.")
+        key = "codex_thread_id" if provider == "codex" else "opencode_session_id"
+        current = self.get_agent_session(local_id, owner_session_id, provider)
+        if current is not None and current != provider_session_id:
+            raise AppError("SESSION_CONFLICT", "Agent session is already linked to this provider.", 409)
+        payload = json.loads(self._load("agent_session", local_id, owner_session_id))
+        payload[key] = provider_session_id
         self._save(
             "agent_session",
             local_id,
-            json.dumps({"opencode_session_id": opencode_session_id}),
+            json.dumps(payload),
+            owner_session_id,
+        )
+
+    def clear_agent_session(
+        self, local_id: str, owner_session_id: str, provider: str = "opencode"
+    ) -> None:
+        if provider not in {"codex", "opencode"}:
+            raise ValueError("Unknown agent provider.")
+        key = "codex_thread_id" if provider == "codex" else "opencode_session_id"
+        payload = json.loads(self._load("agent_session", local_id, owner_session_id))
+        payload[key] = None
+        self._save(
+            "agent_session",
+            local_id,
+            json.dumps(payload),
             owner_session_id,
         )
 

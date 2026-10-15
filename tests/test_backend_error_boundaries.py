@@ -18,6 +18,7 @@ def _client(tmp_path):
 
     settings = Settings.load(
         database_url=f"sqlite:///{tmp_path / 'errors.db'}",
+        agent_provider="opencode",
         opencode_server_url="http://127.0.0.1:4098",
     )
     with patch("backend.api.for_settings", return_value=StaticCatalog()):

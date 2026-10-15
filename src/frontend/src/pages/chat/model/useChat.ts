@@ -49,7 +49,25 @@ function errorText(cause: unknown, fallback: string, locale: Locale) {
         'The current model cannot accept requests from this app. Choose another model or contact your administrator.',
       );
     }
-    if (cause.code === 'OPENCODE_RESPONSE_EMPTY') {
+    if (cause.code === 'CODEX_AUTH_REQUIRED') {
+      return t(
+        'Codex cần đăng nhập lại. Kiểm tra log của gateway để lấy mã xác thực rồi thử lại.',
+        'Codex needs sign-in. Check the gateway log for the device code, then retry.',
+      );
+    }
+    if (cause.code === 'CODEX_RATE_LIMIT') {
+      return t(
+        'Tài khoản Codex đang bị giới hạn lượt dùng. Hãy thử lại sau.',
+        'Codex account usage is rate limited. Please retry later.',
+      );
+    }
+    if (cause.code === 'CODEX_THREAD_EXPIRED') {
+      return t(
+        'Phiên Codex cũ đã hết hạn. Gửi lại tin nhắn để bắt đầu phiên mới; nếu cần, mở lại bản điều kiện đã lưu.',
+        'The saved Codex thread expired. Retry to start a new thread; reopen your saved brief if needed.',
+      );
+    }
+    if (cause.code === 'OPENCODE_RESPONSE_EMPTY' || cause.code === 'AGENT_RESPONSE_EMPTY') {
       return t(
         'Mình chưa lấy được kết quả lần này.',
         'I couldn’t retrieve the results this time.',

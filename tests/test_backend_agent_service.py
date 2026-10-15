@@ -5,8 +5,10 @@ import json
 import logging
 import re
 
+import pytest
 from sample_rows import StaticCatalog
 
+from backend.agent.codex_runner import normalize_codex_event
 from backend.agent.mcp_server import AgentTools
 from backend.agent.service import (
     AgentService,
@@ -15,6 +17,7 @@ from backend.agent.service import (
     _tool_progress_message,
 )
 from backend.data.sessions import SessionStore
+from backend.errors import AppError
 from backend.models import uid
 from backend.workflows import TourWorkflows
 
@@ -73,6 +76,68 @@ def test_message_uses_final_text_message_and_deduplicates_parts(settings, caplog
     assert "agent_text_aggregation message_count=3 part_count=4 duplicate_events=1 filtered_parts=3" in caplog.text
     assert "Chào bạn" not in caplog.text
     assert "Bạn muốn đi đâu?" not in caplog.text
+    store.close()
+
+
+def test_codex_thread_is_reused_for_follow_up_messages(settings):
+    settings = settings.model_copy(update={
+        "database_url": "sqlite:///:memory:",
+        "agent_provider": "codex",
+    })
+    store = SessionStore(settings.database_url)
+    service = AgentService(settings, store)
+    owner_id = store.create_session(3600)["id"]
+    local_id = store.create_agent_session(owner_id)
+    thread_id = "01900123-abcd-4567-8901-234567890123"
+    resumed_with: list[str | None] = []
+
+    async def fake_events(_message, received_thread_id):
+        resumed_with.append(received_thread_id)
+        if received_thread_id is None:
+            yield {"type": "session", "sessionID": thread_id}
+        yield {"type": "text", "part": {
+            "id": "part-1", "messageID": f"message-{len(resumed_with)}", "text": "Đã hiểu."
+        }}
+
+    service.runner.events = fake_events
+    asyncio.run(service.message(owner_id, local_id, "Tin nhắn đầu"))
+    asyncio.run(service.message(owner_id, local_id, "Tin nhắn tiếp theo"))
+
+    assert resumed_with == [None, thread_id]
+    assert store.get_agent_session(local_id, owner_id, "codex") == thread_id
+    store.close()
+
+
+def test_expired_codex_thread_is_cleared_before_retry_starts_a_new_thread(settings):
+    settings = settings.model_copy(update={
+        "database_url": "sqlite:///:memory:",
+        "agent_provider": "codex",
+    })
+    store = SessionStore(settings.database_url)
+    service = AgentService(settings, store)
+    owner_id = store.create_session(3600)["id"]
+    local_id = store.create_agent_session(owner_id)
+    store.save_agent_session(local_id, owner_id, "01900123-abcd-4567-8901-234567890123", "codex")
+
+    async def fake_events(_message, thread_id):
+        if thread_id:
+            yield {
+                "type": "error",
+                "error": {"code": "CODEX_THREAD_EXPIRED", "message": "expired"},
+            }
+            return
+        yield {"type": "session", "sessionID": "01900124-abcd-4567-8901-234567890123"}
+        yield {"type": "text", "part": {"id": "p1", "messageID": "m1", "text": "Mình sẽ tiếp tục."}}
+
+    service.runner.events = fake_events
+    with pytest.raises(AppError) as exc:
+        asyncio.run(service.message(owner_id, local_id, "tiếp tục"))
+    assert exc.value.code == "CODEX_THREAD_EXPIRED"
+    assert store.get_agent_session(local_id, owner_id, "codex") is None
+
+    response = asyncio.run(service.message(owner_id, local_id, "tiếp tục"))
+    assert response["assistant_text"] == "Mình sẽ tiếp tục."
+    assert store.get_agent_session(local_id, owner_id, "codex") == "01900124-abcd-4567-8901-234567890123"
     store.close()
 
 
@@ -220,8 +285,11 @@ def test_code_mode_preserves_real_nested_mcp_failures():
     ]
 
 
-def test_decision_uses_persisted_result_when_opencode_turn_errors_after_tools(settings):
-    settings = settings.model_copy(update={"database_url": "sqlite:///:memory:"})
+def test_decision_uses_persisted_result_when_codex_turn_errors_after_tools(settings):
+    settings = settings.model_copy(update={
+        "database_url": "sqlite:///:memory:",
+        "agent_provider": "codex",
+    })
     store = SessionStore(settings.database_url)
     service = AgentService(settings, store)
     owner_id = store.create_session(3600)["id"]
@@ -254,6 +322,22 @@ def test_decision_uses_persisted_result_when_opencode_turn_errors_after_tools(se
     )
     tools = AgentTools(settings, catalog, workflows, result_store=store)
 
+    def codex_tool_event(call_id, name, arguments, result):
+        raw_event = {
+            "type": "item.completed",
+            "turn_id": "turn-12345678",
+            "item": {
+                "id": call_id,
+                "type": "mcp_tool_call",
+                "server": "tour-catalog",
+                "tool": name,
+                "arguments": arguments,
+                "result": [{"type": "text", "text": json.dumps(result)}],
+                "status": "completed",
+            },
+        }
+        return normalize_codex_event(raw_event)
+
     async def fake_events(message, _session_id):
         run_match = re.search(r"DECISION_RUN_ID=(dec_[0-9a-f]{32})", message)
         assert run_match is not None
@@ -268,13 +352,8 @@ def test_decision_uses_persisted_result_when_opencode_turn_errors_after_tools(se
         params["decision_run_id"] = run_id
 
         query_result = json.loads(tools.query_tours(**params))
-        yield {
-            "type": "tool",
-            "part": {
-                "tool": "tour-catalog_query_tours",
-                "state": {"status": "completed", "input": params},
-            },
-        }
+        for event in codex_tool_event("tool-query-1", "query_tours", params, query_result):
+            yield event
 
         while "soft_review" in query_result:
             review = query_result["soft_review"]
@@ -288,27 +367,26 @@ def test_decision_uses_persisted_result_when_opencode_turn_errors_after_tools(se
                 for condition in review["soft_conditions"]
             ]
             metric_facts = [
-                {"tour_id": candidate["tour_id"]}
+                {"tour_id": candidate["tour_id"], "reviewed_fields": []}
                 for candidate in review["candidates"]
             ]
             tool_output = json.loads(tools.score_soft(review["context_id"], verdicts, metric_facts))
-            yield {
-                "type": "tool",
-                "part": {
-                    "tool": "tour-catalog_score_soft",
-                    "state": {"status": "completed", "input": {
-                        "verdicts": verdicts, "metric_facts": metric_facts,
-                    }},
-                },
-            }
+            for event in codex_tool_event(
+                f"tool-score-{review['context_id']}",
+                "score_soft",
+                {"verdicts": verdicts, "metric_facts": metric_facts},
+                tool_output,
+            ):
+                yield event
             query_result = tool_output
 
         assert query_result["ranking_complete"] is True
         assert "comparison" not in query_result
-        yield {
-            "type": "error",
-            "error": {"data": {"statusCode": 502}},
-        }
+        yield {"type": "session", "sessionID": "01900123-abcd-4567-8901-234567890123"}
+        yield normalize_codex_event({
+            "type": "turn.failed",
+            "error": {"http_status": 502, "message": "transient provider error"},
+        })[0]
 
     service.runner.events = fake_events
 
@@ -322,6 +400,7 @@ def test_decision_uses_persisted_result_when_opencode_turn_errors_after_tools(se
 
     assert response["comparison"]["requirement"]["id"] == requirement.id
     assert response["comparison"]["decision_views"]
+    assert store.get_agent_session(local_id, owner_id, "codex") == "01900123-abcd-4567-8901-234567890123"
     saved = store.get_comparison(response["comparison"]["id"], owner_id)
     assert saved.requirement == requirement
     store.close()

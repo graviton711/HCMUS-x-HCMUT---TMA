@@ -33,6 +33,47 @@ def raise_for_error_event(event: dict[str, Any]) -> None:
         return
     error = event.get("error")
     error = error if isinstance(error, dict) else {}
+    provider_code = error.get("code")
+    if provider_code in {"CODEX_AUTH_REQUIRED", "CODEX_RATE_LIMIT", "CODEX_UNAVAILABLE"}:
+        messages = {
+            "CODEX_AUTH_REQUIRED": "Codex ChatGPT login is required. Check the gateway log for the device code.",
+            "CODEX_RATE_LIMIT": "Codex account usage is temporarily rate limited. Retry later.",
+            "CODEX_UNAVAILABLE": "Codex CLI is unavailable or unsupported on the gateway.",
+        }
+        raise AppError(
+            str(provider_code),
+            messages[str(provider_code)],
+            503 if provider_code != "CODEX_RATE_LIMIT" else 429,
+            retryable=True,
+        )
+    if provider_code == "CODEX_GATEWAY_TIMEOUT":
+        raise AppError(
+            str(provider_code),
+            "The Codex gateway did not respond in time.",
+            504,
+            retryable=True,
+        )
+    if provider_code == "CODEX_THREAD_EXPIRED":
+        raise AppError(
+            str(provider_code),
+            "The saved Codex thread is unavailable. Retry to start a new conversation.",
+            409,
+            retryable=True,
+        )
+    if provider_code == "CODEX_GATEWAY_UNAVAILABLE":
+        raise AppError(
+            str(provider_code),
+            "The Codex gateway is unavailable.",
+            503,
+            retryable=True,
+        )
+    if isinstance(provider_code, str) and provider_code.startswith("CODEX_"):
+        raise AppError(
+            provider_code,
+            "Codex could not complete this turn.",
+            502,
+            retryable=True,
+        )
     data = error.get("data")
     data = data if isinstance(data, dict) else {}
     status = data.get("statusCode")

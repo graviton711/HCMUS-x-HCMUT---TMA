@@ -1,4 +1,4 @@
-"""Owner-scoped OpenCode sessions and grounded request/response turns."""
+"""Owner-scoped provider sessions and grounded request/response turns."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator
 from secrets import token_hex
 from typing import Any
 
+from backend.agent.codex_runner import CodexRunner
 from backend.agent.results import json_candidates, limit_comparison
 from backend.agent.runner import OpenCodeRunner, raise_for_error_event
 from backend.data.sessions import BaseStore
@@ -18,6 +19,7 @@ from shared import get_logger
 
 _LOCAL_ID = re.compile(r"^agt_[A-Za-z0-9]{16,40}$")
 _OPENCODE_ID = re.compile(r"^ses_[A-Za-z0-9_-]{8,120}$")
+_CODEX_THREAD_ID = re.compile(r"^[A-Za-z0-9_-]{8,160}$")
 _MCP_TOOL_NAMES = (
     "draft_requirement",
     "catalog_facets",
@@ -90,22 +92,23 @@ class AgentService:
     def __init__(self, settings: Settings, store: BaseStore):
         self.settings = settings
         self.store = store
-        self.runner = OpenCodeRunner(settings)
+        self.runner = CodexRunner(settings) if settings.agent_provider == "codex" else OpenCodeRunner(settings)
         self._locks: dict[tuple[str, str], asyncio.Lock] = {}
 
     @property
     def available(self) -> bool:
         if not self.runner.configured:
             return False
-        try:
-            self.runner._executable()
-        except AppError:
-            return False
+        if isinstance(self.runner, OpenCodeRunner):
+            try:
+                self.runner._executable()
+            except AppError:
+                return False
         return True
 
     def create_session(self, owner_id: str) -> dict[str, str]:
         if not self.available:
-            raise AppError("AGENT_DISABLED", "OpenCode agent is not configured.", 503)
+            raise AppError("AGENT_DISABLED", "The configured agent provider is not available.", 503)
         return {"agent_session_id": self.store.create_agent_session(owner_id)}
 
     async def message(self, owner_id: str, local_id: str, message: str) -> dict[str, Any]:
@@ -115,8 +118,8 @@ class AgentService:
                 response = event["response"]
         if response is None:
             raise AppError(
-                "OPENCODE_RESPONSE_EMPTY",
-                "OpenCode completed without returning a message or tool result.",
+                self._response_empty_code,
+                "The agent completed without returning a message or tool result.",
                 502,
                 retryable=True,
             )
@@ -155,8 +158,8 @@ class AgentService:
                 response = event["response"]
         if response is None:
             raise AppError(
-                "OPENCODE_RESPONSE_EMPTY",
-                "OpenCode completed without returning a decision comparison.",
+                self._response_empty_code,
+                "The agent completed without returning a decision comparison.",
                 502,
                 retryable=True,
             )
@@ -252,16 +255,32 @@ class AgentService:
         requirement_draft: Requirement | None = None
 
         try:
-            session_id = self.store.get_agent_session(local_id, owner_id)
+            provider = self.settings.agent_provider
+            session_id = self.store.get_agent_session(local_id, owner_id, provider)
             yield {"type": "progress", "status": "working"}
             async for event in self.runner.events(message, session_id):
                 raise_for_error_event(event)
+                if event.get("type") == "usage":
+                    usage = event.get("usage")
+                    usage = usage if isinstance(usage, dict) else {}
+                    input_tokens = _usage_count(usage, "input_tokens", "prompt_tokens")
+                    output_tokens = _usage_count(usage, "output_tokens", "completion_tokens")
+                    total_tokens = _usage_count(usage, "total_tokens")
+                    _log.info(
+                        "agent_usage provider=%s input_tokens=%s output_tokens=%s total_tokens=%s",
+                        provider,
+                        input_tokens,
+                        output_tokens,
+                        total_tokens,
+                    )
+                    continue
                 properties = event.get("properties")
                 properties = properties if isinstance(properties, dict) else {}
                 observed_id = event.get("sessionID") or properties.get("sessionID")
-                if isinstance(observed_id, str) and _OPENCODE_ID.fullmatch(observed_id):
+                id_pattern = _CODEX_THREAD_ID if provider == "codex" else _OPENCODE_ID
+                if isinstance(observed_id, str) and id_pattern.fullmatch(observed_id):
                     if session_id is None:
-                        self.store.save_agent_session(local_id, owner_id, observed_id)
+                        self.store.save_agent_session(local_id, owner_id, observed_id, provider)
                         session_id = observed_id
 
                 part = event.get("part") or properties.get("part")
@@ -354,7 +373,13 @@ class AgentService:
                     final_comparison = comparison
                 if "draft_requirement" in successful_tool_names:
                     _log.info("agent_draft_parse valid=%s", draft_parse_valid)
-        except Exception:
+        except Exception as error:
+            if (
+                provider == "codex"
+                and isinstance(error, AppError)
+                and error.code == "CODEX_THREAD_EXPIRED"
+            ):
+                self.store.clear_agent_session(local_id, owner_id, provider)
             if expected_requirement is None or decision_run_id is None:
                 raise
             persisted = self.store.pop_decision_result(decision_run_id)
@@ -417,8 +442,8 @@ class AgentService:
         if not any((response["assistant_text"], response["tool_calls"], choices, final_requirement,
                     final_comparison)):
             raise AppError(
-                "OPENCODE_RESPONSE_EMPTY",
-                "OpenCode completed without returning a message or tool result.",
+                self._response_empty_code,
+                "The agent completed without returning a message or tool result.",
                 502,
                 retryable=True,
             )
@@ -454,6 +479,12 @@ class AgentService:
             )
         return comparison.requirement, comparison
 
+    @property
+    def _response_empty_code(self) -> str:
+        if self.settings.agent_provider == "opencode":
+            return "OPENCODE_RESPONSE_EMPTY"
+        return "AGENT_RESPONSE_EMPTY"
+
 
 def _tool_name(value: str) -> str:
     normalized = value.rsplit(".", 1)[-1]
@@ -461,6 +492,14 @@ def _tool_name(value: str) -> str:
         if normalized == name or normalized.endswith(f"_{name}"):
             return name
     return normalized
+
+
+def _usage_count(usage: dict[str, Any], *keys: str) -> int | None:
+    for key in keys:
+        value = usage.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    return None
 
 
 def _nested_tool_calls(metadata: Any) -> list[Any] | None:

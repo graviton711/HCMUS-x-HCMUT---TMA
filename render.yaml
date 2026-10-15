@@ -14,6 +14,8 @@ services:
     envVars:
       - key: ROLE
         value: backend
+      - key: AGENT_PROVIDER
+        value: opencode
       - key: SUPABASE_TOUR_DB_URL
         sync: false
       - key: CORS_ORIGINS

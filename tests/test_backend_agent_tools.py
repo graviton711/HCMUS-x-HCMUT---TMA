@@ -157,6 +157,15 @@ def test_catalog_facets_only_returns_values_from_active_catalog(settings):
     assert result["scan_limit"] == settings.supabase_scan_limit
 
 
+def test_catalog_facets_can_avoid_sending_unrequested_value_groups(settings):
+    result = json.loads(_tools(settings).catalog_facets(["destinations"]))
+    assert result["destinations"] == ["Hạ Long", "Phú Quốc", "Đà Lạt"]
+    assert result["scanned_tours"] == 3
+    assert "departure_cities" not in result
+    assert "prices_vnd" not in result
+    assert "departure_dates" not in result
+
+
 def test_discover_destinations_returns_only_hard_matching_catalog_options(settings):
     result = json.loads(_tools(settings).discover_destinations(
         raw_text="Đi từ Sài Gòn 3 ngày",

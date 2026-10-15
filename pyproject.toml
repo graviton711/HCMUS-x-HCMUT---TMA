@@ -26,6 +26,7 @@ browser = ["playwright>=1.52"]
 [project.scripts]
 tour-backend = "backend.cli:main"
 tour-opencode = "backend.opencode_cli:main"
+tour-codex = "backend.codex_cli:main"
 tour-frontend = "tooling.frontend_cli:main"
 tour-crawl = "ingest.pipeline:main"
 

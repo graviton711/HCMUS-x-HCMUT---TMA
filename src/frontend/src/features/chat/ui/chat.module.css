@@ -23,6 +23,7 @@
   line-height: 1.55;
   overflow-wrap: anywhere;
   cursor: default;
+  caret-color: transparent;
   box-shadow: var(--shadow-rest);
 }
 

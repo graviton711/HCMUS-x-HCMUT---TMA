@@ -291,26 +291,37 @@ class AgentTools:
             }
         return self._destination_names.get(_fold_catalog_text(value), value)
 
-    def catalog_facets(self) -> str:
+    def catalog_facets(
+        self,
+        fields: list[Literal["destinations", "departure_cities", "prices_vnd", "departure_dates"]]
+        | None = None,
+    ) -> str:
+        """Return only requested facet groups; omitted fields preserve the legacy full response."""
         tours = self.workflows.snapshots(self.settings.supabase_scan_limit)
-        destinations = sorted({value for tour in tours for value in tour.destinations})
-        departure_cities = sorted({tour.departure_city for tour in tours if tour.departure_city})
-        prices = sorted({
-            offer.price for tour in tours for offer in tour.offers
-            if offer.price is not None and offer.currency == "VND"
-        })
-        dates = sorted({
-            offer.departure_date for tour in tours for offer in tour.offers
-            if _is_iso_date(offer.departure_date)
-        })
-        return _json({
-            "destinations": destinations,
-            "departure_cities": departure_cities,
-            "prices_vnd": prices,
-            "departure_dates": dates,
+        requested = set(fields) if fields is not None else {
+            "destinations", "departure_cities", "prices_vnd", "departure_dates"
+        }
+        result: dict[str, Any] = {
             "scanned_tours": len(tours),
             "scan_limit": self.settings.supabase_scan_limit,
-        })
+        }
+        if "destinations" in requested:
+            result["destinations"] = sorted({value for tour in tours for value in tour.destinations})
+        if "departure_cities" in requested:
+            result["departure_cities"] = sorted({
+                tour.departure_city for tour in tours if tour.departure_city
+            })
+        if "prices_vnd" in requested:
+            result["prices_vnd"] = sorted({
+                offer.price for tour in tours for offer in tour.offers
+                if offer.price is not None and offer.currency == "VND"
+            })
+        if "departure_dates" in requested:
+            result["departure_dates"] = sorted({
+                offer.departure_date for tour in tours for offer in tour.offers
+                if _is_iso_date(offer.departure_date)
+            })
+        return _json(result)
 
     def discover_destinations(
         self,

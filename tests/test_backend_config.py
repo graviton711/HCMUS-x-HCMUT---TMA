@@ -119,6 +119,9 @@ def test_incomplete_yaml_fails_loud(tmp_path):
 def test_repo_configs_load():
     settings = Settings.load()
     assert settings.opencode.model == "opencode/muse-spark-1.3-contributor-free"
+    assert settings.codex.model == "gpt-6-luna"
+    assert settings.codex.reasoning_effort == "medium"
+    assert settings.agent_provider == "codex"
     assert settings.tuning.decide.quote_chars <= 200
     assert settings.tuning.data.providers_limit == 100
     assert settings.tuning.api.port == 8000

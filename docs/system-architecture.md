@@ -6,18 +6,20 @@ Frontend gọi backend qua HTTP. Chat thu thập yêu cầu; agent giữ các l�
 flowchart LR
     User[Người dùng] --> UI[src/frontend: chat + decision workspace]
     UI --> API[backend/api]
-    API --> Agent[backend/agent: OpenCode session]
-    Agent --> MCP[MCP tools]
+    API --> Agent[backend/agent: provider session]
+    Agent --> Gateway[Codex gateway local; OpenCode on Render until eligible]
+    Gateway --> MCP[MCP tools]
     MCP --> Input[backend/input: validate requirement]
     MCP --> Workflow[backend/workflows]
     Workflow --> Data[backend/data: read-only catalog]
     Workflow --> Normalize[backend/normalize: snapshot + evidence]
     Workflow --> Decide[backend/decide: hard filter + views]
     Decide --> MCP
-    MCP --> Agent
+    MCP --> Gateway
+    Gateway --> Agent
     Agent --> API
     API --> UI
-    Ingest[src/ingest] --> Catalog[(Tour catalog)]
+    Ingest[src/ingest + OpenCode survey] --> Catalog[(Tour catalog)]
     Data --> Catalog
 ```
 
@@ -72,7 +74,9 @@ Scenario điều kiện chạy lại hard filter trên snapshot gốc; scenario 
 - Điểm đến không được gắn nhãn “gần” nếu catalog không có dữ liệu địa lý để chứng minh. Khi thiếu nơi khởi hành, không tự thêm hard condition.
 - Kết quả có tối thiểu ba tour khác nhau nếu scan có đủ tour qua hard filter; thiếu thì báo số thực có và kịch bản nới điều kiện chờ duyệt. Nhiều góc nhìn không tự bảo đảm có ba phương án khác nhau.
 - Không đặt deadline tổng cho agent. Giữ timeout riêng cho MCP/data calls và hủy process khi client disconnect.
-- Kết quả quyết định đi từ MCP tới API qua runtime store bằng `decision_run_id`; không phụ thuộc OpenCode có lặp lại JSON của tool trong output model hay không.
+- Kết quả quyết định đi từ MCP tới API qua runtime store bằng `decision_run_id`; không phụ thuộc provider có lặp lại JSON của tool trong output model hay không. Codex thread ID và OpenCode session ID được lưu riêng trong cùng owner-scoped agent record.
+- Local chat dùng Codex CLI (`gpt-6-luna`, medium) qua gateway riêng, nạp prompt từ `configs/prompts/backend-agent.yaml`, chỉ bật MCP `tour-catalog` và tắt shell/multi-agent. Render tiếp tục OpenCode cho tới khi được xác nhận đủ điều kiện dùng ChatGPT plan trên app remote-hosted.
+- Render free không giữ filesystem qua spin-down/redeploy; Codex cần device-code login lại. Khi resume báo thread cũ không còn, backend bỏ ID cũ để lần retry mở thread mới. Requirement/comparison lưu ở Supabase không bị ảnh hưởng.
 - Thêm field model có default để dữ liệu comparison cũ vẫn đọc được. Thay đổi schema catalog offer cần migration; metric cache dùng schema runtime có phiên bản.
 
 Contract chi tiết: [backend-contract](backend-contract.md). Field/evidence: [data-contract](data-contract.md).

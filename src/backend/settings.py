@@ -1,7 +1,8 @@
 """Backend settings. Runtime values come from YAML or env; code holds no secrets.
 
-Precedence: explicit constructor args > env vars > YAML file, except OpenCode
-model selection, which has one source in `configs/settings.yaml`.
+Precedence: explicit constructor args > env vars > YAML file. Local chat and survey
+models have separate settings: Codex for chat, OpenCode for survey. Render retains
+OpenCode chat until the Codex rollout is eligible.
 Missing YAML keys fail loud with ValidationError. Only credentials may be
 empty (absent key = feature off, guarded at use time).
 """
@@ -11,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -64,6 +65,21 @@ class OpenCodeConfig(BaseModel):
         value = value.strip()
         if not value:
             raise ValueError("OpenCode model must not be empty.")
+        return value
+
+
+class CodexConfig(BaseModel):
+    model_config = SettingsConfigDict(extra="ignore")
+
+    model: str = "gpt-6-luna"
+    reasoning_effort: Literal["low", "medium", "high", "xhigh"] = "medium"
+
+    @field_validator("model")
+    @classmethod
+    def _strip_model(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Codex model must not be empty.")
         return value
 
 
@@ -140,6 +156,10 @@ class Settings(BaseSettings):
     )
 
     opencode: OpenCodeConfig
+    codex: CodexConfig = Field(default_factory=CodexConfig)
+    agent_provider: Literal["codex", "opencode"] = "codex"
+    codex_server_url: str = "http://127.0.0.1:4099"
+    codex_binary: str = "codex"
     opencode_server_url: str = ""
     opencode_server_password: str = ""
     opencode_binary: str = "opencode"
@@ -185,6 +205,8 @@ class Settings(BaseSettings):
         backend = backend if isinstance(backend, dict) else {}
         opencode = config.get("opencode", {})
         opencode = opencode if isinstance(opencode, dict) else {}
+        codex = config.get("codex", {})
+        codex = codex if isinstance(codex, dict) else {}
         from dotenv import dotenv_values
 
         # Resolve the dotenv file from the repo root so every entry point
@@ -200,7 +222,6 @@ class Settings(BaseSettings):
             }
         except Exception:
             dot_values = {}
-        init: dict[str, Any] = {"tuning": {}, "opencode": opencode}
         process_values = {key.lower(): value for key, value in os.environ.items()}
         env = set(process_values) | set(dot_values)
         if "supabase_tour_db_url" in overrides:
@@ -212,7 +233,21 @@ class Settings(BaseSettings):
         tuning: dict[str, Any] = {}
         tuning.update({k: v for k, v in backend.items()
                        if k in Tuning.model_fields and v is not None})
-        init: dict[str, Any] = {"tuning": tuning, "opencode": opencode, "_env_file": env_file}
+        init: dict[str, Any] = {
+            "tuning": tuning,
+            "opencode": opencode,
+            "codex": codex,
+            "_env_file": env_file,
+        }
+        if "codex_model" in env or "codex_reasoning_effort" in env:
+            codex = dict(codex)
+            if "codex_model" in env:
+                codex["model"] = process_values.get("codex_model", dot_values.get("codex_model"))
+            if "codex_reasoning_effort" in env:
+                codex["reasoning_effort"] = process_values.get(
+                    "codex_reasoning_effort", dot_values.get("codex_reasoning_effort")
+                )
+            init["codex"] = codex
         for key, field in _FLAT_MAP.items():
             if isinstance(key, tuple):
                 section, sub = key

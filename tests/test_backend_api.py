@@ -15,6 +15,9 @@ def _client(tmp_path, **overrides):
 
     from backend.settings import Settings
 
+    # These API contract tests exercise the existing OpenCode-compatible path.
+    # Codex-specific behavior is covered in test_backend_codex_runner.py.
+    overrides.setdefault("agent_provider", "opencode")
     settings = Settings.load(database_url=f"sqlite:///{tmp_path / 'api.db'}", **overrides)
     assert settings.data_provider == "supabase"
     with patch("backend.api.for_settings", return_value=StaticCatalog()):

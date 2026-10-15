@@ -3,7 +3,8 @@ import pytest
 from backend.settings import DecideCfg, Settings
 
 _ENV_VARS = ("DATABASE_URL", "DATA_PROVIDER", "CANDIDATE_LIMIT",
-             "SUPABASE_TOUR_DB_URL", "SUPABASE_SCAN_LIMIT")
+             "SUPABASE_TOUR_DB_URL", "SUPABASE_SCAN_LIMIT", "AGENT_PROVIDER",
+             "CODEX_SERVER_URL", "CODEX_MODEL", "CODEX_REASONING_EFFORT")
 
 
 @pytest.fixture(autouse=True)
@@ -27,7 +28,10 @@ def _guarded_load(empty):
 
 @pytest.fixture
 def settings(tmp_path):
-    return Settings.load(database_url=f"sqlite:///{tmp_path / 'test.db'}")
+    return Settings.load(
+        database_url=f"sqlite:///{tmp_path / 'test.db'}",
+        agent_provider="opencode",
+    )
 
 
 @pytest.fixture

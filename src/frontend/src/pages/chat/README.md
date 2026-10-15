@@ -1,6 +1,6 @@
 ﻿# pages/chat
 
-Màn hình quyết định (`/`): hội thoại nhiều lượt với OpenCode travel agent, lựa chọn hỏi thêm và workspace review/so sánh có evidence.
+Màn hình quyết định (`/`): hội thoại nhiều lượt với Codex travel agent, lựa chọn hỏi thêm và workspace review/so sánh có evidence.
 
 - Input: `LocalSession` (hoặc null trước lần gửi đầu), callback session từ `app`.
 - Output: chat text, QuickReplies và tiến độ trong pane trao đổi; Brief có thể sửa/xác nhận và comparison có evidence trong Decision Workspace. Transcript giữ liên kết tới từng artifact, không render lặp toàn bộ Brief/kết quả.
@@ -9,9 +9,10 @@ Màn hình quyết định (`/`): hội thoại nhiều lượt với OpenCode t
 - Decision Workspace đọc `decision_trace` và phân trang offer bị loại từ API comparison. What-if dùng snapshot scan owner-scoped; thay điều kiện tạo bản Brief để review/xác nhận, còn giả định chi phí chỉ áp dụng trong scenario. Trọng số được tự cân lại theo tỷ lệ phần còn lại và giữ tổng 100 khi giá trị nhập hợp lệ.
 - Interface: export `ChatPage`. `model/` nội bộ. Bearer access (`accessFor`, `SessionExpiredError`), format helpers và `sessionTitle` dùng chung từ `features/session-history`, `features/chat`, `shared/lib` — không copy per-page.
 - Trình bày: desktop chia pane chat/tiến độ và quyết định; tay nắm kéo đổi tỷ lệ hai pane, lưu trong localStorage và hỗ trợ bàn phím. Ma trận/option co theo bề rộng pane, không cuộn ngang; nội dung dài dùng một vùng cuộn dọc. Mobile dùng tab, tự chuyển sang quyết định khi Brief/kết quả có cấu trúc tới. Composer luôn khả dụng và gửi từ tab quyết định chuyển về chat. Cả hai pane dùng chung design tokens, typography, surfaces và state colors hiện tại. Composer gọn, tự tăng chiều cao; tiến độ mở timeline tool; lỗi inline giữ bản nháp.
+  - Tin nhắn người dùng là văn bản chỉ đọc; caret trong bubble luôn trong suốt để không nhấp nháy trên nội dung đã gửi. Composer vẫn giữ caret bình thường khi soạn.
 - Quyết định kỹ thuật:
-  - Tin nhắn agent dùng SSE trên endpoint hiện tại: UI có một dòng trạng thái phẳng; nội dung cập nhật theo tool đang chạy và gradient chuyển động trực tiếp trên chữ của dòng thuộc lượt hiện tại. Các dòng hoạt động đã lưu từ lượt trước luôn tĩnh. Mở dòng hiện tại để xem các sự kiện tool theo thứ tự. Backend dựng mô tả từ tên tool cùng input cấu trúc an toàn; không lấy private reasoning làm tiến độ. Các mô tả/trạng thái tool được lưu cùng transcript local và phục hồi sau reload; lượt đang chạy không tự gửi lại. Backend vẫn giữ JSON mặc định cho consumer khác. Backend và OpenCode/MCP cần khởi động lại sau khi đổi code; Vite HMR không reload các tiến trình đó.
-  - Khi agent đang chạy, nút gửi đổi thành nút dừng. Nút dừng hủy request SSE bằng `AbortController`; client không hiển thị đây là lỗi, đánh dấu các tool đang chạy là đã dừng và lưu trạng thái vào transcript. Backend đóng luồng khi client ngắt, runner dọn tiến trình OpenCode trong `finally`.
+  - Tin nhắn agent dùng SSE trên endpoint hiện tại: UI có một dòng trạng thái phẳng; nội dung cập nhật theo tool đang chạy và gradient chuyển động trực tiếp trên chữ của dòng thuộc lượt hiện tại. Các dòng hoạt động đã lưu từ lượt trước luôn tĩnh. Mở dòng hiện tại để xem các sự kiện tool theo thứ tự. Backend dựng mô tả từ tên tool cùng input cấu trúc an toàn; không lấy private reasoning làm tiến độ. Các mô tả/trạng thái tool được lưu cùng transcript local và phục hồi sau reload; lượt đang chạy không tự gửi lại. Backend vẫn giữ JSON mặc định cho consumer khác. Backend và Codex gateway/MCP cần khởi động lại sau khi đổi code; Vite HMR không reload các tiến trình đó.
+  - Khi agent đang chạy, nút gửi đổi thành nút dừng. Nút dừng hủy request SSE bằng `AbortController`; client không hiển thị đây là lỗi, đánh dấu các tool đang chạy là đã dừng và lưu trạng thái vào transcript. Backend đóng luồng khi client ngắt, runner dọn tiến trình Codex CLI trong `finally`.
   - Auto-send được quyết định từ trạng thái trước khi tạo local agent session; ID agent đã lưu là dấu hiệu phiên đang tiếp tục, không phải yêu cầu chạy lại prompt. Transcript hiển thị lấy từ bản local đã lưu, gồm các sự kiện tool an toàn đã ghi nhận.
   - Composer khóa khi backend client chưa sẵn sàng; auto-scroll chỉ khi user đã ở gần đáy. Composer trống dùng chiều cao gọn; nội dung nhiều dòng được phép mở rộng và tự co về chiều cao gọn sau khi gửi.
   - Ở viewport rộng hơn 1000px, `.thread-scroll` là scroll container và auto-scroll theo thread. Từ 1000px trở xuống, app chuyển sang document scrolling: thread trở về chiều cao nội dung, không chặn scroll chaining, composer có thể sticky trên màn nhỏ; auto-scroll dùng `window`/document để theo tin nhắn mới. Không bật đồng thời scroll độc lập của thread và document.
@@ -19,4 +20,4 @@ Màn hình quyết định (`/`): hội thoại nhiều lượt với OpenCode t
   - Guest access hết hạn cho phép tạo session mới và gửi lại bản nháp.
   - Workspace chỉ nhận artifact có cấu trúc, không dựng Brief từ assistant prose. Comparison hiện hành phải khớp Brief; artifact cũ vẫn mở từ transcript và được gắn nhãn cũ.
   - Session bar và sidebar toggle do `app` sở hữu; page không render header riêng.
-  - OpenCode agent là luồng hội thoại duy nhất; client giữ local agent session ID nhưng không thấy OpenCode session ID.
+  - Codex agent là luồng hội thoại duy nhất; client giữ local agent session ID nhưng không thấy Codex thread ID.

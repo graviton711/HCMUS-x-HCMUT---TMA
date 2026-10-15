@@ -127,6 +127,12 @@ def test_agent_session_mapping_reuses_records_and_is_owner_scoped(settings):
     assert store.get_agent_session(local_id, owner) is None
     store.save_agent_session(local_id, owner, "ses_abcdefgh12345678")
     assert store.get_agent_session(local_id, owner) == "ses_abcdefgh12345678"
+    store.save_agent_session(local_id, owner, "01900123-abcd-4567-8901-234567890123", "codex")
+    assert store.get_agent_session(local_id, owner, "codex") == "01900123-abcd-4567-8901-234567890123"
+    assert store.get_agent_session(local_id, owner) == "ses_abcdefgh12345678"
+    store.clear_agent_session(local_id, owner, "codex")
+    assert store.get_agent_session(local_id, owner, "codex") is None
+    assert store.get_agent_session(local_id, owner) == "ses_abcdefgh12345678"
     with pytest.raises(AppError) as exc:
         store.get_agent_session(local_id, other)
     assert exc.value.status == 404
