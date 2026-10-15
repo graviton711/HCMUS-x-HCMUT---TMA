@@ -1,6 +1,6 @@
 # Kiến trúc hệ thống
 
-Frontend gọi backend qua HTTP. Chat thu thập và làm rõ yêu cầu; trước khi gợi ý địa điểm, agent có thể chạy preflight chỉ đọc catalog theo hard condition đã biết. So sánh và xếp hạng chỉ bắt đầu sau khi người dùng xác nhận Decision Brief. Agent diễn giải ngôn ngữ và đánh giá evidence; backend kiểm tra schema, áp điều kiện cứng và tính các góc nhìn quyết định.
+Frontend gọi backend qua HTTP. Chat thu thập và làm rõ yêu cầu; trước khi gợi ý địa điểm, agent chạy preflight catalog theo hard condition đã biết. Sau khi người dùng duyệt Decision Brief, backend lọc ứng viên, tạo hồ sơ metric có bằng chứng cho từng tour còn lại, rồi xếp hạng theo các góc nhìn chuẩn và sở thích người dùng. Agent diễn giải yêu cầu; code xác thực evidence và tính metric.
 
 ```mermaid
 flowchart LR
@@ -23,14 +23,13 @@ flowchart LR
 
 ## Workflow
 
-1. Người dùng gửi mô tả tự do qua chat. Agent trích hard condition và đối chiếu địa danh với giá trị thực từ catalog facets.
-2. Khi cần gợi ý hoặc xác nhận địa điểm, `discover_destinations` lọc snapshot theo các hard condition đã biết. Chỉ candidate qua tất cả điều kiện mới được đề xuất; thiếu dữ liệu và dữ liệu cũ giữ trạng thái chưa xác minh. Preflight không tạo comparison hoặc ranking cuối.
-3. Agent hỏi chọn trong các địa điểm có candidate đã xác minh hoặc hỏi người dùng điều chỉnh điều kiện nếu chưa có kết quả, rồi tạo requirement draft.
-4. Frontend lưu draft cùng phiên để khôi phục sau reload. Người dùng chỉnh điều kiện và phân bổ 100 điểm giữa các sở thích mềm.
-5. Frontend gửi requirement đã review tới `POST /agent/sessions/{id}/decisions`. Backend validate lại và mở lượt agent để chấm evidence.
-6. `query_tours` quét catalog đến `data.scan_limit`, chuẩn hóa snapshot, áp hard filter trên toàn bộ ứng viên đã quét và tạo context. Các ứng viên hard-pass được gửi cho agent theo batch để đánh giá từng soft condition.
-7. Engine xác thực quote, gắn verdict `pass|fail|unknown`, tính điểm trọng số và trả `decision_views`: giá thấp nhất, hợp ưu tiên nhất và Pareto cân bằng. Kết quả giữ `ranked`/`near_miss` cho consumer hiện tại. MCP ghi Comparison hoàn tất vào runtime store theo `decision_run_id`.
-8. Agent service lấy Comparison theo `decision_run_id`, kiểm tra requirement, lưu dưới owner của phiên và stream kết quả. Nội dung model không phải nguồn xác nhận hoàn tất.
+1. Agent trích hard conditions và soft preferences; `catalog_facets` phân giải nhãn thực, `discover_destinations` kiểm tra tính khả thi trước khi đề xuất.
+2. Người dùng review brief và trọng số. Final comparison chỉ bắt đầu sau khi xác nhận.
+3. Backend quét catalog, chuẩn hóa snapshot và áp hard filter trên toàn bộ scan. Offer chỉ qua khi mọi hard condition pass; unknown không được xem là pass.
+4. Metric enrichment đọc riêng itinerary, inclusions, exclusions, surcharges, cancellation và child policy. Structured facts phải có quote khớp nguồn; code chuẩn hóa, tính cost/route/coverage và ghi unknown khi không đủ căn cứ. Kết quả được cache theo content hash và extractor version.
+5. Engine tạo metric vector chung cho từng tour: cost, preference fit, experience density, route complexity, inclusion coverage, cancellation flexibility, family suitability và evidence coverage. Từ đó tạo các góc nhìn khả dụng và ít nhất ba tour khác nhau nếu có.
+6. Nếu thiếu ba hard-pass tour, API trả số thực có và các kịch bản nới điều kiện có giải thích; không tự sửa brief hoặc tạo tour giả.
+7. Comparison, evidence, metric vectors và phương án được lưu cùng snapshot; frontend hiển thị phép tính, giới hạn dữ liệu và hỗ trợ what-if qua brief/trọng số đã review.
 
 ## Ranh giới module
 
@@ -38,24 +37,26 @@ flowchart LR
 |---|---|---|
 | `backend/agent` | Hội thoại, draft requirement, gọi MCP, semantic evaluation có evidence | Quyết định hard eligibility, tự tính điểm hoặc truy cập UI |
 | `backend/input` | Validate cấu trúc requirement, `weight_percent`, giá trị tiền/ngày | Parse business decision từ free text |
-| `backend/data` | Đọc catalog; lưu owner-scoped session/records và kết quả tạm theo decision run để MCP bàn giao cho API | Rank hoặc gọi LLM |
-| `backend/normalize` | Chuyển row thành snapshot/evidence | Alias địa danh hoặc quyết định |
-| `backend/decide` | Hard filter, xác thực soft evidence, weighted views, Pareto, near-miss | LLM, HTTP, storage |
+| `backend/data` | Đọc catalog; lưu owner-scoped session/records, decision handoff và cache metric theo hash nội dung/phiên bản | Rank hoặc gọi LLM |
+| `backend/normalize` | Chuyển row thành snapshot/evidence, giữ price basis và price by age ở cấp offer | Alias địa danh hoặc quyết định |
+| `backend/decide` | Hard filter, kiểm tra structured evidence, metric vector, weighted fit, objective views/Pareto, near-miss | LLM, HTTP, storage |
 | `backend/workflows` | Ghép input/catalog/normalize/decide, quản lý scan context và batch | UI hoặc giao thức HTTP |
 | `backend/api` | Auth owner, route, SSE/JSON envelope | Logic ra quyết định |
 | `frontend` | Draft review, trọng số, decision workspace, saved tours | Truy cập database hoặc tự suy eligibility |
-| `ingest` | Xuất bản catalog | Chạy trong request demo |
+| `ingest` | Xuất bản catalog, giữ giá/basis/tuổi/phụ thu ở cấp offer | Chạy trong request demo |
 
 ## Quy tắc kỹ thuật
 
 - Database catalog là nguồn có thẩm quyền. Hard filter luôn chạy trước soft ranking.
 - Soft evaluation bao phủ mọi ứng viên hard-pass trong scan, không chỉ các tour có thể lọt top N theo ranking cũ. Batching giới hạn context model; scan limit vẫn giới hạn số record được đọc.
-- Giá rẻ nhất chỉ dùng giá exact cùng currency. Không quy đổi currency và không coi `from` là giá exact.
-- Điểm phù hợp là tổng trọng số các verdict `pass`; `unknown` không được đổi thành `fail` và không đóng góp điểm. Evidence quote phải khớp snapshot.
-- Pareto giữ các phương án không bị trội đồng thời về exact price và preference score; không tạo điểm tổng hợp bí ẩn.
-- Kết quả hướng tới ít nhất ba phương án khác nhau có dữ liệu, theo mục tiêu phù hợp với yêu cầu và field catalog. Nếu scan không có đủ ba tour qua hard filter, hệ thống báo số thực có; không tự nới điều kiện. Ba decision view hiện tại không tự bảo đảm có ba phương án khác nhau.
+- Price vectors tách giá exact/from/contact, tổng đã tính, khoản đã định giá và khoản loại trừ chưa định giá; chỉ exact cùng currency được dùng để kết luận rẻ nhất.
+- Exclusion không tự động là khoản phát sinh. Phân loại bắt buộc/tùy chọn/có điều kiện; chỉ tính khoản có amount, unit và điều kiện áp dụng được xác nhận.
+- Metric dùng đơn vị/scale riêng và evidence. Không ép thành một điểm tổng; unknown tạo khoảng hoặc trạng thái chưa so sánh được.
+- Objective views tối ưu metric cụ thể hoặc người dùng; Pareto chỉ so trên dimensions có thứ tự/đơn vị hợp lệ và không bị thiếu evidence làm giả thứ hạng.
+- Metric cache được khóa bằng hash nội dung nguồn và phiên bản extractor; freshness và độ phủ hiển thị riêng, không gọi là xác suất tin cậy.
+- Kết quả có tối thiểu ba tour khác nhau nếu scan có đủ tour qua hard filter; thiếu thì báo số thực có và kịch bản nới điều kiện chờ duyệt. Nhiều góc nhìn không tự bảo đảm có ba phương án khác nhau.
 - Không đặt deadline tổng cho agent. Giữ timeout riêng cho MCP/data calls và hủy process khi client disconnect.
 - Kết quả quyết định đi từ MCP tới API qua runtime store bằng `decision_run_id`; không phụ thuộc OpenCode có lặp lại JSON của tool trong output model hay không.
-- Thêm field model có default để dữ liệu comparison cũ vẫn đọc được; không cần migration database cho `decision_views`.
+- Thêm field model có default để dữ liệu comparison cũ vẫn đọc được. Thay đổi schema catalog offer cần migration; metric cache dùng schema runtime có phiên bản.
 
 Contract chi tiết: [backend-contract](backend-contract.md). Field/evidence: [data-contract](data-contract.md).

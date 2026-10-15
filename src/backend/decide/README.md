@@ -1,21 +1,21 @@
-# backend/decide — eligibility và decision views
+# backend/decide — eligibility, metric vectors và decision views
 
 ## Trách nhiệm
 
-Đánh giá hard conditions một cách xác định; kiểm tra soft verdict/evidence từ agent; tính điểm ưu tiên minh bạch; tạo cheapest, best-fit và balanced Pareto views.
+Áp hard filter xác định; tiêu thụ metric facts đã chuẩn hóa và evidence; tính preference fit có khoảng khi thiếu dữ kiện; tạo objective views từ cùng một metric vector. Không tạo điểm chất lượng tổng hợp.
 
 ## Input/output
 
-Vào: requirement đã validate, tour snapshots, soft verdict map `(offer_id, condition_id) -> verdict/quote/reason`. Ra: hard/soft evaluations, `ranked`, `near_miss`, tối đa 5 lựa chọn mỗi `decision_view`, snapshots, evidence và số candidate đã quét.
+Vào: requirement đã validate, tour/offer snapshots, metric facts và preference evaluations `(offer_id, condition_id) -> score/unknown + quote`. Ra: hard evaluations, metric profiles, decision options, `ranked`, `near_miss`, snapshots, evidence và số candidate đã quét.
 
 ## Workflow
 
 1. Hard filter chạy trước; chỉ offers pass toàn bộ hard conditions vào soft evaluation.
-2. Xác thực quote khớp snapshot. `unknown` giữ nguyên trạng thái và không đóng góp vào điểm; chỉ verdict `pass` cộng `weight_percent`.
-3. Cheapest sắp exact-price candidates theo giá trong từng currency riêng; nếu giá bằng nhau thì ưu tiên weighted fit cao hơn rồi dùng ID ổn định. `from`, `contact`, thiếu giá bị loại khỏi kết luận cheapest.
-4. Best-fit sắp tổng trọng số pass giảm dần, với tie-break ổn định theo giá/currency rồi ID.
-5. Balanced trả Pareto frontier giữa giá exact thấp và điểm best-fit cao trong từng currency. Candidate thiếu exact price không bị giả định có giá; có thể trình bày như dữ liệu chưa đủ để so.
-6. Trả danh sách view giới hạn tối đa 5, nhưng giữ đủ evaluations trong dữ liệu cần cho explanations và compatibility fields.
+2. Metric facts chỉ hợp lệ khi evidence quote khớp đúng source field. Numeric/categorical normalization và phép tính do code thực hiện.
+3. Preference fit cộng trọng số theo mức `0`, `0.5`, `1`; unknown tạo khoảng điểm min/max và evidence coverage riêng.
+4. Cost view tách exact/from/contact, group total, khoản bắt buộc đã định giá và exclusions chưa định giá. Exclusion chỉ thành cost khi obligation, amount, unit và applicability có evidence.
+5. Objective views gồm cheapest, best-fit, experience-rich, fewest-legs, cancellation-flexible, family-friendly, included-value và balanced Pareto. Chỉ xếp trên metric có thể so sánh; unknown không được ép thành 0 hoặc pass.
+6. Mỗi view trả tối đa 5 lựa chọn, nhưng engine giữ đủ profile/evaluation cho explanations. Nếu có đủ candidates, kết quả có tối thiểu ba tour khác nhau; thiếu thì trả số thực có và relaxation scenarios riêng.
 
 ## Interface với module khác
 
@@ -24,7 +24,9 @@ Vào: requirement đã validate, tour snapshots, soft verdict map `(offer_id, co
 ## Quyết định kỹ thuật
 
 - Trọng số chỉ đổi thứ tự/view, không thay eligibility.
-- Điểm phù hợp là tổng các weight pass (0–100), không phải xác suất/confidence.
+- Mỗi metric giữ đơn vị và thang đo riêng; evidence coverage mô tả dữ liệu, không phải độ tốt của tour hay xác suất.
+- Unknown tạo khoảng hoặc trạng thái unavailable, không bị biến thành điểm 0 hay đạt.
+- Không cộng giá trị tiền cho lợi ích hoặc exclusions không có giá/đơn vị/điều kiện áp dụng rõ.
 - Multi-currency không quy đổi; cheapest/Pareto được nhóm currency-wise.
 - Tie-break dùng khóa xác định để kết quả ổn định.
 - `ranked`/`near_miss` được giữ cho consumer cũ.

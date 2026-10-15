@@ -5,14 +5,14 @@ Backend chỉ đọc catalog Supabase. Nguồn do người dùng khai báo là n
 ## Nguyên tắc
 
 - Nguồn được duyệt khi được khai báo trong danh sách nguồn; runtime không áp dụng allowlist domain thứ hai.
-- Backend dùng `offers.price`, `tours.price_type` và currency trong catalog để đánh giá ngân sách. Metadata quote không xác minh lại, không ghi đè các trường này và không làm giá thành untrusted.
+- Backend dùng `offers.price`, `offers.price_type` và currency trong catalog để đánh giá ngân sách. `tours.price_type` chỉ là tham chiếu cấp tour, không được kế thừa cho offer. Metadata quote không thay thế các trường chuẩn.
 - `observed_at` được giữ làm bằng chứng thời điểm ghi nhận; tuổi giá không chặn pass/fail ngân sách.
 - Fixture là explicit cho dev/test; lỗi Supabase không fallback fixture.
 
 ## Freshness và giá
 
 - Freshness TTL chỉ áp dụng cho ngày khởi hành; không áp dụng TTL giá trong quyết định ngân sách.
-- `price_type=fixed` được so trực tiếp với ngân sách. `price_type=from` luôn là lower bound: vượt trần thì fail, không vượt trần thì unknown. Giá `contact` hoặc thiếu giá là unknown.
+- `offers.price_type=fixed` được so trực tiếp với ngân sách. `from` luôn là lower bound: vượt trần thì fail, không vượt trần thì unknown. Giá `contact`, `unknown` hoặc thiếu basis là unknown.
 - Metadata `offers.field_meta.pricing` là tùy chọn và chỉ bổ sung thông tin; không cần khớp raw columns để backend dùng giá catalog. Không suy giá cuối cùng từ giá `from`.
 - Ngày khởi hành stale vẫn là unknown cho điều kiện ngày; thiếu giá vẫn là unknown cho điều kiện ngân sách.
 

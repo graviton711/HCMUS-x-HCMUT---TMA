@@ -82,7 +82,7 @@ Offer    { fields }
 | `duration_nights` | int | | |
 | `price` | int | * | giá tham chiếu thấp nhất đã quan sát; bỏ separator nghìn; đơn vị theo `currency` |
 | `currency` | str | * | ISO 4217; `đ`, `VNĐ` → `VND` |
-| `price_type` | enum | | `fixed` \| `from` \| `contact` |
+| `price_type` | enum | | Tour-level reference only: `fixed` \| `from` \| `contact`; must not override offer-level basis. |
 | `departure_pattern` | str | | "hàng tuần", "theo yêu cầu" khi không có ngày cụ thể |
 | `offers` | list[Offer] | | lượt khởi hành theo ngày (nếu có) |
 
@@ -105,11 +105,11 @@ Plain text thuần túy cho cả 6 field: sạch thẻ HTML, giải mã entities
 |---|---|---|---|
 | `departure_date` | date | * | ISO 8601; không gọi `valid_from` là ngày khởi hành nếu nguồn không nói rõ |
 | `price` | int | * | giá người lớn/combo của đúng ngày này; `from` → chấm `unknown`, không loại không tin |
-| `price_type` | enum | | `fixed` \| `from` \| `contact` |
+| `price_type` | enum | * | Basis for this exact departure: `fixed` \| `from` \| `contact` \| `unknown`. Never inherit silently from Tour. |
 | `availability` | enum | | `available` \| `sold_out` \| `unknown` |
 | `supplements` | text | | phụ thu nguyên văn của lượt này |
 | `tour_code` | str | | mã đặt chỗ; hiển thị xem trực tiếp bằng `url` |
-| `price_by_age` | dict | | `{adult, child, small_child, infant}` int/null; dải tuổi theo `child_policy` của Tour |
+| `price_by_age` | dict | | `{adult, child, small_child, infant}` int/null; preserve in runtime snapshot; age ranges must cite `child_policy`. |
 | `single_supplement` | int | | phụ thu phòng đơn của lượt này |
 | `flights` | list[dict] | | `{flight_no, airline, dep_datetime, arr_datetime}` — không có với tour đường bộ |
 | `conditions` | text | | điều kiện riêng của lượt (nếu khác chính sách chung) |
@@ -119,7 +119,24 @@ Plain text thuần túy cho cả 6 field: sạch thẻ HTML, giải mã entities
 - Khi nguồn không công bố ngày cụ thể: ghi `departure_pattern` ở `Tour.fields` kèm `status: partial`, và `offers` để rỗng.
 - Field phụ nguồn không công bố thì bỏ hẳn khỏi dict, không ghi null đoán mò.
 
-`offers.field_meta.pricing` có thể bổ sung quote có cấu trúc nhưng không thay các trường chuẩn `offers.price`, `tours.price_type` và currency trong catalog. Backend dùng các trường chuẩn này trực tiếp, không kiểm tra lại host hoặc ràng buộc quote với raw columns. `from` luôn là lower bound; giá thấp hơn ngân sách không chứng minh giá cuối cùng nằm trong ngân sách. Không áp dụng TTL cho giá; `observed_at` vẫn được giữ làm bằng chứng. Freshness của ngày khởi hành tiếp tục được đánh giá theo policy backend.
+`offers.field_meta.pricing` có thể bổ sung quote có cấu trúc nhưng không thay các trường chuẩn `offers.price`, `offers.price_type` và currency trong catalog. `tours.price_type` chỉ là tham chiếu cấp tour. Backend dùng basis của offer, không kiểm tra lại host hoặc ràng buộc quote với raw columns. `from` luôn là lower bound; giá thấp hơn ngân sách không chứng minh giá cuối cùng nằm trong ngân sách. Không áp dụng TTL cho giá; `observed_at` vẫn được giữ làm bằng chứng. Freshness của ngày khởi hành tiếp tục được đánh giá theo policy backend.
+
+## Canonical decision metrics
+
+Every eligible tour/offer has a metric profile with per-metric value, unit/scale, state (`observed`, `partial`, `unknown`), source field, exact quote, observation time and method/version. Unknown is never coerced to zero or a pass.
+
+| Metric | Canonical measurement |
+|---|---|
+| `cost` | Offer price basis, currency, age prices, calculable group total, priced mandatory extras and separately listed unpriced costs. `exclusions` and `surcharges` are primary sources; an exclusion is not automatically a mandatory cost. |
+| `preference_fit` | Per-user soft condition on `0`, `0.5`, `1`, or `unknown`, with exact evidence. Unknown yields a score interval and separate evidence coverage. |
+| `experience_density` | Count of distinct explicitly listed itinerary activities/visits, total and per day. Count is not a quality claim. |
+| `route_complexity` | Published route legs and transport changes only when explicit route/itinerary facts support them; no inferred distance or travel duration. |
+| `included_coverage` | `transport`, `accommodation`, `meals`, `admission_or_activity`, `guide`, `insurance`; each is `included`, `partial`, `excluded`, or `unknown`. |
+| `cancellation_flexibility` | Free-cancellation cutoff and penalty/refund schedule by days before departure, only when explicitly stated and parseable. |
+| `family_suitability` | Child age eligibility, child prices/discounts and room/bed conditions; missing age composition stays unknown. |
+| `evidence_coverage` | Number of applicable metrics with observed evidence and source age; metadata, not desirability or calibrated confidence. |
+
+Standard objective views use one metric or a disclosed Pareto comparison: lowest exact cost (same currency), best user fit, most listed experiences, fewest published legs, most flexible cancellation, family fit, highest included coverage/lowest unpriced-cost exposure, and balanced Pareto. A view is omitted or marked unavailable when its metric cannot be compared. No universal quality score is computed.
 
 ## Required policy
 
@@ -135,4 +152,4 @@ Backend mới không còn endpoint compare theo URL. Contract request/response h
 
 ## Decision Brief (runtime contract)
 
-Trọng số không phải field catalog và không cần migration database. Trong requirement của một lượt quyết định, mỗi soft condition có `weight_percent` là số nguyên từ 0 đến 100; khi có soft condition, tổng phải bằng 100 trước khi chạy. Hard condition không có trọng số. Nếu người dùng sửa giá trị trong Decision Brief, requirement cập nhật `quote` và `raw_text` để trích dẫn vẫn khớp với bản đã review. Comparison có `decision_views` tùy chọn (`cheapest`, `best_fit`, `balanced`); model cũ mặc định danh sách này rỗng. Các view tham chiếu candidate bằng `tour_id`/`offer_id`, còn giá và evidence vẫn lấy từ snapshot chuẩn của catalog.
+Trọng số không phải field catalog và không cần migration database. Trong requirement của một lượt quyết định, mỗi soft condition có `weight_percent` là số nguyên từ 0 đến 100; khi có soft condition, tổng phải bằng 100 trước khi chạy. Hard condition không có trọng số. Nếu người dùng sửa giá trị trong Decision Brief, requirement cập nhật `quote` và `raw_text` để trích dẫn vẫn khớp với bản đã review. Comparison bổ sung `metric_profiles`, `decision_options` và `recommendation` tùy chọn, cùng các `decision_views`: `cheapest`, `best_fit`, `experience_rich`, `fewest_legs`, `cancellation_flexible`, `family_friendly`, `included_value`, `balanced`. Model cũ mặc định field mới về rỗng/None. View tham chiếu candidate bằng `tour_id`/`offer_id`; giá và evidence vẫn lấy từ snapshot chuẩn của catalog. Schema lưu offer cần migration cho basis giá và giá theo tuổi.

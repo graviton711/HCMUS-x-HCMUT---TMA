@@ -2,14 +2,14 @@
 
 ## Trách nhiệm
 
-Điều phối hội thoại, làm rõ nhu cầu, kiểm tra trước tính khả thi của hard condition đã biết, tạo requirement draft và đánh giá mức phù hợp của sở thích dựa trên evidence trong tour snapshot. Agent không quyết định hard eligibility hoặc tự tính ranking cuối.
+Điều phối hội thoại, làm rõ nhu cầu, kiểm tra trước tính khả thi của hard conditions, tạo requirement draft và trích structured facts/evidence từ các trường tour. Agent phân tích ngữ nghĩa; code kiểm chứng quote, chuẩn hóa giá trị, tính toán metric, eligibility và ranking cuối.
 
 ## Input/output
 
 - Chat: owner-scoped `agent_session_id` và message; có thể trả text, choices, progress, requirement draft hoặc comparison.
 - Decision run: requirement đã được người dùng review, gồm hard/soft conditions và `weight_percent` cho từng soft condition.
-- Tool evaluation: verdict `pass|fail|unknown`, quote evidence nguyên văn và reason gắn với candidate/condition.
-- Kết quả cuối: `ranked`, `near_miss`, `decision_views`, evidence và số candidate đã quét.
+- Tool evaluation: mức phù hợp `0|0.5|1|unknown` cho từng ưu tiên, quote khớp snapshot và structured facts cho itinerary, inclusions, exclusions, surcharges, cancellation, child policy.
+- Kết quả cuối: metric profiles, các decision options, `ranked`, `near_miss`, evidence và số candidate đã quét.
 
 ## Workflow
 
@@ -18,8 +18,8 @@
 3. Agent hỏi người dùng chọn trong các địa điểm có candidate rồi tạo hoặc cập nhật Decision Brief; chưa chạy comparison cho tới khi người dùng xác nhận.
 4. `POST /agent/sessions/{id}/decisions` validate lại requirement và tổng trọng số 100.
 5. `query_tours` nhận `decision_run_id` do backend cấp, áp hard filter lên catalog scan và mở context chứa toàn bộ hard-pass candidates.
-6. Agent gọi `score_soft` theo batch tới khi mọi candidate/soft condition trong context được đánh giá. Quote phải có trong snapshot; verdict chưa rõ là `unknown`.
-7. Backend engine tính weighted view, cheapest view và Pareto view; MCP ghi Comparison cuối vào runtime store theo `decision_run_id`.
+6. Agent trích metric facts theo field và đánh giá từng soft condition cho mọi candidate trong context. Quote phải xuất hiện nguyên văn trong đúng snapshot field. Nội dung dài được chia theo field/chunk; không gộp thành một payload ngắn bị cắt.
+7. Backend xác thực quote, chuẩn hóa facts và tính metric vector: cost (gồm exclusions), preference fit, experience density, route complexity, inclusion coverage, cancellation flexibility, family suitability và evidence coverage. Engine tạo các objective views/Pareto; MCP lưu Comparison cuối theo `decision_run_id`.
 8. Sau khi OpenCode dừng, service lấy Comparison theo mã lượt, kiểm tra khớp requirement, lưu owner-scoped rồi stream kết quả. Không dựa vào model lặp lại JSON kết quả trong output.
 9. SSE có progress/tool events an toàn, gắn mô tả cụ thể cho từng thao tác nghiệp vụ đã hỗ trợ. Trước khi lập nhãn, service chuẩn hóa MCP tool ID theo tên nghiệp vụ; OpenCode ghép tool ID từ tên server đã sanitize và tên tool. Trạng thái lỗi áp dụng cho từng lần gọi tool; lượt chat có thể hoàn tất nếu agent sửa lỗi và gọi lại thành công. Không đặt deadline tổng cho agent; client disconnect sẽ hủy process. Giữ timeout riêng của tool/data call.
 
@@ -30,10 +30,11 @@
 ## Quyết định kỹ thuật
 
 - Mỗi chat gắn một OpenCode session owner-scoped; ID OpenCode không lộ client.
-- Agent đánh giá semantic fit; engine kiểm tra hard rules, evidence, trọng số và kết quả xếp hạng. Mọi đề xuất trước brief đều lấy từ candidate thực qua hard filter; địa danh được đối chiếu với nhãn catalog thay vì danh sách alias viết cứng.
+- Agent chỉ đề xuất địa điểm sau preflight hard filter. Semantic extraction/fit luôn có quote từ field gốc; backend kiểm tra quote, tính toán số liệu và xếp hạng.
 - Không gửi toàn bộ candidate evidence vào một prompt; dùng batch tuần tự trong evaluation context.
 - `candidates_considered` là số tour đã quét, không phải tổng catalog.
-- Mục tiêu đầu ra là ít nhất ba phương án khác nhau có dữ liệu, theo các mục tiêu phù hợp với yêu cầu và field catalog hiện có. Chỉ dùng candidate qua hard filter; nếu catalog có dưới ba candidate, báo đúng số hiện có thay vì nới điều kiện hoặc tự sinh tour.
+- Mục tiêu đầu ra là ít nhất ba tour khác nhau qua hard filter khi dữ liệu hỗ trợ. Nếu không đủ, báo số thực có và kịch bản nới điều kiện chờ người dùng duyệt.
+- Exclusions được phân loại bắt buộc/tùy chọn/có điều kiện; chỉ cộng chi phí khi có amount, unit và applicability rõ. Lợi ích thêm được nêu kèm quote, không quy thành tiền.
 - Không lưu hoặc hiển thị private reasoning. Tiến độ chỉ mô tả thao tác tool thực tế; không dùng nhãn tra cứu chung cho bước tạo Decision Brief. Lỗi của một lần gọi tool không đồng nghĩa lượt agent thất bại nếu có kết quả cuối hợp lệ.
 
 ## OpenCode event adapter

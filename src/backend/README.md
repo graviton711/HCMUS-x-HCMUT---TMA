@@ -1,12 +1,12 @@
 # backend — travel agent + pipeline nghiệp vụ
 
-Luồng hội thoại: user → OpenCode agent → MCP tools → validate → catalog/hard filter → soft verdict → kết quả có evidence.
+Luồng hội thoại: user → OpenCode agent → MCP tools → validate → catalog/hard filter → structured facts có quote → metric vectors và lựa chọn đa mục tiêu có giải thích.
 
 - [`data`](data/README.md): guest sessions, owner-scoped SQLite records/history + đọc catalog.
 - [`input`](input/README.md): validate điều kiện có cấu trúc; không parse text tự do.
-- [`normalize`](normalize/README.md): ánh xạ rows catalog thành snapshot; freshness chỉ dùng cho ngày khởi hành.
-- [`decide`](decide/README.md): lọc → chấm → rank → phân tích.
-- `workflows.py`: đọc catalog, chuẩn hóa snapshot và chạy hard-filter/comparison.
+- [`normalize`](normalize/README.md): ánh xạ rows catalog thành snapshot, giữ basis/giá tuổi từng offer và source fields.
+- [`decide`](decide/README.md): hard filter → metric vectors → objective views/Pareto → lựa chọn.
+- `workflows.py`: đọc catalog, chuẩn hóa snapshot, điều phối enrichment/cache qua `data` và chạy comparison.
 - [`agent`](agent/README.md): owner-scoped OpenCode session, MCP tools, JSON response và SSE tiến độ tool.
 - `opencode_cli.py`: lệnh `tour-opencode serve`, nạp `.env` và khởi chạy OpenCode server local.
 - `opencode_binary.py`: phân giải OpenCode CLI dùng chung cho server launcher và agent runner, gồm npm shim trên Windows.

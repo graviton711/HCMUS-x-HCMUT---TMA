@@ -1,27 +1,42 @@
-# TourLens — hỗ trợ quyết định chọn tour
+# TourLens — không gian hỗ trợ quyết định chọn tour
 
-**Định vị:** Không gian quyết định cho người Việt chọn tour. Chat giúp diễn đạt và làm rõ nhu cầu; việc review điều kiện, xem đánh đổi và chọn phương án diễn ra trong decision workspace.
+TourLens giúp người Việt chọn tour đóng gói bằng cách làm rõ yêu cầu, lọc lựa chọn thật trong catalog, lượng hóa các đánh đổi và để người dùng quyết định cuối cùng. Chat thu thập nhu cầu; Decision Workspace trình bày các lựa chọn và bằng chứng.
 
-## Luồng chính
+## Luồng quyết định
 
-1. Người dùng mô tả điểm đến, ngày đi, ngân sách, nhóm đi và sở thích trong chat.
-2. Agent tạo requirement draft gồm điều kiện cứng, sở thích mềm và phần còn thiếu. Draft chưa truy vấn tour.
-3. Người dùng review/sửa điều kiện và phân bổ đúng 100 điểm giữa các sở thích mềm; có thể chia đều.
-4. Khi xác nhận, hệ thống quét catalog trong giới hạn cấu hình, áp hard filter rồi agent đánh giá từng sở thích trên mọi ứng viên hard-pass theo batch, kèm evidence.
-5. Decision workspace trình bày ba góc nhìn có thể đối chiếu: giá thấp nhất, hợp ưu tiên nhất và tập phương án Pareto cân bằng. Người dùng xem bằng chứng/đánh đổi rồi tự quyết định.
+1. Trích điều kiện bắt buộc và sở thích; preflight catalog theo hard conditions trước khi gợi ý địa điểm.
+2. Người dùng review brief và trọng số các sở thích mềm.
+3. Engine áp hard filter, phân tích metric chuẩn cho từng offer còn lại, rồi tạo ít nhất ba lựa chọn tour khác nhau nếu dữ liệu hỗ trợ.
+4. Workspace cho so sánh giá, trải nghiệm, tuyến đi, độ bao gồm, chi phí bị loại trừ, rủi ro và điều kiện gia đình. Mỗi kết luận có evidence, trạng thái dữ liệu và thời điểm quan sát.
+5. Người dùng đổi điều kiện/trọng số để chạy what-if. Nếu không đủ ba tour đạt điều kiện, hệ thống đưa kịch bản nới điều kiện riêng và chờ người dùng chọn.
 
-## Quy tắc quyết định
+## Không gian metric chuẩn
 
-- Hard conditions là cổng đủ điều kiện; thay đổi trọng số mềm không làm đổi eligibility.
-- Giá thấp nhất chỉ so sánh giá exact cùng currency. Giá `from`, `contact` hoặc thiếu giá không được xem là giá thấp nhất.
-- Mức khớp ưu tiên là tổng `weight_percent` của các sở thích có verdict `pass`; `fail` và `unknown` không được cộng điểm. `unknown` vẫn được trình bày riêng.
-- Cân bằng là Pareto frontier giữa giá exact thấp và mức khớp ưu tiên cao; không ép thành một điểm tổng hợp hay quán quân duy nhất.
-- Kết quả nêu số tour đã quét trong phạm vi cấu hình, không suy ra tổng kích thước catalog. Mọi kết luận giữ evidence từ snapshot catalog.
-- Điểm khớp là phép xếp hạng minh bạch theo verdict và trọng số người dùng, không phải xác suất hay điểm tin cậy đã hiệu chuẩn.
-- Không quy đổi currency để tuyên bố tour rẻ nhất toàn cục. Tour thiếu giá exact vẫn có thể xuất hiện ở góc nhìn mức khớp, nhưng giá được ghi là chưa so sánh được.
+Mọi tour được mô tả theo cùng các trục, không gộp thành một điểm chất lượng duy nhất:
+
+- **Chi phí:** giá exact/from/contact; tổng tính được cho nhóm; khoản cộng thêm đã định giá; và khoản chưa định giá. Đọc `exclusions` và `surcharges` để phát hiện khoản bắt buộc, tùy chọn hoặc có điều kiện. Không phải mọi exclusion đều là chi phí cần cộng.
+- **Khớp ưu tiên:** điểm từng soft condition theo trọng số đã duyệt; thiếu bằng chứng tạo khoảng điểm và giảm độ phủ, không tự thành đạt/trượt.
+- **Trải nghiệm:** số hoạt động/điểm tham quan được nêu rõ, tổng và trên mỗi ngày.
+- **Độ phức tạp tuyến:** số chặng và lần đổi phương tiện chỉ khi route/lịch trình nêu rõ.
+- **Độ bao gồm:** phương tiện, lưu trú, bữa ăn, vé/hoạt động, hướng dẫn viên và bảo hiểm; mỗi mục là gồm đủ/một phần/không gồm/chưa rõ.
+- **Linh hoạt hủy:** hạn miễn phí và mức phạt theo mốc ngày nếu điều khoản cho phép tính.
+- **Phù hợp gia đình:** giới hạn tuổi, giá theo tuổi, giường/phòng và điều kiện trẻ em.
+- **Độ phủ dữ kiện:** số metric có evidence và độ mới nguồn; đây là thông tin chất lượng dữ liệu, không phải điểm tour hay xác suất tin cậy.
+
+Góc nhìn có thể tối ưu các metric này: rẻ nhất, hợp ưu tiên, nhiều trải nghiệm, ít chặng, linh hoạt hủy, phù hợp gia đình, độ bao gồm cao/ít chi phí chưa rõ và Pareto cân bằng. Chỉ tạo góc nhìn khi metric có dữ liệu so sánh được; không suy diễn từ văn bản thiếu căn cứ.
+
+## Nguyên tắc
+
+- Hard conditions quyết định eligibility; metric mềm không được nới hard condition.
+- Thứ hạng và mọi phép tính phải tái lập được từ dữ kiện, công thức và evidence đã lưu.
+- Chỉ cộng khoản chi phí khi có số tiền/đơn vị và điều kiện áp dụng rõ; khoản loại trừ chưa định giá vẫn hiện riêng.
+- Giá khác currency không so trực tiếp; `from` là lower bound, không phải tổng tour.
+- Dữ kiện nhà cung cấp là provider-claimed; stale/unknown/mâu thuẫn phải hiện rõ.
+- Tối thiểu ba lựa chọn phải là ba tour thật khác nhau. Thiếu thì trình bày số thực có và what-if minh bạch.
+- Không tự quyết thay người dùng; đề xuất một lựa chọn chỉ khi metric và evidence phân biệt đủ rõ.
 
 ## Phạm vi
 
-Trong demo, agent diễn giải yêu cầu và evidence; backend kiểm tra điều kiện, áp hard filter và tính các góc nhìn. Database là nguồn dữ liệu có thẩm quyền. Không làm booking, ingest mới, tích hợp production, điểm tin cậy, dashboard độ phủ hay chỉ số di chuyển khi catalog chưa có dữ liệu cần thiết.
+Chọn tour đóng gói có sẵn. Không booking, tự tạo tour, ước lượng xác suất rủi ro, quy tiền quyền lợi không có giá nguồn, hay suy thời gian/quãng đường từ tên địa điểm.
 
-Tài liệu kiến trúc: [system-architecture](system-architecture.md). API: [backend-contract](backend-contract.md). Giao diện: [ui-design-brief](ui-design-brief.md).
+Định hướng theo `docs/TMA.md`: quyết định có thể dùng trong thực tế, khác chatbot/tìm kiếm, dùng dữ liệu/AI có giải thích và nêu giới hạn.
