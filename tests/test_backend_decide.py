@@ -506,3 +506,12 @@ def test_family_suitability_unknown_without_child_groups(decide_cfg):
         metric = profile.metrics["family_suitability"]
         assert metric.state == "unknown"
         assert metric.value is None
+
+
+def test_assumptions_cover_party_costs_and_snapshot(decide_cfg):
+    comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    text = " ".join(comparison.assumptions)
+    assert "3 khách" in text or "1 khách" in text
+    assert "Giá công bố" in text
+    assert "snapshot" in text
+    assert comparison.assumptions

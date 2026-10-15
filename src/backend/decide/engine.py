@@ -558,6 +558,33 @@ _HARD_FIELD_VI = {
 }
 
 
+def _assumptions(
+    req: Requirement, tours: list[TourSnapshot], profiles: list[MetricProfile]
+) -> list[str]:
+    """Assumptions the comparison rests on, each grounded in real counts."""
+    notes = []
+    mix = req.traveler_mix
+    if mix and sum(mix.values()) == req.travelers:
+        parts = ", ".join(f"{count} {group}" for group, count in sorted(mix.items()) if count > 0)
+        notes.append(f"Tính cho {req.travelers} khách ({parts}).")
+    else:
+        notes.append(f"Tính cho {req.travelers} khách; chưa có cơ cấu tuổi nên chỉ dùng giá niêm yết.")
+    unpriced = sum(len(profile.cost.unpriced_exclusions) for profile in profiles)
+    conditional = sum(
+        1 for profile in profiles for item in profile.cost.optional_or_conditional
+        if item.obligation == "conditional"
+    )
+    if unpriced:
+        notes.append(f"{unpriced} khoản loại trừ chưa niêm yết giá, chưa cộng vào tổng nào.")
+    if conditional:
+        notes.append(f"{conditional} khoản có điều kiện chưa cộng vào tổng.")
+    notes.append("Giá công bố dùng để lọc và so sánh, không phải tổng cuối cùng phải trả.")
+    notes.append("Ngày khởi hành so trực tiếp với yêu cầu; snapshot khóa ngày crawl, không xác nhận còn chỗ.")
+    if any(offer.single_supplement is not None for tour in tours for offer in tour.offers):
+        notes.append("Phụ thu phòng đơn chưa cộng vì chưa rõ số phòng.")
+    return notes
+
+
 def _option_tradeoff_sentence(
     req: Requirement,
     profile: MetricProfile,
@@ -1195,4 +1222,5 @@ def compare(
         metric_profiles=profiles,
         near_miss_profiles=near_profiles,
         decision_options=options,
+        assumptions=_assumptions(req, tours, profiles),
     )

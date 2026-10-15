@@ -416,6 +416,7 @@ class Comparison(BaseModel):
     metric_profiles: list[MetricProfile] = Field(default_factory=list)
     near_miss_profiles: list[MetricProfile] = Field(default_factory=list)
     decision_options: list[DecisionOption] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
 
 
 class TourRow(BaseModel):
