@@ -34,7 +34,7 @@ pnpm.cmd --dir src/frontend install
 corepack pnpm --dir src/frontend dev:all
 ```
 
-Ba service (backend `8000` + opencode `4098` + web `5173`) chạy chung một terminal với log gắn màu riêng; `Ctrl+C` một lần dừng cả ba. Chạy lẻ từng service khi cần debug riêng: `uv run tour-opencode serve`, `uv run tour-backend serve --reload`, `uv run tour-frontend dev`.
+Ba service (backend `8000` + opencode (cổng theo `OPENCODE_SERVER_URL` trong `.env`) + web `5173`) chạy chung một terminal với log gắn màu riêng; `Ctrl+C` một lần dừng cả ba. Chạy lẻ từng service khi cần debug riêng: `uv run tour-opencode serve`, `uv run tour-backend serve --reload`, `uv run tour-frontend dev`.
 
 Mặc định local dùng SQLite cho runtime store. Catalog luôn là Supabase chỉ-đọc qua `SUPABASE_TOUR_DB_URL`; thiếu URL thì backend báo `CATALOG_NOT_CONFIGURED`, không có fallback offline. Tests dùng rows inline trong `tests/sample_rows.py`, không đọc file fixture.
 

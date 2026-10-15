@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config config/vite.config.ts --host 127.0.0.1",
-    "dev:all": "concurrently --names backend,opencode,web --prefix-colors magenta,cyan,green \"uv run tour-backend serve --reload\" \"opencode serve --hostname 127.0.0.1 --port 4098\" \"corepack pnpm dev\"",
+    "dev:all": "concurrently --names backend,opencode,web --prefix-colors magenta,cyan,green \"uv run tour-backend serve --reload\" \"uv run tour-opencode serve\" \"corepack pnpm dev\"",
     "build": "tsc -b config/tsconfig.json && vite build --config config/vite.config.ts",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run --config config/vite.config.ts",
