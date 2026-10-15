@@ -21,6 +21,7 @@ _OPENCODE_ID = re.compile(r"^ses_[A-Za-z0-9_-]{8,120}$")
 _MCP_TOOL_NAMES = (
     "draft_requirement",
     "catalog_facets",
+    "discover_destinations",
     "query_tours",
     "tour_detail",
     "score_soft",
@@ -418,6 +419,8 @@ def _tool_progress_message(name: str, value: dict[str, Any]) -> str:
         return f"Chuẩn bị lựa chọn: {question}" if question else "Chuẩn bị câu hỏi lựa chọn"
     if name == "catalog_facets":
         return "Kiểm tra điểm đến, giá và ngày khởi hành trong dữ liệu"
+    if name == "discover_destinations":
+        return "Lọc điểm đến theo các điều kiện đã biết"
     if name == "draft_requirement":
         return "Chuẩn bị bản điều kiện để bạn xem"
     if name == "query_tours":

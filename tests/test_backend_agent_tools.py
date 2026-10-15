@@ -82,15 +82,75 @@ def test_query_tours_mcp_schema_requires_complete_condition_contract(settings):
     assert condition["additionalProperties"] is False
     assert "decision_run_id" in schema["required"]
     assert "relax_criterion" not in {tool.name for tool in tools}
+    assert "discover_destinations" in {tool.name for tool in tools}
 
 
 def test_catalog_facets_only_returns_values_from_active_fixture(settings):
     result = json.loads(_tools(settings).catalog_facets())
     assert result["destinations"] == ["Hạ Long", "Phú Quốc", "Đà Lạt"]
+    assert result["departure_cities"] == ["Hà Nội", "Sài Gòn"]
     assert "2026-12-26" in result["departure_dates"]
     assert 12_900_000 in result["prices_vnd"]
     assert result["scanned_tours"] == 3
     assert result["scan_limit"] == settings.supabase_scan_limit
+
+
+def test_discover_destinations_returns_only_hard_matching_catalog_options(settings):
+    result = json.loads(_tools(settings).discover_destinations(
+        raw_text="Đi từ Sài Gòn 3 ngày",
+        travelers=5,
+        conditions=[
+            {
+                "id": "h1", "field": "departure_city", "operator": "contains",
+                "value": "Sài Gòn", "strength": "hard", "quote": "Sài Gòn",
+            },
+            {
+                "id": "h2", "field": "duration_days", "operator": "eq",
+                "value": 3, "strength": "hard", "quote": "3 ngày",
+            },
+        ],
+    ))
+
+    assert result["status"] == "matching_options_found"
+    assert result["matching_tour_count"] == 1
+    assert [item["destination"] for item in result["matching_destinations"]] == ["Đà Lạt"]
+    assert result["matching_destinations"][0]["examples"][0]["tour_name"] == "Đà Lạt 3 ngày 2 đêm"
+    assert result["party_size_checked"] is False
+
+
+def test_discovery_returns_live_location_labels_for_agent_resolution(settings):
+    result = json.loads(_tools(settings).discover_destinations(
+        raw_text="Khởi hành từ TP.HCM",
+        travelers=1,
+        conditions=[{
+            "id": "h1", "field": "departure_city", "operator": "contains",
+            "value": "TP.HCM", "strength": "hard", "quote": "TP.HCM",
+        }],
+    ))
+
+    assert result["status"] == "resolve_catalog_labels"
+    assert result["unresolved"] == [{"field": "departure_city", "values": ["TP.HCM"]}]
+    assert result["available_departure_cities"] == ["Hà Nội", "Sài Gòn"]
+
+
+def test_discovery_accepts_multiple_observed_departure_labels(settings):
+    result = json.loads(_tools(settings).discover_destinations(
+        raw_text="Đi từ Sài Gòn hoặc Hà Nội tour 3 ngày",
+        conditions=[
+            {
+                "id": "h1", "field": "departure_city", "operator": "any",
+                "value": ["Sài Gòn", "Hà Nội"], "strength": "hard",
+                "quote": "Sài Gòn hoặc Hà Nội",
+            },
+            {
+                "id": "h2", "field": "duration_days", "operator": "eq",
+                "value": 3, "strength": "hard", "quote": "3 ngày",
+            },
+        ],
+    ))
+
+    assert result["matching_tour_count"] == 2
+    assert {item["destination"] for item in result["matching_destinations"]} == {"Đà Lạt", "Hạ Long"}
 
 
 def test_ask_choice_restores_catalog_destination_spelling(settings):

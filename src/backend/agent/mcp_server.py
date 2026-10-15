@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from backend.agent.results import limit_comparison
 from backend.data.catalog import for_settings
 from backend.data.sessions import BaseStore, SessionStore
-from backend.decide.engine import compare, soft_review_candidates
+from backend.decide.engine import compare, eval_hard, soft_review_candidates
 from backend.error_logging import log_app_error, log_unexpected_error
 from backend.errors import AppError
 from backend.input.lunar import resolve_lunar
@@ -154,6 +154,7 @@ class AgentTools:
     def catalog_facets(self) -> str:
         tours = self.workflows.snapshots(self.settings.supabase_scan_limit)
         destinations = sorted({value for tour in tours for value in tour.destinations})
+        departure_cities = sorted({tour.departure_city for tour in tours if tour.departure_city})
         prices = sorted({
             offer.price for tour in tours for offer in tour.offers
             if offer.price is not None and offer.currency == "VND"
@@ -164,10 +165,183 @@ class AgentTools:
         })
         return _json({
             "destinations": destinations,
+            "departure_cities": departure_cities,
             "prices_vnd": prices,
             "departure_dates": dates,
             "scanned_tours": len(tours),
             "scan_limit": self.settings.supabase_scan_limit,
+        })
+
+    def discover_destinations(
+        self,
+        raw_text: str,
+        conditions: list[QueryConditionInput],
+        travelers: int = 1,
+    ) -> str:
+        """Preview catalog locations that satisfy all known hard conditions.
+
+        This read-only feasibility scan is used before the user reviews a brief.
+        It never ranks soft preferences or creates a comparison.
+        """
+        structured_conditions = [
+            item.model_dump(mode="json")
+            if isinstance(item, QueryConditionInput)
+            else QueryConditionInput.model_validate(item).model_dump(mode="json")
+            for item in conditions
+        ]
+        if not structured_conditions:
+            raise AppError(
+                "DISCOVERY_CONSTRAINTS_REQUIRED",
+                "Provide at least one known hard condition for the feasibility scan.",
+                422,
+            )
+        if any(item["strength"] != "hard" for item in structured_conditions):
+            raise AppError(
+                "DISCOVERY_HARD_CONDITIONS_ONLY",
+                "Feasibility preview accepts hard conditions only.",
+                422,
+            )
+
+        requirement = self.workflows.requirement(
+            raw_text, structured_conditions, travelers=travelers
+        )
+        tours = self.workflows.snapshots(self.settings.supabase_scan_limit)
+        catalog_destinations = sorted({dest for tour in tours for dest in tour.destinations})
+        catalog_departures = sorted({tour.departure_city for tour in tours if tour.departure_city})
+
+        unresolved = _unresolved_location_labels(
+            requirement.hard(), catalog_destinations, catalog_departures
+        )
+        if unresolved:
+            return _json({
+                "status": "resolve_catalog_labels",
+                "unresolved": unresolved,
+                "available_destinations": catalog_destinations,
+                "available_departure_cities": catalog_departures,
+                "scanned_tours": len(tours),
+                "scan_limit": self.settings.supabase_scan_limit,
+            })
+
+        destinations: dict[str, dict[str, Any]] = {}
+        passing_tour_ids: set[str] = set()
+        condition_counts: dict[str, dict[str, int]] = {
+            condition.id: {"pass": 0, "fail": 0, "unknown": 0}
+            for condition in requirement.hard()
+        }
+        near_matches: list[tuple[int, int, int, str, dict[str, Any]]] = []
+
+        for tour in tours:
+            tour_best: dict[str, Any] | None = None
+            tour_passed = False
+            for offer in tour.offers:
+                evaluations = [
+                    (condition, *eval_hard(condition, tour, offer))
+                    for condition in requirement.hard()
+                ]
+                for condition, state, _reason in evaluations:
+                    condition_counts[condition.id][state] += 1
+                pass_count = sum(state == "pass" for _, state, _ in evaluations)
+                fail_count = sum(state == "fail" for _, state, _ in evaluations)
+                unknown_count = sum(state == "unknown" for _, state, _ in evaluations)
+                example = {
+                    "tour_id": tour.id,
+                    "tour_name": tour.name,
+                    "destinations": tour.destinations,
+                    "departure_city": tour.departure_city,
+                    "departure_date": offer.departure_date,
+                    "duration_days": tour.duration_days,
+                    "price": offer.price,
+                    "currency": offer.currency,
+                    "price_basis": offer.price_basis,
+                    "availability": offer.availability,
+                    "url": tour.url,
+                }
+                if pass_count == len(evaluations):
+                    tour_passed = True
+                    if tour_best is None or _preflight_offer_key(example) < _preflight_offer_key(tour_best):
+                        tour_best = example
+                else:
+                    near_matches.append((pass_count, -fail_count, -unknown_count, tour.id, {
+                        **example,
+                        "conditions": [
+                            {
+                                "field": condition.field,
+                                "state": state,
+                                "reason_code": reason,
+                            }
+                            for condition, state, reason in evaluations
+                            if state != "pass"
+                        ],
+                    }))
+            if not tour_passed or tour_best is None:
+                continue
+            passing_tour_ids.add(tour.id)
+            requested_destinations = [
+                str(value)
+                for condition in requirement.hard()
+                if condition.field == "destination"
+                for value in (condition.value if isinstance(condition.value, list) else [condition.value])
+            ]
+            tour_destinations = (
+                [
+                    item for item in tour.destinations
+                    if any(_fold_catalog_label(item) == _fold_catalog_label(value)
+                           for value in requested_destinations)
+                ]
+                if requested_destinations
+                else tour.destinations
+            )
+            for destination in tour_destinations:
+                group = destinations.setdefault(destination, {"tour_ids": set(), "examples": []})
+                group["tour_ids"].add(tour.id)
+                if all(example["tour_id"] != tour.id for example in group["examples"]):
+                    group["examples"].append(tour_best)
+
+        feasible_destinations = []
+        for destination, group in destinations.items():
+            all_examples = sorted(group["examples"], key=_preflight_offer_key)
+            exact_by_currency: dict[str, int] = {}
+            for example in all_examples:
+                if example["price"] is None or example["price_basis"] != "exact":
+                    continue
+                currency = str(example["currency"]).upper()
+                if currency:
+                    exact_by_currency[currency] = min(
+                        exact_by_currency.get(currency, example["price"]),
+                        example["price"],
+                    )
+            feasible_destinations.append({
+                "destination": destination,
+                "tour_count": len(group["tour_ids"]),
+                "lowest_exact_prices": [
+                    {"amount": amount, "currency": currency}
+                    for currency, amount in sorted(exact_by_currency.items())
+                ],
+                "examples": all_examples[:3],
+            })
+        feasible_destinations.sort(key=lambda item: (
+            -item["tour_count"],
+            item["lowest_exact_prices"][0]["amount"] if item["lowest_exact_prices"] else 10**18,
+            item["destination"].casefold(),
+        ))
+        near_matches.sort(key=lambda row: (-row[0], -row[1], -row[2], row[3]))
+        diagnostics = [
+            {
+                "id": condition.id,
+                "field": condition.field,
+                **condition_counts[condition.id],
+            }
+            for condition in requirement.hard()
+        ]
+        return _json({
+            "status": "matching_options_found" if feasible_destinations else "no_verified_options",
+            "scanned_tours": len(tours),
+            "scan_limit": self.settings.supabase_scan_limit,
+            "matching_tour_count": len(passing_tour_ids),
+            "party_size_checked": False,
+            "matching_destinations": feasible_destinations[:12],
+            "condition_diagnostics": diagnostics,
+            "near_matches": [row[4] for row in near_matches[:5]],
         })
 
     def query_tours(
@@ -464,6 +638,46 @@ def _fold_catalog_text(value: str) -> str:
     return re.sub(r"\s+", " ", "".join(char for char in folded if not unicodedata.combining(char)))
 
 
+def _fold_catalog_label(value: str) -> str:
+    """Compare casing, accents and punctuation without guessing geographic aliases."""
+    return re.sub(r"[^a-z0-9]", "", _fold_catalog_text(value))
+
+
+def _unresolved_location_labels(
+    conditions: list[Any], destinations: list[str], departure_cities: list[str]
+) -> list[dict[str, Any]]:
+    available = {
+        "destination": {_fold_catalog_label(value) for value in destinations},
+        "departure_city": {_fold_catalog_label(value) for value in departure_cities},
+    }
+    unresolved: list[dict[str, Any]] = []
+    for condition in conditions:
+        if condition.field not in available:
+            continue
+        values = condition.value if isinstance(condition.value, list) else [condition.value]
+        missing = [
+            str(value)
+            for value in values
+            if not isinstance(value, str)
+            or _fold_catalog_label(value) not in available[condition.field]
+        ]
+        if missing:
+            unresolved.append({"field": condition.field, "values": missing})
+    return unresolved
+
+
+def _preflight_offer_key(value: dict[str, Any]) -> tuple[Any, ...]:
+    exact = value.get("price_basis") == "exact" and isinstance(value.get("price"), int)
+    return (
+        0 if exact else 1,
+        str(value.get("currency", "")).upper(),
+        value["price"] if exact else 10**18,
+        str(value.get("departure_date", "")),
+        str(value.get("tour_name", "")).casefold(),
+        str(value.get("tour_id", "")),
+    )
+
+
 def create_server(settings: Settings | None = None) -> FastMCP:
     settings = settings or Settings.load()
     catalog = for_settings(settings)
@@ -473,6 +687,7 @@ def create_server(settings: Settings | None = None) -> FastMCP:
 
     server.tool()(_guard_tool("ask_choice", tools.ask_choice))
     server.tool()(_guard_tool("catalog_facets", tools.catalog_facets))
+    server.tool()(_guard_tool("discover_destinations", tools.discover_destinations))
     server.tool()(_guard_tool("draft_requirement", tools.draft_requirement))
     server.tool()(_guard_tool("query_tours", tools.query_tours))
     server.tool()(_guard_tool("tour_detail", tools.tour_detail))

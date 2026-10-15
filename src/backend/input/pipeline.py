@@ -180,9 +180,16 @@ def _validate_hard(condition: Condition) -> None:
             raise _invalid("Use a single destination with the contains operator.")
         return
     if field == "departure_city":
-        if operator != "contains" or not isinstance(value, str) or not value.strip():
-            raise _invalid("Departure city must be non-empty text.")
-        return
+        if operator == "contains" and isinstance(value, str) and value.strip():
+            return
+        if (
+            operator == "any"
+            and isinstance(value, list)
+            and len(value) >= 2
+            and all(isinstance(part, str) and part.strip() for part in value)
+        ):
+            return
+        raise _invalid("Departure city must be text or multiple catalog labels.")
     if field == "transport":
         if operator != "eq" or not isinstance(value, str) or value not in _TRANSPORTS:
             raise _invalid("Transport must use a supported transport value.")

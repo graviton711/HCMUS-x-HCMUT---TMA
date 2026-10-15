@@ -73,7 +73,7 @@ Offer    { fields }
 | Field | Kiểu | Bắt buộc | Ghi chú |
 |---|---|---|---|
 | `tour_name` | str | * | |
-| `departure_city` | str | * | một giá trị, điểm khởi hành |
+| `departure_city` | str | * | một giá trị, điểm khởi hành; condition có thể dùng operator `any` với nhiều nhãn thực trong catalog |
 | `destinations` | list[str] | * | Mỗi phần tử là một địa điểm Title Case (`["Mộc Châu", "Sơn La"]`), không viết tắt, xác nhận bằng taxonomy/structured data của nguồn, dùng để lọc |
 | `route` | list[str] | | điểm dừng theo thứ tự, gồm transit, bỏ slogan (không dùng string gộp) |
 | `transport` | enum | | `flight` \| `bus` \| `train` \| `cruise` \| `mixed` |

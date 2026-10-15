@@ -14,6 +14,7 @@ import styles from './chat.module.css';
 const TOOL_LABEL: Record<string, [string, string]> = {
   ask_choice: ['Làm rõ lựa chọn', 'Clarify a choice'],
   catalog_facets: ['Kiểm tra lựa chọn có trong dữ liệu', 'Check catalog options'],
+  discover_destinations: ['Lọc điểm đến theo điều kiện', 'Filter destinations by criteria'],
   draft_requirement: ['Chuẩn bị bản tiêu chí để bạn xem', 'Prepare criteria for review'],
   query_tours: ['Đối chiếu tour theo điều kiện', 'Filter tours by requirements'],
   tour_detail: ['Đọc chi tiết và nguồn dữ kiện', 'Read tour details and evidence'],

@@ -60,6 +60,16 @@ def test_structured_destination_choices_use_any_operator():
     assert req.conditions[0].value == ["Đà Lạt", "Hạ Long"]
 
 
+def test_departure_city_can_match_multiple_catalog_labels():
+    raw = "Sài Gòn hoặc TP.HCM"
+    req = validate_requirement(raw, [condition(
+        "departure_city", ["Sài Gòn", "TP.HCM"], raw, operator="any"
+    )])
+
+    assert req.conditions[0].operator == "any"
+    assert req.conditions[0].value == ["Sài Gòn", "TP.HCM"]
+
+
 def test_form_adapter_uses_explicit_fields_only():
     req = requirement_from_form({"destinations": ["Đà Lạt"], "budget_max": 8_000_000})
     assert [(item.field, item.value) for item in req.conditions] == [

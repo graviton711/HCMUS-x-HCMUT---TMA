@@ -23,6 +23,11 @@ def test_draft_requirement_progress_has_a_specific_user_facing_label():
     assert _tool_progress_message(tool_name, {}) == "Chuẩn bị bản điều kiện để bạn xem"
 
 
+def test_discovery_progress_describes_the_catalog_filter():
+    assert _tool_name("tour_catalog_discover_destinations") == "discover_destinations"
+    assert _tool_progress_message("discover_destinations", {}) == "Lọc điểm đến theo các điều kiện đã biết"
+
+
 def test_normalizes_opencode_sanitized_mcp_tool_names():
     assert _tool_name("tour_catalog_draft_requirement") == "draft_requirement"
     assert _tool_name("tour-catalog_query_tours") == "query_tours"
