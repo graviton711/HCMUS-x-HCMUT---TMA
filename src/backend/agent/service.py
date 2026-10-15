@@ -346,6 +346,18 @@ def _tool_name(value: str) -> str:
     return normalized
 
 
+def _nested_tool_calls(metadata: Any) -> list[Any] | None:
+    """Find logical MCP calls across OpenCode metadata wrapper versions."""
+    for _ in range(16):
+        if not isinstance(metadata, dict):
+            return None
+        calls = metadata.get("toolCalls")
+        if isinstance(calls, list):
+            return calls
+        metadata = metadata.get("metadata")
+    return None
+
+
 def _tool_invocations(part: dict[str, Any], state: dict[str, Any]) -> list[dict[str, Any]]:
     """Normalize direct MCP events and OpenCode Code Mode's nested tool metadata."""
     outer_tool = part.get("tool") or part.get("name")
@@ -354,7 +366,7 @@ def _tool_invocations(part: dict[str, Any], state: dict[str, Any]) -> list[dict[
 
     metadata = state.get("metadata")
     metadata = metadata if isinstance(metadata, dict) else {}
-    nested_calls = metadata.get("toolCalls")
+    nested_calls = _nested_tool_calls(metadata)
     if outer_name == "execute":
         if not isinstance(nested_calls, list):
             # `execute` is an OpenCode wrapper, not a user-facing business operation.

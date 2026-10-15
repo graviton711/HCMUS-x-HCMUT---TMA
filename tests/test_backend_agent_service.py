@@ -77,30 +77,29 @@ def test_code_mode_execute_recovers_nested_draft_result(settings, caplog):
                 },
             },
         }
-        # The successful retry exposes the MCP call in metadata and result content.
+        # Current OpenCode nests Code Mode calls one level below metadata and
+        # returns the wrapper output as a JSON string.
         yield {
-            "type": "tool",
+            "type": "tool_use",
             "part": {
-                "name": "execute",
-                "id": "execute-draft",
+                "type": "tool",
+                "tool": "execute",
+                "callID": "execute-draft",
                 "state": {
                     "status": "completed",
                     "input": {"code": "call draft_requirement"},
                     "metadata": {
-                        "toolCalls": [
-                            {
-                                "tool": "tour-catalog.draft_requirement",
-                                "status": "completed",
-                                "input": params,
-                            }
-                        ]
-                    },
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": json.dumps({"result": draft_payload}),
+                        "metadata": {
+                            "toolCalls": [
+                                {
+                                    "tool": "tour-catalog.draft_requirement",
+                                    "status": "completed",
+                                    "input": params,
+                                }
+                            ]
                         }
-                    ],
+                    },
+                    "output": json.dumps({"result": draft_payload}),
                 },
             },
         }
