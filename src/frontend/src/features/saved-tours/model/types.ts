@@ -1,8 +1,8 @@
-import type { CurrentCondition, CurrentComparison } from '../../../shared/api';
+import type { CurrentCondition, CurrentComparison } from "../../../shared/api";
 
 export interface SavedTourEvaluation {
   condition: CurrentCondition;
-  state: 'pass' | 'fail' | 'unknown';
+  state: "pass" | "partial" | "fail" | "unknown";
   quote: string;
   reasonCode: string;
   reason: string;
@@ -23,7 +23,7 @@ export interface SavedTour {
   departureDate: string;
   price: number | null;
   currency: string;
-  priceBasis: 'exact' | 'from' | 'contact';
+  priceBasis: "exact" | "from" | "contact" | "unknown";
   availability: string;
   conditions: string;
   sourceUrl: string;
@@ -40,7 +40,9 @@ export function savedTourFromComparison(
   tourId: string,
   offerId: string,
 ): SavedTour | null {
-  const tour = comparison.tour_snapshots.find((candidate) => candidate.id === tourId);
+  const tour = comparison.tour_snapshots.find(
+    (candidate) => candidate.id === tourId,
+  );
   const offer = tour?.offers.find((candidate) => candidate.id === offerId);
   if (!tour || !offer) return null;
   const evaluations = new Map(
@@ -55,7 +57,7 @@ export function savedTourFromComparison(
     tourId,
     offerId,
     name: tour.name || tour.id,
-    supplier: tour.supplier || '',
+    supplier: tour.supplier || "",
     destinations: [...tour.destinations],
     route: [...tour.route],
     departureCity: tour.departure_city,
@@ -73,10 +75,10 @@ export function savedTourFromComparison(
       const evaluation = evaluations.get(condition.id);
       return {
         condition: { ...condition },
-        state: evaluation?.state ?? 'unknown',
-        quote: evaluation?.quote ?? '',
-        reasonCode: evaluation?.reason_code ?? '',
-        reason: evaluation?.reason ?? '',
+        state: evaluation?.state ?? "unknown",
+        quote: evaluation?.quote ?? "",
+        reasonCode: evaluation?.reason_code ?? "",
+        reason: evaluation?.reason ?? "",
       };
     }),
   };

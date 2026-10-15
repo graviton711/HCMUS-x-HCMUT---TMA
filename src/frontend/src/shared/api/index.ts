@@ -1,5 +1,5 @@
-export { CurrentBackendClient } from './client';
-export { CurrentApiError } from './errors';
+export { CurrentBackendClient } from "./client";
+export { CurrentApiError } from "./errors";
 export type {
   CurrentAgentChoice,
   CurrentAgentProgressEvent,
@@ -8,13 +8,20 @@ export type {
   CurrentCatalog,
   CurrentComparison,
   CurrentDecisionView,
+  CurrentDecisionOption,
+  CurrentCostExposure,
   CurrentCondition,
+  CurrentCancellationRule,
   CurrentEvaluation,
+  CurrentFamilyFact,
   CurrentHealth,
   CurrentHistoryItem,
   CurrentHistoryPage,
+  CurrentMetricEvidence,
+  CurrentMetricMeasure,
+  CurrentMetricProfile,
   CurrentOffer,
   CurrentRequirement,
   CurrentSession,
   CurrentTourSnapshot,
-} from './types';
+} from "./types";
