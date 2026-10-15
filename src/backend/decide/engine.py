@@ -11,8 +11,11 @@ from backend.models import (
     Analysis,
     Comparison,
     Condition,
+    DecisionOption,
     DecisionView,
+    ExtractedTourFacts,
     Evaluation,
+    MetricProfile,
     OfferSnapshot,
     RankedCandidate,
     RankingKey,
@@ -21,9 +24,10 @@ from backend.models import (
     TourSnapshot,
     uid,
 )
+from backend.decide.metrics import build_metric_profiles
 from backend.settings import DecideCfg
 
-RankValue = int | str | tuple[str, int]
+RankValue = int | float | str | tuple[str, int | float]
 
 
 def _contains(haystack: str, needle: str) -> bool:
@@ -278,11 +282,14 @@ def _soft_fit_count(
     req: Requirement,
     offer_id: str,
     soft_verdicts: dict[tuple[str, str], tuple[State, str, str]],
-) -> int:
+) -> float:
     return sum(
         (condition.weight_percent if condition.weight_percent is not None else 1)
+        * {"pass": 1.0, "partial": 0.5, "fail": 0.0}.get(
+            soft_verdicts.get((offer_id, condition.id), ("unknown", "", ""))[0], 0.0
+        )
         for condition in req.soft()
-        if soft_verdicts.get((offer_id, condition.id), ("unknown", "", ""))[0] == "pass"
+        if soft_verdicts.get((offer_id, condition.id), ("unknown", "", ""))[0] != "unknown"
     )
 
 
@@ -290,145 +297,376 @@ def _decision_views(
     req: Requirement,
     surviving: list[tuple[TourSnapshot, str]],
     verdicts: dict[tuple[str, str], tuple[State, str, str]],
+    profiles: list[MetricProfile],
 ) -> list[DecisionView]:
-    fit_by_offer = {
-        offer_id: _soft_fit_count(req, offer_id, verdicts)
-        for _, offer_id in surviving
-    }
-    exact = [
-        (tour, offer)
+    soft = req.soft()
+    if soft and (
+        any(condition.weight_percent is None for condition in soft)
+        or sum(condition.weight_percent or 0 for condition in soft) != 100
+    ):
+        return []
+
+    profile_by_offer = {profile.offer_id: profile for profile in profiles}
+    rows = [
+        (tour, offer, profile_by_offer[offer_id])
         for tour, offer_id in surviving
-        for offer in tour.offers
-        if offer.id == offer_id and offer.price is not None
-        and offer.price_basis == "exact" and offer.currency.strip()
+        for offer in tour.offers if offer.id == offer_id and offer_id in profile_by_offer
     ]
 
-    cheapest_rows: list[tuple[TourSnapshot, OfferSnapshot]] = []
-    cheapest_by_currency: dict[str, list[tuple[TourSnapshot, OfferSnapshot]]] = {}
-    for tour, offer in exact:
-        cheapest_by_currency.setdefault(offer.currency.upper(), []).append((tour, offer))
-    for currency in sorted(cheapest_by_currency):
-        cheapest_by_currency[currency].sort(
-            key=lambda pair: (
-                pair[1].price,
-                -fit_by_offer[pair[1].id],
-                pair[0].id,
-                pair[1].id,
+    def candidates(items: list[tuple[TourSnapshot, OfferSnapshot, float]]) -> list[RankedCandidate]:
+        seen: set[str] = set()
+        result: list[RankedCandidate] = []
+        for tour, offer, score in items:
+            if tour.id in seen:
+                continue
+            result.append(RankedCandidate(tour_id=tour.id, offer_id=offer.id, score=score))
+            seen.add(tour.id)
+            if len(result) == 5:
+                break
+        return result
+
+    exact_by_currency: dict[str, list[tuple[TourSnapshot, OfferSnapshot, MetricProfile]]] = {}
+    fit_rows: list[tuple[TourSnapshot, OfferSnapshot, float, float]] = []
+    for tour, offer, profile in rows:
+        if offer.price is not None and offer.price_basis == "exact" and offer.currency.strip():
+            exact_by_currency.setdefault(offer.currency.upper(), []).append((tour, offer, profile))
+        fit = profile.metrics.get("preference_fit")
+        if soft and fit is not None and fit.lower_bound is not None:
+            fit_rows.append((
+                tour, offer, fit.lower_bound,
+                fit.upper_bound if fit.upper_bound is not None else 1.0,
+            ))
+
+    cheapest_rows: list[tuple[TourSnapshot, OfferSnapshot, float]] = []
+    cheapest_seen: set[str] = set()
+    for currency in sorted(exact_by_currency):
+        currency_rows = sorted(
+            exact_by_currency[currency],
+            key=lambda row: (
+                row[1].price,
+                -(row[2].metrics.get("preference_fit").lower_bound or 0)
+                if row[2].metrics.get("preference_fit") else 0,
+                row[0].id,
+                row[1].id,
             ),
         )
-        cheapest_rows.extend(cheapest_by_currency[currency])
-    cheapest: list[tuple[TourSnapshot, OfferSnapshot]] = []
-    seen_tours: set[str] = set()
-
-    def add_unique(rows: list[tuple[TourSnapshot, OfferSnapshot]], limit: int = 5) -> None:
-        for pair in rows:
-            if pair[0].id in seen_tours:
-                continue
-            cheapest.append(pair)
-            seen_tours.add(pair[0].id)
-            if len(cheapest) == limit:
-                return
-
-    # Show a lowest-price representative for each currency before adding more
-    # options from any one currency, so the preview does not imply a global order.
-    add_unique([rows[0] for _, rows in sorted(cheapest_by_currency.items()) if rows])
-    add_unique(cheapest_rows)
-    cheapest_currencies = sorted({offer.currency.upper() for _, offer in cheapest})
-
-    best_offer_by_tour: dict[str, tuple[TourSnapshot, OfferSnapshot]] = {}
-    for tour, offer_id in surviving:
-        offer = next(item for item in tour.offers if item.id == offer_id)
-        prior = best_offer_by_tour.get(tour.id)
-        if prior is None or offer.id < prior[1].id:
-            best_offer_by_tour[tour.id] = (tour, offer)
-    best_fit_rows = sorted(
-        best_offer_by_tour.values(),
-        key=lambda pair: (-fit_by_offer[pair[1].id], pair[0].id, pair[1].id),
-    )[:5]
-    best_fit_currencies = sorted({
-        offer.currency.upper() for _, offer in best_fit_rows if offer.currency.strip()
+        for tour, offer, _profile in currency_rows:
+            if tour.id not in cheapest_seen:
+                cheapest_rows.append((tour, offer, 0.0))
+                cheapest_seen.add(tour.id)
+                break
+    all_exact = sorted(
+        (row for values in exact_by_currency.values() for row in values),
+        key=lambda row: (row[1].currency.upper(), row[1].price, row[0].id, row[1].id),
+    )
+    for tour, offer, _profile in all_exact:
+        if tour.id in cheapest_seen:
+            continue
+        cheapest_rows.append((tour, offer, 0.0))
+        cheapest_seen.add(tour.id)
+        if len(cheapest_rows) >= 5:
+            break
+    cheapest = candidates(cheapest_rows)
+    cheapest_currencies = sorted({
+        next(offer.currency.upper() for tour, offer, _ in rows if tour.id == item.tour_id and offer.id == item.offer_id)
+        for item in cheapest
     })
 
-    per_currency_tour: dict[tuple[str, str], tuple[TourSnapshot, OfferSnapshot]] = {}
-    for tour, offer in exact:
-        key = (offer.currency.upper(), tour.id)
-        previous = per_currency_tour.get(key)
-        if previous is None or (offer.price, offer.id) < (previous[1].price, previous[1].id):
-            per_currency_tour[key] = (tour, offer)
-    frontier: list[tuple[TourSnapshot, OfferSnapshot]] = []
-    for currency in sorted({key[0] for key in per_currency_tour}):
-        rows = [pair for key, pair in per_currency_tour.items() if key[0] == currency]
-        for tour, offer in rows:
-            score = fit_by_offer[offer.id]
-            dominated = any(
-                other_offer.price <= offer.price
-                and fit_by_offer[other_offer.id] >= score
-                and (other_offer.price < offer.price or fit_by_offer[other_offer.id] > score)
-                for other_tour, other_offer in rows
-                if other_tour.id != tour.id
-            )
+    fit_rows.sort(key=lambda row: (-row[2], -row[3], row[0].id, row[1].id))
+    best_fit = candidates([
+        (tour, offer, round(lower * 100, 2)) for tour, offer, lower, _upper in fit_rows
+    ])
+    best_fit_currencies = sorted({
+        offer.currency.upper() for tour, offer, _score, _upper in fit_rows[:5] if offer.currency.strip()
+    })
+
+    # Pareto dominance is evaluated only within one currency. A candidate with
+    # an unknown preference interval or unreviewed cost evidence cannot be
+    # eliminated on that axis. Cost transparency is a count of explicit
+    # unresolved/conditional items, not a monetary or probability score.
+    frontier: list[tuple[TourSnapshot, OfferSnapshot, float]] = []
+    for currency, currency_rows in exact_by_currency.items():
+        cost_axis_available = any(
+            (row[2].metrics.get("unpriced_cost_exposures") is not None)
+            and row[2].metrics["unpriced_cost_exposures"].state == "observed"
+            for row in currency_rows
+        )
+        for tour, offer, profile in currency_rows:
+            own_fit = profile.metrics.get("preference_fit")
+            own_cost = profile.metrics.get("unpriced_cost_exposures")
+            own_count = own_cost.value.get("count") if own_cost and own_cost.state == "observed" else None
+            dominated = False
+            for other_tour, other_offer, other_profile in currency_rows:
+                if other_tour.id == tour.id:
+                    continue
+                other_fit = other_profile.metrics.get("preference_fit")
+                other_cost = other_profile.metrics.get("unpriced_cost_exposures")
+                other_count = other_cost.value.get("count") if other_cost and other_cost.state == "observed" else None
+                if soft and (
+                    own_fit is None or other_fit is None
+                    or own_fit.lower_bound is None or other_fit.lower_bound is None
+                    or other_fit.lower_bound < (own_fit.upper_bound if own_fit.upper_bound is not None else 1.0)
+                ):
+                    continue
+                if cost_axis_available and (
+                    own_count is None or other_count is None or other_count > own_count
+                ):
+                    continue
+                no_worse = other_offer.price <= offer.price
+                strict = other_offer.price < offer.price
+                if cost_axis_available:
+                    strict = strict or other_count < own_count
+                if soft:
+                    own_upper = own_fit.upper_bound if own_fit.upper_bound is not None else 1.0
+                    no_worse = no_worse and other_fit.lower_bound >= own_upper
+                    strict = strict or other_fit.lower_bound > own_upper
+                if no_worse and strict:
+                    dominated = True
+                    break
             if not dominated:
-                frontier.append((tour, offer))
-    frontier.sort(key=lambda pair: (
-        pair[1].currency.upper(), -fit_by_offer[pair[1].id], pair[1].price, pair[0].id
-    ))
-    balanced: list[tuple[TourSnapshot, OfferSnapshot]] = []
-    seen_balanced: set[str] = set()
+                score = (own_fit.lower_bound * 100) if soft and own_fit and own_fit.lower_bound is not None else 0.0
+                frontier.append((tour, offer, round(score, 2)))
+    frontier.sort(key=lambda row: (row[1].currency.upper(), row[1].price, -row[2], row[0].id))
+    balanced = candidates(frontier)
+    balanced_currencies = sorted({row[1].currency.upper() for row in frontier[:5]})
 
-    def add_balanced(rows: list[tuple[TourSnapshot, OfferSnapshot]]) -> None:
-        for pair in rows:
-            if pair[0].id in seen_balanced:
-                continue
-            balanced.append(pair)
-            seen_balanced.add(pair[0].id)
-            if len(balanced) == 5:
-                return
-
-    first_by_currency: dict[str, tuple[TourSnapshot, OfferSnapshot]] = {}
-    for pair in frontier:
-        first_by_currency.setdefault(pair[1].currency.upper(), pair)
-    add_balanced([first_by_currency[key] for key in sorted(first_by_currency)])
-    add_balanced(frontier)
-    balanced_currencies = sorted({offer.currency.upper() for _, offer in balanced})
-
-    def candidates(rows: list[tuple[TourSnapshot, OfferSnapshot]]) -> list[RankedCandidate]:
-        return [RankedCandidate(
-            tour_id=tour.id,
-            offer_id=offer.id,
-            score=float(fit_by_offer[offer.id]),
-        ) for tour, offer in rows]
-
-    soft = req.soft()
-    weights_valid = not soft or (
-        all(condition.weight_percent is not None for condition in soft)
-        and sum(condition.weight_percent or 0 for condition in soft) == 100
-    )
-    if not weights_valid:
-        return []
     best_fit_note = (
-        "Chưa có sở thích mềm; chưa thể xếp mức độ phù hợp."
-        if not soft else "Điểm là tổng trọng số của các sở thích được đánh giá là phù hợp."
+        "Chưa có sở thích mềm để xếp mức độ phù hợp."
+        if not soft else "Xếp theo cận dưới điểm ưu tiên; điểm chưa rõ giữ khoảng 0–100 và không được coi là bằng chứng trượt."
+    )
+    balanced_note = (
+        "Tập Pareto theo giá exact cùng tiền tệ và số khoản chi phí có điều kiện/chưa định giá; "
+        "nếu có ưu tiên mềm, giữ cả khoảng điểm phù hợp. Không cộng thành một điểm tổng."
     )
     return [
         DecisionView(
-            kind="cheapest",
-            candidates=candidates(cheapest),
-            currencies=cheapest_currencies,
-            note="Chỉ so sánh giá exact trong cùng đơn vị tiền tệ.",
+            kind="cheapest", candidates=cheapest, currencies=cheapest_currencies,
+            note="Chỉ xếp giá exact theo giá niêm yết trong cùng tiền tệ; giá từ/liên hệ không vào thứ tự này.",
         ),
         DecisionView(
-            kind="best_fit",
-            candidates=candidates(best_fit_rows) if soft else [],
-            currencies=best_fit_currencies,
+            kind="best_fit", candidates=best_fit, currencies=best_fit_currencies,
             note=best_fit_note,
         ),
         DecisionView(
-            kind="balanced",
-            candidates=candidates(balanced),
-            currencies=balanced_currencies,
-            note="Pareto giữa giá exact và điểm ưu tiên; giá chỉ so trong cùng đơn vị tiền tệ.",
+            kind="balanced", candidates=balanced, currencies=balanced_currencies,
+            note=balanced_note,
         ),
     ]
+
+
+def _measure_number(profile: MetricProfile, key: str, nested: str = "") -> float | None:
+    metric = profile.metrics.get(key)
+    if metric is None or metric.state == "unknown":
+        return None
+    value = metric.value
+    if nested:
+        value = value.get(nested) if isinstance(value, dict) else None
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def _objective_views(profiles: list[MetricProfile], base: list[DecisionView]) -> list[DecisionView]:
+    def candidates_for(rows: list[tuple[float, str, MetricProfile]], *, reverse: bool = False):
+        rows.sort(key=lambda row: (row[0] if reverse else -row[0], row[1]))
+        seen: set[str] = set()
+        result: list[RankedCandidate] = []
+        for value, _tour_id, profile in rows:
+            if profile.tour_id in seen:
+                continue
+            result.append(RankedCandidate(
+                tour_id=profile.tour_id, offer_id=profile.offer_id, score=value
+            ))
+            seen.add(profile.tour_id)
+            if len(result) == 5:
+                break
+        return result
+
+    experience = []
+    route = []
+    cancellation = []
+    family = []
+    included: list[tuple[float, MetricProfile]] = []
+    for profile in profiles:
+        count = _measure_number(profile, "experience_density", "activity_count")
+        if count is not None:
+            experience.append((count, profile.tour_id, profile))
+        legs = _measure_number(profile, "route_complexity", "explicit_legs")
+        if legs is not None:
+            route.append((legs, profile.tour_id, profile))
+        free_days = _measure_number(profile, "cancellation_flexibility")
+        if free_days is not None:
+            # A smaller number means the user may cancel closer to departure.
+            cancellation.append((-free_days, profile.tour_id, profile))
+        child_detail = _measure_number(profile, "family_suitability")
+        if child_detail is not None:
+            family.append((child_detail, profile.tour_id, profile))
+        coverage = _measure_number(profile, "included_coverage", "ratio")
+        if coverage is not None:
+            included.append((coverage, profile))
+
+    base_by_kind = {view.kind: view for view in base}
+    included.sort(key=lambda row: (-row[0], row[1].tour_id))
+    included_candidates: list[RankedCandidate] = []
+    included_seen: set[str] = set()
+    for ratio, profile in included:
+        if profile.tour_id in included_seen:
+            continue
+        included_candidates.append(RankedCandidate(
+            tour_id=profile.tour_id, offer_id=profile.offer_id, score=ratio
+        ))
+        included_seen.add(profile.tour_id)
+        if len(included_candidates) == 5:
+            break
+    notes = {
+        "experience_rich": "Xếp theo số hoạt động/điểm tham quan nêu rõ; số lượng không khẳng định chất lượng.",
+        "fewest_legs": "Chỉ đếm chặng được nêu rõ trong route/lịch trình; không suy ra thời gian hay quãng đường.",
+        "cancellation_flexible": "Xếp theo mốc gần ngày đi nhất vẫn được hoàn 100%, khi điều khoản nêu rõ.",
+        "family_friendly": "Chưa đủ dữ liệu tuổi cụ thể để xếp mức phù hợp cho nhóm; xem các điều khoản trẻ em có trích dẫn riêng.",
+        "included_value": "Tỷ lệ hạng mục gồm/ gồm một phần; các khoản loại trừ chưa định giá được liệt kê riêng, không gộp vào điểm.",
+    }
+    additional = [
+        DecisionView(kind="experience_rich", candidates=candidates_for(experience), note=notes["experience_rich"]),
+        DecisionView(kind="fewest_legs", candidates=candidates_for(route, reverse=True), note=notes["fewest_legs"]),
+        DecisionView(kind="cancellation_flexible", candidates=candidates_for(cancellation), note=notes["cancellation_flexible"]),
+        DecisionView(kind="family_friendly", candidates=candidates_for(family), note=notes["family_friendly"]),
+        DecisionView(kind="included_value", candidates=included_candidates, note=notes["included_value"]),
+    ]
+    base_by_kind.update({view.kind: view for view in additional})
+    return [base_by_kind[key] for key in (
+        "cheapest", "best_fit", "experience_rich", "fewest_legs",
+        "cancellation_flexible", "family_friendly", "included_value", "balanced",
+    ) if key in base_by_kind]
+
+
+def _option_tradeoffs(profile: MetricProfile) -> list[str]:
+    tradeoffs: list[str] = []
+    cost = profile.cost
+    if cost.group_total_calculated is not None:
+        suffix = " (tạm tính tối thiểu)" if cost.total_is_lower_bound else ""
+        tradeoffs.append(f"Tổng nhóm tính được: {cost.group_total_calculated:,} {cost.currency}{suffix}")
+    elif cost.listed_price is not None:
+        basis = "giá từ" if cost.price_basis == "from" else "giá niêm yết"
+        tradeoffs.append(f"{basis}: {cost.listed_price:,} {cost.currency}; chưa tính tổng nhóm")
+    if cost.unpriced_exclusions:
+        tradeoffs.append(f"{len(cost.unpriced_exclusions)} khoản loại trừ/chi phí chưa thể định giá")
+    conditional_count = sum(
+        item.obligation == "conditional" for item in cost.optional_or_conditional
+    )
+    if conditional_count:
+        tradeoffs.append(f"{conditional_count} khoản có điều kiện, chưa cộng vào tổng nhóm")
+    fit = profile.metrics.get("preference_fit")
+    if fit is not None:
+        tradeoffs.append(f"Khớp ưu tiên: {fit.lower_bound or 0:.0f}–{fit.upper_bound or 0:.0f}/100")
+    activities = _measure_number(profile, "experience_density", "activity_count")
+    if activities is not None:
+        tradeoffs.append(f"{int(activities)} hoạt động được nêu rõ")
+    legs = _measure_number(profile, "route_complexity", "explicit_legs")
+    if legs is not None:
+        tradeoffs.append(f"{int(legs)} chặng được ghi rõ")
+    coverage = _measure_number(profile, "included_coverage", "ratio")
+    if coverage is not None:
+        tradeoffs.append(f"Tỷ lệ hạng mục gồm/ gồm một phần: {coverage * 100:.0f}% trên phần đã biết")
+    return tradeoffs
+
+
+def _decision_options(
+    views: list[DecisionView],
+    profiles: list[MetricProfile],
+    ranked: list[RankedCandidate],
+    tours: list[TourSnapshot],
+) -> list[DecisionOption]:
+    profile_by_offer = {profile.offer_id: profile for profile in profiles}
+    offer_by_id = {
+        offer.id: offer for tour in tours for offer in tour.offers
+    }
+    views_by_kind = {view.kind: view for view in views}
+    selected: list[DecisionOption] = []
+    seen: set[str] = set()
+    objective_order = (
+        "cheapest", "best_fit", "experience_rich", "fewest_legs",
+        "cancellation_flexible", "included_value", "balanced",
+    )
+    max_depth = max((len(views_by_kind[kind].candidates) for kind in objective_order if kind in views_by_kind), default=0)
+    for depth in range(max_depth):
+        for kind in objective_order:
+            view = views_by_kind.get(kind)
+            if view is None or depth >= len(view.candidates):
+                continue
+            candidate = view.candidates[depth]
+            if candidate.tour_id in seen:
+                continue
+            profile = profile_by_offer.get(candidate.offer_id)
+            if profile is None:
+                continue
+            if kind == "cheapest":
+                offer = offer_by_id.get(candidate.offer_id)
+                reason = (
+                    f"Giá exact {offer.price:,} {offer.currency.upper()} thuộc nhóm thấp nhất "
+                    "trong cùng tiền tệ; tổng nhóm và khoản loại trừ được trình bày riêng."
+                    if offer and offer.price is not None and offer.currency
+                    else view.note
+                )
+            elif kind == "best_fit":
+                fit = profile.metrics.get("preference_fit")
+                reason = (
+                    f"Cận điểm khớp ưu tiên {fit.lower_bound * 100:.0f}–{(fit.upper_bound or 1) * 100:.0f}/100 "
+                    "theo trọng số đã duyệt."
+                    if fit and fit.lower_bound is not None else view.note
+                )
+            elif kind == "experience_rich":
+                count = _measure_number(profile, "experience_density", "activity_count")
+                reason = f"Lịch trình nêu rõ {int(count)} hoạt động/điểm ghé." if count is not None else view.note
+            elif kind == "fewest_legs":
+                count = _measure_number(profile, "route_complexity", "explicit_legs")
+                reason = f"Có {int(count)} chặng được nguồn nêu rõ." if count is not None else view.note
+            elif kind == "cancellation_flexible":
+                days = _measure_number(profile, "cancellation_flexibility")
+                reason = f"Điều khoản nêu hoàn 100% đến {int(days)} ngày trước khởi hành." if days is not None else view.note
+            elif kind == "included_value":
+                coverage = _measure_number(profile, "included_coverage", "ratio")
+                reason = f"{coverage * 100:.0f}% hạng mục đã biết được gồm hoặc gồm một phần." if coverage is not None else view.note
+            elif kind == "balanced":
+                reason = "Nằm trên tập Pareto theo các metric có dữ kiện; không bị phương án khác vượt trội đồng thời."
+            else:
+                reason = view.note
+            selected.append(DecisionOption(
+                tour_id=candidate.tour_id,
+                offer_id=candidate.offer_id,
+                objective=kind,
+                title={
+                    "cheapest": "Giá thấp nhất trong nhóm so sánh",
+                    "best_fit": "Khớp ưu tiên nhất",
+                    "experience_rich": "Nhiều trải nghiệm được nêu rõ",
+                    "fewest_legs": "Ít chặng được ghi rõ",
+                    "cancellation_flexible": "Hủy linh hoạt nhất theo điều khoản",
+                    "included_value": "Nhiều hạng mục bao gồm",
+                    "balanced": "Phương án cân bằng",
+                }.get(kind, "Phương án"),
+                reason=reason,
+                tradeoffs=_option_tradeoffs(profile),
+            ))
+            seen.add(candidate.tour_id)
+            if len(selected) >= 3:
+                return selected
+    # Keep three real choices visible when the scan has at least three hard-pass tours,
+    # even if some metrics are unavailable; mark them as unranked candidates.
+    for candidate in ranked:
+        if candidate.tour_id in seen:
+            continue
+        profile = profile_by_offer.get(candidate.offer_id)
+        if profile is None:
+            continue
+        selected.append(DecisionOption(
+            tour_id=candidate.tour_id,
+            offer_id=candidate.offer_id,
+            objective="multi_objective",
+            title="Phương án để cân nhắc",
+            reason="Metric hiện có chưa đủ để xếp hạng riêng phương án này.",
+            tradeoffs=_option_tradeoffs(profile),
+        ))
+        seen.add(candidate.tour_id)
+        if len(selected) >= 3:
+            break
+    return selected
 
 
 def _group_value(field: str, tour: TourSnapshot, offer: OfferSnapshot) -> RankValue | None:
@@ -466,7 +704,7 @@ def _compare_candidates(
     left: tuple[TourSnapshot, str],
     right: tuple[TourSnapshot, str],
     order: list[RankingKey],
-    soft_fit_by_offer: dict[str, int],
+    soft_fit_by_offer: dict[str, float],
     offers_by_id: dict[str, OfferSnapshot],
 ) -> int:
     left_tour, left_id = left
@@ -498,7 +736,8 @@ def _compare_candidates(
 
 
 def _compare_values(left: RankValue, right: RankValue) -> int:
-    if isinstance(left, int) and isinstance(right, int):
+    if (isinstance(left, (int, float)) and not isinstance(left, bool)
+            and isinstance(right, (int, float)) and not isinstance(right, bool)):
         return 0 if left == right else (-1 if left < right else 1)
     if isinstance(left, str) and isinstance(right, str):
         return 0 if left == right else (-1 if left < right else 1)
@@ -550,6 +789,7 @@ def compare(
     tours: list[TourSnapshot],
     cfg: DecideCfg,
     soft_verdicts: dict[tuple[str, str], tuple[State, str, str]] | None = None,
+    metric_facts: dict[str, ExtractedTourFacts] | None = None,
 ) -> Comparison:
     evals = hard_filter(req, tours)
     surviving = passing_offers(req, tours, evals)
@@ -570,6 +810,9 @@ def compare(
     ranked = rank(req, surviving, verdicts)
     near = near_miss(req, tours, evaluations, {c.offer_id for c in ranked}, cfg.near_miss_max_fails)
     near = near[: cfg.top_n]
+    profiles = build_metric_profiles(req, surviving, verdicts, metric_facts)
+    views = _objective_views(profiles, _decision_views(req, surviving, verdicts, profiles))
+    options = _decision_options(views, profiles, ranked, tours)
     return Comparison(
         id=uid("cmp"),
         requirement=req,
@@ -586,5 +829,8 @@ def compare(
             if offer.id == offer_id and offer.price is not None
             and offer.price_basis != "contact" and offer.currency.strip()
         }),
-        decision_views=_decision_views(req, surviving, verdicts),
+        decision_views=views,
+        metric_profiles=profiles,
+        decision_options=options,
+        extracted_facts=list((metric_facts or {}).values()),
     )

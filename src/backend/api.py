@@ -116,6 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 body["conditions"],
                 body.get("travelers", 1),
                 ranking=body.get("ranking"),
+                traveler_mix=body.get("traveler_mix"),
             )
         else:
             from backend.input.pipeline import requirement_from_form

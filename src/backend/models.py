@@ -7,10 +7,11 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-State = Literal["pass", "fail", "unknown"]
+State = Literal["pass", "partial", "fail", "unknown"]
 Strength = Literal["hard", "soft"]
-PriceBasis = Literal["exact", "from", "contact"]
+PriceBasis = Literal["exact", "from", "contact", "unknown"]
 Freshness = Literal["fresh", "stale", "unknown"]
+MetricState = Literal["observed", "partial", "unknown"]
 RankingField = Literal["price", "departure_date", "duration_days", "tour_name", "soft_fit"]
 SortDirection = Literal["asc", "desc"]
 
@@ -44,6 +45,9 @@ class Requirement(BaseModel):
     missing: list[str] = Field(default_factory=list)
     raw_text: str = ""
     travelers: int = 1
+    traveler_mix: dict[Literal["adult", "child", "small_child", "infant"], int] = Field(
+        default_factory=dict
+    )
     ranking: RankingSpec | None = None
 
     def hard(self) -> list[Condition]:
@@ -66,7 +70,10 @@ class OfferSnapshot(BaseModel):
     departure_date: str = ""
     price: int | None = None
     currency: str = ""
-    price_basis: PriceBasis = "contact"
+    price_basis: PriceBasis = "unknown"
+    price_by_age: dict[str, int | None] = Field(default_factory=dict)
+    single_supplement: int | None = None
+    supplements: str = ""
     departure_freshness: Freshness = "unknown"
     departure_freshness_policy_seconds: int | None = None
     pricing_complete: bool | None = None
@@ -85,8 +92,10 @@ class TourSnapshot(BaseModel):
     destinations: list[str] = Field(default_factory=list)
     raw_destinations: list[str] = Field(default_factory=list)
     route: list[str] = Field(default_factory=list)
+    route_observed: bool = False
     departure_city: str = ""
     duration_days: int | None = None
+    duration_nights: int | None = None
     transport: str = ""
     accommodation: str = ""
     itinerary: str = ""
@@ -117,10 +126,140 @@ class RankedCandidate(BaseModel):
 
 
 class DecisionView(BaseModel):
-    kind: Literal["cheapest", "best_fit", "balanced"]
+    kind: Literal[
+        "cheapest", "best_fit", "experience_rich", "fewest_legs",
+        "cancellation_flexible", "family_friendly", "included_value", "balanced",
+    ]
     candidates: list[RankedCandidate] = Field(default_factory=list, max_length=5)
     currencies: list[str] = Field(default_factory=list)
     note: str = ""
+
+
+class MetricEvidence(BaseModel):
+    source_field: str
+    quote: str
+    observed_at: str = ""
+    url: str = ""
+
+
+class MetricMeasure(BaseModel):
+    value: Any = None
+    lower_bound: float | None = None
+    upper_bound: float | None = None
+    unit: str = ""
+    state: MetricState = "unknown"
+    evidence: list[MetricEvidence] = Field(default_factory=list)
+    method_version: str = ""
+
+
+class CostExposure(BaseModel):
+    name: str
+    obligation: Literal["mandatory", "optional", "conditional", "unknown"] = "unknown"
+    amount: int | None = None
+    currency: str = ""
+    unit: Literal[
+        "per_person", "per_adult", "per_child", "per_night", "per_room",
+        "per_booking", "per_day", "per_vehicle", "other", "unknown",
+    ] = "unknown"
+    applies_when: str = ""
+    source_field: str = ""
+    quote: str = ""
+    calculated_total: int | None = None
+
+
+class CostProfile(BaseModel):
+    listed_price: int | None = None
+    price_basis: PriceBasis = "unknown"
+    currency: str = ""
+    group_total_calculated: int | None = None
+    group_total_scope: str = ""
+    total_is_lower_bound: bool = False
+    priced_extras: list[CostExposure] = Field(default_factory=list)
+    unpriced_exclusions: list[CostExposure] = Field(default_factory=list)
+    optional_or_conditional: list[CostExposure] = Field(default_factory=list)
+    state: MetricState = "unknown"
+
+
+class ActivityFact(BaseModel):
+    name: str
+    day: int | None = None
+    evidence: MetricEvidence
+
+
+class RouteLegFact(BaseModel):
+    origin: str
+    destination: str
+    mode: str = ""
+    evidence: MetricEvidence
+
+
+class CoverageFact(BaseModel):
+    category: Literal[
+        "transport", "accommodation", "meals", "admission_or_activity",
+        "guide", "insurance", "other",
+    ]
+    status: Literal["included", "partial", "excluded", "unknown"]
+    evidence: MetricEvidence
+
+
+class CancellationRule(BaseModel):
+    days_before_departure: int | None = None
+    refund_percent: int | None = None
+    fee_amount: int | None = None
+    currency: str = ""
+    evidence: MetricEvidence
+
+
+class FamilyFact(BaseModel):
+    kind: Literal["age_range", "age_price", "discount", "room", "bed", "eligibility", "other"]
+    min_age: int | None = None
+    max_age: int | None = None
+    amount: int | None = None
+    percent: int | None = None
+    condition: str = ""
+    evidence: MetricEvidence
+
+
+class ExtractedTourFacts(BaseModel):
+    tour_id: str
+    activities: list[ActivityFact] = Field(default_factory=list)
+    route_legs: list[RouteLegFact] = Field(default_factory=list)
+    inclusions: list[CoverageFact] = Field(default_factory=list)
+    exclusions: list[CostExposure] = Field(default_factory=list)
+    surcharges: list[CostExposure] = Field(default_factory=list)
+    cancellation_rules: list[CancellationRule] = Field(default_factory=list)
+    family_facts: list[FamilyFact] = Field(default_factory=list)
+    reviewed_fields: list[str] = Field(default_factory=list)
+    method_version: str = ""
+
+
+class PreferenceScore(BaseModel):
+    condition_id: str
+    lower_score: float = Field(ge=0, le=1)
+    upper_score: float = Field(ge=0, le=1)
+    state: MetricState = "unknown"
+    evidence: list[MetricEvidence] = Field(default_factory=list)
+
+
+class MetricProfile(BaseModel):
+    tour_id: str
+    offer_id: str
+    cost: CostProfile = Field(default_factory=CostProfile)
+    preference_fit: list[PreferenceScore] = Field(default_factory=list)
+    metrics: dict[str, MetricMeasure] = Field(default_factory=dict)
+    inclusions: list[MetricMeasure] = Field(default_factory=list)
+    exclusions: list[CostExposure] = Field(default_factory=list)
+    cancellation_rules: list[CancellationRule] = Field(default_factory=list)
+    family_facts: list[FamilyFact] = Field(default_factory=list)
+
+
+class DecisionOption(BaseModel):
+    tour_id: str
+    offer_id: str
+    objective: str
+    title: str = ""
+    reason: str = ""
+    tradeoffs: list[str] = Field(default_factory=list)
 
 
 class Analysis(BaseModel):
@@ -141,6 +280,10 @@ class Comparison(BaseModel):
     candidates_considered: int = 0
     ranking_currencies: list[str] = Field(default_factory=list)
     decision_views: list[DecisionView] = Field(default_factory=list)
+    metric_profiles: list[MetricProfile] = Field(default_factory=list)
+    decision_options: list[DecisionOption] = Field(default_factory=list)
+    recommendation: DecisionOption | None = None
+    extracted_facts: list[ExtractedTourFacts] = Field(default_factory=list)
 
 
 class TourRow(BaseModel):

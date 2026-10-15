@@ -122,7 +122,8 @@ class SupabaseCatalog:
                         return []
                     cur.execute(
                         "SELECT tour_id, record_key, departure_date, price, availability,"
-                        " price_by_age, field_meta, observed_at"
+                        " price_type, price_by_age, single_supplement, supplements,"
+                        " conditions, field_meta, observed_at"
                         " FROM offers WHERE tour_id = ANY(%s)",
                         ([t["id"] for t in tours],),
                     )
@@ -134,6 +135,8 @@ class SupabaseCatalog:
                             row["departure_date"] = str(row["departure_date"])
                         if row["price"] is not None:
                             row["price"] = int(row["price"])
+                        if row.get("single_supplement") is not None:
+                            row["single_supplement"] = int(row["single_supplement"])
                         if row["observed_at"] is not None:
                             row["observed_at"] = str(row["observed_at"])
                         by_tour.setdefault(row.pop("tour_id"), []).append(row)

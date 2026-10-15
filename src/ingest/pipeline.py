@@ -1004,23 +1004,33 @@ def publish_snapshot(out_dir: str | Path, profile_name: str,
                     seen_keys.append(offer_key)
                     cursor.execute(
                         """INSERT INTO offers (record_key, tour_id, departure_date, price,
-                               availability, tour_code, price_by_age, single_supplement,
+                               price_type, availability, tour_code, price_by_age, single_supplement,
+                               supplements,
                                flights, pickup_point, hotel_location, conditions,
                                observed_at, evidence, field_meta)
-                           VALUES (%s, %s, %s, %s,
-                               %s, %s, %s, %s,
+                           VALUES (%s, %s, %s, %s, %s,
+                               %s, %s, %s, %s, %s,
                                %s, %s, %s, %s,
                                %s, %s, %s)
                            ON CONFLICT (record_key) DO UPDATE SET
-                               price = EXCLUDED.price, availability = EXCLUDED.availability,
+                               price = EXCLUDED.price, price_type = EXCLUDED.price_type,
+                               availability = EXCLUDED.availability,
+                               price_by_age = EXCLUDED.price_by_age,
+                               single_supplement = EXCLUDED.single_supplement,
+                               supplements = EXCLUDED.supplements,
+                               conditions = EXCLUDED.conditions,
                                observed_at = EXCLUDED.observed_at, evidence = EXCLUDED.evidence,
                                field_meta = EXCLUDED.field_meta,
                                updated_at = NOW()""",
                         (offer_key, tour_id, date, price,
+                         str(offer.get("price_type", "unknown"))
+                         if offer.get("price_type") in {"fixed", "from", "contact", "unknown"}
+                         else "unknown",
                          str(offer.get("availability", "unknown"))[:20] or "unknown",
                          str(offer.get("tour_code", ""))[:100],
                          json.dumps(offer.get("price_by_age")) if offer.get("price_by_age") is not None else None,
                          _int_or_none(offer.get("single_supplement")),
+                         str(offer.get("supplements", ""))[:2000],
                          json.dumps(offer.get("flights")) if offer.get("flights") is not None else None,
                          str(offer.get("pickup_point", ""))[:500], str(offer.get("hotel_location", ""))[:500],
                          str(offer.get("conditions", ""))[:2000],

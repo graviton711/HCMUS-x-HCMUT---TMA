@@ -22,6 +22,7 @@ class TourWorkflows:
         ranking=None,
         requirement_id: str | None = None,
         require_weights: bool = False,
+        traveler_mix=None,
     ) -> Requirement:
         return validate_requirement(
             raw_text,
@@ -30,6 +31,7 @@ class TourWorkflows:
             requirement_id=requirement_id,
             ranking=ranking,
             require_weights=require_weights,
+            traveler_mix=traveler_mix,
         )
 
     def snapshots(self, candidate_limit: int | None = None) -> list[TourSnapshot]:

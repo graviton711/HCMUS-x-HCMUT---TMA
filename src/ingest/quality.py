@@ -274,6 +274,9 @@ def _shape_problem(field: str, value: object) -> str:
         for offer in value:
             if not isinstance(offer, dict):
                 return "expected_offer_object"
+            price_type = offer.get("price_type", "unknown")
+            if not isinstance(price_type, str) or price_type not in {"fixed", "from", "contact", "unknown"}:
+                return "invalid_offer_price_type"
             departure_date = offer.get("departure_date")
             if not isinstance(departure_date, str) or not re.fullmatch(
                     r"\d{4}-\d{2}-\d{2}", departure_date):
@@ -288,6 +291,26 @@ def _shape_problem(field: str, value: object) -> str:
             availability = offer.get("availability", "unknown")
             if not isinstance(availability, str) or availability not in {"available", "sold_out", "unknown"}:
                 return "invalid_offer_availability"
+            age_prices = offer.get("price_by_age")
+            if age_prices is not None and (
+                not isinstance(age_prices, dict)
+                or any(key not in {"adult", "child", "small_child", "infant"} for key in age_prices)
+                or any(
+                    amount is not None
+                    and (not isinstance(amount, int) or isinstance(amount, bool) or amount < 0)
+                    for amount in age_prices.values()
+                )
+            ):
+                return "invalid_offer_age_prices"
+            single_supplement = offer.get("single_supplement")
+            if single_supplement is not None and (
+                not isinstance(single_supplement, int)
+                or isinstance(single_supplement, bool)
+                or single_supplement < 0
+            ):
+                return "invalid_offer_single_supplement"
+            if "supplements" in offer and not isinstance(offer["supplements"], str):
+                return "invalid_offer_supplements"
         return ""
     return ""
 

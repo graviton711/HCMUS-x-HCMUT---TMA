@@ -18,14 +18,31 @@ from backend.agent.results import limit_comparison
 from backend.data.catalog import for_settings
 from backend.data.sessions import BaseStore, SessionStore
 from backend.decide.engine import compare, eval_hard, soft_review_candidates
+from backend.decide.metrics import fact_cache_id
 from backend.error_logging import log_app_error, log_unexpected_error
 from backend.errors import AppError
 from backend.input.lunar import resolve_lunar
-from backend.models import Comparison, Requirement, State, TourSnapshot, uid
+from backend.models import (
+    ActivityFact,
+    CancellationRule,
+    Comparison,
+    CostExposure,
+    CoverageFact,
+    ExtractedTourFacts,
+    FamilyFact,
+    MetricEvidence,
+    Requirement,
+    RouteLegFact,
+    State,
+    TourSnapshot,
+    uid,
+)
 from backend.settings import Settings
 from backend.workflows import TourWorkflows
 
-_VERDICT_STATES: dict[str, State] = {"fit": "pass", "unknown": "unknown", "not_fit": "fail"}
+_VERDICT_STATES: dict[str, State] = {
+    "fit": "pass", "partial": "partial", "unknown": "unknown", "not_fit": "fail"
+}
 
 
 class QueryConditionInput(BaseModel):
@@ -73,16 +90,109 @@ class QueryRankingInput(BaseModel):
     )
 
 
+class TravelerMixInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    adult: int | None = Field(default=None, ge=0)
+    child: int | None = Field(default=None, ge=0)
+    small_child: int | None = Field(default=None, ge=0)
+    infant: int | None = Field(default=None, ge=0)
+
+
 class SoftVerdictInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     offer_id: str = Field(description="Offer ID from the active soft_review batch.")
     condition_id: str = Field(description="Soft condition ID from the active soft_review batch.")
-    verdict: Literal["fit", "unknown", "not_fit"] = Field(
-        description="Whether the tour evidence supports this soft preference."
+    verdict: Literal["fit", "partial", "unknown", "not_fit"] = Field(
+        description="Full fit=1, partial fit=0.5, contradicted=0, unknown=not established."
     )
     quote: str = Field(default="", description="Exact short quote from the candidate evidence.")
     reason: str = Field(default="", description="At most two concise sentences grounded in the quote.")
+
+
+class ActivityInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(description="Short activity name copied from the itinerary quote.")
+    day: int | None = Field(default=None, ge=1)
+    quote: str = Field(description="Exact substring from the itinerary source field.")
+
+
+class RouteLegInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    origin: str
+    destination: str
+    mode: str = ""
+    quote: str = Field(description="Exact source quote explicitly stating this route leg.")
+
+
+class CoverageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    category: Literal[
+        "transport", "accommodation", "meals", "admission_or_activity",
+        "guide", "insurance", "other",
+    ]
+    status: Literal["included", "partial", "excluded", "unknown"]
+    quote: str
+
+
+class CostExposureInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    obligation: Literal["mandatory", "optional", "conditional", "unknown"] = "unknown"
+    amount: int | None = Field(default=None, ge=0)
+    currency: str = ""
+    unit: Literal[
+        "per_person", "per_adult", "per_child", "per_night", "per_room",
+        "per_booking", "per_day", "per_vehicle", "other", "unknown",
+    ] = "unknown"
+    applies_when: str = ""
+    quote: str
+
+
+class CancellationRuleInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    days_before_departure: int | None = Field(default=None, ge=0)
+    refund_percent: int | None = Field(default=None, ge=0, le=100)
+    fee_amount: int | None = Field(default=None, ge=0)
+    currency: str = ""
+    quote: str
+
+
+class FamilyFactInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["age_range", "age_price", "discount", "room", "bed", "eligibility", "other"]
+    min_age: int | None = Field(default=None, ge=0)
+    max_age: int | None = Field(default=None, ge=0)
+    amount: int | None = Field(default=None, ge=0)
+    percent: int | None = Field(default=None, ge=0, le=100)
+    condition: str = ""
+    quote: str
+
+
+class TourMetricFactsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tour_id: str
+    reviewed_fields: list[
+        Literal[
+            "itinerary", "route", "inclusions", "exclusions",
+            "surcharges", "cancellation_policy", "child_policy",
+        ]
+    ] = Field(default_factory=list)
+    activities: list[ActivityInput] = Field(default_factory=list)
+    route_legs: list[RouteLegInput] = Field(default_factory=list)
+    inclusions: list[CoverageInput] = Field(default_factory=list)
+    exclusions: list[CostExposureInput] = Field(default_factory=list)
+    surcharges: list[CostExposureInput] = Field(default_factory=list)
+    cancellation_rules: list[CancellationRuleInput] = Field(default_factory=list)
+    family_facts: list[FamilyFactInput] = Field(default_factory=list)
 
 
 @dataclass
@@ -95,6 +205,7 @@ class _RankingContext:
     decision_run_id: str | None = None
     batch_index: int = 0
     verdicts: dict[tuple[str, str], tuple[State, str, str]] = field(default_factory=dict)
+    metric_facts: dict[str, ExtractedTourFacts] = field(default_factory=dict)
 
 
 def _json(payload: Any) -> str:
@@ -177,6 +288,7 @@ class AgentTools:
         raw_text: str,
         conditions: list[QueryConditionInput],
         travelers: int = 1,
+        traveler_mix: TravelerMixInput | None = None,
     ) -> str:
         """Preview catalog locations that satisfy all known hard conditions.
 
@@ -203,7 +315,10 @@ class AgentTools:
             )
 
         requirement = self.workflows.requirement(
-            raw_text, structured_conditions, travelers=travelers
+            raw_text,
+            structured_conditions,
+            travelers=travelers,
+            traveler_mix=(traveler_mix.model_dump(exclude_none=True) if traveler_mix else None),
         )
         tours = self.workflows.snapshots(self.settings.supabase_scan_limit)
         catalog_destinations = sorted({dest for tour in tours for dest in tour.destinations})
@@ -352,6 +467,7 @@ class AgentTools:
         travelers: int = 1,
         ranking: QueryRankingInput | None = None,
         requirement_id: str = "",
+        traveler_mix: TravelerMixInput | None = None,
     ) -> str:
         if not re.fullmatch(r"dec_[0-9a-f]{32}", decision_run_id):
             raise AppError("DECISION_RUN_INVALID", "Invalid decision run ID.", 422)
@@ -375,6 +491,7 @@ class AgentTools:
             ranking_value,
             requirement_id=requirement_id or None,
             require_weights=True,
+            traveler_mix=(traveler_mix.model_dump(exclude_none=True) if traveler_mix else None),
         )
         comparison = self.workflows.comparison(requirement, self.settings.supabase_scan_limit)
         return self._comparison_payload(
@@ -387,6 +504,7 @@ class AgentTools:
         conditions: list[QueryConditionInput],
         travelers: int = 1,
         ranking: QueryRankingInput | None = None,
+        traveler_mix: TravelerMixInput | None = None,
     ) -> str:
         """Validate a reviewable brief without reading the tour catalog."""
         structured_conditions = [
@@ -403,7 +521,11 @@ class AgentTools:
             else None
         )
         requirement = self.workflows.requirement(
-            raw_text, structured_conditions, travelers, ranking_value
+            raw_text,
+            structured_conditions,
+            travelers,
+            ranking_value,
+            traveler_mix=(traveler_mix.model_dump(exclude_none=True) if traveler_mix else None),
         )
         soft = requirement.soft()
         if soft:
@@ -432,6 +554,7 @@ class AgentTools:
         self,
         context_id: str,
         verdicts: list[SoftVerdictInput],
+        metric_facts: list[TourMetricFactsInput],
     ) -> str:
         with self._ranking_context_lock:
             context = self._ranking_contexts.get(context_id)
@@ -459,14 +582,27 @@ class AgentTools:
                     422,
                 )
 
+            parsed_facts = [
+                item if isinstance(item, TourMetricFactsInput)
+                else TourMetricFactsInput.model_validate(item)
+                for item in metric_facts
+            ]
+            batch_tour_ids = {tour.id for tour, _ in batch if tour.id not in context.metric_facts}
+            supplied_tour_ids = [item.tour_id for item in parsed_facts]
+            if len(supplied_tour_ids) != len(set(supplied_tour_ids)) or set(supplied_tour_ids) != batch_tour_ids:
+                raise AppError(
+                    "METRIC_FACTS_INCOMPLETE",
+                    "Submit one metric fact object for every tour in the active batch.",
+                    422,
+                )
+
             batch_tour_by_offer = {offer_id: tour for tour, offer_id in batch}
             max_quote = min(self.settings.tuning.decide.quote_chars, 200)
             for item in parsed:
                 key = (item.offer_id, item.condition_id)
                 tour = batch_tour_by_offer[item.offer_id]
                 source = "\n".join(
-                    str(getattr(tour, name, ""))
-                    for name in self.settings.tuning.decide.soft_fields
+                    _metric_source_fields(tour).values()
                 )
                 if item.verdict == "unknown":
                     state: State = "unknown"
@@ -487,11 +623,30 @@ class AgentTools:
                 for same_tour_offer in tour.offers:
                     context.verdicts[(same_tour_offer.id, item.condition_id)] = (state, quote, reason)
 
+            accepted_facts = 0
+            rejected_facts = 0
+            batch_tour_by_id = {tour.id: tour for tour, _ in batch}
+            facts_to_cache: list[tuple[TourSnapshot, ExtractedTourFacts]] = []
+            for item in parsed_facts:
+                extracted, rejected = _validate_metric_facts(batch_tour_by_id[item.tour_id], item)
+                context.metric_facts[item.tour_id] = extracted
+                facts_to_cache.append((batch_tour_by_id[item.tour_id], extracted))
+                accepted_facts += len(extracted.activities) + len(extracted.route_legs)
+                accepted_facts += len(extracted.inclusions) + len(extracted.exclusions)
+                accepted_facts += len(extracted.surcharges) + len(extracted.cancellation_rules)
+                accepted_facts += len(extracted.family_facts)
+                rejected_facts += rejected
+            self._save_metric_fact_cache_batch(facts_to_cache)
+
             context.batch_index += 1
             if context.batch_index < len(context.batches):
                 response: dict[str, Any] = {
                     "requirement": context.requirement.model_dump(mode="json"),
                     "soft_review": self._soft_review_payload(context),
+                    "metric_fact_validation": {
+                        "accepted": accepted_facts,
+                        "rejected": rejected_facts,
+                    },
                 }
                 if context.decision_run_id:
                     response["decision_run_id"] = context.decision_run_id
@@ -502,6 +657,7 @@ class AgentTools:
                 context.comparison.tour_snapshots,
                 cfg=self.settings.tuning.decide,
                 soft_verdicts=context.verdicts,
+                metric_facts=context.metric_facts,
             )
             self._ranking_contexts.pop(context_id, None)
             comparison = limit_comparison(comparison)
@@ -519,20 +675,17 @@ class AgentTools:
         candidates = []
         for tour, offer_id in batch:
             offer = next(item for item in tour.offers if item.id == offer_id)
-            snippets = [
-                f"{name}: {str(getattr(tour, name, '')).strip()}"
-                for name in self.settings.tuning.decide.soft_fields
-                if str(getattr(tour, name, "")).strip()
-            ]
-            evidence = "\n".join(snippets)[:2400]
+            source_fields = _metric_source_fields(tour)
             candidates.append({
+                "tour_id": tour.id,
                 "offer_id": offer_id,
                 "tour_name": tour.name,
                 "departure_date": offer.departure_date,
                 "price": offer.price,
                 "currency": offer.currency,
                 "price_basis": offer.price_basis,
-                "evidence": evidence,
+                "metric_facts_required": tour.id not in context.metric_facts,
+                "source_fields": source_fields,
             })
         return {
             "context_id": context.id,
@@ -559,15 +712,35 @@ class AgentTools:
     ) -> str:
         review_candidates = soft_review_candidates(
             requirement, comparison.tour_snapshots, comparison.evaluations
-        ) if requirement.soft() else []
+        )
         payload: dict[str, Any] = {
             "requirement": requirement.model_dump(mode="json"),
             "scanned_tours": len(comparison.tour_snapshots),
             "scan_limit": self.settings.supabase_scan_limit,
         }
         if review_candidates:
+            cached_facts = self._load_metric_fact_cache(review_candidates)
+            candidates_to_review = [
+                pair for pair in review_candidates
+                if requirement.soft() or pair[0].id not in cached_facts
+            ]
+            batches = _review_batches(candidates_to_review)
+            if not batches:
+                comparison = compare(
+                    requirement,
+                    comparison.tour_snapshots,
+                    cfg=self.settings.tuning.decide,
+                    metric_facts=cached_facts,
+                )
+                comparison = limit_comparison(comparison)
+                if decision_run_id:
+                    self._save_decision_result(decision_run_id, comparison)
+                    return _json(self._decision_receipt(decision_run_id, comparison))
+                payload["comparison"] = comparison.model_dump(mode="json")
+                if additional:
+                    payload.update(additional)
+                return _json(payload)
             context_id = uid("rank")
-            batches = [review_candidates[i:i + 5] for i in range(0, len(review_candidates), 5)]
             context = _RankingContext(
                 id=context_id,
                 requirement=requirement,
@@ -575,6 +748,7 @@ class AgentTools:
                 candidates=review_candidates,
                 batches=batches,
                 decision_run_id=decision_run_id,
+                metric_facts=cached_facts,
             )
             with self._ranking_context_lock:
                 self._ranking_contexts[context_id] = context
@@ -594,6 +768,42 @@ class AgentTools:
         should_close = self.result_store is None
         try:
             store.save_decision_result(run_id, comparison)
+        finally:
+            if should_close:
+                store.close()
+
+    def _load_metric_fact_cache(
+        self, candidates: list[tuple[TourSnapshot, str]]
+    ) -> dict[str, ExtractedTourFacts]:
+        store = self.result_store or SessionStore(self.settings.database_url)
+        should_close = self.result_store is None
+        cached: dict[str, ExtractedTourFacts] = {}
+        try:
+            for tour, _offer_id in candidates:
+                payload = store.get_metric_cache(fact_cache_id(tour))
+                if not payload:
+                    continue
+                try:
+                    facts = ExtractedTourFacts.model_validate(payload)
+                except Exception:
+                    continue
+                if facts.tour_id == tour.id and facts.method_version == "tour-facts-v3":
+                    cached[tour.id] = facts
+        finally:
+            if should_close:
+                store.close()
+        return cached
+
+    def _save_metric_fact_cache_batch(
+        self, entries: list[tuple[TourSnapshot, ExtractedTourFacts]]
+    ) -> None:
+        if not entries:
+            return
+        store = self.result_store or SessionStore(self.settings.database_url)
+        should_close = self.result_store is None
+        try:
+            for tour, facts in entries:
+                store.save_metric_cache(fact_cache_id(tour), facts.model_dump(mode="json"))
         finally:
             if should_close:
                 store.close()
@@ -631,6 +841,259 @@ def _is_iso_date(value: str) -> bool:
 def _sentence_count(value: str) -> int:
     sentences = [item for item in re.split(r"(?<=[.!?。！？])\s+", value.strip()) if item]
     return len(sentences) or (1 if value.strip() else 0)
+
+
+def _review_batches(
+    candidates: list[tuple[TourSnapshot, str]],
+    *,
+    max_candidates: int = 5,
+    max_source_chars: int = 18_000,
+) -> list[list[tuple[TourSnapshot, str]]]:
+    """Bound each model payload without truncating any source field."""
+    batches: list[list[tuple[TourSnapshot, str]]] = []
+    current: list[tuple[TourSnapshot, str]] = []
+    current_chars = 0
+    for candidate in candidates:
+        tour, _offer_id = candidate
+        size = sum(len(value) for value in _metric_source_fields(tour).values())
+        if current and (len(current) >= max_candidates or current_chars + size > max_source_chars):
+            batches.append(current)
+            current = []
+            current_chars = 0
+        current.append(candidate)
+        current_chars += size
+    if current:
+        batches.append(current)
+    return batches
+
+
+def _metric_source_fields(tour: TourSnapshot) -> dict[str, str]:
+    """Keep sources separate so long fields never crowd out later fields."""
+    return {
+        "itinerary": tour.itinerary,
+        "route": " → ".join(tour.route) if tour.route_observed else "",
+        "inclusions": tour.inclusions,
+        "exclusions": tour.exclusions,
+        "surcharges": tour.surcharges,
+        "cancellation_policy": tour.cancellation_policy,
+        "child_policy": tour.child_policy,
+    }
+
+
+def _metric_evidence(tour: TourSnapshot, source_field: str, quote: str) -> MetricEvidence | None:
+    source = _metric_source_fields(tour).get(source_field, "")
+    if not quote or len(quote) > 1000 or quote not in source:
+        return None
+    return MetricEvidence(
+        source_field=source_field,
+        quote=quote,
+        observed_at=tour.observed_at,
+        url=tour.url,
+    )
+
+
+_MONEY_NUMBER = re.compile(
+    r"(?<!\d)(\d{1,3}(?:[.,\s]\d{3})+|\d+(?:[.,]\d+)?)\s*(tỷ|ty|triệu|trieu|million|nghìn|nghin|ngàn|ngan|k)?",
+    re.IGNORECASE,
+)
+
+
+def _money_amounts(quote: str) -> list[int]:
+    amounts: list[int] = []
+    for number, suffix in _MONEY_NUMBER.findall(quote):
+        compact = re.sub(r"\s", "", number)
+        if suffix:
+            decimal = compact.replace(",", ".")
+            try:
+                base = float(decimal)
+            except ValueError:
+                continue
+            multiplier = (
+                1_000_000_000 if suffix.casefold() in {"tỷ", "ty"}
+                else 1_000_000 if suffix.casefold() in {"triệu", "trieu", "million"}
+                else 1_000 if suffix.casefold() in {"nghìn", "nghin", "ngàn", "ngan", "k"}
+                else 1
+            )
+            amounts.append(round(base * multiplier))
+            continue
+        digits = re.sub(r"\D", "", compact)
+        if digits:
+            amounts.append(int(digits))
+    return amounts
+
+
+def _has_money_context(quote: str) -> bool:
+    folded = quote.casefold()
+    return bool(
+        re.search(r"\b(vnd|vnđ|đồng|dong|đ)\b|[$€£¥]", folded)
+        or re.search(r"\b(tỷ|ty|triệu|trieu|million|nghìn|nghin|ngàn|ngan|k)\b", folded)
+        or any(word in folded for word in ("phí", "phu thu", "giá", "tien", "chi phí"))
+    )
+
+
+def _money_supported(amount: int | None, quote: str) -> bool:
+    return amount is not None and _has_money_context(quote) and amount in _money_amounts(quote)
+
+
+def _supported_currency(currency: str, quote: str) -> str:
+    folded = quote.casefold()
+    markers = {
+        "VND": ("vnd", "vnđ", "đồng", "dong", "đ"),
+        "USD": ("usd", "$"),
+        "EUR": ("eur", "€"),
+        "GBP": ("gbp", "£"),
+        "JPY": ("jpy", "¥"),
+        "CNY": ("cny", "rmb", "¥"),
+        "THB": ("thb", "baht", "฿"),
+    }
+    requested = currency.strip().upper()
+    if requested:
+        supported = markers.get(requested, (requested.casefold(),))
+        return requested if any(marker in folded for marker in supported) else ""
+    return next(
+        (code for code, tokens in markers.items() if any(token in folded for token in tokens)),
+        "",
+    )
+
+
+def _unit_supported(unit: str, quote: str) -> bool:
+    folded = _fold_catalog_text(quote)
+    markers = {
+        "per_person": ("nguoi", "khach", "/nguoi", "/khach"),
+        "per_adult": ("nguoi lon", "adult", "/nguoi lon"),
+        "per_child": ("tre em", "child", "/tre em"),
+        "per_night": ("dem", "night", "/dem"),
+        "per_room": ("phong", "room", "/phong"),
+        "per_booking": ("tour", "goi", "chuyen", "booking"),
+        "per_day": ("ngay", "day", "/ngay"),
+        "per_vehicle": ("xe", "vehicle", "/xe"),
+    }
+    return unit in markers and any(_fold_catalog_text(marker) in folded for marker in markers[unit])
+
+
+def _number_with_word(number: int | None, quote: str, words: tuple[str, ...]) -> bool:
+    if number is None:
+        return True
+    for token in re.finditer(r"\d+", quote):
+        if int(token.group()) != number:
+            continue
+        tail = quote[token.end():token.end() + 16].casefold()
+        if any(word.casefold() in tail for word in words):
+            return True
+    return False
+
+
+def _validate_metric_facts(
+    tour: TourSnapshot, item: TourMetricFactsInput
+) -> tuple[ExtractedTourFacts, int]:
+    accepted_activities: list[ActivityFact] = []
+    accepted_legs: list[RouteLegFact] = []
+    accepted_coverage: list[CoverageFact] = []
+    accepted_exclusions: list[CostExposure] = []
+    accepted_surcharges: list[CostExposure] = []
+    accepted_cancellation: list[CancellationRule] = []
+    accepted_family: list[FamilyFact] = []
+    rejected = 0
+
+    for fact in item.activities:
+        evidence = _metric_evidence(tour, "itinerary", fact.quote)
+        if evidence is None or not fact.name.strip() or fact.name not in fact.quote:
+            rejected += 1
+            continue
+        day = fact.day if _number_with_word(fact.day, fact.quote, ("ngày", "day")) else None
+        accepted_activities.append(ActivityFact(name=fact.name.strip(), day=day, evidence=evidence))
+
+    for fact in item.route_legs:
+        field = next((name for name in ("route", "itinerary")
+                      if _metric_evidence(tour, name, fact.quote) is not None), "")
+        evidence = _metric_evidence(tour, field, fact.quote) if field else None
+        if (evidence is None or not fact.origin.strip() or not fact.destination.strip()
+                or fact.origin not in fact.quote or fact.destination not in fact.quote):
+            rejected += 1
+            continue
+        accepted_legs.append(RouteLegFact(
+            origin=fact.origin.strip(), destination=fact.destination.strip(),
+            mode=fact.mode.strip(), evidence=evidence,
+        ))
+
+    for fact in item.inclusions:
+        source_field = "exclusions" if fact.status == "excluded" else "inclusions"
+        evidence = _metric_evidence(tour, source_field, fact.quote)
+        if evidence is None:
+            rejected += 1
+            continue
+        accepted_coverage.append(CoverageFact(
+            category=fact.category, status=fact.status, evidence=evidence
+        ))
+
+    for source_field, facts, destination in (
+        ("exclusions", item.exclusions, accepted_exclusions),
+        ("surcharges", item.surcharges, accepted_surcharges),
+    ):
+        for fact in facts:
+            evidence = _metric_evidence(tour, source_field, fact.quote)
+            if evidence is None or not fact.name.strip():
+                rejected += 1
+                continue
+            amount = fact.amount if _money_supported(fact.amount, fact.quote) else None
+            unit = fact.unit if _unit_supported(fact.unit, fact.quote) else "unknown"
+            currency = _supported_currency(fact.currency, fact.quote)
+            applies_when = fact.applies_when if fact.applies_when and fact.applies_when in fact.quote else ""
+            destination.append(CostExposure(
+                name=fact.name.strip(), obligation=fact.obligation,
+                amount=amount, currency=currency, unit=unit,
+                applies_when=applies_when, source_field=source_field,
+                quote=fact.quote,
+            ))
+
+    for fact in item.cancellation_rules:
+        evidence = _metric_evidence(tour, "cancellation_policy", fact.quote)
+        if evidence is None:
+            rejected += 1
+            continue
+        days = fact.days_before_departure
+        if not _number_with_word(days, fact.quote, ("ngày", "day")):
+            days = None
+        refund = fact.refund_percent
+        if refund is not None and not re.search(rf"(?<!\d){refund}\s*%", fact.quote):
+            refund = None
+        fee = fact.fee_amount if _money_supported(fact.fee_amount, fact.quote) else None
+        currency = _supported_currency(fact.currency, fact.quote)
+        accepted_cancellation.append(CancellationRule(
+            days_before_departure=days, refund_percent=refund,
+            fee_amount=fee, currency=currency, evidence=evidence,
+        ))
+
+    for fact in item.family_facts:
+        evidence = _metric_evidence(tour, "child_policy", fact.quote)
+        if evidence is None:
+            rejected += 1
+            continue
+        min_age = fact.min_age if _number_with_word(fact.min_age, fact.quote, ("tuổi", "tuoi", "year")) else None
+        max_age = fact.max_age if _number_with_word(fact.max_age, fact.quote, ("tuổi", "tuoi", "year")) else None
+        amount = fact.amount if _money_supported(fact.amount, fact.quote) else None
+        percent = fact.percent if fact.percent is not None and re.search(rf"(?<!\d){fact.percent}\s*%", fact.quote) else None
+        condition = fact.condition if fact.condition and fact.condition in fact.quote else ""
+        accepted_family.append(FamilyFact(
+            kind=fact.kind, min_age=min_age, max_age=max_age,
+            amount=amount, percent=percent, condition=condition, evidence=evidence,
+        ))
+
+    return ExtractedTourFacts(
+        tour_id=tour.id,
+        activities=accepted_activities,
+        route_legs=accepted_legs,
+        inclusions=accepted_coverage,
+        exclusions=accepted_exclusions,
+        surcharges=accepted_surcharges,
+        cancellation_rules=accepted_cancellation,
+        family_facts=accepted_family,
+        reviewed_fields=[
+            field for field in item.reviewed_fields
+            if _metric_source_fields(tour).get(field, "").strip()
+        ],
+        method_version="tour-facts-v3",
+    ), rejected
 
 
 def _fold_catalog_text(value: str) -> str:

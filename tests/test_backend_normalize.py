@@ -78,7 +78,7 @@ def test_origin_endpoint_alias_is_not_removed_without_an_alias_registry():
     assert tour.destinations == ["Sài Gòn", "Đà Lạt"]
 
 
-def test_database_price_is_authoritative_over_optional_pricing_metadata():
+def test_offer_price_basis_is_not_inherited_from_tour_or_metadata():
     observed = datetime.now(UTC).isoformat()
     row = TourRow(
         tour={
@@ -116,7 +116,7 @@ def test_database_price_is_authoritative_over_optional_pricing_metadata():
     )
     offer = rows_to_snapshots([row])[0].offers[0]
     assert offer.price == 10_000_000
-    assert offer.price_basis == "exact"
+    assert offer.price_basis == "unknown"
     assert offer.pricing_complete is False
     assert offer.price_quotes[0]["amount"] == 99_000_000
 
@@ -127,6 +127,7 @@ def test_optional_quote_metadata_never_changes_canonical_from_price():
         offers=[{
             "record_key": "from-offer",
             "price": 10_000_000,
+            "price_type": "from",
             "observed_at": "2026-10-10T00:00:00+00:00",
             "field_meta": {"source_url": "https://trusted.example.test/tour", "pricing": {
                 "observed_at": "2026-10-09T00:00:00+00:00",
@@ -140,6 +141,25 @@ def test_optional_quote_metadata_never_changes_canonical_from_price():
     offer = rows_to_snapshots([row])[0].offers[0]
     assert offer.price == 10_000_000
     assert offer.price_basis == "from"
+
+
+def test_offer_age_prices_and_supplements_are_preserved():
+    row = TourRow(
+        tour={"record_key": "age-prices", "price_type": "fixed", "currency": "VND"},
+        offers=[{
+            "record_key": "age-offer",
+            "price": 2_000_000,
+            "price_type": "fixed",
+            "price_by_age": {"adult": 2_000_000, "child": 1_000_000, "infant": None},
+            "single_supplement": 500_000,
+            "supplements": "Lễ Tết: 300.000đ/khách",
+        }],
+    )
+
+    offer = rows_to_snapshots([row])[0].offers[0]
+    assert offer.price_by_age == {"adult": 2_000_000, "child": 1_000_000, "infant": None}
+    assert offer.single_supplement == 500_000
+    assert offer.supplements == "Lễ Tết: 300.000đ/khách"
 
 
 def test_stale_departure_date_is_retained_without_price_freshness_state():

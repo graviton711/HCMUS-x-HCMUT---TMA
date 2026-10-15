@@ -228,12 +228,18 @@ def test_decision_uses_persisted_result_when_opencode_turn_errors_after_tools(se
                 for candidate in review["candidates"]
                 for condition in review["soft_conditions"]
             ]
-            tool_output = json.loads(tools.score_soft(review["context_id"], verdicts))
+            metric_facts = [
+                {"tour_id": candidate["tour_id"]}
+                for candidate in review["candidates"]
+            ]
+            tool_output = json.loads(tools.score_soft(review["context_id"], verdicts, metric_facts))
             yield {
                 "type": "tool",
                 "part": {
                     "tool": "tour-catalog_score_soft",
-                    "state": {"status": "completed", "input": {"verdicts": verdicts}},
+                    "state": {"status": "completed", "input": {
+                        "verdicts": verdicts, "metric_facts": metric_facts,
+                    }},
                 },
             }
             query_result = tool_output

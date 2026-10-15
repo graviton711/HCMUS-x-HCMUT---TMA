@@ -31,6 +31,8 @@ def _pop_decision_result(database_url, run_id):
 def _query(tools, **kwargs):
     run_id = f"dec_{token_hex(16)}"
     result = json.loads(tools.query_tours(decision_run_id=run_id, **kwargs))
+    while result.get("soft_review") and not result["soft_review"].get("soft_conditions"):
+        result = _score_soft(tools, result["soft_review"]["context_id"], [])
     if result.get("ranking_complete"):
         comparison = _pop_decision_result(tools.settings.database_url, run_id)
         if comparison is not None:
@@ -39,7 +41,14 @@ def _query(tools, **kwargs):
 
 
 def _score_soft(tools, context_id, verdicts):
-    result = json.loads(tools.score_soft(context_id, verdicts))
+    context = tools._ranking_contexts[context_id]
+    batch = context.batches[context.batch_index]
+    metric_facts = [
+        {"tour_id": tour.id}
+        for tour, _offer_id in batch
+        if tour.id not in context.metric_facts
+    ]
+    result = json.loads(tools.score_soft(context_id, verdicts, metric_facts))
     run_id = result.get("decision_run_id")
     if result.get("ranking_complete") and isinstance(run_id, str):
         comparison = _pop_decision_result(tools.settings.database_url, run_id)
@@ -382,7 +391,7 @@ def test_score_soft_does_not_accept_verdict_for_hard_rejected_offer(settings):
             "verdict": "fit",
             "quote": "Ngày 2: Vịnh Lan Hạ",
             "reason": "Có hoạt động tham quan trên vịnh.",
-        }])
+        }], [])
     assert error.value.code == "SOFT_BATCH_INCOMPLETE"
 
 
@@ -409,7 +418,7 @@ def test_empty_turn_falls_back_to_retry_text(settings):
     async def fake_events(message, session_id):
         yield {
             "type": "message",
-            "part": {"tool": "tour-catalog_task",
+            "part": {"tool": "query_tours",
                      "state": {"status": "error", "input": {}}},
         }
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from backend.models import Comparison
+from backend.models import Comparison, RankedCandidate
 
 
 def limit_comparison(comparison: Comparison, limit: int = 5) -> Comparison:
@@ -35,11 +35,16 @@ def limit_comparison(comparison: Comparison, limit: int = 5) -> Comparison:
         })
         for view in comparison.decision_views
     ]
+    selected_options = comparison.decision_options[:3]
+    option_candidates = [
+        RankedCandidate(tour_id=item.tour_id, offer_id=item.offer_id)
+        for item in selected_options
+    ]
     view_candidates = [candidate for view in limited_views for candidate in view.candidates]
     seen.update(candidate.tour_id for candidate in view_candidates)
     offer_ids = {
         candidate.offer_id
-        for candidate in (*selected_ranked, *selected_near, *view_candidates)
+        for candidate in (*selected_ranked, *selected_near, *view_candidates, *option_candidates)
     }
     selected_tours = {
         candidate.tour_id
@@ -58,6 +63,14 @@ def limit_comparison(comparison: Comparison, limit: int = 5) -> Comparison:
             ],
             "evaluations": [item for item in comparison.evaluations if item.offer_id in offer_ids],
             "decision_views": limited_views,
+            "decision_options": [item for item in selected_options if item.tour_id in selected_tours],
+            "metric_profiles": [item for item in comparison.metric_profiles if item.offer_id in offer_ids],
+            "extracted_facts": [item for item in comparison.extracted_facts if item.tour_id in selected_tours],
+            "recommendation": (
+                comparison.recommendation
+                if comparison.recommendation and comparison.recommendation.tour_id in selected_tours
+                else None
+            ),
         }
     )
 

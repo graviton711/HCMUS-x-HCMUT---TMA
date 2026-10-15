@@ -303,6 +303,12 @@ class AgentService:
                 502,
                 retryable=True,
             )
+        if (
+            not response["assistant_text"]
+            and response["tool_calls"]
+            and not any((choices, final_requirement, final_comparison))
+        ):
+            response["assistant_text"] = "Mình chưa lấy được kết quả lần này. Bạn thử lại nhé."
         if not any((response["assistant_text"], response["tool_calls"], choices, final_requirement,
                     final_comparison)):
             raise AppError(
@@ -310,12 +316,6 @@ class AgentService:
                 "OpenCode completed without returning a message or tool result.",
                 502,
                 retryable=True,
-            )
-        if not response["assistant_text"] and choices is None and final_comparison is None:
-            # Tools ran (possibly with errors) but produced nothing user-facing.
-            # Never hand the UI an empty turn; the user can simply retry.
-            response["assistant_text"] = (
-                "Tôi chưa lấy được kết quả vừa rồi. Bạn thử gửi lại nhé."
             )
         _log.info(
             "agent_turn_completed operation=%s decision_draft_attached=%s comparison_attached=%s tool_count=%d",
@@ -435,7 +435,7 @@ def _tool_progress_message(name: str, value: dict[str, Any]) -> str:
     if name == "score_soft":
         verdicts = value.get("verdicts")
         count = len(verdicts) if isinstance(verdicts, list) else 0
-        return f"Đánh giá mức phù hợp qua {count} lượt đối chiếu" if count else "Đánh giá mức độ phù hợp"
+        return f"Đánh giá ưu tiên và dữ kiện qua {count} lượt đối chiếu" if count else "Đánh giá dữ kiện tour"
     if name == "clarify_date":
         calendar = value.get("calendar")
         year, month, day = (value.get(field) for field in ("year", "month", "day"))
@@ -506,7 +506,7 @@ def _comparison_result(value: dict[str, Any]) -> tuple[Requirement, Comparison] 
         return None
     if comparison.requirement.id != requirement.id or comparison.requirement.raw_text != requirement.raw_text:
         return None
-    max_snapshots = 20 if comparison.decision_views else 5
+    max_snapshots = 50 if comparison.decision_views else 5
     if len({tour.id for tour in comparison.tour_snapshots}) > max_snapshots:
         return None
     if any(len(view.candidates) > 5 for view in comparison.decision_views):

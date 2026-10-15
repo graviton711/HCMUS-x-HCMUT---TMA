@@ -42,6 +42,7 @@ def test_from_price_above_budget_fails(decide_cfg):
         offers=[{
             "record_key": "from-high-offer",
             "price": 11_000_000,
+                "price_type": "from",
             "currency": "VND",
             "departure_date": "2027-02-01",
             "observed_at": datetime.now(UTC).isoformat(),

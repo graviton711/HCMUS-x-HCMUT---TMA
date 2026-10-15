@@ -78,6 +78,24 @@ def test_form_adapter_uses_explicit_fields_only():
     ]
 
 
+def test_traveler_mix_is_validated_and_preserved():
+    requirement = validate_requirement(
+        "5 người lớn",
+        [],
+        travelers=5,
+        traveler_mix={"adult": 5},
+    )
+    assert requirement.traveler_mix == {"adult": 5}
+
+    with pytest.raises(AppError, match="add up"):
+        validate_requirement(
+            "5 người lớn",
+            [],
+            travelers=5,
+            traveler_mix={"adult": 4, "child": 0},
+        )
+
+
 def test_reviewed_soft_weights_must_total_100():
     raw = "thích thiên nhiên và biển"
     conditions = [

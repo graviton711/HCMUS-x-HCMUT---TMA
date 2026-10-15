@@ -141,6 +141,29 @@ class BaseStore:
         )
         self._commit()
 
+    def get_metric_cache(self, cache_id: str) -> dict | None:
+        rows = self._query(
+            self._sql(
+                f"SELECT payload FROM {self.records_table}"
+                " WHERE id = ? AND kind = 'metric_cache' AND owner_session_id IS NULL"
+            ),
+            (cache_id,),
+        )
+        if not rows:
+            return None
+        try:
+            payload = json.loads(str(rows[0][0]))
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise AppError("RECORD_INVALID", "Invalid metric cache record.", 500) from exc
+        return payload if isinstance(payload, dict) else None
+
+    def save_metric_cache(self, cache_id: str, payload: dict) -> None:
+        self._save(
+            "metric_cache", cache_id,
+            json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+            None,
+        )
+
     def create_agent_session(self, owner_session_id: str) -> str:
         local_id = f"agt_{uuid4().hex}"
         self._save("agent_session", local_id, json.dumps({"opencode_session_id": None}), owner_session_id)

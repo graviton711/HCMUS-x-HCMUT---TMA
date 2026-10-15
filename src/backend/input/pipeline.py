@@ -34,6 +34,7 @@ def validate_requirement(
     requirement_id: str | None = None,
     ranking: Any = None,
     require_weights: bool = False,
+    traveler_mix: Any = None,
 ) -> Requirement:
     """Validate agent-produced conditions without guessing or coercing values."""
     if not isinstance(raw_text, str) or not raw_text.strip() or len(raw_text) > 8000:
@@ -42,6 +43,20 @@ def validate_requirement(
         raise _invalid("Conditions must be a list.")
     if not isinstance(travelers, int) or isinstance(travelers, bool) or travelers < 1:
         raise _invalid("Travelers must be a positive integer.")
+    if traveler_mix is None:
+        traveler_mix = {}
+    if not isinstance(traveler_mix, dict):
+        raise _invalid("Traveler mix must be an object.")
+    allowed_ages = {"adult", "child", "small_child", "infant"}
+    if any(key not in allowed_ages for key in traveler_mix):
+        raise _invalid("Traveler mix contains an unsupported age group.")
+    if any(
+        not isinstance(count, int) or isinstance(count, bool) or count < 0
+        for count in traveler_mix.values()
+    ):
+        raise _invalid("Traveler counts must be non-negative integers.")
+    if traveler_mix and sum(traveler_mix.values()) != travelers:
+        raise _invalid("Traveler mix must add up to the total number of travelers.")
 
     cleaned: list[Condition] = []
     seen_ids: set[str] = set()
@@ -98,6 +113,7 @@ def validate_requirement(
         missing=[],
         raw_text=raw_text,
         travelers=travelers,
+        traveler_mix=traveler_mix,
         ranking=ranking_spec,
     )
 
@@ -146,7 +162,9 @@ def requirement_from_form(form: Any) -> Requirement:
             "quote": quote,
         })
     raw_text = " · ".join(raw_parts) or "Structured travel request"
-    return validate_requirement(raw_text, conditions, form.get("travelers", 1))
+    return validate_requirement(
+        raw_text, conditions, form.get("travelers", 1), traveler_mix=form.get("traveler_mix")
+    )
 
 
 def _validate_hard(condition: Condition) -> None:

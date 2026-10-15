@@ -105,6 +105,15 @@ def _pricing_details(offer: dict) -> tuple[bool | None, list[dict], list[dict]]:
     )
 
 
+def _age_prices(offer: dict) -> dict[str, int | None]:
+    raw = _json_object(offer.get("price_by_age"))
+    return {
+        key: _int(value)
+        for key, value in raw.items()
+        if key in {"adult", "child", "small_child", "infant"}
+    }
+
+
 def _offer(
     o: dict,
     tour: dict,
@@ -114,10 +123,12 @@ def _offer(
     now: datetime,
 ) -> OfferSnapshot:
     price = _int(o.get("price"))
-    raw_basis = o.get("price_type") or tour.get("price_type") or ""
-    basis = {"fixed": "exact", "from": "from", "contact": "contact"}.get(str(raw_basis))
-    if price is None or basis is None:
-        basis = "contact"
+    raw_basis = o.get("price_type")
+    basis = {"fixed": "exact", "from": "from", "contact": "contact", "unknown": "unknown"}.get(
+        str(raw_basis or "").strip().lower(), "unknown"
+    )
+    if price is None:
+        basis = "unknown"
     complete, quotes, charges = _pricing_details(o)
     availability = o.get("availability", "unknown")
     if availability not in ("available", "sold_out", "unknown"):
@@ -131,6 +142,9 @@ def _offer(
         price=price,
         currency=str(o.get("currency") or tour.get("currency") or ""),
         price_basis=basis,  # type: ignore[arg-type]
+        price_by_age=_age_prices(o),
+        single_supplement=_int(o.get("single_supplement")),
+        supplements=_text(o.get("supplements")),
         departure_freshness=_freshness(observed, freshness_seconds.get("departure_date"), now),
         departure_freshness_policy_seconds=freshness_seconds.get("departure_date"),
         pricing_complete=complete,
@@ -175,8 +189,10 @@ def rows_to_snapshots(
                 destinations=dests,
                 raw_destinations=raw_dests,
                 route=route,
+                route_observed=isinstance(route_value, list) and len(route_value) >= 2,
                 departure_city=origin,
                 duration_days=_int(t.get("duration_days")),
+                duration_nights=_int(t.get("duration_nights")),
                 transport=transport if transport in _TRANSPORTS else "",
                 accommodation=_text(t.get("accommodation")),
                 itinerary=_text(t.get("itinerary")),

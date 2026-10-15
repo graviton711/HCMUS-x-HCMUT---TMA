@@ -123,6 +123,8 @@ Plain text thuần túy cho cả 6 field: sạch thẻ HTML, giải mã entities
 
 ## Canonical decision metrics
 
+Extracted facts explicitly report which source fields were reviewed (itinerary, route, inclusions, exclusions, surcharges, cancellation_policy, or child_policy). An omitted field or empty fact list does not establish that there are no extra costs, cancellation terms, or child conditions.
+
 Every eligible tour/offer has a metric profile with per-metric value, unit/scale, state (`observed`, `partial`, `unknown`), source field, exact quote, observation time and method/version. Unknown is never coerced to zero or a pass.
 
 | Metric | Canonical measurement |
@@ -152,4 +154,4 @@ Backend mới không còn endpoint compare theo URL. Contract request/response h
 
 ## Decision Brief (runtime contract)
 
-Trọng số không phải field catalog và không cần migration database. Trong requirement của một lượt quyết định, mỗi soft condition có `weight_percent` là số nguyên từ 0 đến 100; khi có soft condition, tổng phải bằng 100 trước khi chạy. Hard condition không có trọng số. Nếu người dùng sửa giá trị trong Decision Brief, requirement cập nhật `quote` và `raw_text` để trích dẫn vẫn khớp với bản đã review. Comparison bổ sung `metric_profiles`, `decision_options` và `recommendation` tùy chọn, cùng các `decision_views`: `cheapest`, `best_fit`, `experience_rich`, `fewest_legs`, `cancellation_flexible`, `family_friendly`, `included_value`, `balanced`. Model cũ mặc định field mới về rỗng/None. View tham chiếu candidate bằng `tour_id`/`offer_id`; giá và evidence vẫn lấy từ snapshot chuẩn của catalog. Schema lưu offer cần migration cho basis giá và giá theo tuổi.
+Trọng số không phải field catalog và không cần migration database. Trong requirement của một lượt quyết định, `travelers` là tổng khách; `traveler_mix` giữ số `adult`, `child`, `small_child`, `infant` khi người dùng nêu rõ và phải cộng đúng tổng khách. Thiếu mix thì không đoán tuổi hoặc tính tổng theo nhóm. Mỗi soft condition có `weight_percent` là số nguyên từ 0 đến 100; khi có soft condition, tổng phải bằng 100 trước khi chạy. Hard condition không có trọng số. Nếu người dùng sửa giá trị trong Decision Brief, requirement cập nhật `quote` và `raw_text` để trích dẫn vẫn khớp với bản đã review. Comparison bổ sung `metric_profiles`, `decision_options` và `recommendation` tùy chọn, cùng các `decision_views`: `cheapest`, `best_fit`, `experience_rich`, `fewest_legs`, `cancellation_flexible`, `family_friendly`, `included_value`, `balanced`. Model cũ mặc định field mới về rỗng/None. View tham chiếu candidate bằng `tour_id`/`offer_id`; giá và evidence vẫn lấy từ snapshot chuẩn của catalog. Schema lưu offer cần migration cho basis giá và giá theo tuổi.
