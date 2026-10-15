@@ -7,14 +7,15 @@ import unicodedata
 from datetime import date
 from functools import cmp_to_key
 
+from backend.decide.metrics import build_metric_profiles
 from backend.models import (
     Analysis,
     Comparison,
     Condition,
     DecisionOption,
     DecisionView,
-    ExtractedTourFacts,
     Evaluation,
+    ExtractedTourFacts,
     MetricProfile,
     OfferSnapshot,
     RankedCandidate,
@@ -24,7 +25,6 @@ from backend.models import (
     TourSnapshot,
     uid,
 )
-from backend.decide.metrics import build_metric_profiles
 from backend.settings import DecideCfg
 
 RankValue = int | float | str | tuple[str, int | float]
@@ -44,14 +44,6 @@ def _destination_state(value: str, tour: TourSnapshot) -> State:
     if any(_contains(place, value) for place in tour.destinations):
         return "pass"
     return "fail" if tour.destinations else "unknown"
-
-
-def _unknown_reason(freshness: str, policy_seconds: int | None) -> str:
-    if policy_seconds is None or policy_seconds <= 0:
-        return "FIELD_FRESHNESS_POLICY_MISSING"
-    if freshness == "stale":
-        return "FIELD_STALE"
-    return "FIELD_FRESHNESS_UNKNOWN"
 
 
 def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) -> tuple[State, str]:
@@ -100,10 +92,6 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) ->
             else (("pass", "") if tour.duration_days == v else ("fail", "DURATION_MISMATCH"))
         )
     if f in ("date_from", "date_to"):
-        if offer.departure_freshness != "fresh":
-            return "unknown", _unknown_reason(
-                offer.departure_freshness, offer.departure_freshness_policy_seconds
-            )
         if not offer.departure_date:
             return "unknown", "FIELD_MISSING"
         try:
@@ -385,7 +373,7 @@ def _decision_views(
     # eliminated on that axis. Cost transparency is a count of explicit
     # unresolved/conditional items, not a monetary or probability score.
     frontier: list[tuple[TourSnapshot, OfferSnapshot, float]] = []
-    for currency, currency_rows in exact_by_currency.items():
+    for _currency, currency_rows in exact_by_currency.items():
         cost_axis_available = any(
             (row[2].metrics.get("unpriced_cost_exposures") is not None)
             and row[2].metrics["unpriced_cost_exposures"].state == "observed"

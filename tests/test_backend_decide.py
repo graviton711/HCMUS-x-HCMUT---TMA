@@ -143,7 +143,7 @@ def test_missing_destination_data_is_unknown(decide_cfg):
     assert comparison.evaluations[0].reason_code == "DESTINATION_MISSING"
 
 
-def test_stale_price_can_pass_budget_while_stale_departure_cannot_pass_date(decide_cfg):
+def test_date_matching_uses_catalog_date_regardless_of_crawl_freshness(decide_cfg):
     future = datetime.now(UTC) + timedelta(days=2)
     stale_tours = rows_to_snapshots(
         FixtureCatalog().list_tours(10),
@@ -153,10 +153,30 @@ def test_stale_price_can_pass_budget_while_stale_departure_cannot_pass_date(deci
     req = _req({"destinations": ["Đà Lạt"], "budget_max": 8_000_000})
     req.conditions.append(Condition(id="old-date", field="date_from", value="2026-12-01"))
     comparison = compare(req, stale_tours, decide_cfg)
-    reasons = {(item.offer_id, item.condition_id): item.reason_code for item in comparison.evaluations}
     states = {(item.offer_id, item.condition_id): item.state for item in comparison.evaluations}
     assert states[("dlv-dalat-3n-20261225", "h2")] == "pass"
-    assert reasons[("dlv-dalat-3n-20261225", "old-date")] == "FIELD_STALE"
+    assert states[("dlv-dalat-3n-20261225", "old-date")] == "pass"
+    stale_offer = next(
+        offer for tour in stale_tours for offer in tour.offers
+        if offer.id == "dlv-dalat-3n-20261225"
+    )
+    assert stale_offer.departure_freshness == "stale"
+
+
+def test_date_matching_does_not_require_observed_at(decide_cfg):
+    row = TourRow(
+        tour={"record_key": "no-crawl-time", "departure_city": "TP.HCM"},
+        offers=[{"record_key": "scheduled", "departure_date": "2026-12-25"}],
+    )
+    req = Requirement(id=uid("req"), conditions=[
+        Condition(id="start", field="date_from", value="2026-12-19", strength="hard"),
+        Condition(id="end", field="date_to", value="2026-12-26", strength="hard"),
+    ])
+    snapshot = rows_to_snapshots([row])[0]
+    comparison = compare(req, [snapshot], decide_cfg)
+    states = {item.condition_id: item.state for item in comparison.evaluations}
+    assert snapshot.offers[0].departure_freshness == "unknown"
+    assert states == {"start": "pass", "end": "pass"}
 
 
 def test_any_operator_matches_either(decide_cfg):

@@ -82,8 +82,9 @@ ping `/health` backend và `/global/health` opencode.
   `VITE_API_BASE_URL` trên service `web`.
 4. **Kiểm sau deploy:** `/health` Render trả `{status: ok}`; SPA mở được;
   network tab không còn request `/v2`, không lỗi CORS; chat ra đủ 5 tour cards;
-  BGK query tự do có budget/date cứng mà giá stale/`from` thì `unknown` là đúng
-  policy — demo luồng near-miss và review lại brief khi nới điều kiện.
+  query có date cứng phải so theo ngày trong offer bất kể tuổi crawl; giá `from`
+  dưới ngân sách vẫn là `unknown` vì chỉ là lower bound — demo luồng near-miss
+  và review lại brief khi nới điều kiện.
 5. **E2E lên preview:** `E2E_BASE_URL=https://<preview>.vercel.app` rồi chạy `test:e2e` (cần backend thật + Chrome, không dùng production data).
 
 ## Ranh giới
