@@ -445,3 +445,99 @@ test('composer keeps top room for the caret and grows for multiline input', asyn
   expect(multilineMetrics.height).toBeLessThanOrEqual(200);
   expect(multilineMetrics.height).toBeGreaterThanOrEqual(multilineMetrics.scrollHeight - 1);
 });
+
+async function weightedBrief(page: Page, weights: number[]) {
+  const backend = await mockBackend(page);
+  const preferences = [
+    'nhẹ nhàng', 'trong nước', 'văn hóa lịch sử', 'di tích cấp quốc gia',
+    'uy tín', 'hướng dẫn viên bám sát', 'tiền tip',
+  ].slice(0, weights.length);
+  const requirement = {
+    ...currentComparison().requirement,
+    raw_text: `${currentComparison().requirement.raw_text} ${preferences.join(' ')}`,
+    conditions: [
+      ...currentComparison().requirement.conditions.filter((condition) => condition.strength === 'hard'),
+      ...weights.map((weight_percent, index) => ({
+        id: `weight-${index}`, field: 'preference', operator: 'contains',
+        strength: 'soft', value: preferences[index], quote: preferences[index], weight_percent,
+      })),
+    ],
+  };
+  await page.route('**/agent/sessions/*/messages', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ assistant_text: 'Bản tiêu chí đã sẵn sàng.', tool_calls: [], decision_draft: requirement }),
+  }));
+  await startChat(page);
+  await page.getByLabel('Nhắn cho TourLens').fill(requirement.raw_text);
+  await page.getByRole('button', { name: 'Gửi', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Kiểm tra tiêu chí chuyến đi' })).toBeVisible();
+  return { backend, preferences };
+}
+
+test('confirmed weights remain editable across reload and only final weights reach the API', async ({ page }, testInfo) => {
+  const { backend } = await weightedBrief(page, [20, 5, 30, 10, 10, 20, 5]);
+  const culture = page.getByRole('spinbutton', { name: 'Trọng số văn hóa lịch sử', exact: true });
+  const gentle = page.getByRole('spinbutton', { name: 'Trọng số nhẹ nhàng', exact: true });
+  await culture.fill('40');
+  await expect(gentle).toHaveValue('20');
+  await culture.press('Enter');
+  await expect(gentle).toHaveValue('17');
+  await gentle.fill('30');
+  await gentle.press('Tab');
+  await expect(culture).toHaveValue('40');
+  await expect(page.getByText('Đã chốt', { exact: true })).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => {
+    const sessions = JSON.parse(localStorage.getItem('di-cung:history:v1') ?? '[]');
+    return sessions.flatMap((session: { messages: { kind: string; confirmedWeightIds?: string[] }[] }) => session.messages)
+      .find((message: { kind: string }) => message.kind === 'decision_draft')?.confirmedWeightIds;
+  })).toEqual(['weight-2', 'weight-0']);
+  await page.reload();
+  await expect(culture).toHaveValue('40');
+  await expect(gentle).toHaveValue('30');
+  await gentle.fill('25');
+  await gentle.press('Enter');
+  await expect(culture).toHaveValue('40');
+  await expect(gentle).toBeEnabled();
+  await page.locator('section[aria-label="Bản tóm tắt quyết định"]')
+    .screenshot({ path: testInfo.outputPath('confirmed-weights-desktop.png') });
+  await page.getByRole('button', { name: 'So sánh tour', exact: true }).click();
+  await expect.poll(() => backend.decisionCalls.length).toBe(1);
+  const sent = backend.decisionCalls[0].requirement as {
+    conditions: { id: string; strength: string; weight_percent?: number }[];
+  };
+  const weights = sent.conditions.filter((condition) => condition.strength === 'soft');
+  expect(weights.find((condition) => condition.id === 'weight-2')?.weight_percent).toBe(40);
+  expect(weights.find((condition) => condition.id === 'weight-0')?.weight_percent).toBe(25);
+  expect(weights.reduce((sum, condition) => sum + condition.weight_percent!, 0)).toBe(100);
+  expect(sent).not.toHaveProperty('confirmedWeightIds');
+});
+
+test('mobile weights report missing and excess totals and can be reset or corrected', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const { preferences } = await weightedBrief(page, [50, 30, 20]);
+  const inputs = preferences.map((value) => page.getByRole('spinbutton', { name: `Trọng số ${value}`, exact: true }));
+  for (const input of inputs) await input.press('Enter');
+  await inputs[2].fill('15');
+  await inputs[2].press('Tab');
+  await expect(page.getByText(/Còn thiếu 5% để đủ 100%/u)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'So sánh tour', exact: true })).toBeDisabled();
+  await inputs[2].fill('30');
+  await inputs[2].press('Enter');
+  await expect(page.getByText(/Các trọng số đã chốt vượt 10%/u)).toBeVisible();
+  await expect(inputs[0]).toHaveValue('50');
+  await inputs[2].fill('20');
+  await inputs[2].press('Tab');
+  await expect(page.getByRole('button', { name: 'So sánh tour', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Chia đều', exact: true }).click();
+  await expect(page.getByText('Đã chốt', { exact: true })).toHaveCount(0);
+  await inputs[0].fill('40');
+  await inputs[0].press('Tab');
+  await expect(inputs[1]).toHaveValue('30');
+  await expect(inputs[2]).toHaveValue('30');
+  const width = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth, content: document.documentElement.scrollWidth,
+  }));
+  expect(width.content).toBeLessThanOrEqual(width.viewport + 1);
+  await page.locator('section[aria-label="Bản tóm tắt quyết định"]')
+    .screenshot({ path: testInfo.outputPath('confirmed-weights-mobile.png') });
+});

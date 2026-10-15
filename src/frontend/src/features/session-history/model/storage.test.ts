@@ -12,6 +12,20 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('browser history privacy', () => {
+  it('restores per-brief weight confirmations alongside legacy drafts without editor metadata', () => {
+    const session = newSession();
+    const draft = {
+      id: 'brief-weight', kind: 'decision_draft', status: 'draft',
+      requirement: { id: 'req-weight', conditions: [], raw_text: '', travelers: 1, missing: [] },
+    };
+    session.messages = [draft, { ...draft, id: 'brief-confirmed', confirmedWeightIds: ['culture'] }];
+    saveSessions([session]);
+    const messages = loadSessions()[0]?.messages;
+    expect(messages).toHaveLength(2);
+    expect(messages?.[0]).not.toHaveProperty('confirmedWeightIds');
+    expect(messages?.[1]).toMatchObject({ id: 'brief-confirmed', confirmedWeightIds: ['culture'] });
+  });
+
   it('strips legacy draft and session keys without losing saved criteria or sessions', () => {
     const original = newSession();
     const legacyDraft = {

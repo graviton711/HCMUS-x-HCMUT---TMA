@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { CurrentCondition, CurrentRequirement } from '../../../shared/api';
 import { usePreferences } from '../../../shared/preferences';
 import { display, fieldLabel } from '../lib/format';
 import type { ChatMsg } from '../model/types';
 import { normalizeWeights, reallocateWeight } from '../lib/weightAllocation';
 import styles from './chat.module.css';
+
+const validWeightInput = (raw: string) => /^\d+$/u.test(raw) && Number(raw) <= 100;
 
 export function DecisionBrief({
   message,
@@ -14,24 +16,44 @@ export function DecisionBrief({
 }: {
   message: Extract<ChatMsg, { kind: 'decision_draft' }>;
   busy: boolean;
-  onChange: (requirement: CurrentRequirement) => void;
+  onChange: (requirement: CurrentRequirement, confirmedWeightIds?: string[]) => void;
   onRun: (requirement: CurrentRequirement) => void;
 }) {
   const { t } = usePreferences();
+  const weightHelpId = useId();
   const editStartValues = useRef<Record<string, string>>({});
   const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
   const requirement = message.requirement;
   const soft = requirement.conditions.filter((condition) => condition.strength === 'soft');
   const hard = requirement.conditions.filter((condition) => condition.strength === 'hard');
+  const confirmedIds = new Set((message.confirmedWeightIds ?? [])
+    .filter((id) => soft.some((condition) => condition.id === id)));
   const total = soft.reduce((sum, condition) => sum + (condition.weight_percent ?? 0), 0);
-  const weightsValid = soft.length === 0 || (
-    soft.every((condition) => Number.isInteger(condition.weight_percent)
+  const hasPendingWeights = Object.keys(weightDrafts).length > 0;
+  const pendingUpdate = prepareWeightUpdate();
+  const pendingSoft = pendingUpdate?.requirement.conditions
+    .filter((condition) => condition.strength === 'soft') ?? soft;
+  const pendingTotal = pendingSoft.reduce((sum, condition) => sum + (condition.weight_percent ?? 0), 0);
+  const pendingConfirmedIds = new Set(pendingUpdate?.confirmedWeightIds ?? confirmedIds);
+  const confirmedTotal = pendingSoft.reduce((sum, condition) => sum + (
+    pendingConfirmedIds.has(condition.id) ? condition.weight_percent ?? 0 : 0
+  ), 0);
+  const weightsValid = soft.length === 0 || (pendingUpdate !== null
+    && pendingSoft.every((condition) => Number.isInteger(condition.weight_percent)
       && (condition.weight_percent ?? -1) >= 0
       && (condition.weight_percent ?? 101) <= 100)
-    && total === 100
-    && Object.values(weightDrafts).every((value) => /^\d+$/u.test(value)
-      && Number(value) >= 0 && Number(value) <= 100)
+    && pendingTotal === 100
   );
+  const weightError = pendingUpdate === null
+    ? t('Nhập trọng số là số nguyên từ 0 đến 100.', 'Enter whole-number weights from 0 to 100.')
+    : confirmedTotal > 100
+      ? t(`Các trọng số đã chốt vượt ${confirmedTotal - 100}%. Hãy giảm trọng số để tiếp tục.`,
+        `Confirmed weights exceed 100% by ${confirmedTotal - 100}%. Reduce a weight to continue.`)
+      : pendingTotal < 100
+        ? t(`Còn thiếu ${100 - pendingTotal}% để đủ 100%. Hãy tăng trọng số để tiếp tục.`,
+          `${100 - pendingTotal}% remains to reach 100%. Increase a weight to continue.`)
+        : t(`Vượt ${pendingTotal - 100}%. Hãy giảm trọng số để tổng bằng 100%.`,
+          `${pendingTotal - 100}% over the limit. Reduce weights to total 100%.`);
   const valuesValid = requirement.conditions.every((condition) => {
     if (!condition.quote.trim() || !requirement.raw_text.includes(condition.quote)) return false;
     if (condition.field === 'destination' && condition.operator === 'any')
@@ -42,6 +64,29 @@ export function DecisionBrief({
     return Array.isArray(condition.value) && condition.value.length > 0;
   }) && requirement.raw_text.length <= 8000;
   const canRun = weightsValid && valuesValid && !busy && message.status !== 'running';
+
+  function withWeights(weights: Map<string, number>): CurrentRequirement {
+    return {
+      ...requirement,
+      conditions: requirement.conditions.map((condition) => condition.strength === 'soft'
+        ? { ...condition, weight_percent: weights.get(condition.id) ?? 0 }
+        : condition),
+    };
+  }
+
+  function prepareWeightUpdate() {
+    const edits = Object.entries(weightDrafts);
+    if (edits.some(([, raw]) => !validWeightInput(raw))) return null;
+    if (edits.length === 0) return { requirement, confirmedWeightIds: [...confirmedIds] };
+    const nextConfirmedIds = new Set([...confirmedIds, ...edits.map(([id]) => id)]);
+    const edited = soft.map((condition) => weightDrafts[condition.id] === undefined
+      ? condition
+      : { ...condition, weight_percent: Number(weightDrafts[condition.id]) });
+    return {
+      requirement: withWeights(normalizeWeights(edited, nextConfirmedIds)),
+      confirmedWeightIds: [...nextConfirmedIds],
+    };
+  }
 
   function patchCondition(id: string, changes: Partial<CurrentCondition>) {
     onChange({
@@ -55,13 +100,16 @@ export function DecisionBrief({
   function removeCondition(id: string) {
     const conditions = requirement.conditions.filter((condition) => condition.id !== id);
     const remainingSoft = conditions.filter((condition) => condition.strength === 'soft');
-    const normalized = normalizeWeights(remainingSoft);
+    const nextConfirmedIds = new Set([...confirmedIds].filter((confirmedId) => confirmedId !== id));
+    const normalized = requirement.conditions.find((condition) => condition.id === id)?.strength === 'soft'
+      ? normalizeWeights(remainingSoft, nextConfirmedIds)
+      : null;
     onChange({
       ...requirement,
-      conditions: conditions.map((condition) => condition.strength === 'soft'
+      conditions: conditions.map((condition) => condition.strength === 'soft' && normalized
         ? { ...condition, weight_percent: normalized.get(condition.id) ?? 0 }
         : condition),
-    });
+    }, [...nextConfirmedIds]);
     setWeightDrafts((current) => {
       const next = { ...current };
       delete next[id];
@@ -81,30 +129,34 @@ export function DecisionBrief({
       conditions: requirement.conditions.map((condition) => condition.strength === 'soft'
         ? { ...condition, weight_percent: weights.get(condition.id) ?? base }
         : condition),
-    });
+    }, []);
     setWeightDrafts({});
   }
 
   function changeWeight(condition: CurrentCondition, raw: string) {
     setWeightDrafts((current) => ({ ...current, [condition.id]: raw }));
-    if (!/^\d+$/u.test(raw)) return;
-    const proposed = Number(raw);
-    const weights = reallocateWeight(soft, condition.id, proposed);
+  }
+
+  function finishWeightEdit(condition: CurrentCondition, explicitValue?: string) {
+    const raw = explicitValue ?? weightDrafts[condition.id];
+    if (raw === undefined || !validWeightInput(raw)) return;
+    const weights = reallocateWeight(soft, condition.id, Number(raw), confirmedIds);
     if (!weights) return;
-    onChange({
-      ...requirement,
-      conditions: requirement.conditions.map((item) => item.strength === 'soft'
-        ? { ...item, weight_percent: weights.get(item.id) ?? 0 }
-        : item),
+    onChange(withWeights(weights), [...new Set([...confirmedIds, condition.id])]);
+    setWeightDrafts((current) => {
+      const next = { ...current };
+      delete next[condition.id];
+      return next;
     });
   }
 
-  function finishWeightEdit(id: string) {
-    setWeightDrafts((current) => {
-      const next = { ...current };
-      delete next[id];
-      return next;
-    });
+  function runComparison() {
+    if (!canRun || !pendingUpdate) return;
+    if (hasPendingWeights) {
+      onChange(pendingUpdate.requirement, pendingUpdate.confirmedWeightIds);
+      setWeightDrafts({});
+    }
+    onRun(pendingUpdate.requirement);
   }
 
   function changeValue(condition: CurrentCondition, value: string) {
@@ -147,6 +199,9 @@ export function DecisionBrief({
   }
 
   function conditionEditor(condition: CurrentCondition) {
+    const rawWeight = weightDrafts[condition.id];
+    const invalidWeight = rawWeight !== undefined && !validWeightInput(rawWeight);
+    const errorId = `${weightHelpId}-${encodeURIComponent(condition.id)}`;
     const text = Array.isArray(condition.value)
       ? condition.value.map((value) => display(value)).join(', ')
       : typeof condition.value === 'number'
@@ -217,10 +272,18 @@ export function DecisionBrief({
                 max="100"
                 step="1"
                 value={weightDrafts[condition.id] ?? condition.weight_percent ?? ''}
-                disabled={busy || message.status === 'running' || soft.length === 1}
+                disabled={busy || message.status === 'running'}
                 aria-label={t(`Trọng số ${String(condition.value)}`, `Weight for ${String(condition.value)}`)}
+                aria-invalid={invalidWeight || undefined}
+                aria-describedby={invalidWeight ? `${weightHelpId} ${errorId}` : weightHelpId}
                 onChange={(event) => changeWeight(condition, event.target.value)}
-                onBlur={() => finishWeightEdit(condition.id)}
+                onBlur={() => finishWeightEdit(condition)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    finishWeightEdit(condition, event.currentTarget.value);
+                  }
+                }}
               />
               <span>%</span>
             </span>
@@ -235,6 +298,11 @@ export function DecisionBrief({
         >
           ×
         </button>
+        {invalidWeight && (
+          <span id={errorId} className={styles['brief-weight-error']}>
+            {t('Trọng số phải là số nguyên từ 0 đến 100.', 'Weight must be a whole number from 0 to 100.')}
+          </span>
+        )}
       </div>
     );
   }
@@ -275,12 +343,20 @@ export function DecisionBrief({
       {soft.length > 0 && (
         <div className={styles['brief-weight-summary']}>
           <span aria-live="polite">
-            {t(`Đã phân bổ ${total} / 100 điểm`, `${total} / 100 points assigned`)}
+            {hasPendingWeights
+              ? t('Đang chỉnh trọng số', 'Editing weights')
+              : t(`Đã phân bổ ${total} / 100 điểm`, `${total} / 100 points assigned`)}
           </span>
           <button type="button" disabled={busy || message.status === 'running'} onClick={divideEvenly}>
             {t('Chia đều', 'Divide evenly')}
           </button>
         </div>
+      )}
+      {soft.length > 0 && (
+        <p id={weightHelpId} className={styles['brief-empty']}>
+          {t('Nhấn Enter hoặc rời ô để chốt. Các mục đã chốt vẫn sửa được và không bị tự cân lại. “Chia đều” đặt lại tất cả trọng số.',
+            'Press Enter or leave a changed field to confirm. Confirmed weights stay editable and are excluded from automatic allocation. “Divide evenly” resets all weights.')}
+        </p>
       )}
 
       {requirement.missing.length > 0 && (
@@ -296,7 +372,7 @@ export function DecisionBrief({
           type="button"
           className="btn btn-primary"
           disabled={!canRun}
-          onClick={() => onRun(requirement)}
+          onClick={runComparison}
         >
           {message.status === 'complete'
             ? t('Chạy lại so sánh', 'Run comparison again')
@@ -305,7 +381,7 @@ export function DecisionBrief({
       </footer>
       {!weightsValid && (
         <p className={styles['brief-validation']} role="status">
-          {t('Phân bổ đủ đúng 100 điểm để tiếp tục.', 'Allocate exactly 100 points to continue.')}
+          {weightError}
         </p>
       )}
       {!valuesValid && (

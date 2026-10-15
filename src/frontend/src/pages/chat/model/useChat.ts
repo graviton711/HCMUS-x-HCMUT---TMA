@@ -383,10 +383,19 @@ export function useChat(
   );
 
   const updateDecisionDraft = useCallback(
-    (messageId: string, requirement: CurrentRequirement) => {
+    (messageId: string, requirement: CurrentRequirement, confirmedWeightIds?: string[]) => {
+      const softIds = new Set(requirement.conditions
+        .filter((condition) => condition.strength === 'soft')
+        .map((condition) => condition.id));
       const updated = transcriptRef.current.map((message) =>
         message.id === messageId && message.kind === 'decision_draft'
-          ? { ...message, requirement: withEqualSoftWeights(requirement), status: 'draft' as const }
+          ? {
+              ...message,
+              requirement: withEqualSoftWeights(requirement),
+              confirmedWeightIds: [...new Set(confirmedWeightIds ?? message.confirmedWeightIds ?? [])]
+                .filter((id) => softIds.has(id)),
+              status: 'draft' as const,
+            }
           : message,
       );
       transcriptRef.current = updated;

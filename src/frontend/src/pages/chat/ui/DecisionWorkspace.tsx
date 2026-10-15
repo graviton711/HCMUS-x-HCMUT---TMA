@@ -35,7 +35,7 @@ export function DecisionWorkspace({
   agentSessionId: string | null;
   selectedArtifactId: string | null;
   onOpenArtifact: (id: string) => void;
-  onUpdateDecisionDraft: (id: string, requirement: CurrentRequirement) => void;
+  onUpdateDecisionDraft: (id: string, requirement: CurrentRequirement, confirmedWeightIds?: string[]) => void;
   onRunDecision: (id: string, requirement: CurrentRequirement) => void;
   onRelax: (field: string) => void;
   onSend: (text: string) => void;
@@ -137,9 +137,11 @@ export function DecisionWorkspace({
               </p>
             )}
             <DecisionBrief
+              key={activeDraft.id}
               message={activeDraft}
               busy={busy || !clientReady || !isCurrentDraft}
-              onChange={(requirement) => onUpdateDecisionDraft(activeDraft.id, requirement)}
+              onChange={(requirement, confirmedWeightIds) =>
+                onUpdateDecisionDraft(activeDraft.id, requirement, confirmedWeightIds)}
               onRun={(requirement) => onRunDecision(activeDraft.id, requirement)}
             />
           </>

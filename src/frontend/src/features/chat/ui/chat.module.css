@@ -1270,6 +1270,13 @@
   align-items: center;
 }
 
+.brief-weight-error {
+  grid-column: 1 / -1;
+  color: var(--danger-ink, var(--accent));
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
 .brief-weight-input input {
   padding-right: 27px;
   font-variant-numeric: tabular-nums;

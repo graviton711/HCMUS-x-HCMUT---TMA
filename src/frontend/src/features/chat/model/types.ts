@@ -27,6 +27,7 @@ export type ChatMsg =
       id: string;
       kind: 'decision_draft';
       requirement: CurrentRequirement;
+      confirmedWeightIds?: string[];
       status: 'draft' | 'running' | 'complete';
     }
   | { id: string; kind: 'error'; text: string; expired?: boolean };

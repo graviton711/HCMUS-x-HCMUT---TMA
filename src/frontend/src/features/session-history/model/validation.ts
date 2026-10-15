@@ -76,6 +76,10 @@ export function validChatMsg(v: unknown): boolean {
       record(v.requirement) &&
       typeof v.requirement.id === 'string' &&
       Array.isArray(v.requirement.conditions) &&
+      (v.confirmedWeightIds === undefined || (
+        Array.isArray(v.confirmedWeightIds) &&
+        v.confirmedWeightIds.every((id) => typeof id === 'string')
+      )) &&
       ['draft', 'running', 'complete'].includes(String(v.status))
     );
   }

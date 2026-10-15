@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { useState } from 'react';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { newSession, type LocalSession } from '../../../features/session-history';
 import { PreferencesProvider } from '../../../shared/preferences';
@@ -162,6 +162,49 @@ afterEach(() => {
 });
 
 describe('useChat OpenCode agent loop', () => {
+  it('persists confirmed weight IDs per brief while sending only final requirement weights', async () => {
+    vi.stubGlobal('fetch', makeBackend());
+    const apiRef: { current: ChatApi | null } = { current: null };
+    const sessionRef: { current: LocalSession | null } = { current: null };
+    const view = render(<Probe initial={newSession()} apiRef={apiRef} sessionRef={sessionRef} />);
+    await waitFor(() => expect(screen.getByTestId('busy').textContent).toBe('idle'));
+    act(() => apiRef.current?.send('tháng 12'));
+    await waitFor(() => expect(screen.getByTestId('msgs').textContent).toContain('decision_draft'));
+    const draft = apiRef.current!.msgs.find((message) => message.kind === 'decision_draft')!;
+    if (draft.kind !== 'decision_draft') throw new Error('Brief was not created');
+    const reviewed = {
+      ...draft.requirement,
+      raw_text: `${draft.requirement.raw_text} nhẹ nhàng văn hóa uy tín`,
+      conditions: [
+        ...draft.requirement.conditions,
+        ...['nhẹ nhàng', 'văn hóa', 'uy tín'].map((value, index) => ({
+          id: `soft-${index}`, field: 'preference', operator: 'contains', strength: 'soft' as const,
+          value, quote: value, weight_percent: [40, 35, 25][index],
+        })),
+      ],
+    };
+    act(() => apiRef.current?.updateDecisionDraft(
+      draft.id, reviewed, ['soft-0', 'soft-1', 'soft-0', 'h1', 'deleted'],
+    ));
+    act(() => apiRef.current?.updateDecisionDraft(draft.id, { ...reviewed, travelers: 2 }));
+    const saved = sessionRef.current!;
+    expect(saved.messages.find((message) => (message as { id: string }).id === draft.id))
+      .toMatchObject({ confirmedWeightIds: ['soft-0', 'soft-1'] });
+    view.unmount();
+
+    render(<Probe initial={saved} apiRef={apiRef} />);
+    await waitFor(() => expect(screen.getByTestId('busy').textContent).toBe('idle'));
+    const restored = apiRef.current!.msgs.find((message) => message.id === draft.id)!;
+    if (restored.kind !== 'decision_draft') throw new Error('Brief was not restored');
+    expect(restored.confirmedWeightIds).toEqual(['soft-0', 'soft-1']);
+    act(() => apiRef.current?.runDecision(restored.id, restored.requirement));
+    await waitFor(() => expect(calls.some((call) => call.path.endsWith('/decisions'))).toBe(true));
+    const body = calls.find((call) => call.path.endsWith('/decisions'))!.body;
+    expect(body).toEqual({ requirement: { ...reviewed, travelers: 2 } });
+    expect(JSON.stringify(body)).not.toContain('confirmedWeightIds');
+    await waitFor(() => expect(screen.getByTestId('busy').textContent).toBe('idle'));
+  });
+
   it('reuses one agent session, reviews a draft, and sends the confirmed requirement to comparison', async () => {
     vi.stubGlobal('fetch', makeBackend());
     const apiRef: { current: ChatApi | null } = { current: null };

@@ -28,27 +28,30 @@ export function reallocateWeight(
   items: WeightedItem[],
   changedId: string,
   proposed: number,
+  confirmedIds: ReadonlySet<string> = new Set(),
 ): Map<string, number> | null {
   if (!Number.isInteger(proposed) || proposed < 0 || proposed > 100) return null;
   if (items.length === 0 || !items.some((item) => item.id === changedId)) return null;
-  if (items.length === 1) return new Map([[items[0].id, 100]]);
-
-  const changedIndex = items.findIndex((item) => item.id === changedId);
-  const others = items.filter((_, index) => index !== changedIndex);
-  const current = others.map((item) => {
-    const value = item.weight_percent;
-    return Number.isInteger(value) && (value ?? -1) >= 0 ? value as number : 0;
-  });
-  const remainder = distribute(others, 100 - proposed, current);
-  return new Map([[changedId, proposed], ...remainder.entries()]);
+  return normalizeWeights(
+    items.map((item) => item.id === changedId ? { ...item, weight_percent: proposed } : item),
+    new Set([...confirmedIds, changedId]),
+  );
 }
 
-export function normalizeWeights(items: WeightedItem[]): Map<string, number> {
+export function normalizeWeights(
+  items: WeightedItem[],
+  confirmedIds: ReadonlySet<string> = new Set(),
+): Map<string, number> {
   if (items.length === 0) return new Map();
-  if (items.length === 1) return new Map([[items[0].id, 100]]);
-  const basis = items.map((item) => {
+  const current = new Map(items.map((item) => {
     const value = item.weight_percent;
-    return Number.isInteger(value) && (value ?? -1) >= 0 ? value as number : 0;
-  });
-  return distribute(items, 100, basis);
+    return [item.id, Number.isInteger(value) && (value ?? -1) >= 0 ? value as number : 0];
+  }));
+  const remaining = 100 - items.reduce((sum, item) =>
+    sum + (confirmedIds.has(item.id) ? current.get(item.id)! : 0), 0);
+  const automatic = items.filter((item) => !confirmedIds.has(item.id));
+  // Invalid totals remain editable drafts; never adjust a confirmed value or allocate negatives.
+  if (automatic.length === 0 || remaining < 0) return current;
+  const allocated = distribute(automatic, remaining, automatic.map((item) => current.get(item.id)!));
+  return new Map(items.map((item) => [item.id, allocated.get(item.id) ?? current.get(item.id)!]));
 }
