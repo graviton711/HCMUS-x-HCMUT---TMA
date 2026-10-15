@@ -6,7 +6,7 @@
 
 ## Input/output
 
-Vào: requirement đã validate (điều kiện chung và các alternative branch), tour/offer snapshots, metric facts và preference evaluations `(offer_id, condition_id) -> score/unknown + quote`. Ra: hard evaluations, metric profiles, decision options, `ranked`, `near_miss`, snapshots, evidence, decision trace theo offer/tour/nhánh và số lượng đã quét.
+Vào: requirement đã validate (điều kiện chung và các alternative branch), tour/offer snapshots, metric facts và preference evaluations `(offer_id, condition_id) -> score/unknown + quote`. Ra: hard evaluations, metric profiles (+ near-miss profiles), decision options kèm câu Đánh đổi/So với, `ranked`, `near_miss`, snapshots, evidence, decision trace, assumptions.
 
 ## Workflow
 
@@ -17,6 +17,9 @@ Vào: requirement đã validate (điều kiện chung và các alternative branc
 5. Objective views gồm cheapest, best-fit, experience-rich, fewest-legs, cancellation-flexible, included-value và balanced Pareto. Chỉ xếp trên metric có thể so sánh; unknown không được ép thành 0 hoặc pass.
 6. Mỗi view trả tối đa 5 lựa chọn, nhưng engine giữ đủ profile/evaluation cho explanations. Nếu có đủ candidates, kết quả có tối thiểu ba tour khác nhau; thiếu thì trả số thực có và relaxation scenarios riêng.
 7. Decision trace đếm riêng scan, điều kiện và blocker đầu tiên. Tổng theo condition có thể chồng lấp; unknown được đếm riêng. Mỗi option so metric với nhóm hard-pass cùng đơn vị/phạm vi, giữ evidence và trạng thái thiếu dữ liệu.
+8. Mỗi option có 1 câu "Đánh đổi:" ghép từ số trace (độ khan, blocker lớn nhất, khoản chưa định giá) và 1 câu "So với ..." chênh lệch vs rẻ nhất; không số thì không câu. Near-miss có profiles riêng (`near_miss_profiles`) cho what-if, không trộn vào xếp hạng.
+9. Metric đếm được (hoạt động, chặng, mốc hoàn tiền) parse bằng code từ text catalog kèm quote (`code-parse-v1`); facts LLM ưu tiên hơn. `family_suitability` tính từ cơ cấu đoàn + giá rõ theo nhóm tuổi; đoàn adult-only hoặc thiếu mix thì unknown.
+10. `assumptions` liệt kê giả định comparison đang dựa vào (đoàn, khoản chưa định giá/có điều kiện, giá công bố, snapshot-lock, phòng đơn).
 
 ## Interface với module khác
 
