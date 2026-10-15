@@ -187,14 +187,20 @@ class Settings(BaseSettings):
         opencode = opencode if isinstance(opencode, dict) else {}
         from dotenv import dotenv_values
 
+        # Resolve the dotenv file from the repo root so every entry point
+        # (repo root, src/frontend, deploy boxes) reads the same `.env`.
+        # An explicit `_env_file` (tests) always wins.
+        repo_env = str(Path(__file__).resolve().parents[2] / ".env")
+        env_file = overrides.get("_env_file", repo_env)
         try:
             dot_values = {
                 key.lower(): value
-                for key, value in dotenv_values(overrides.get("_env_file", ".env")).items()
+                for key, value in dotenv_values(env_file).items()
                 if value is not None
             }
         except Exception:
             dot_values = {}
+        init: dict[str, Any] = {"tuning": {}, "opencode": opencode}
         process_values = {key.lower(): value for key, value in os.environ.items()}
         env = set(process_values) | set(dot_values)
         if "supabase_tour_db_url" in overrides:
@@ -206,7 +212,7 @@ class Settings(BaseSettings):
         tuning: dict[str, Any] = {}
         tuning.update({k: v for k, v in backend.items()
                        if k in Tuning.model_fields and v is not None})
-        init: dict[str, Any] = {"tuning": tuning, "opencode": opencode}
+        init: dict[str, Any] = {"tuning": tuning, "opencode": opencode, "_env_file": env_file}
         for key, field in _FLAT_MAP.items():
             if isinstance(key, tuple):
                 section, sub = key

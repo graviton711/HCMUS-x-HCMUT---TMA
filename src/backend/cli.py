@@ -13,8 +13,12 @@ def main() -> None:
                         help="Path to settings.yaml (default: auto-resolve configs/settings.yaml)")
     parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=None)
+    parser.add_argument("--reload", action="store_true",
+                        help="Auto-restart on source changes (dev only).")
     args = parser.parse_args()
     if args.command == "serve":
+        from pathlib import Path
+
         import uvicorn
 
         from backend.settings import Settings
@@ -22,7 +26,11 @@ def main() -> None:
         settings = Settings.load(args.settings)
         host = args.host or settings.tuning.api.host
         port = args.port or settings.tuning.api.port
-        uvicorn.run("backend.api:create_app", factory=True, host=host, port=port, workers=1)
+        root = Path(__file__).resolve().parents[2]
+        uvicorn.run("backend.api:create_app", factory=True, host=host, port=port,
+                    workers=1, reload=args.reload,
+                    reload_dirs=[str(root / "src" / name) for name in ("backend", "shared")]
+                    + [str(root / "configs")] if args.reload else None)
 
 
 if __name__ == "__main__":
