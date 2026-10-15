@@ -19,14 +19,42 @@ flowchart LR
 - [Module backend](src/backend/README.md) · [Module frontend](src/frontend/README.md) · [Module ingest](src/ingest/README.md)
 - [Deploy preview](docs/frontend-vercel-preview.md)
 
-## Chạy backend
+## Chạy local
+
+Cài phụ thuộc một lần từ repo root:
 
 ```powershell
 uv sync
+pnpm.cmd --dir src/frontend install
+```
+
+Đặt `OPENCODE_SERVER_URL` và `OPENCODE_SERVER_PASSWORD` trong `.env`. Sau đó mở ba terminal tại repo root và chạy:
+
+**Terminal 1 — OpenCode**
+
+```powershell
+uv run tour-opencode serve
+```
+
+Lệnh tự nạp `.env` và lấy cổng từ `OPENCODE_SERVER_URL`.
+
+**Terminal 2 — Backend**
+
+```powershell
 uv run tour-backend serve
 ```
 
-API: <http://127.0.0.1:8000/docs>. Mặc định local dùng SQLite và catalog fixture. Khi có `SUPABASE_TOUR_DB_URL`, backend dùng cùng URL cho runtime store (đọc/ghi) và catalog Supabase (chỉ đọc catalog); không cần `DATABASE_URL` hay `DATA_PROVIDER`. Chat dùng OpenCode: chạy `opencode serve --hostname 127.0.0.1 --port 4098` và đặt `OPENCODE_SERVER_URL=http://127.0.0.1:4098`.
+API: <http://127.0.0.1:8000/docs>. Backend tự truyền mật khẩu cho CLI attach.
+
+**Terminal 3 — Frontend**
+
+```powershell
+uv run tour-frontend dev
+```
+
+Mở <http://127.0.0.1:5173>. Vite proxy API tới backend ở cổng `8000`. Giữ cả ba terminal chạy khi dùng web; dừng từng dịch vụ bằng `Ctrl+C`.
+
+Mặc định local dùng SQLite và catalog fixture. Khi có `SUPABASE_TOUR_DB_URL`, backend dùng cùng URL cho runtime store (đọc/ghi) và catalog Supabase (chỉ đọc catalog); không cần `DATABASE_URL` hay `DATA_PROVIDER`.
 
 ## Frontend
 

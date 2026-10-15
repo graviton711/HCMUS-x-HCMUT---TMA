@@ -13,12 +13,16 @@ API HTTP cho frontend và các consumer. Schema live ở `/openapi.json`; models
 - `GET /comparisons/{id}` → comparison đã lưu.
 - `GET /history?limit=&cursor=` and `GET /history/{id}` → cursor pagination and owner-scoped requirement/comparison detail for guest sessions.
 - `POST /agent/sessions` — Bearer bắt buộc; tạo local agent session và trả `{agent_session_id}`.
-- `POST /agent/sessions/{id}/messages` — Bearer bắt buộc; body `{message}`. Có thể trả `{assistant_text, choices?, tool_calls?, requirement?, comparison?, decision_draft?}`. Một `decision_draft` chứa requirement đã cấu trúc nhưng chưa có comparison; việc tạo draft không truy vấn catalog. Với `Accept: text/event-stream`, trả SSE `progress`, từng `tool` với trạng thái, rồi `result`; lỗi giữa stream dùng event `error`.
+- `POST /agent/sessions/{id}/messages` — Bearer bắt buộc; body `{message}`. Có thể trả `{assistant_text, choices?, tool_calls?, requirement?, comparison?, decision_draft?}`. Một `decision_draft` chứa requirement đã cấu trúc nhưng chưa có comparison; việc tạo draft không truy vấn catalog. Với `Accept: text/event-stream`, trả SSE `progress`, từng lần gọi `tool` có mô tả nghiệp vụ và trạng thái, rồi `result`; lỗi giữa stream dùng event `error`. `tool.status=error` chỉ nói lần gọi đó lỗi; lượt vẫn có thể kết thúc thành công nếu agent gọi lại và trả kết quả hợp lệ.
 - `POST /agent/sessions/{id}/decisions` — Bearer bắt buộc; body chứa requirement đã được người dùng review, gồm `conditions` và `weight_percent` cho từng soft condition. Backend validate lại schema, hard conditions và tổng trọng số đúng 100 trước khi chạy. MCP ghi Comparison hoàn tất vào runtime store theo mã lượt riêng; backend lấy, kiểm tra requirement rồi mới lưu theo owner và trả response/SSE. Kết quả cuối không phụ thuộc model có nhắc lại JSON tool trong câu trả lời hay không. Response trả `decision_views`, `ranked`, `near_miss`, evidence và `candidates_considered`.
 
 Local agent ID ánh xạ tới OpenCode session theo guest owner; OpenCode ID không lộ ra client. Các lượt tìm kiếm giới hạn số tour hiển thị theo contract, nhưng đánh giá soft bao phủ mọi hard-pass candidate trong phạm vi catalog scan. MCP dùng batch để không gửi toàn bộ evidence cùng lúc vào model context.
 
 Requirements/comparisons created without a Bearer token remain unowned for workspace compatibility. When a guest Bearer token is supplied, reads and history are restricted to that session. Existing unowned records are preserved by the schema migration. `POST /comparisons` runs synchronously. Agent routes require a Bearer session and never accept owner IDs from the client. OpenCode is optional and requires a configured `opencode serve`; ordinary requirement/comparison routes do not depend on it.
+
+## OpenCode event adapter
+
+OpenCode JSON events may expose MCP calls directly or wrap them in Code Mode `execute`. The backend normalizes wrapped tool names and inputs from `state.metadata.toolCalls`, then parses returned JSON from `state.content`. SSE progress and `tool_calls` represent the logical MCP operations; wrapper-level argument errors such as a missing `code` field are not reported as failed catalog operations. A Decision Brief is returned only from a validated `draft_requirement` payload.
 
 ## Agent ranking
 
@@ -53,11 +57,17 @@ OpenCode agent điều khiển hội thoại → MCP tools kiểm tra điều ki
 
 ```powershell
 uv sync
-opencode serve --hostname 127.0.0.1 --port 4098
-# Set OPENCODE_SERVER_URL=http://127.0.0.1:4098 in .env
+# Set OPENCODE_SERVER_URL and OPENCODE_SERVER_PASSWORD in .env
+# Terminal 1
+uv run tour-opencode serve
+# Terminal 2
 uv run tour-backend serve
 ```
 
 Mặc định local dùng SQLite và catalog fixture. Khi có `SUPABASE_TOUR_DB_URL`, backend dùng URL đó cho runtime store (đọc/ghi phiên và kết quả) lẫn catalog Supabase (chỉ đọc catalog); không cần `DATABASE_URL` hoặc `DATA_PROVIDER`. Migration `migrations/004_runtime_store.sql` phải được áp dụng trước; session mapping dùng records store.
 
-OpenCode giữ một server local chạy nền; backend gọi `opencode run --attach http://127.0.0.1:4098 --format json` theo từng tin nhắn và gắn `--session` khi đã có session ID. Agent/MCP config nằm trong `opencode.json`, `.opencode/agents/` và `src/backend/agent/`. Backend và OpenCode server cần cùng host/workspace để nạp MCP server. Không cần NIM key cho hội thoại hay soft verdict. Frontend nhận tiến độ tool qua SSE và kết quả cuối cùng qua event `result`; consumer cũ vẫn dùng JSON mặc định. Trang chào: `http://127.0.0.1:8000/`, docs tương tác: `http://127.0.0.1:8000/docs`.
+OpenCode giữ một server local chạy nền; backend gọi `opencode run --server http://127.0.0.1:4098 --format json` theo từng tin nhắn và gắn `--session` khi đã có session ID. Mỗi lượt truyền model rõ ràng: `OPENCODE_MODEL` nếu được đặt, nếu không thì model hiện tại của agent lấy từ OpenCode API. Nhờ vậy session cũ không giữ model đã bị thay hoặc không còn hợp lệ. CLI dùng thư mục làm việc của tiến trình làm project context; backend đặt thư mục này từ `OPENCODE_PROJECT_DIR`, mặc định là root repo. Backend đọc `OPENCODE_SERVER_PASSWORD` từ `.env`/process environment và truyền biến đó cho CLI/API OpenCode. Lệnh `tour-opencode serve` nạp cùng `.env`, dùng loopback và lấy cổng từ `OPENCODE_SERVER_URL`; chỉ địa chỉ bind có thể override bằng `--hostname`, để server và backend không lệch cổng. Lệnh này dành cho server local; server remote được khởi chạy bởi nền tảng deploy. Agent/MCP config nằm trong `opencode.json`, `.opencode/agents/` và `src/backend/agent/`. Backend và OpenCode server cần cùng host/workspace để nạp MCP server. Không cần NIM key cho hội thoại hay soft verdict. Frontend nhận tiến độ tool qua SSE và kết quả cuối cùng qua event `result`; consumer cũ vẫn dùng JSON mặc định. Trang chào: `http://127.0.0.1:8000/`, docs tương tác: `http://127.0.0.1:8000/docs`.
+
+## Operational logging
+
+Operational logs are not part of the HTTP/SSE contract. Each request has a correlation ID returned in `X-Request-ID` and included in backend log records. OpenCode diagnostics record process status and bounded, filtered stderr only on failure; tool logs use logical tool name and status without inputs or outputs. A validated Decision Brief is logged as a boolean lifecycle milestone, not with its contents. Local file logging defaults to `.local/logs/backend.log` and rotates at 10 MiB × 5 backups; hosted Render deployments use the Dashboard log stream and do not rely on container files.

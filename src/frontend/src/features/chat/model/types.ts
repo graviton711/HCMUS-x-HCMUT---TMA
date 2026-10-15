@@ -16,6 +16,7 @@ export type ChatMsg =
         message?: string;
         status: 'running' | 'completed' | 'error' | 'cancelled';
       }[];
+      outcome?: 'running' | 'completed' | 'error' | 'cancelled';
     }
   | {
       id: string;

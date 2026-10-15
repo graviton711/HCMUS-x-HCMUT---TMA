@@ -108,16 +108,18 @@ export function Thread({
               const activeTool = [...message.tools]
                 .reverse()
                 .find((tool) => tool.status === 'running');
-              const failedSteps = message.tools.filter((tool) => tool.status === 'error').length;
+              const failedCalls = message.tools.filter((tool) => tool.status === 'error').length;
               const cancelledSteps = message.tools.filter((tool) => tool.status === 'cancelled').length;
               const isCurrentActivity = busy && message.id === currentActivityId;
               const state = isCurrentActivity
                 ? 'running'
-                : failedSteps > 0
-                  ? 'error'
-                  : cancelledSteps > 0
+                : message.outcome === 'completed'
+                  ? 'completed'
+                  : message.outcome === 'cancelled' || cancelledSteps > 0
                     ? 'cancelled'
-                    : 'completed';
+                    : message.outcome === 'error' || failedCalls > 0
+                      ? 'error'
+                      : 'completed';
               const summary = isCurrentActivity
                 ? activeTool
                   ? activeTool.message ||
@@ -128,17 +130,29 @@ export function Thread({
                       ]),
                     )
                   : t('Đang tổng hợp kết quả', 'Putting the results together')
-                : cancelledSteps > 0
-                  ? t('Đã dừng lượt tìm', 'Search stopped')
-                  : failedSteps > 0
-                  ? t(
-                      `Có ${failedSteps} bước tra cứu chưa hoàn tất`,
-                      `${failedSteps} search step${failedSteps === 1 ? '' : 's'} did not complete`,
-                    )
-                  : t(
-                      `Đã kiểm tra ${message.tools.length} bước`,
-                      `Checked ${message.tools.length} steps`,
-                    );
+                : message.outcome === 'completed'
+                  ? failedCalls > 0
+                    ? t(
+                        `Đã hoàn tất · ${failedCalls} lần gọi chưa thành công`,
+                        `Completed · ${failedCalls} tool call${failedCalls === 1 ? '' : 's'} did not succeed`,
+                      )
+                    : t(
+                        `Đã kiểm tra ${message.tools.length} bước`,
+                        `Checked ${message.tools.length} steps`,
+                      )
+                  : message.outcome === 'cancelled' || cancelledSteps > 0
+                    ? t('Đã dừng lượt tìm', 'Search stopped')
+                    : message.outcome === 'error'
+                      ? t('Lượt chưa hoàn tất', 'Turn did not complete')
+                      : failedCalls > 0
+                        ? t(
+                            `Có ${failedCalls} lần gọi chưa thành công`,
+                            `${failedCalls} tool call${failedCalls === 1 ? '' : 's'} did not succeed`,
+                          )
+                        : t(
+                            `Đã kiểm tra ${message.tools.length} bước`,
+                            `Checked ${message.tools.length} steps`,
+                          );
 
               return (
                 <motion.div key={message.id} {...rise} className={styles['tool-progress']}>

@@ -20,6 +20,7 @@ from backend.errors import AppError
 from backend.input.pipeline import validate_requirement
 from backend.settings import Settings
 from backend.workflows import TourWorkflows
+from shared import RequestContextMiddleware
 
 
 class SafeAPIRoute(APIRoute):
@@ -68,7 +69,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_origin_regex=settings.cors_origin_regex or None,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Accept"],
+        expose_headers=["X-Request-ID"],
     )
+    app.add_middleware(RequestContextMiddleware)
 
     def operation(request: Request) -> str:
         route = request.scope.get("route")

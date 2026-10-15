@@ -1,7 +1,7 @@
 ---
 description: Grounded Vietnamese travel decision consultant
 mode: primary
-model: opencode/muse-spark-1.3-contributor-free
+model: opencode/big-pickle
 temperature: 0.2
 permission:
   "*": ask

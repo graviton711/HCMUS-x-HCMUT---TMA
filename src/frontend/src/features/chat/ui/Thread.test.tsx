@@ -90,4 +90,32 @@ describe('Thread tool activity', () => {
     );
     expect(screen.getByText('Đã kiểm tra 2 bước')).toBeTruthy();
   });
+
+  it('shows a successful turn as completed when one tool invocation was recovered', () => {
+    const message: ChatMsg = {
+      id: 'activity',
+      kind: 'tool_activity',
+      outcome: 'completed',
+      tools: [
+        { id: 'call-1', name: 'draft_requirement', message: 'Preparing reviewed criteria', status: 'error' },
+        { id: 'call-2', name: 'draft_requirement', message: 'Preparing reviewed criteria', status: 'completed' },
+      ],
+    };
+
+    render(
+      <PreferencesProvider>
+        <Thread messages={[message]} busy={false} onSend={() => {}} onRelax={() => {}} />
+      </PreferencesProvider>,
+    );
+
+    const details = document.querySelector('details');
+    expect(details?.getAttribute('data-state')).toBe('completed');
+    expect(details?.querySelector('summary')?.textContent).toContain('1');
+
+    fireEvent.click(details?.querySelector('summary') as HTMLElement);
+    const rows = within(details as HTMLElement).getAllByRole('listitem');
+    expect(rows[0].getAttribute('data-state')).toBe('error');
+    expect(rows[1].getAttribute('data-state')).toBe('completed');
+  });
+
 });

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import traceback
+from pathlib import Path
 
 from backend.errors import AppError
 from shared import get_logger
@@ -27,10 +29,15 @@ def log_app_error(error: AppError, *, transport: str, operation: str) -> None:
 
 
 def log_unexpected_error(error: Exception, *, transport: str, operation: str) -> None:
-    """Log safe metadata only; never include exception text or traceback."""
+    """Log exception type and source frames, never exception text or payloads."""
+    frames = traceback.extract_tb(error.__traceback__)
+    stack = " <- ".join(
+        f"{Path(frame.filename).name}:{frame.lineno}:{frame.name}" for frame in frames[-8:]
+    )
     _log.error(
-        "unexpected_error transport=%s operation=%s exception_type=%s",
+        "unexpected_error transport=%s operation=%s exception_type=%s stack=%s",
         transport,
         operation,
         type(error).__name__,
+        stack,
     )

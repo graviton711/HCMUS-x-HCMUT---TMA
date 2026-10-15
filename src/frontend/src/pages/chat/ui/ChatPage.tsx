@@ -106,11 +106,20 @@ function ActiveChat({
   useEffect(() => {
     const thread = threadRef.current;
     if (!thread) return;
+    const canMatchMedia = typeof window.matchMedia === 'function';
+    const reduced = canMatchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (canMatchMedia && window.matchMedia('(max-width: 1000px)').matches) {
+      const scrollRoot = document.scrollingElement ?? document.documentElement;
+      const scrollHeight = Math.max(scrollRoot.scrollHeight, document.body.scrollHeight);
+      const nearBottom = scrollHeight - window.scrollY - window.innerHeight < 480;
+      if (!nearBottom) return;
+      window.scrollTo({ top: scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
+      return;
+    }
+
     const nearBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 480;
     if (!nearBottom) return;
-    const reduced =
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const top = thread.scrollHeight;
     if (typeof thread.scrollTo === 'function') {
       thread.scrollTo({ top, behavior: reduced ? 'auto' : 'smooth' });

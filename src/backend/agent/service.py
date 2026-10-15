@@ -14,9 +14,20 @@ from backend.data.sessions import BaseStore
 from backend.errors import AppError
 from backend.models import Comparison, Requirement
 from backend.settings import Settings
+from shared import get_logger
 
 _LOCAL_ID = re.compile(r"^agt_[A-Za-z0-9]{16,40}$")
 _OPENCODE_ID = re.compile(r"^ses_[A-Za-z0-9_-]{8,120}$")
+_MCP_TOOL_NAMES = (
+    "draft_requirement",
+    "catalog_facets",
+    "query_tours",
+    "tour_detail",
+    "score_soft",
+    "ask_choice",
+    "clarify_date",
+)
+_log = get_logger("backend.agent.service")
 
 
 class AgentService:
@@ -134,6 +145,8 @@ class AgentService:
         expected_requirement: Requirement | None = None,
         decision_run_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
+        operation = "decision" if expected_requirement is not None else "message"
+        _log.info("agent_turn_started operation=%s", operation)
         assistant_text: list[str] = []
         tool_calls: list[dict[str, str]] = []
         active_tool_ids: dict[str, str] = {}
@@ -171,58 +184,65 @@ class AgentService:
                     assistant_text.append(part["text"])
                     continue
 
-                tool = part.get("tool") or part.get("name")
-                if not isinstance(tool, str):
-                    continue
-                tool_name = _tool_name(tool)
                 state = part.get("state")
                 state = state if isinstance(state, dict) else {}
-                status = str(state.get("status", "running"))
-                tool_calls.append({"name": tool_name, "status": status})
-                call_id = part.get("callID") or part.get("call_id") or part.get("id")
-                if not isinstance(call_id, str) or not call_id:
-                    terminal = status in {"completed", "success", "error", "failed"}
-                    call_id = active_tool_ids.get(tool_name, "")
-                    if not call_id:
-                        tool_sequence += 1
-                        call_id = f"tool-{tool_sequence}"
-                    if not terminal:
-                        active_tool_ids[tool_name] = call_id
-                tool_input = state.get("input")
-                if not isinstance(tool_input, dict):
-                    tool_input = part.get("input") or part.get("arguments")
-                if not isinstance(tool_input, dict):
-                    tool_input = {}
-                message_summary = _tool_progress_message(tool_name, tool_input)
-                if message_summary:
-                    tool_messages[call_id] = message_summary
-                yield {
-                    "type": "tool",
-                    "id": call_id,
-                    "name": tool_name,
-                    "message": tool_messages.get(call_id, ""),
-                    "status": (
+                invocations = _tool_invocations(part, state)
+                successful_tool_names: set[str] = set()
+                for invocation in invocations:
+                    tool_name = invocation["name"]
+                    status = invocation["status"]
+                    log_status = (
                         "completed" if status in {"completed", "success"} else
                         "error" if status in {"error", "failed"} else "running"
-                    ),
-                }
-                if status in {"completed", "success", "error", "failed"}:
-                    active_tool_ids.pop(tool_name, None)
-                    tool_messages.pop(call_id, None)
-                if status not in {"completed", "success"}:
+                    )
+                    _log.info("agent_tool name=%s status=%s", tool_name, log_status)
+                    tool_calls.append({"name": tool_name, "status": status})
+                    call_id = invocation["id"]
+                    if not call_id:
+                        terminal = status in {"completed", "success", "error", "failed"}
+                        call_id = active_tool_ids.get(tool_name, "")
+                        if not call_id:
+                            tool_sequence += 1
+                            call_id = f"tool-{tool_sequence}"
+                        if not terminal:
+                            active_tool_ids[tool_name] = call_id
+                    message_summary = _tool_progress_message(tool_name, invocation["input"])
+                    if message_summary:
+                        tool_messages[call_id] = message_summary
+                    yield {
+                        "type": "tool",
+                        "id": call_id,
+                        "name": tool_name,
+                        "message": tool_messages.get(call_id, ""),
+                        "status": (
+                            "completed" if status in {"completed", "success"} else
+                            "error" if status in {"error", "failed"} else "running"
+                        ),
+                    }
+                    if status in {"completed", "success", "error", "failed"}:
+                        active_tool_ids.pop(tool_name, None)
+                        tool_messages.pop(call_id, None)
+                    if status in {"completed", "success"}:
+                        successful_tool_names.add(tool_name)
+
+                if not successful_tool_names:
                     continue
                 output = state.get("output", part.get("output"))
+                if output is None:
+                    output = state.get("content", part.get("content"))
+                draft_parse_valid = False
                 for payload in json_candidates(output):
-                    if tool_name == "ask_choice" and _valid_choice(payload):
+                    if "ask_choice" in successful_tool_names and _valid_choice(payload):
                         choices = {
                             "question": payload["question"],
                             "options": payload["options"],
                             "allow_custom": bool(payload.get("allow_custom", True)),
                         }
-                    if tool_name == "draft_requirement":
+                    if "draft_requirement" in successful_tool_names:
                         draft = _requirement_draft(payload)
                         if draft is not None:
                             requirement_draft = draft
+                            draft_parse_valid = True
                     result = _comparison_result(payload)
                     if result is None:
                         continue
@@ -235,6 +255,8 @@ class AgentService:
                         )
                     final_requirement = requirement
                     final_comparison = comparison
+                if "draft_requirement" in successful_tool_names:
+                    _log.info("agent_draft_parse valid=%s", draft_parse_valid)
         except Exception:
             if expected_requirement is None or decision_run_id is None:
                 raise
@@ -294,6 +316,13 @@ class AgentService:
             response["assistant_text"] = (
                 "Tôi chưa lấy được kết quả vừa rồi. Bạn thử gửi lại nhé."
             )
+        _log.info(
+            "agent_turn_completed operation=%s decision_draft_attached=%s comparison_attached=%s tool_count=%d",
+            operation,
+            "decision_draft" in response,
+            "comparison" in response,
+            len(response["tool_calls"]),
+        )
         yield {"type": "result", "response": response}
 
     @staticmethod
@@ -310,11 +339,64 @@ class AgentService:
 
 
 def _tool_name(value: str) -> str:
-    if value.startswith("tour-catalog_"):
-        return value.removeprefix("tour-catalog_")
-    if "." in value:
-        return value.rsplit(".", 1)[-1]
-    return value
+    normalized = value.rsplit(".", 1)[-1]
+    for name in _MCP_TOOL_NAMES:
+        if normalized == name or normalized.endswith(f"_{name}"):
+            return name
+    return normalized
+
+
+def _tool_invocations(part: dict[str, Any], state: dict[str, Any]) -> list[dict[str, Any]]:
+    """Normalize direct MCP events and OpenCode Code Mode's nested tool metadata."""
+    outer_tool = part.get("tool") or part.get("name")
+    outer_name = _tool_name(outer_tool) if isinstance(outer_tool, str) else ""
+    outer_id = part.get("callID") or part.get("call_id") or part.get("id")
+
+    metadata = state.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    nested_calls = metadata.get("toolCalls")
+    if outer_name == "execute":
+        if not isinstance(nested_calls, list):
+            # `execute` is an OpenCode wrapper, not a user-facing business operation.
+            # In particular, a malformed wrapper call must not count as a failed MCP call.
+            return []
+        invocations = []
+        for index, call in enumerate(nested_calls):
+            if not isinstance(call, dict):
+                continue
+            raw_name = call.get("tool") or call.get("name")
+            if not isinstance(raw_name, str):
+                continue
+            name = _tool_name(raw_name)
+            if name not in _MCP_TOOL_NAMES:
+                continue
+            tool_input = call.get("input") or call.get("arguments")
+            if not isinstance(tool_input, dict):
+                tool_input = {}
+            call_id = call.get("callID") or call.get("id")
+            if not isinstance(call_id, str) or not call_id:
+                call_id = f"{outer_id}-{index}" if isinstance(outer_id, str) and outer_id else ""
+            invocations.append({
+                "id": call_id,
+                "name": name,
+                "status": str(call.get("status", state.get("status", "running"))),
+                "input": tool_input,
+            })
+        return invocations
+
+    if not outer_name or outer_name not in _MCP_TOOL_NAMES:
+        return []
+    tool_input = state.get("input")
+    if not isinstance(tool_input, dict):
+        tool_input = part.get("input") or part.get("arguments")
+    if not isinstance(tool_input, dict):
+        tool_input = {}
+    return [{
+        "id": outer_id if isinstance(outer_id, str) else "",
+        "name": outer_name,
+        "status": str(state.get("status", "running")),
+        "input": tool_input,
+    }]
 
 
 def _tool_progress_message(name: str, value: dict[str, Any]) -> str:
@@ -324,6 +406,8 @@ def _tool_progress_message(name: str, value: dict[str, Any]) -> str:
         return f"Chuẩn bị lựa chọn: {question}" if question else "Chuẩn bị câu hỏi lựa chọn"
     if name == "catalog_facets":
         return "Kiểm tra điểm đến, giá và ngày khởi hành trong dữ liệu"
+    if name == "draft_requirement":
+        return "Chuẩn bị bản điều kiện để bạn xem"
     if name == "query_tours":
         conditions = value.get("conditions")
         summaries = [
@@ -344,7 +428,7 @@ def _tool_progress_message(name: str, value: dict[str, Any]) -> str:
             calendar_label = "ngày âm lịch" if calendar == "lunar" else "ngày dương lịch"
             return f"Đổi {calendar_label} {year:04d}-{month:02d}-{day:02d}"
         return "Kiểm tra và đổi ngày lịch"
-    return "Đang kiểm tra dữ kiện"
+    return "Đang xử lý yêu cầu"
 
 
 def _condition_activity(value: Any) -> str:

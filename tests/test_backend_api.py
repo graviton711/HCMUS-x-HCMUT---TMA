@@ -1,5 +1,7 @@
 """API: health → requirement → comparison → fetch. Fixture provider."""
 
+import logging
+
 from fastapi.testclient import TestClient
 
 from backend.agent.runner import OpenCodeRunner
@@ -14,10 +16,17 @@ def _client(tmp_path, **overrides):
     return TestClient(create_app(settings))
 
 
-def test_health(tmp_path):
-    body = _client(tmp_path).get("/health").json()
-    assert body["status"] == "ok"
-    assert body["version"]
+def test_health_includes_a_correlated_request_id(tmp_path, caplog):
+    caplog.set_level(logging.INFO, logger="mlai.backend.request")
+    client = _client(tmp_path)
+
+    response = client.get("/health")
+    request_id = response.headers["x-request-id"]
+
+    assert response.json()["status"] == "ok"
+    assert response.json()["version"]
+    assert len(request_id) == 32
+    assert any(getattr(record, "request_id", None) == request_id for record in caplog.records)
 
 
 def test_full_compare_flow(tmp_path):

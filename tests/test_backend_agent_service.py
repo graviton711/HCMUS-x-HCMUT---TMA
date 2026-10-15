@@ -2,14 +2,159 @@
 
 import asyncio
 import json
+import logging
 import re
 
 from backend.agent.mcp_server import AgentTools
-from backend.agent.service import AgentService
+from backend.agent.service import (
+    AgentService,
+    _tool_invocations,
+    _tool_name,
+    _tool_progress_message,
+)
 from backend.data.catalog import FixtureCatalog
 from backend.data.sessions import SessionStore
 from backend.models import uid
 from backend.workflows import TourWorkflows
+
+
+def test_draft_requirement_progress_has_a_specific_user_facing_label():
+    tool_name = _tool_name("tour_catalog_draft_requirement")
+    assert _tool_progress_message(tool_name, {}) == "Chuẩn bị bản điều kiện để bạn xem"
+
+
+def test_normalizes_opencode_sanitized_mcp_tool_names():
+    assert _tool_name("tour_catalog_draft_requirement") == "draft_requirement"
+    assert _tool_name("tour-catalog_query_tours") == "query_tours"
+    assert _tool_name("tour-catalog.draft_requirement") == "draft_requirement"
+
+
+def test_code_mode_execute_recovers_nested_draft_result(settings, caplog):
+    caplog.set_level(logging.INFO, logger="mlai.backend.agent.service")
+    settings = settings.model_copy(update={"database_url": "sqlite:///:memory:"})
+    store = SessionStore(settings.database_url)
+    service = AgentService(settings, store)
+    owner_id = store.create_session(3600)["id"]
+    local_id = store.create_agent_session(owner_id)
+    catalog = FixtureCatalog()
+    workflows = TourWorkflows(settings, catalog)
+    tools = AgentTools(settings, catalog, workflows, result_store=store)
+    raw_text = "Group of five, duration 2 days, departing TP.HCM."
+    params = {
+        "raw_text": raw_text,
+        "travelers": 5,
+        "conditions": [
+            {
+                "id": "c1",
+                "field": "departure_city",
+                "operator": "contains",
+                "value": "TP.HCM",
+                "strength": "hard",
+                "quote": "TP.HCM",
+            },
+            {
+                "id": "c2",
+                "field": "duration_days",
+                "operator": "eq",
+                "value": 2,
+                "strength": "hard",
+                "quote": "2 days",
+            },
+        ],
+    }
+    draft_payload = json.loads(tools.draft_requirement(**params))
+
+    async def fake_events(_message, _session_id):
+        # OpenCode Code Mode first attempted its wrapper without the required `code` field.
+        yield {
+            "type": "tool",
+            "part": {
+                "name": "execute",
+                "id": "execute-invalid",
+                "state": {
+                    "status": "error",
+                    "error": {"type": "tool.execution", "message": "Missing key: code"},
+                },
+            },
+        }
+        # The successful retry exposes the MCP call in metadata and result content.
+        yield {
+            "type": "tool",
+            "part": {
+                "name": "execute",
+                "id": "execute-draft",
+                "state": {
+                    "status": "completed",
+                    "input": {"code": "call draft_requirement"},
+                    "metadata": {
+                        "toolCalls": [
+                            {
+                                "tool": "tour-catalog.draft_requirement",
+                                "status": "completed",
+                                "input": params,
+                            }
+                        ]
+                    },
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps({"result": draft_payload}),
+                        }
+                    ],
+                },
+            },
+        }
+        yield {"type": "text", "part": {"text": "Bản điều kiện đã sẵn sàng."}}
+
+    service.runner.events = fake_events
+
+    async def collect():
+        return [event async for event in service.stream_message(owner_id, local_id, raw_text)]
+
+    events = asyncio.run(collect())
+    response = next(event["response"] for event in events if event.get("type") == "result")
+    tool_events = [event for event in events if event.get("type") == "tool"]
+
+    assert response["decision_draft"]["travelers"] == 5
+    assert [call["name"] for call in response["tool_calls"]] == ["draft_requirement"]
+    assert [(event["name"], event["status"]) for event in tool_events] == [
+        ("draft_requirement", "completed")
+    ]
+    assert "agent_tool name=draft_requirement status=completed" in caplog.text
+    assert "agent_draft_parse valid=True" in caplog.text
+    assert "agent_turn_completed operation=message decision_draft_attached=True" in caplog.text
+    assert raw_text not in caplog.text
+    store.close()
+
+
+def test_code_mode_preserves_real_nested_mcp_failures():
+    part = {
+        "name": "execute",
+        "id": "execute-with-mcp-error",
+        "state": {
+            "status": "completed",
+            "metadata": {
+                "toolCalls": [
+                    {
+                        "tool": "tour-catalog.catalog_facets",
+                        "status": "error",
+                        "input": {},
+                    }
+                ]
+            },
+        },
+    }
+
+    invocations = _tool_invocations(part, part["state"])
+
+    assert invocations == [
+        {
+            "id": "execute-with-mcp-error-0",
+            "name": "catalog_facets",
+            "status": "error",
+            "input": {},
+        }
+    ]
 
 
 def test_decision_uses_persisted_result_when_opencode_turn_errors_after_tools(settings):

@@ -154,7 +154,12 @@ export function useChat(
       } as const;
       if (toolIndex >= 0) nextTools[toolIndex] = tool;
       else nextTools.push(tool);
-      upsertToolActivity({ id: activityId, kind: 'tool_activity', tools: nextTools });
+      upsertToolActivity({
+        id: activityId,
+        kind: 'tool_activity',
+        tools: nextTools,
+        outcome: 'running',
+      });
     },
     [upsertToolActivity],
   );
@@ -167,7 +172,7 @@ export function useChat(
     const tools = activity.tools.map((tool) =>
       tool.status === 'running' ? { ...tool, status: 'error' as const } : tool,
     );
-    upsertToolActivity({ ...activity, tools });
+    upsertToolActivity({ ...activity, tools, outcome: 'error' });
   }, [upsertToolActivity]);
 
   const cancelRunningTools = useCallback(() => {
@@ -178,7 +183,15 @@ export function useChat(
     const tools = activity.tools.map((tool) =>
       tool.status === 'running' ? { ...tool, status: 'cancelled' as const } : tool,
     );
-    upsertToolActivity({ ...activity, tools });
+    upsertToolActivity({ ...activity, tools, outcome: 'cancelled' });
+  }, [upsertToolActivity]);
+
+  const completeToolActivity = useCallback(() => {
+    const activity = transcriptRef.current.find(
+      (message) => message.id === toolActivityIdRef.current && message.kind === 'tool_activity',
+    );
+    if (activity?.kind !== 'tool_activity') return;
+    upsertToolActivity({ ...activity, outcome: 'completed' });
   }, [upsertToolActivity]);
 
   useEffect(() => {
@@ -372,6 +385,7 @@ export function useChat(
           controller.signal,
         );
         applyResponse(response, text);
+        completeToolActivity();
       } catch (cause) {
         if (controller.signal.aborted) {
           if (controller.signal.reason === 'user' && mountedRef.current) {
@@ -411,6 +425,7 @@ export function useChat(
     [
       applyResponse,
       cancelRunningTools,
+      completeToolActivity,
       client,
       failRunningTools,
       push,
@@ -446,6 +461,7 @@ export function useChat(
             controller.signal,
           );
           applyResponse(response, requirement.raw_text);
+          completeToolActivity();
           setDecisionDraftStatus(messageId, 'complete');
         } catch (cause) {
           if (controller.signal.aborted) {
@@ -489,6 +505,7 @@ export function useChat(
     [
       applyResponse,
       cancelRunningTools,
+      completeToolActivity,
       client,
       failRunningTools,
       push,

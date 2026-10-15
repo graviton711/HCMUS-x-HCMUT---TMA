@@ -59,6 +59,8 @@ def test_http_normalizes_unexpected_exception_and_logs_safe_metadata(tmp_path, m
     assert response.json() == {"error": {"code": "INTERNAL_ERROR", "message": "An internal error occurred."}}
     assert len(records) == 1
     assert "RuntimeError" in records[0].getMessage()
+    assert "stack=" in records[0].getMessage()
+    assert "broken" in records[0].getMessage()
     assert "secret token detail" not in records[0].getMessage()
 
 
@@ -110,6 +112,7 @@ def test_sse_logs_retryable_app_error_once(tmp_path, monkeypatch, caplog):
     assert '"code":"OPENCODE_RUN_FAILED"' in response.text
     assert len(records) == 1
     assert "OPENCODE_RUN_FAILED" in records[0].getMessage()
+    assert records[0].request_id == response.headers["x-request-id"]
 
 
 def test_mcp_boundary_logs_retryable_error_and_returns_safe_payload(caplog):

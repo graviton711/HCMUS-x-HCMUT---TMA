@@ -191,6 +191,21 @@
   animation: entry-fade 280ms ease both;
 }
 
+@media (max-width: 1000px) {
+  .workspace:not(.entry) {
+    height: auto;
+    min-height: calc(100dvh - var(--header-height) - 56px);
+    overflow: visible;
+  }
+
+  .thread-scroll {
+    flex: 1 0 auto;
+    min-height: auto;
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+}
+
 @keyframes entry-rise {
   from {
     opacity: 0;

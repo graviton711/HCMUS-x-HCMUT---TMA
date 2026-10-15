@@ -22,8 +22,8 @@ Browser ──Vercel preview URL──▶ web (Vite SPA)
    └──▶ Render mlai-tour-backend (ROLE=backend, public /health, /sessions,
         │    /catalog, /requirements*, /comparisons*, /history*,
         │    /agent/sessions, /agent/sessions/*/messages, /docs)
-        │    opencode CLI --attach https://mlai-opencode[-suffix].onrender.com
-        │    --dir /app (server-side path, setting opencode_project_dir)
+        │    opencode run --server https://mlai-opencode[-suffix].onrender.com
+        │    CLI cwd /app = project path on both Render services
         └──▶ Render mlai-opencode (ROLE=opencode, public /global/health,
              serve cwd /app = repo + MCP tour-catalog, catalog đọc Supabase)
 ```
@@ -63,7 +63,7 @@ ping `/health` backend và `/global/health` opencode.
 - Render `mlai-tour-backend`: `SUPABASE_TOUR_DB_URL`, `CORS_ORIGINS`
   (domain web Vercel), `OPENCODE_SERVER_URL` = URL opencode ở trên,
   `OPENCODE_MODEL` + `OPENCODE_AGENT` + `OPENCODE_PROJECT_DIR=/app` đã có
-  value trong yaml.
+  value trong yaml; CLI dùng đường dẫn này làm working directory khi gửi request.
 - Vercel `web`: `VITE_API_BASE_URL` = URL backend (không đổi nếu giữ service
   cũ — vẫn `mlai-tour-backend[-suffix].onrender.com` như trước).
 - Vercel `api` (legacy): giữ env cũ nếu còn dùng route đồng bộ ở đó.

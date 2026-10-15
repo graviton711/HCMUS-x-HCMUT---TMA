@@ -127,11 +127,11 @@ class Settings(BaseSettings):
     )
 
     opencode_server_url: str = ""
+    opencode_server_password: str = ""
     opencode_binary: str = "opencode"
     opencode_model: str = ""
     opencode_agent: str = "travel-consultant"
-    # Project dir ON THE SERVER when attaching remotely (CLI docs: --dir is
-    # the remote path). Empty = local project root (local dev, single-box).
+    # OpenCode CLI working directory / shared project path. Empty uses repo root.
     opencode_project_dir: str = ""
     agent_max_message_chars: int = 8000
     cors_origins: Annotated[list[str], NoDecode] = Field(default_factory=list)

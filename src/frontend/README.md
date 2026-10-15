@@ -4,6 +4,8 @@ UI React + TypeScript + Vite cho `src/backend`. Backend contract là nguồn chu
 
 ## Kiến trúc
 
+Chạy giao diện local từ repo root bằng `uv run tour-frontend dev`. Lệnh dự án chuyển tiếp sang script `dev` của package này qua Corepack/pnpm; cài dependency vẫn dùng `pnpm.cmd --dir src/frontend install`.
+
 Dùng cấu trúc feature-sliced gọn. Dependency source chỉ chảy xuống: `app → pages → features → entities → shared`; một layer được bỏ qua nhưng không được import từ layer cao hơn hay slice ngang hàng. Chỉ giữ layer nào có trách nhiệm thật trong app này.
 
 ```text

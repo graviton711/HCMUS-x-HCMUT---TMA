@@ -24,6 +24,8 @@ browser = ["playwright>=1.52"]
 
 [project.scripts]
 tour-backend = "backend.cli:main"
+tour-opencode = "backend.opencode_cli:main"
+tour-frontend = "tooling.frontend_cli:main"
 tour-crawl = "ingest.pipeline:main"
 
 [tool.vercel]
@@ -43,7 +45,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["backend*", "ingest*", "shared*"]
+include = ["backend*", "ingest*", "shared*", "tooling*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

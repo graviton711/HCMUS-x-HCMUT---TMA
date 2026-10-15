@@ -47,6 +47,8 @@ export function validChatMsg(v: unknown): boolean {
   if (v.kind === 'tool_activity') {
     return (
       Array.isArray(v.tools) &&
+      (v.outcome === undefined ||
+        ['running', 'completed', 'error', 'cancelled'].includes(String(v.outcome))) &&
       v.tools.every(
         (tool) =>
           record(tool) &&
