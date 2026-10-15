@@ -1033,7 +1033,6 @@ function DecisionViews({
     experience_rich: ['Nhiều trải nghiệm', 'More stated experiences'],
     fewest_legs: ['Ít chặng', 'Fewer route legs'],
     cancellation_flexible: ['Dễ hủy hơn', 'More flexible cancellation'],
-    family_friendly: ['Phù hợp gia đình', 'Family suitability'],
     included_value: ['Dịch vụ bao gồm', 'Included services'],
     balanced: ['Cân bằng', 'Balanced'],
   };

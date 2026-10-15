@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 
+from backend.decide.costing import age_group_total, exposure_quantity
 from backend.models import (
     ActivityFact,
     CostExposure,
@@ -20,7 +21,6 @@ from backend.models import (
 )
 from shared.text import fold_vi as _fold
 
-_AGE_GROUPS = ("adult", "child", "small_child", "infant")
 _FACT_EXTRACTOR_VERSION = "tour-facts-v3"
 
 
@@ -40,41 +40,25 @@ def fact_cache_id(tour: TourSnapshot) -> str:
     return "metric_" + hashlib.sha256(f"{_FACT_EXTRACTOR_VERSION}:{source_hash}".encode()).hexdigest()
 
 
-def _party_base(req: Requirement, tour: TourSnapshot, offer) -> tuple[int | None, str]:
+def _party_base(req: Requirement, offer) -> tuple[int | None, str]:
     if offer.price is None or not offer.currency:
         return None, ""
     mix = req.traveler_mix
     if not mix or sum(mix.values()) != req.travelers:
         return None, "Chưa có cơ cấu độ tuổi; chỉ có giá niêm yết."
-    total = 0
-    for age_group in _AGE_GROUPS:
-        count = mix.get(age_group, 0)
-        if not count:
-            continue
-        age_price = offer.price_by_age.get(age_group)
-        if age_price is None and age_group == "adult":
-            age_price = offer.price
-        if age_price is None:
-            return None, f"Thiếu giá cho nhóm {age_group}."
-        total += age_price * count
+    total, missing = age_group_total(offer.price_by_age, offer.price, mix)
+    if total is None:
+        return None, f"Thiếu giá cho nhóm {missing}."
     return total, ""
 
 
 def _exposure_quantity(unit: str, req: Requirement, tour: TourSnapshot) -> int | None:
     mix = req.traveler_mix
-    if unit == "per_booking":
-        return 1
-    if unit == "per_person":
-        return req.travelers if mix and sum(mix.values()) == req.travelers else None
-    if unit == "per_adult":
-        return mix.get("adult") if mix and "adult" in mix else None
-    if unit == "per_child":
-        return (mix.get("child", 0) + mix.get("small_child", 0)) if mix else None
-    if unit == "per_day":
-        return tour.duration_days
-    if unit == "per_night":
-        return tour.duration_nights
-    return None
+    party = req.travelers if mix and sum(mix.values()) == req.travelers else None
+    return exposure_quantity(
+        unit, mix=mix, party=party,
+        duration_days=tour.duration_days, duration_nights=tour.duration_nights,
+    )
 
 
 def _price_exposures(
@@ -184,7 +168,7 @@ def build_metric_profiles(
         facts = facts_by_tour.get(tour.id, ExtractedTourFacts(tour_id=tour.id))
         if facts.tour_id != tour.id:
             facts = ExtractedTourFacts(tour_id=tour.id)
-        group_base, group_note = _party_base(req, tour, offer)
+        group_base, group_note = _party_base(req, offer)
         priced, unpriced, optional, extra_total, unresolved = _price_exposures(facts, req, tour, offer)
         if not {"exclusions", "surcharges"}.issubset(facts.reviewed_fields):
             unresolved = True

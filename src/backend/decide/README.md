@@ -14,7 +14,7 @@ Vào: requirement đã validate (điều kiện chung và các alternative branc
 2. Metric facts chỉ hợp lệ khi evidence quote khớp đúng source field. Numeric/categorical normalization và phép tính do code thực hiện.
 3. Preference fit cộng trọng số theo mức `0`, `0.5`, `1`; unknown tạo khoảng điểm min/max và evidence coverage riêng.
 4. Giá số được so trong cùng currency bất kể metadata `price_basis`; cost view tách giá công bố, group total, khoản bắt buộc đã định giá và exclusions chưa định giá. Exclusion chỉ thành cost khi obligation, amount, unit và applicability có evidence.
-5. Objective views gồm cheapest, best-fit, experience-rich, fewest-legs, cancellation-flexible, family-friendly, included-value và balanced Pareto. Chỉ xếp trên metric có thể so sánh; unknown không được ép thành 0 hoặc pass.
+5. Objective views gồm cheapest, best-fit, experience-rich, fewest-legs, cancellation-flexible, included-value và balanced Pareto. Chỉ xếp trên metric có thể so sánh; unknown không được ép thành 0 hoặc pass.
 6. Mỗi view trả tối đa 5 lựa chọn, nhưng engine giữ đủ profile/evaluation cho explanations. Nếu có đủ candidates, kết quả có tối thiểu ba tour khác nhau; thiếu thì trả số thực có và relaxation scenarios riêng.
 7. Decision trace đếm riêng scan, điều kiện và blocker đầu tiên. Tổng theo condition có thể chồng lấp; unknown được đếm riêng. Mỗi option so metric với nhóm hard-pass cùng đơn vị/phạm vi, giữ evidence và trạng thái thiếu dữ liệu.
 

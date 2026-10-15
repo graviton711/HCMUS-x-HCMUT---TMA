@@ -169,8 +169,6 @@ export interface CurrentComparison {
   decision_views?: CurrentDecisionView[];
   metric_profiles?: CurrentMetricProfile[];
   decision_options?: CurrentDecisionOption[];
-  recommendation?: CurrentDecisionOption | null;
-  extracted_facts?: unknown[];
 }
 
 export interface CurrentDecisionView {
@@ -180,7 +178,6 @@ export interface CurrentDecisionView {
     | 'experience_rich'
     | 'fewest_legs'
     | 'cancellation_flexible'
-    | 'family_friendly'
     | 'included_value'
     | 'balanced';
   candidates: { tour_id: string; offer_id: string; score: number }[];

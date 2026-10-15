@@ -165,7 +165,7 @@ class RankedCandidate(BaseModel):
 class DecisionView(BaseModel):
     kind: Literal[
         "cheapest", "best_fit", "experience_rich", "fewest_legs",
-        "cancellation_flexible", "family_friendly", "included_value", "balanced",
+        "cancellation_flexible", "included_value", "balanced",
     ]
     candidates: list[RankedCandidate] = Field(default_factory=list, max_length=5)
     currencies: list[str] = Field(default_factory=list)
@@ -415,8 +415,6 @@ class Comparison(BaseModel):
     decision_views: list[DecisionView] = Field(default_factory=list)
     metric_profiles: list[MetricProfile] = Field(default_factory=list)
     decision_options: list[DecisionOption] = Field(default_factory=list)
-    recommendation: DecisionOption | None = None
-    extracted_facts: list[ExtractedTourFacts] = Field(default_factory=list)
 
 
 class TourRow(BaseModel):

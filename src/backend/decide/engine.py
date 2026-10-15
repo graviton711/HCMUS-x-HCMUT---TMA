@@ -263,14 +263,11 @@ def soft_review_candidates(
     req: Requirement,
     tours: list[TourSnapshot],
     evaluations: list[Evaluation],
-    limit: int | None = None,
 ) -> list[tuple[TourSnapshot, str]]:
     """Return one representative passing offer for every tour in the scan.
 
     Preference evidence belongs to the tour, not to a pre-ranked top-N slice.
     Every hard-pass tour must be scored before weighted views can be computed.
-    ``limit`` remains accepted for callers from the previous interface but is
-    intentionally ignored.
     """
     passing = passing_offers(req, tours, evaluations)
     if not passing:
@@ -501,7 +498,6 @@ def _objective_views(profiles: list[MetricProfile], base: list[DecisionView]) ->
     experience = []
     route = []
     cancellation = []
-    family = []
     included: list[tuple[float, MetricProfile]] = []
     for profile in profiles:
         count = _measure_number(profile, "experience_density", "activity_count")
@@ -514,9 +510,6 @@ def _objective_views(profiles: list[MetricProfile], base: list[DecisionView]) ->
         if free_days is not None:
             # A smaller number means the user may cancel closer to departure.
             cancellation.append((-free_days, profile.tour_id, profile))
-        child_detail = _measure_number(profile, "family_suitability")
-        if child_detail is not None:
-            family.append((child_detail, profile.tour_id, profile))
         coverage = _measure_number(profile, "included_coverage", "ratio")
         if coverage is not None:
             included.append((coverage, profile))
@@ -538,20 +531,18 @@ def _objective_views(profiles: list[MetricProfile], base: list[DecisionView]) ->
         "experience_rich": "Xếp theo số hoạt động/điểm tham quan nêu rõ; số lượng không khẳng định chất lượng.",
         "fewest_legs": "Chỉ đếm chặng được nêu rõ trong route/lịch trình; không suy ra thời gian hay quãng đường.",
         "cancellation_flexible": "Xếp theo mốc gần ngày đi nhất vẫn được hoàn 100%, khi điều khoản nêu rõ.",
-        "family_friendly": "Chưa đủ dữ liệu tuổi cụ thể để xếp mức phù hợp cho nhóm; xem các điều khoản trẻ em có trích dẫn riêng.",
         "included_value": "Tỷ lệ hạng mục gồm/ gồm một phần; các khoản loại trừ chưa định giá được liệt kê riêng, không gộp vào điểm.",
     }
     additional = [
         DecisionView(kind="experience_rich", candidates=candidates_for(experience), note=notes["experience_rich"]),
         DecisionView(kind="fewest_legs", candidates=candidates_for(route, reverse=True), note=notes["fewest_legs"]),
         DecisionView(kind="cancellation_flexible", candidates=candidates_for(cancellation), note=notes["cancellation_flexible"]),
-        DecisionView(kind="family_friendly", candidates=candidates_for(family), note=notes["family_friendly"]),
         DecisionView(kind="included_value", candidates=included_candidates, note=notes["included_value"]),
     ]
     base_by_kind.update({view.kind: view for view in additional})
     return [base_by_kind[key] for key in (
         "cheapest", "best_fit", "experience_rich", "fewest_legs",
-        "cancellation_flexible", "family_friendly", "included_value", "balanced",
+        "cancellation_flexible", "included_value", "balanced",
     ) if key in base_by_kind]
 
 
@@ -1108,5 +1099,4 @@ def compare(
         decision_views=views,
         metric_profiles=profiles,
         decision_options=options,
-        extracted_facts=list((metric_facts or {}).values()),
     )

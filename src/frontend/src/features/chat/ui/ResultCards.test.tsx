@@ -95,12 +95,6 @@ const decisionComparison = {
       note: "No cancellation data.",
     },
     {
-      kind: "family_friendly" as const,
-      candidates: [],
-      currencies: [],
-      note: "No family data.",
-    },
-    {
       kind: "included_value" as const,
       candidates: [],
       currencies: [],

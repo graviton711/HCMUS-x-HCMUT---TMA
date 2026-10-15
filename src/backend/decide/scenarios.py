@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from backend.decide.costing import age_group_total, exposure_quantity
 from backend.models import (
     Comparison,
     CostExposure,
@@ -145,16 +146,9 @@ def _party_base(
     mix = assumptions.traveler_mix
     if not mix or sum(mix.values()) != assumptions.travelers:
         return None, []
-    total = 0
-    for age_group, count in mix.items():
-        if count <= 0:
-            continue
-        age_price = offer.price_by_age.get(age_group)
-        if age_price is None and age_group == "adult":
-            age_price = offer.price
-        if age_price is None:
-            return None, []
-        total += age_price * count
+    total, _missing = age_group_total(offer.price_by_age, offer.price, mix)
+    if total is None:
+        return None, []
     quote = next((str(item.get("quote", "")) for item in offer.price_quotes if item.get("quote")), "")
     evidence = [MetricEvidence(
         source_field="offers.price_by_age" if offer.price_by_age else "offers.price",
@@ -166,19 +160,8 @@ def _party_base(
 
 
 def _quantity(unit: str, assumptions: CostScenarioAssumptions, tour: TourSnapshot) -> int | None:
-    mix = assumptions.traveler_mix
-    if unit == "per_booking":
-        return 1
-    if unit == "per_person":
-        return assumptions.travelers
-    if unit == "per_adult":
-        return mix.get("adult") if "adult" in mix else None
-    if unit == "per_child":
-        return mix.get("child", 0) + mix.get("small_child", 0) if mix else None
-    if unit == "per_day":
-        return tour.duration_days
-    if unit == "per_night":
-        return assumptions.nights if assumptions.nights is not None else tour.duration_nights
-    if unit == "per_room":
-        return assumptions.rooms
-    return None
+    return exposure_quantity(
+        unit, mix=assumptions.traveler_mix, party=assumptions.travelers,
+        duration_days=tour.duration_days, duration_nights=tour.duration_nights,
+        nights=assumptions.nights, rooms=assumptions.rooms,
+    )
