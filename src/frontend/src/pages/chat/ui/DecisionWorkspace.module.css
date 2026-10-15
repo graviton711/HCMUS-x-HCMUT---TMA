@@ -124,6 +124,195 @@
   cursor: not-allowed;
 }
 
+.tracePanel {
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 14px);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: var(--text-sm);
+}
+
+.tracePanel > summary {
+  color: var(--accent);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.traceContent {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  line-height: 1.5;
+}
+
+.traceList,
+.traceCounts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.traceList li,
+.traceCounts > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.traceList li strong,
+.traceCounts span,
+.traceNote {
+  color: var(--muted);
+}
+
+.traceNote {
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.traceEliminated {
+  display: grid;
+  gap: 10px;
+}
+
+.traceEliminated article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 10px);
+  overflow-wrap: anywhere;
+}
+
+.traceEliminated article > span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.traceEliminated ul {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.traceEliminated blockquote {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.traceEliminated button {
+  justify-self: start;
+  color: var(--accent);
+}
+
+.scenarioPanel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 14px);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.scenarioPanel > summary {
+  color: var(--accent);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.scenarioPanel section {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.scenarioPanel h3 {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+
+.scenarioPanel > p {
+  margin: 0;
+}
+
+.scenarioPanel button {
+  justify-self: start;
+}
+
+.scenarioInputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 8px;
+}
+
+.scenarioInputs label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.scenarioInputs input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 10px);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.scenarioNotice {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.scenarioCosts {
+  display: grid;
+  gap: 8px;
+}
+
+.scenarioCosts article {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm, 10px);
+  overflow-wrap: anywhere;
+}
+
+.scenarioCosts article > span,
+.scenarioCosts small,
+.scenarioCosts ul {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.scenarioCosts ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+}
+
 @media (max-width: 1000px) {
   .root {
     height: auto;

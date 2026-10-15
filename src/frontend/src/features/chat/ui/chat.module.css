@@ -1543,6 +1543,42 @@
   line-height: 1.45;
 }
 
+.decision-metric-comparisons {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.decision-metric-comparisons > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 3px 10px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+
+.decision-metric-comparisons > div > span {
+  color: var(--muted);
+  text-align: right;
+}
+
+.decision-metric-comparisons > div[data-relation='favorable'] > span {
+  color: var(--success, var(--accent));
+}
+
+.decision-metric-comparisons > div > small,
+.decision-metric-comparisons > div > details {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+.decision-metric-comparisons blockquote {
+  margin: 4px 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--line);
+}
+
 .metric-comparison-heading {
   display: grid;
   gap: 3px;

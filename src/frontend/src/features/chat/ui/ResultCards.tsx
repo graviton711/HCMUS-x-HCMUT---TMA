@@ -1314,6 +1314,56 @@ function DecisionViews({
                         ))}
                       </ul>
                     )}
+                    {(option.metric_comparisons ?? []).length > 0 && (
+                      <div className={styles['decision-metric-comparisons']}>
+                        {(option.metric_comparisons ?? []).map((metric) => {
+                          const metricNames: Record<string, [string, string]> = {
+                            group_total: ['Tổng nhóm', 'Group total'],
+                            preference_fit: ['Khớp ưu tiên', 'Preference fit'],
+                            experience_density: ['Hoạt động được nêu', 'Stated activities'],
+                            route_complexity: ['Số chặng được nêu', 'Stated route legs'],
+                            included_coverage: ['Độ bao gồm đã biết', 'Known inclusion coverage'],
+                            cancellation_flexibility: ['Mốc hoàn đủ tiền', 'Full-refund cutoff'],
+                          };
+                          const relationLabels: Record<string, [string, string]> = {
+                            favorable: ['Thuận lợi hơn trung vị', 'More favorable than median'],
+                            tradeoff: ['Đánh đổi so với trung vị', 'Trade-off vs median'],
+                            similar: ['Gần trung vị', 'Near median'],
+                            unknown: ['Chưa đủ dữ kiện so sánh', 'Not enough evidence to compare'],
+                          };
+                          const name = metricNames[metric.key] ?? [metric.key, metric.key];
+                          const format = (value: number | null) => value == null
+                            ? t('Chưa rõ', 'Unknown')
+                            : metric.key === 'group_total'
+                              ? `${value.toLocaleString()} ${metric.currency}`
+                              : metric.key === 'included_coverage'
+                                ? `${(value * 100).toFixed(0)}%`
+                                : metric.key === 'preference_fit'
+                                  ? `${value.toFixed(0)}/100`
+                                  : `${value}${metric.unit === 'days before departure for full refund' ? ` ${t('ngày', 'days')}` : ''}`;
+                          const relation = relationLabels[metric.relation] ?? relationLabels.unknown;
+                          return (
+                            <div key={metric.key} data-relation={metric.relation}>
+                              <strong>{t(...name)}</strong>
+                              <span>{format(metric.value)} · {t(...relation)}</span>
+                              {metric.reference_median != null && (
+                                <small>{t('Trung vị nhóm:', 'Group median:')} {format(metric.reference_median)}</small>
+                              )}
+                              {metric.evidence.length > 0 && (
+                                <details>
+                                  <summary>{t('Bằng chứng', 'Evidence')}</summary>
+                                  {metric.evidence.map((evidence, evidenceIndex) => (
+                                    <blockquote key={`${evidence.source_field}-${evidenceIndex}`}>
+                                      {evidence.quote}
+                                    </blockquote>
+                                  ))}
+                                </details>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </article>
                 );
               })}

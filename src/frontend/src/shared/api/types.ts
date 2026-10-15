@@ -151,6 +151,7 @@ export interface CurrentComparison {
     benefits: string[];
   };
   candidates_considered: number;
+  decision_trace?: CurrentDecisionTrace | null;
   ranking_currencies?: string[];
   decision_views?: CurrentDecisionView[];
   metric_profiles?: CurrentMetricProfile[];
@@ -264,6 +265,109 @@ export interface CurrentDecisionOption {
   title: string;
   reason: string;
   tradeoffs: string[];
+  metric_comparisons?: CurrentOptionMetricComparison[];
+}
+
+export interface CurrentOptionMetricComparison {
+  key: string;
+  value: number | null;
+  reference_median: number | null;
+  unit: string;
+  currency: string;
+  scope: string;
+  state: "observed" | "partial" | "unknown";
+  relation: "favorable" | "tradeoff" | "similar" | "unknown";
+  higher_is_better: boolean | null;
+  evidence: CurrentMetricEvidence[];
+}
+
+export interface CurrentDecisionTrace {
+  scanned_tours: number;
+  scanned_offers: number;
+  eligible_tours: number;
+  eligible_offers: number;
+  excluded_offers: number;
+  condition_counts: {
+    condition_id: string;
+    pass_offers: number;
+    fail_offers: number;
+    unknown_offers: number;
+    pass_tours: number;
+    fail_tours: number;
+    unknown_tours: number;
+  }[];
+  sequential_funnel: {
+    condition_id: string;
+    stage: number;
+    offers_before: number;
+    offers_after: number;
+    tours_before: number;
+    tours_after: number;
+  }[];
+  first_blockers: {
+    condition_id: string;
+    state: "fail" | "unknown";
+    offers: number;
+    tours: number;
+  }[];
+  snapshot_available: boolean;
+}
+
+export interface CurrentEliminatedOffer {
+  tour_id: string;
+  tour_name: string;
+  supplier: string;
+  tour_url: string;
+  offer: CurrentOffer;
+  conditions: {
+    condition_id: string;
+    field: string;
+    value: unknown;
+    state: "pass" | "fail" | "unknown";
+    reason_code: string;
+    reason: string;
+    quote: string;
+  }[];
+}
+
+export interface CurrentEliminatedPage {
+  comparison_id: string;
+  items: CurrentEliminatedOffer[];
+  limit: number;
+  next_cursor: string | null;
+  total: number;
+}
+
+export interface CurrentCostScenarioAssumptions {
+  travelers: number;
+  traveler_mix: Partial<Record<"adult" | "child" | "small_child" | "infant", number>>;
+  rooms?: number | null;
+  single_rooms?: number | null;
+  nights?: number | null;
+}
+
+export interface CurrentCostScenarioItem {
+  tour_id: string;
+  tour_name: string;
+  offer_id: string;
+  currency: string;
+  price_basis: "exact" | "from" | "contact" | "unknown";
+  listed_price: number | null;
+  group_base_calculated: number | null;
+  priced_mandatory_extras: CurrentCostExposure[];
+  known_total: number | null;
+  total_is_lower_bound: boolean;
+  unresolved_exposures: CurrentCostExposure[];
+  delta_from_original: number | null;
+  state: "observed" | "partial" | "unknown";
+  evidence: CurrentMetricEvidence[];
+}
+
+export interface CurrentCostScenario {
+  source_comparison_id: string;
+  assumptions: CurrentCostScenarioAssumptions;
+  scanned_offers: number;
+  items: CurrentCostScenarioItem[];
 }
 
 export interface CurrentHistoryItem {

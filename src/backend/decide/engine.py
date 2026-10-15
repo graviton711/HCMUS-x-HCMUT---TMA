@@ -12,12 +12,18 @@ from backend.models import (
     Analysis,
     Comparison,
     Condition,
+    DecisionBlockerCount,
+    DecisionConditionCount,
+    DecisionFunnelStep,
     DecisionOption,
+    DecisionTrace,
     DecisionView,
     Evaluation,
     ExtractedTourFacts,
+    MetricEvidence,
     MetricProfile,
     OfferSnapshot,
+    OptionMetricComparison,
     RankedCandidate,
     RankingKey,
     Requirement,
@@ -556,6 +562,201 @@ def _option_tradeoffs(profile: MetricProfile) -> list[str]:
     return tradeoffs
 
 
+def _decision_trace(
+    req: Requirement, tours: list[TourSnapshot], evaluations: list[Evaluation]
+) -> DecisionTrace:
+    hard = req.hard()
+    offers = [(tour, offer) for tour in tours for offer in tour.offers]
+    by_offer: dict[str, dict[str, Evaluation]] = {}
+    for item in evaluations:
+        by_offer.setdefault(item.offer_id, {})[item.condition_id] = item
+
+    def state(offer_id: str, condition_id: str) -> State:
+        item = by_offer.get(offer_id, {}).get(condition_id)
+        return item.state if item else "unknown"
+
+    eligible_ids = {
+        offer.id for _tour, offer in offers
+        if all(state(offer.id, condition.id) == "pass" for condition in hard)
+    }
+    eligible_tours = {
+        tour.id for tour, offer in offers if offer.id in eligible_ids
+    }
+    condition_counts: list[DecisionConditionCount] = []
+    for condition in hard:
+        states_by_offer = {offer.id: state(offer.id, condition.id) for _, offer in offers}
+        condition_counts.append(DecisionConditionCount(
+            condition_id=condition.id,
+            pass_offers=sum(value == "pass" for value in states_by_offer.values()),
+            fail_offers=sum(value == "fail" for value in states_by_offer.values()),
+            unknown_offers=sum(value == "unknown" for value in states_by_offer.values()),
+            pass_tours=len({tour.id for tour, offer in offers if states_by_offer[offer.id] == "pass"}),
+            fail_tours=len({tour.id for tour, offer in offers if states_by_offer[offer.id] == "fail"}),
+            unknown_tours=len({tour.id for tour, offer in offers if states_by_offer[offer.id] == "unknown"}),
+        ))
+
+    surviving = {offer.id for _, offer in offers}
+    funnel: list[DecisionFunnelStep] = []
+    for index, condition in enumerate(hard, 1):
+        before = set(surviving)
+        surviving = {offer_id for offer_id in before if state(offer_id, condition.id) == "pass"}
+        before_tours = {tour.id for tour, offer in offers if offer.id in before}
+        after_tours = {tour.id for tour, offer in offers if offer.id in surviving}
+        funnel.append(DecisionFunnelStep(
+            condition_id=condition.id,
+            stage=index,
+            offers_before=len(before),
+            offers_after=len(surviving),
+            tours_before=len(before_tours),
+            tours_after=len(after_tours),
+        ))
+
+    blockers: dict[tuple[str, str], list[str]] = {}
+    for _tour, offer in offers:
+        if offer.id in eligible_ids:
+            continue
+        for condition in hard:
+            value = state(offer.id, condition.id)
+            if value != "pass":
+                blockers.setdefault((condition.id, value), []).append(offer.id)
+                break
+    offer_tour = {offer.id: tour.id for tour, offer in offers}
+    first_blockers = [
+        DecisionBlockerCount(
+            condition_id=condition.id,
+            state=value,
+            offers=len(ids),
+            tours=len({offer_tour[offer_id] for offer_id in ids}),
+        )
+        for condition in hard
+        for value in ("fail", "unknown")
+        for ids in [blockers.get((condition.id, value), [])]
+        if ids
+    ]
+    return DecisionTrace(
+        scanned_tours=len(tours),
+        scanned_offers=len(offers),
+        eligible_tours=len(eligible_tours),
+        eligible_offers=len(eligible_ids),
+        excluded_offers=len(offers) - len(eligible_ids),
+        condition_counts=condition_counts,
+        sequential_funnel=funnel,
+        first_blockers=first_blockers,
+        snapshot_available=True,
+    )
+
+
+def _option_metric_comparisons(
+    candidate: MetricProfile, profiles: list[MetricProfile], tours: list[TourSnapshot]
+) -> list[OptionMetricComparison]:
+    tour_by_offer = {
+        offer.id: (tour, offer) for tour in tours for offer in tour.offers
+    }
+    specs: list[tuple[str, str, str, float | None, float | None, str, list[MetricEvidence]]] = []
+    cost = candidate.cost
+    offer_pair = tour_by_offer.get(candidate.offer_id)
+    cost_evidence: list[MetricEvidence] = []
+    if offer_pair:
+        tour, offer = offer_pair
+        quote = next((str(item.get("quote", "")) for item in offer.price_quotes
+                      if item.get("quote")), "")
+        cost_evidence = [MetricEvidence(
+            source_field="offers.price_by_age" if offer.price_by_age else "offers.price",
+            quote=quote or f"{offer.price} {offer.currency} mỗi khách",
+            observed_at=offer.evidence.observed_at or tour.observed_at,
+            url=offer.evidence.url or tour.url,
+        )] if offer.price is not None else []
+    if cost.group_total_calculated is not None and cost.state == "observed" and not cost.total_is_lower_bound:
+        comparable = [p.cost.group_total_calculated for p in profiles
+                      if p.cost.currency.upper() == cost.currency.upper()
+                      and p.cost.group_total_calculated is not None
+                      and p.cost.state == "observed" and not p.cost.total_is_lower_bound]
+        median = _median(comparable)
+        specs.append(("group_total", "VND" if cost.currency.upper() == "VND" else cost.currency.upper(),
+                      cost.currency.upper(), float(cost.group_total_calculated), median, "observed", cost_evidence))
+    else:
+        specs.append(("group_total", "VND" if cost.currency.upper() == "VND" else cost.currency.upper(),
+                      cost.currency.upper(), float(cost.group_total_calculated)
+                      if cost.group_total_calculated is not None else None, None,
+                      cost.state, cost_evidence))
+
+    directions = {
+        "preference_fit": ("weighted preference points", True),
+        "experience_density": ("distinct stated activities", True),
+        "route_complexity": ("explicit legs", False),
+        "included_coverage": ("known category ratio", True),
+        "cancellation_flexibility": ("days before departure for full refund", True),
+    }
+    for key, (unit, _higher_is_better) in directions.items():
+        metric = candidate.metrics.get(key)
+        value = None
+        evidence: list[MetricEvidence] = []
+        if metric and metric.state != "unknown":
+            if key == "preference_fit":
+                value = metric.lower_bound * 100 if metric.lower_bound is not None else None
+                evidence = metric.evidence
+            elif key == "experience_density":
+                raw = metric.value if isinstance(metric.value, dict) else {}
+                value = raw.get("activity_count")
+                evidence = metric.evidence
+            elif key == "route_complexity":
+                raw = metric.value if isinstance(metric.value, dict) else {}
+                value = raw.get("explicit_legs")
+                evidence = metric.evidence
+            elif key == "included_coverage":
+                raw = metric.value if isinstance(metric.value, dict) else {}
+                value = raw.get("ratio")
+                evidence = metric.evidence
+            else:
+                value = metric.value if isinstance(metric.value, (int, float)) else None
+                evidence = metric.evidence
+        candidate_state = metric.state if metric else "unknown"
+        if key == "preference_fit" and metric and metric.lower_bound != metric.upper_bound:
+            candidate_state = "partial"
+        reference_values = []
+        for profile in profiles:
+            other = profile.metrics.get(key)
+            if other is None or other.state != "observed":
+                continue
+            if key == "preference_fit":
+                v = other.lower_bound * 100 if other.lower_bound is not None and other.lower_bound == other.upper_bound else None
+            elif key in ("experience_density", "route_complexity", "included_coverage"):
+                raw = other.value if isinstance(other.value, dict) else {}
+                v = raw.get({"experience_density": "activity_count", "route_complexity": "explicit_legs", "included_coverage": "ratio"}[key])
+            else:
+                v = other.value if isinstance(other.value, (int, float)) else None
+            if isinstance(v, (int, float)):
+                reference_values.append(float(v))
+        median = _median(reference_values)
+        specs.append((key, unit, "", float(value) if isinstance(value, (int, float)) else None,
+                      median, candidate_state, evidence))
+
+    output: list[OptionMetricComparison] = []
+    for key, unit, currency, value, median, candidate_state, evidence in specs:
+        higher = directions.get(key, ("", False))[1] if key != "group_total" else False
+        relation: str = "unknown"
+        state = "unknown"
+        state = candidate_state if candidate_state in ("partial", "observed") and value is not None else "unknown"
+        if state == "observed" and value is not None and median is not None:
+            relation = "similar" if abs(value - median) < 1e-9 else (
+                "favorable" if (value > median) == higher else "tradeoff"
+            )
+        output.append(OptionMetricComparison(
+            key=key, value=value, reference_median=median, unit=unit, currency=currency,
+            scope="Hard-pass offer pool; median in matching currency/unit" if median is not None else "",
+            state=state, relation=relation, higher_is_better=higher, evidence=evidence,
+        ))
+    return output
+
+
+def _median(values: list[float | int | None]) -> float | None:
+    ordered = sorted(float(value) for value in values if isinstance(value, (int, float)))
+    if not ordered:
+        return None
+    middle = len(ordered) // 2
+    return ordered[middle] if len(ordered) % 2 else (ordered[middle - 1] + ordered[middle]) / 2
+
+
 def _decision_options(
     views: list[DecisionView],
     profiles: list[MetricProfile],
@@ -631,6 +832,7 @@ def _decision_options(
                 }.get(kind, "Phương án"),
                 reason=reason,
                 tradeoffs=_option_tradeoffs(profile),
+                metric_comparisons=_option_metric_comparisons(profile, profiles, tours),
             ))
             seen.add(candidate.tour_id)
             if len(selected) >= 3:
@@ -650,6 +852,7 @@ def _decision_options(
             title="Phương án để cân nhắc",
             reason="Metric hiện có chưa đủ để xếp hạng riêng phương án này.",
             tradeoffs=_option_tradeoffs(profile),
+            metric_comparisons=_option_metric_comparisons(profile, profiles, tours),
         ))
         seen.add(candidate.tour_id)
         if len(selected) >= 3:
@@ -810,6 +1013,7 @@ def compare(
         evaluations=evaluations,
         analysis=analyze(tours, ranked + near, cfg),
         candidates_considered=len(tours),
+        decision_trace=_decision_trace(req, tours, evals),
         ranking_currencies=sorted({
             offer.currency.upper()
             for tour, offer_id in surviving

@@ -180,6 +180,40 @@ class CostProfile(BaseModel):
     state: MetricState = "unknown"
 
 
+class CostScenarioAssumptions(BaseModel):
+    travelers: int = Field(ge=1, le=100)
+    traveler_mix: dict[Literal["adult", "child", "small_child", "infant"], int] = Field(
+        default_factory=dict
+    )
+    rooms: int | None = Field(default=None, ge=1, le=100)
+    single_rooms: int | None = Field(default=None, ge=0, le=100)
+    nights: int | None = Field(default=None, ge=0, le=100)
+
+
+class CostScenarioItem(BaseModel):
+    tour_id: str
+    tour_name: str
+    offer_id: str
+    currency: str
+    price_basis: PriceBasis
+    listed_price: int | None = None
+    group_base_calculated: int | None = None
+    priced_mandatory_extras: list[CostExposure] = Field(default_factory=list)
+    known_total: int | None = None
+    total_is_lower_bound: bool = False
+    unresolved_exposures: list[CostExposure] = Field(default_factory=list)
+    delta_from_original: int | None = None
+    state: MetricState = "unknown"
+    evidence: list[MetricEvidence] = Field(default_factory=list)
+
+
+class CostScenarioResult(BaseModel):
+    source_comparison_id: str
+    assumptions: CostScenarioAssumptions
+    scanned_offers: int
+    items: list[CostScenarioItem] = Field(default_factory=list)
+
+
 class ActivityFact(BaseModel):
     name: str
     day: int | None = None
@@ -253,6 +287,19 @@ class MetricProfile(BaseModel):
     family_facts: list[FamilyFact] = Field(default_factory=list)
 
 
+class OptionMetricComparison(BaseModel):
+    key: str
+    value: float | int | None = None
+    reference_median: float | int | None = None
+    unit: str = ""
+    currency: str = ""
+    scope: str = ""
+    state: MetricState = "unknown"
+    relation: Literal["favorable", "tradeoff", "similar", "unknown"] = "unknown"
+    higher_is_better: bool | None = None
+    evidence: list[MetricEvidence] = Field(default_factory=list)
+
+
 class DecisionOption(BaseModel):
     tour_id: str
     offer_id: str
@@ -260,6 +307,45 @@ class DecisionOption(BaseModel):
     title: str = ""
     reason: str = ""
     tradeoffs: list[str] = Field(default_factory=list)
+    metric_comparisons: list[OptionMetricComparison] = Field(default_factory=list)
+
+
+class DecisionConditionCount(BaseModel):
+    condition_id: str
+    pass_offers: int = 0
+    fail_offers: int = 0
+    unknown_offers: int = 0
+    pass_tours: int = 0
+    fail_tours: int = 0
+    unknown_tours: int = 0
+
+
+class DecisionFunnelStep(BaseModel):
+    condition_id: str
+    stage: int
+    offers_before: int
+    offers_after: int
+    tours_before: int
+    tours_after: int
+
+
+class DecisionBlockerCount(BaseModel):
+    condition_id: str
+    state: Literal["fail", "unknown"]
+    offers: int = 0
+    tours: int = 0
+
+
+class DecisionTrace(BaseModel):
+    scanned_tours: int = 0
+    scanned_offers: int = 0
+    eligible_tours: int = 0
+    eligible_offers: int = 0
+    excluded_offers: int = 0
+    condition_counts: list[DecisionConditionCount] = Field(default_factory=list)
+    sequential_funnel: list[DecisionFunnelStep] = Field(default_factory=list)
+    first_blockers: list[DecisionBlockerCount] = Field(default_factory=list)
+    snapshot_available: bool = False
 
 
 class Analysis(BaseModel):
@@ -278,6 +364,8 @@ class Comparison(BaseModel):
     evaluations: list[Evaluation] = Field(default_factory=list)
     analysis: Analysis = Field(default_factory=Analysis)
     candidates_considered: int = 0
+    decision_trace: DecisionTrace | None = None
+    scenario_source_comparison_id: str | None = None
     ranking_currencies: list[str] = Field(default_factory=list)
     decision_views: list[DecisionView] = Field(default_factory=list)
     metric_profiles: list[MetricProfile] = Field(default_factory=list)

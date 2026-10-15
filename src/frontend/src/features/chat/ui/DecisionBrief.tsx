@@ -1,8 +1,9 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { CurrentCondition, CurrentRequirement } from '../../../shared/api';
 import { usePreferences } from '../../../shared/preferences';
 import { display, fieldLabel } from '../lib/format';
 import type { ChatMsg } from '../model/types';
+import { normalizeWeights, reallocateWeight } from '../lib/weightAllocation';
 import styles from './chat.module.css';
 
 export function DecisionBrief({
@@ -18,6 +19,7 @@ export function DecisionBrief({
 }) {
   const { t } = usePreferences();
   const editStartValues = useRef<Record<string, string>>({});
+  const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
   const requirement = message.requirement;
   const soft = requirement.conditions.filter((condition) => condition.strength === 'soft');
   const hard = requirement.conditions.filter((condition) => condition.strength === 'hard');
@@ -27,6 +29,8 @@ export function DecisionBrief({
       && (condition.weight_percent ?? -1) >= 0
       && (condition.weight_percent ?? 101) <= 100)
     && total === 100
+    && Object.values(weightDrafts).every((value) => /^\d+$/u.test(value)
+      && Number(value) >= 0 && Number(value) <= 100)
   );
   const valuesValid = requirement.conditions.every((condition) => {
     if (!condition.quote.trim() || !requirement.raw_text.includes(condition.quote)) return false;
@@ -49,9 +53,19 @@ export function DecisionBrief({
   }
 
   function removeCondition(id: string) {
+    const conditions = requirement.conditions.filter((condition) => condition.id !== id);
+    const remainingSoft = conditions.filter((condition) => condition.strength === 'soft');
+    const normalized = normalizeWeights(remainingSoft);
     onChange({
       ...requirement,
-      conditions: requirement.conditions.filter((condition) => condition.id !== id),
+      conditions: conditions.map((condition) => condition.strength === 'soft'
+        ? { ...condition, weight_percent: normalized.get(condition.id) ?? 0 }
+        : condition),
+    });
+    setWeightDrafts((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
     });
   }
 
@@ -67,6 +81,29 @@ export function DecisionBrief({
       conditions: requirement.conditions.map((condition) => condition.strength === 'soft'
         ? { ...condition, weight_percent: weights.get(condition.id) ?? base }
         : condition),
+    });
+    setWeightDrafts({});
+  }
+
+  function changeWeight(condition: CurrentCondition, raw: string) {
+    setWeightDrafts((current) => ({ ...current, [condition.id]: raw }));
+    if (!/^\d+$/u.test(raw)) return;
+    const proposed = Number(raw);
+    const weights = reallocateWeight(soft, condition.id, proposed);
+    if (!weights) return;
+    onChange({
+      ...requirement,
+      conditions: requirement.conditions.map((item) => item.strength === 'soft'
+        ? { ...item, weight_percent: weights.get(item.id) ?? 0 }
+        : item),
+    });
+  }
+
+  function finishWeightEdit(id: string) {
+    setWeightDrafts((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
     });
   }
 
@@ -179,12 +216,11 @@ export function DecisionBrief({
                 min="0"
                 max="100"
                 step="1"
-                value={condition.weight_percent ?? ''}
-                disabled={busy || message.status === 'running'}
+                value={weightDrafts[condition.id] ?? condition.weight_percent ?? ''}
+                disabled={busy || message.status === 'running' || soft.length === 1}
                 aria-label={t(`Trọng số ${String(condition.value)}`, `Weight for ${String(condition.value)}`)}
-                onChange={(event) => patchCondition(condition.id, {
-                  weight_percent: event.target.value === '' ? null : Number(event.target.value),
-                })}
+                onChange={(event) => changeWeight(condition, event.target.value)}
+                onBlur={() => finishWeightEdit(condition.id)}
               />
               <span>%</span>
             </span>

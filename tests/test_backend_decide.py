@@ -4,8 +4,19 @@ from datetime import UTC, datetime, timedelta
 
 from backend.data.catalog import FixtureCatalog
 from backend.decide.engine import compare
+from backend.decide.scenarios import cost_scenario
 from backend.input.pipeline import requirement_from_form
-from backend.models import Condition, OfferSnapshot, Requirement, TourRow, TourSnapshot, uid
+from backend.models import (
+    Condition,
+    CostExposure,
+    CostScenarioAssumptions,
+    ExtractedTourFacts,
+    OfferSnapshot,
+    Requirement,
+    TourRow,
+    TourSnapshot,
+    uid,
+)
 from backend.normalize.snapshots import rows_to_snapshots
 
 
@@ -318,3 +329,99 @@ def test_near_miss_keeps_failures_separate_from_ranked(decide_cfg):
     assert [item.tour_id for item in comparison.ranked] == ["ok"]
     assert [item.tour_id for item in comparison.near_miss] == ["near1", "near2"]
     assert comparison.near_miss[0].score > comparison.near_miss[1].score
+
+
+def test_decision_trace_counts_overlapping_states_and_first_blocker(decide_cfg):
+    rows = [
+        TourRow(tour={"record_key": "a", "departure_city": "Hà Nội", "duration_days": 1},
+                offers=[{"record_key": "oa"}]),
+        TourRow(tour={"record_key": "b", "departure_city": "TP.HCM", "duration_days": 2},
+                offers=[
+                    {"record_key": "ob", "departure_date": "2026-10-20"},
+                    {"record_key": "ob-unknown"},
+                ]),
+        TourRow(tour={"record_key": "c", "departure_city": "TP.HCM", "duration_days": 2},
+                offers=[{"record_key": "oc"}]),
+    ]
+    tours = rows_to_snapshots(rows)
+    req = Requirement(id=uid("req"), conditions=[
+        Condition(id="origin", field="departure_city", value="TP.HCM", strength="hard"),
+        Condition(id="date", field="date_from", value="2026-10-19", strength="hard"),
+        Condition(id="duration", field="duration_days", value=2, strength="hard"),
+    ])
+
+    comparison = compare(req, tours, decide_cfg)
+    trace = comparison.decision_trace
+    assert trace is not None
+    assert (trace.scanned_tours, trace.scanned_offers) == (3, 4)
+    assert (trace.eligible_tours, trace.eligible_offers, trace.excluded_offers) == (1, 1, 3)
+    counts = {item.condition_id: item for item in trace.condition_counts}
+    assert (counts["origin"].pass_offers, counts["origin"].fail_offers) == (3, 1)
+    assert (counts["origin"].pass_tours, counts["origin"].fail_tours) == (2, 1)
+    assert (counts["date"].pass_offers, counts["date"].unknown_offers) == (1, 3)
+    assert (counts["date"].pass_tours, counts["date"].unknown_tours) == (1, 3)
+    assert (counts["duration"].pass_offers, counts["duration"].fail_offers) == (3, 1)
+    assert [(item.condition_id, item.state, item.offers) for item in trace.first_blockers] == [
+        ("origin", "fail", 1), ("date", "unknown", 2),
+    ]
+    assert [(item.offers_before, item.offers_after) for item in trace.sequential_funnel] == [
+        (4, 3), (3, 1), (1, 1),
+    ]
+
+
+def test_decision_options_compare_group_cost_to_same_currency_median(decide_cfg):
+    rows = [
+        TourRow(tour={"record_key": f"tour-{price}", "name": f"Tour {price}",
+                      "destinations": ["Vũng Tàu"], "duration_days": 2},
+                offers=[{"record_key": f"offer-{price}", "price": price,
+                         "price_type": "fixed", "currency": "VND", "departure_date": "2027-02-01"}])
+        for price in (1_000_000, 2_000_000, 3_000_000)
+    ]
+    tours = rows_to_snapshots(rows)
+    req = Requirement(id=uid("req"), travelers=1, traveler_mix={"adult": 1}, conditions=[
+        Condition(id="destination", field="destination", value="Vũng Tàu", strength="hard"),
+    ])
+    facts = {tour.id: ExtractedTourFacts(tour_id=tour.id, reviewed_fields=["exclusions", "surcharges"])
+             for tour in tours}
+    comparison = compare(req, tours, decide_cfg, metric_facts=facts)
+
+    assert len(comparison.decision_options) == 3
+    for option in comparison.decision_options:
+        metric = next(item for item in option.metric_comparisons if item.key == "group_total")
+        assert metric.reference_median == 2_000_000
+        assert metric.currency == "VND"
+        assert metric.state == "observed"
+        assert metric.relation in {"favorable", "tradeoff", "similar"}
+
+
+def test_cost_scenario_recalculates_room_and_age_costs_from_source_values(decide_cfg):
+    row = TourRow(
+        tour={"record_key": "cost-tour", "name": "Cost tour", "destinations": ["Vũng Tàu"],
+              "duration_days": 2, "duration_nights": 1},
+        offers=[{"record_key": "cost-offer", "price": 1_000_000, "price_type": "fixed",
+                 "currency": "VND", "departure_date": "2027-02-01", "single_supplement": 50_000}],
+    )
+    tours = rows_to_snapshots([row])
+    tour = tours[0]
+    req = Requirement(id=uid("req"), travelers=2, traveler_mix={"adult": 2}, conditions=[
+        Condition(id="destination", field="destination", value="Vũng Tàu", strength="hard"),
+    ])
+    facts = {tour.id: ExtractedTourFacts(
+        tour_id=tour.id,
+        exclusions=[CostExposure(
+            name="Phí phòng", obligation="mandatory", amount=100_000, currency="VND",
+            unit="per_room", source_field="exclusions", quote="Phí phòng 100.000 VND mỗi phòng",
+        )],
+        reviewed_fields=["exclusions", "surcharges"],
+    )}
+    comparison = compare(req, tours, decide_cfg, metric_facts=facts)
+    scenario = cost_scenario(comparison, CostScenarioAssumptions(
+        travelers=2, traveler_mix={"adult": 2}, rooms=2, single_rooms=1, nights=1,
+    ))
+
+    assert scenario.items[0].group_base_calculated == 2_000_000
+    assert scenario.items[0].priced_mandatory_extras[0].calculated_total == 200_000
+    assert scenario.items[0].priced_mandatory_extras[1].calculated_total == 50_000
+    assert scenario.items[0].known_total == 2_250_000
+    assert scenario.items[0].state == "observed"
+    assert scenario.items[0].evidence

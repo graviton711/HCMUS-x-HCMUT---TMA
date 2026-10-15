@@ -15,9 +15,11 @@ from fastapi.routing import APIRoute
 from backend.agent.service import AgentService
 from backend.data.catalog import for_settings
 from backend.data.sessions import SessionStore
+from backend.decide.scenarios import cost_scenario
 from backend.error_logging import log_app_error, log_unexpected_error
 from backend.errors import AppError
 from backend.input.pipeline import validate_requirement
+from backend.models import CostScenarioAssumptions, uid
 from backend.settings import Settings
 from backend.workflows import TourWorkflows
 from shared import RequestContextMiddleware
@@ -50,6 +52,87 @@ def _version() -> str:
         return version("mlai")
     except PackageNotFoundError:
         return "dev"
+
+
+def _encode_page_cursor(offset: int) -> str:
+    return base64.urlsafe_b64encode(str(offset).encode()).decode().rstrip("=")
+
+
+def _decode_page_cursor(cursor: str | None) -> int:
+    if not cursor:
+        return 0
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        offset = int(base64.urlsafe_b64decode(padded.encode()).decode())
+    except (ValueError, UnicodeDecodeError, binascii.Error) as exc:
+        raise AppError("CURSOR_INVALID", "Invalid page cursor.", 422) from exc
+    if offset < 0:
+        raise AppError("CURSOR_INVALID", "Invalid page cursor.", 422)
+    return offset
+
+
+def _eliminated_offers(comparison) -> list[dict[str, Any]]:
+    evaluations: dict[tuple[str, str], Any] = {
+        (item.offer_id, item.condition_id): item
+        for item in comparison.evaluations
+    }
+    hard = comparison.requirement.hard()
+    items: list[dict[str, Any]] = []
+    for tour in comparison.tour_snapshots:
+        for offer in tour.offers:
+            conditions = []
+            for condition in hard:
+                item = evaluations.get((offer.id, condition.id))
+                conditions.append({
+                    "condition_id": condition.id,
+                    "field": condition.field,
+                    "value": condition.value,
+                    "state": item.state if item else "unknown",
+                    "reason_code": item.reason_code if item else "EVALUATION_MISSING",
+                    "reason": item.reason.strip() if item and item.reason.strip()
+                    else _evaluation_reason(item.reason_code if item else "EVALUATION_MISSING", condition.field),
+                    "quote": item.quote if item else "",
+                })
+            if all(item["state"] == "pass" for item in conditions):
+                continue
+            items.append({
+                "tour_id": tour.id,
+                "tour_name": tour.name,
+                "supplier": tour.supplier,
+                "tour_url": tour.url,
+                "offer": offer.model_dump(mode="json"),
+                "conditions": conditions,
+            })
+    items.sort(key=lambda item: (
+        str(item["tour_name"]).casefold(),
+        str(item["offer"].get("departure_date", "")),
+        str(item["offer"].get("id", "")),
+    ))
+    return items
+
+
+def _evaluation_reason(code: str, field: str) -> str:
+    reasons = {
+        "DESTINATION_MISMATCH": "Điểm đến trong dữ liệu không khớp yêu cầu.",
+        "DESTINATION_MISSING": "Tour chưa có nhãn điểm đến để xác minh.",
+        "DEPARTURE_CITY_MISMATCH": "Nơi khởi hành trong dữ liệu không khớp yêu cầu.",
+        "DURATION_MISMATCH": "Thời lượng tour không khớp yêu cầu.",
+        "DATE_MISMATCH": "Ngày khởi hành hoặc ngày về nằm ngoài điều kiện đã chọn.",
+        "FIELD_MISSING": f"Dữ liệu {field} còn thiếu.",
+        "FIELD_INVALID": f"Dữ liệu {field} không hợp lệ để đối chiếu.",
+        "FIELD_UNSUPPORTED": f"Chưa hỗ trợ đối chiếu trường {field}.",
+        "PRICE_MISSING": "Offer chưa có giá để đối chiếu ngân sách.",
+        "PRICE_CURRENCY_MISMATCH": "Tiền tệ của giá không khớp điều kiện ngân sách.",
+        "PRICE_LOWER_BOUND_OVER_BUDGET": "Giá khởi điểm đã cao hơn ngân sách tối đa.",
+        "PRICE_FROM_LOWER_BOUND": "Giá là giá khởi điểm nên chưa thể xác nhận nằm trong ngân sách.",
+        "PRICE_NOT_EXACT": "Giá liên hệ hoặc chưa xác định nên không thể xác nhận ngân sách.",
+        "PRICE_OVER_BUDGET": "Giá chính xác cao hơn ngân sách tối đa.",
+        "TRANSPORT_MISMATCH": "Phương tiện trong dữ liệu không khớp yêu cầu.",
+        "ACCOMMODATION_MISMATCH": "Loại chỗ nghỉ trong dữ liệu không khớp yêu cầu.",
+        "UNSUPPORTED_TRANSPORT": "Chưa hỗ trợ loại phương tiện này để đối chiếu.",
+        "EVALUATION_MISSING": f"Chưa có dữ kiện để xác minh trường {field}.",
+    }
+    return reasons.get(code, f"Không đạt hoặc chưa xác minh được trường {field} ({code}).")
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -139,6 +222,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         limit = body.get("candidate_limit", settings.candidate_limit)
         limit = limit if isinstance(limit, int) and lo <= limit <= hi else settings.candidate_limit
         comp = workflows.comparison(req, limit)
+        store.save_decision_snapshot(comp, owner_id)
         store.save_comparison(comp, owner_id)
         return {"comparison": comp.model_dump()}
 
@@ -254,6 +338,138 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/comparisons/{cid}")
     async def get_comparison(cid: str, request: Request) -> dict[str, Any]:
         return {"comparison": store.get_comparison(cid, owner_session(request)).model_dump()}
+
+    @app.get("/comparisons/{cid}/eliminated")
+    async def get_eliminated_offers(
+        cid: str,
+        request: Request,
+        limit: int = 25,
+        cursor: str | None = None,
+    ) -> dict[str, Any]:
+        owner_id = owner_session(request)
+        comparison = store.get_comparison(cid, owner_id)
+        try:
+            snapshot = store.get_decision_snapshot(cid, owner_id)
+        except AppError as exc:
+            if exc.code != "NOT_FOUND":
+                raise
+            raise AppError(
+                "DECISION_TRACE_UNAVAILABLE",
+                "This comparison does not have a retained scan snapshot. Rerun it to inspect excluded offers.",
+                409,
+            ) from exc
+        safe_limit = min(max(limit, 1), 100)
+        offset = _decode_page_cursor(cursor)
+        entries = _eliminated_offers(snapshot)
+        page = entries[offset:offset + safe_limit]
+        next_offset = offset + len(page)
+        return {
+            "comparison_id": cid,
+            "items": page,
+            "limit": safe_limit,
+            "next_cursor": _encode_page_cursor(next_offset) if next_offset < len(entries) else None,
+            "total": comparison.decision_trace.excluded_offers if comparison.decision_trace else len(entries),
+        }
+
+    @app.post("/comparisons/{cid}/scenarios")
+    async def run_comparison_scenario(
+        cid: str, body: dict[str, Any], request: Request
+    ):
+        owner_id = owner_session(request)
+        store.get_comparison(cid, owner_id)
+        kind = body.get("kind")
+        if kind == "cost":
+            try:
+                assumptions = CostScenarioAssumptions.model_validate(body.get("assumptions"))
+            except (TypeError, ValueError) as exc:
+                raise AppError("SCENARIO_INVALID", "Invalid cost scenario assumptions.", 422) from exc
+            if (
+                any(value < 0 for value in assumptions.traveler_mix.values())
+                or (assumptions.traveler_mix and sum(assumptions.traveler_mix.values()) != assumptions.travelers)
+                or (assumptions.single_rooms is not None and assumptions.rooms is not None
+                    and assumptions.single_rooms > assumptions.rooms)
+            ):
+                raise AppError("SCENARIO_INVALID", "Cost assumptions are inconsistent.", 422)
+            try:
+                snapshot = store.get_decision_snapshot(cid, owner_id)
+            except AppError as exc:
+                if exc.code != "NOT_FOUND":
+                    raise
+                raise AppError(
+                    "SCENARIO_SNAPSHOT_UNAVAILABLE",
+                    "This comparison has no retained scan snapshot. Rerun it before testing a scenario.",
+                    409,
+                ) from exc
+            scenario = cost_scenario(snapshot, assumptions)
+            return {"kind": "cost", "scenario": scenario.model_dump(mode="json")}
+
+        if kind != "criteria":
+            raise AppError("SCENARIO_KIND_INVALID", "Scenario kind must be criteria or cost.", 422)
+        if owner_id is None:
+            raise AppError("SESSION_REQUIRED", "A guest access session is required for scenarios.", 401)
+        agent_session_id = body.get("agent_session_id")
+        value = body.get("requirement")
+        if not isinstance(agent_session_id, str) or not isinstance(value, dict):
+            raise AppError("SCENARIO_INVALID", "A scenario requirement and agent session are required.", 422)
+        store.get_agent_session(agent_session_id, owner_id)
+        try:
+            requirement = workflows.requirement(
+                value.get("raw_text", ""),
+                value.get("conditions"),
+                value.get("travelers", 1),
+                value.get("ranking"),
+                requirement_id=uid("req"),
+                require_weights=True,
+                traveler_mix=value.get("traveler_mix"),
+            )
+        except (TypeError, ValueError) as exc:
+            raise AppError("SCENARIO_INVALID", "Invalid scenario requirement.", 422) from exc
+        if "text/event-stream" in request.headers.get("accept", ""):
+
+            async def stream_events():
+                try:
+                    async for event in agent.stream_decision(
+                        owner_id,
+                        agent_session_id,
+                        requirement,
+                        snapshot_comparison_id=cid,
+                    ):
+                        event_type = event.get("type", "progress")
+                        payload = (
+                            event.get("response", {}) if event_type == "result"
+                            else {key: item for key, item in event.items() if key != "type"}
+                        )
+                        data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                        yield f"event: {event_type}\ndata: {data}\n\n"
+                except AppError as exc:
+                    log_app_error(exc, transport="sse", operation="comparison_scenario")
+                    data = json.dumps(
+                        {"code": exc.code, "message": exc.message},
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    yield f"event: error\ndata: {data}\n\n"
+                except Exception as exc:
+                    log_unexpected_error(exc, transport="sse", operation="comparison_scenario")
+                    data = json.dumps(
+                        {"code": "INTERNAL_ERROR", "message": "An internal error occurred."},
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    yield f"event: error\ndata: {data}\n\n"
+
+            return StreamingResponse(
+                stream_events(),
+                media_type="text/event-stream",
+                headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+            )
+        result = await agent.decision(
+            owner_id,
+            agent_session_id,
+            requirement,
+            snapshot_comparison_id=cid,
+        )
+        return {"kind": "criteria", **result}
 
     @app.get("/history")
     async def get_history(

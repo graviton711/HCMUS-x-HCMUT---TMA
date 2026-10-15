@@ -5,6 +5,9 @@ import type {
   CurrentAgentSession,
   CurrentCatalog,
   CurrentComparison,
+  CurrentCostScenario,
+  CurrentCostScenarioAssumptions,
+  CurrentEliminatedPage,
   CurrentHealth,
   CurrentRequirement,
   CurrentSession,
@@ -76,6 +79,34 @@ export class CurrentBackendClient {
 
   health() {
     return this.request<CurrentHealth>('/health');
+  }
+
+  eliminatedOffers(comparisonId: string, cursor?: string | null, limit = 25) {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor) params.set('cursor', cursor);
+    return this.request<CurrentEliminatedPage>(
+      `/comparisons/${encodeURIComponent(comparisonId)}/eliminated?${params.toString()}`,
+    );
+  }
+
+  criteriaScenario(
+    comparisonId: string,
+    agentSessionId: string,
+    requirement: CurrentRequirement,
+  ) {
+    return this.request<CurrentAgentResponse>(
+      `/comparisons/${encodeURIComponent(comparisonId)}/scenarios`,
+      'POST',
+      { kind: 'criteria', agent_session_id: agentSessionId, requirement },
+    );
+  }
+
+  costScenario(comparisonId: string, assumptions: CurrentCostScenarioAssumptions) {
+    return this.request<{ kind: 'cost'; scenario: CurrentCostScenario }>(
+      `/comparisons/${encodeURIComponent(comparisonId)}/scenarios`,
+      'POST',
+      { kind: 'cost', assumptions },
+    );
   }
 
   createAgentSession() {

@@ -107,6 +107,45 @@ class BaseStore:
     def get_comparison(self, cid: str, owner_session_id: str | None = None) -> Comparison:
         return Comparison.model_validate_json(self._load("comparison", cid, owner_session_id))
 
+    def save_decision_snapshot(self, comparison: Comparison, owner_session_id: str | None) -> None:
+        """Keep the untrimmed scan behind the same owner boundary as its comparison."""
+        self._save(
+            "decision_snapshot",
+            f"snapshot_{comparison.id}",
+            comparison.model_dump_json(),
+            owner_session_id,
+        )
+
+    def get_decision_snapshot(
+        self, comparison_id: str, owner_session_id: str | None
+    ) -> Comparison:
+        return Comparison.model_validate_json(
+            self._load("decision_snapshot", f"snapshot_{comparison_id}", owner_session_id)
+        )
+
+    def save_scenario_snapshot_handoff(self, run_id: str, comparison: Comparison) -> None:
+        self._save(
+            "scenario_snapshot_handoff",
+            f"scenario_snapshot_{run_id}",
+            comparison.model_dump_json(),
+            run_id,
+        )
+
+    def get_scenario_snapshot_handoff(self, run_id: str) -> Comparison:
+        return Comparison.model_validate_json(
+            self._load("scenario_snapshot_handoff", f"scenario_snapshot_{run_id}", run_id)
+        )
+
+    def delete_scenario_snapshot_handoff(self, run_id: str) -> None:
+        self._execute(
+            self._sql(
+                f"DELETE FROM {self.records_table}"
+                " WHERE id = ? AND kind = 'scenario_snapshot_handoff' AND owner_session_id = ?"
+            ),
+            (f"scenario_snapshot_{run_id}", run_id),
+        )
+        self._commit()
+
     def save_decision_result(self, run_id: str, comparison: Comparison) -> None:
         """Store a private MCP-to-API handoff under an opaque, one-run key."""
         self._save("decision_result", run_id, comparison.model_dump_json(), run_id)

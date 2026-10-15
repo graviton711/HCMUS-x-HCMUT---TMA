@@ -31,6 +31,10 @@ flowchart LR
 6. Nếu thiếu ba hard-pass tour, API trả số thực có và các kịch bản nới điều kiện có giải thích; không tự sửa brief hoặc tạo tour giả.
 7. Comparison, evidence, metric vectors và phương án được lưu cùng snapshot; frontend hiển thị phép tính, giới hạn dữ liệu và hỗ trợ what-if qua brief/trọng số đã review.
 
+Decision trace được dựng từ toàn bộ hard evaluations trước khi rút gọn response. Funnel tuần tự đếm offer và tour riêng; histogram theo từng condition có thể chồng lấp, còn blocker đầu tiên dùng thứ tự condition trong Brief. Snapshot scan và evaluations đầy đủ được giữ trong runtime record owner-scoped để phân trang offer bị loại và chạy scenario trên đúng snapshot.
+
+Scenario điều kiện chạy lại hard filter trên snapshot gốc; scenario chi phí chỉ tính đơn giá có evidence theo giả định số khách/cơ cấu tuổi/phòng/đêm. Scenario không sửa comparison nguồn. Tour mới qua hard filter cần enrichment theo workflow agent trước khi có metric mềm; nếu chưa có evidence thì metric giữ `unknown`. Điều kiện scenario chỉ được đưa vào Brief dưới dạng bản nháp để người dùng review và xác nhận.
+
 ## Frontend presentation and restoration
 
 - `/` là route chính cho hội thoại và quyết định. `/tours` chỉ là URL tương thích, chuyển về `/` và giữ `session`.

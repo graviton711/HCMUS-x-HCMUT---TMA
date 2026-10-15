@@ -86,10 +86,16 @@ class AgentService:
                 yield event
 
     async def decision(
-        self, owner_id: str, local_id: str, requirement: Requirement
+        self,
+        owner_id: str,
+        local_id: str,
+        requirement: Requirement,
+        snapshot_comparison_id: str | None = None,
     ) -> dict[str, Any]:
         response: dict[str, Any] | None = None
-        async for event in self.stream_decision(owner_id, local_id, requirement):
+        async for event in self.stream_decision(
+            owner_id, local_id, requirement, snapshot_comparison_id=snapshot_comparison_id
+        ):
             if event.get("type") == "result" and isinstance(event.get("response"), dict):
                 response = event["response"]
         if response is None:
@@ -102,41 +108,70 @@ class AgentService:
         return response
 
     async def stream_decision(
-        self, owner_id: str, local_id: str, requirement: Requirement
+        self,
+        owner_id: str,
+        local_id: str,
+        requirement: Requirement,
+        snapshot_comparison_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         if not _LOCAL_ID.fullmatch(local_id):
             raise AppError("AGENT_SESSION_INVALID", "Invalid agent session ID.", 400)
         decision_run_id = f"dec_{token_hex(16)}"
+        if snapshot_comparison_id is not None:
+            snapshot = self.store.get_decision_snapshot(snapshot_comparison_id, owner_id)
+            if not snapshot.decision_trace or not snapshot.decision_trace.snapshot_available:
+                raise AppError(
+                    "SCENARIO_SNAPSHOT_UNAVAILABLE",
+                    "The original scan snapshot is unavailable. Rerun the original comparison first.",
+                    409,
+                )
+            self.store.save_scenario_snapshot_handoff(decision_run_id, snapshot)
         payload = requirement.model_dump_json(exclude_none=True)
-        message = (
-            "[REVIEWED DECISION RUN]\n"
-            "The user has reviewed and confirmed this requirement. Run it exactly as given; "
-            "call query_tours with the same requirement_id and fields plus the exact "
-            "decision_run_id below, then evaluate every soft-review batch using score_soft. "
-            "The final tool call stores the comparison for the backend; do not repeat its full "
-            "JSON or claim completion before the tools finish. "
-            "Do not ask for more information unless a tool reports a real validation error.\n"
-            f"DECISION_RUN_ID={decision_run_id}\n"
-            f"REQUIREMENT_JSON={payload}"
-        )
+        if snapshot_comparison_id is None:
+            message = (
+                "[REVIEWED DECISION RUN]\n"
+                "The user has reviewed and confirmed this requirement. Run it exactly as given; "
+                "call query_tours with the same requirement_id and fields plus the exact "
+                "decision_run_id below, then evaluate every soft-review batch using score_soft. "
+                "The final tool call stores the comparison for the backend; do not repeat its full "
+                "JSON or claim completion before the tools finish. "
+                "Do not ask for more information unless a tool reports a real validation error.\n"
+                f"DECISION_RUN_ID={decision_run_id}\n"
+                f"REQUIREMENT_JSON={payload}"
+            )
+        else:
+            message = (
+                "[WHAT-IF SCENARIO RUN]\n"
+                "This is a comparison-only scenario. Keep the baseline unchanged. Call query_tours "
+                "with the exact requirement and decision_run_id below, and set the exact "
+                "snapshot_comparison_id to the supplied source comparison. Evaluate every soft-review "
+                "batch using score_soft before returning. Do not query the live catalog for this run. "
+                "Do not ask for more information unless a tool reports a validation error.\n"
+                f"DECISION_RUN_ID={decision_run_id}\n"
+                f"SNAPSHOT_COMPARISON_ID={snapshot_comparison_id}\n"
+                f"REQUIREMENT_JSON={payload}"
+            )
         key = (owner_id, local_id)
         lock = self._locks.setdefault(key, asyncio.Lock())
-        async with lock:
-            try:
+        try:
+            async with lock:
                 async for event in self._message_events(
                     owner_id,
                     local_id,
                     message,
                     expected_requirement=requirement,
                     decision_run_id=decision_run_id,
+                    snapshot_comparison_id=snapshot_comparison_id,
                 ):
                     yield event
-            finally:
-                try:
-                    self.store.delete_decision_result(decision_run_id)
-                except Exception:
-                    # Best-effort cleanup must not replace a completed response or cancellation.
-                    pass
+        finally:
+            try:
+                self.store.delete_decision_result(decision_run_id)
+                if snapshot_comparison_id is not None:
+                    self.store.delete_scenario_snapshot_handoff(decision_run_id)
+            except Exception:
+                # Best-effort cleanup must not replace a completed response or cancellation.
+                pass
 
     async def _message_events(
         self,
@@ -145,6 +180,7 @@ class AgentService:
         message: str,
         expected_requirement: Requirement | None = None,
         decision_run_id: str | None = None,
+        snapshot_comparison_id: str | None = None,
     ) -> AsyncIterator[dict[str, Any]]:
         operation = "decision" if expected_requirement is not None else "message"
         _log.info("agent_turn_started operation=%s", operation)
@@ -254,6 +290,15 @@ class AgentService:
                             "The agent returned a comparison for different criteria. Please run the reviewed brief again.",
                             502,
                         )
+                    if (
+                        snapshot_comparison_id is not None
+                        and comparison.scenario_source_comparison_id != snapshot_comparison_id
+                    ):
+                        raise AppError(
+                            "SCENARIO_SNAPSHOT_MISMATCH",
+                            "The agent returned a scenario from a different scan snapshot.",
+                            502,
+                        )
                     final_requirement = requirement
                     final_comparison = comparison
                 if "draft_requirement" in successful_tool_names:
@@ -265,14 +310,14 @@ class AgentService:
             if persisted is None:
                 raise
             final_requirement, final_comparison = self._validate_decision_result(
-                persisted, expected_requirement
+                persisted, expected_requirement, snapshot_comparison_id
             )
 
         if expected_requirement is not None and decision_run_id is not None and final_comparison is None:
             persisted = self.store.pop_decision_result(decision_run_id)
             if persisted is not None:
                 final_requirement, final_comparison = self._validate_decision_result(
-                    persisted, expected_requirement
+                    persisted, expected_requirement, snapshot_comparison_id
                 )
 
         response: dict[str, Any] = {
@@ -293,6 +338,7 @@ class AgentService:
                 final_requirement = final_comparison.requirement
                 self.store.save_requirement(final_requirement, owner_id)
                 response["requirement"] = final_requirement.model_dump(mode="json")
+            self.store.save_decision_snapshot(final_comparison, owner_id)
             final_comparison = limit_comparison(final_comparison)
             self.store.save_comparison(final_comparison, owner_id)
             response["comparison"] = final_comparison.model_dump(mode="json")
@@ -328,12 +374,23 @@ class AgentService:
 
     @staticmethod
     def _validate_decision_result(
-        comparison: Comparison, expected_requirement: Requirement
+        comparison: Comparison,
+        expected_requirement: Requirement,
+        snapshot_comparison_id: str | None = None,
     ) -> tuple[Requirement, Comparison]:
         if comparison.requirement != expected_requirement:
             raise AppError(
                 "DECISION_REQUIREMENT_MISMATCH",
                 "The completed comparison does not match the reviewed criteria.",
+                502,
+            )
+        if (
+            snapshot_comparison_id is not None
+            and comparison.scenario_source_comparison_id != snapshot_comparison_id
+        ):
+            raise AppError(
+                "SCENARIO_SNAPSHOT_MISMATCH",
+                "The completed scenario does not use the requested scan snapshot.",
                 502,
             )
         return comparison.requirement, comparison

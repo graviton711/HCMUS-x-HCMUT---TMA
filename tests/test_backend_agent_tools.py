@@ -94,6 +94,56 @@ def test_query_tours_mcp_schema_requires_complete_condition_contract(settings):
     assert "discover_destinations" in {tool.name for tool in tools}
 
 
+def test_scenario_query_reuses_retained_snapshot_instead_of_live_catalog(settings):
+    from backend.models import Condition
+
+    tools = _tools(settings)
+    source_requirement = tools.workflows.requirement(
+        "Đi Đà Lạt",
+        [Condition(id="source", field="destination", operator="contains", value="Đà Lạt", strength="hard",
+                   quote="Đà Lạt").model_dump()],
+        1,
+        requirement_id="req_source",
+    )
+    baseline = tools.workflows.comparison(source_requirement, settings.supabase_scan_limit)
+    run_id = f"dec_{token_hex(16)}"
+    store = SessionStore(settings.database_url)
+    try:
+        store.save_scenario_snapshot_handoff(run_id, baseline)
+        tools.result_store = store
+
+        class EmptyCatalog:
+            def list_tours(self, limit):
+                return []
+
+            def list_destinations(self):
+                return []
+
+        tools.catalog = EmptyCatalog()
+        tools.workflows = TourWorkflows(settings, tools.catalog)
+        result = json.loads(tools.query_tours(
+            raw_text="Đà Lạt",
+            conditions=[{
+                "id": "destination", "field": "destination", "operator": "contains",
+                "value": "Đà Lạt", "strength": "hard", "quote": "Đà Lạt",
+            }],
+            decision_run_id=run_id,
+            travelers=1,
+            requirement_id="req_scenario",
+            snapshot_comparison_id=baseline.id,
+        ))
+
+        context_id = result["soft_review"]["context_id"]
+        context = tools._ranking_contexts[context_id]
+        assert context.comparison.scenario_source_comparison_id == baseline.id
+        assert [tour.id for tour in context.comparison.tour_snapshots] == [
+            tour.id for tour in baseline.tour_snapshots
+        ]
+        assert result["scanned_tours"] == len(baseline.tour_snapshots)
+    finally:
+        store.close()
+
+
 def test_catalog_facets_only_returns_values_from_active_fixture(settings):
     result = json.loads(_tools(settings).catalog_facets())
     assert result["destinations"] == ["Hạ Long", "Phú Quốc", "Đà Lạt"]

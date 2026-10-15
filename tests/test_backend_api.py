@@ -5,6 +5,7 @@ import logging
 from fastapi.testclient import TestClient
 
 from backend.agent.runner import OpenCodeRunner
+from backend.agent.service import AgentService
 from backend.api import create_app
 
 
@@ -45,10 +46,85 @@ def test_full_compare_flow(tmp_path):
     assert comp["ranked"], "fixture Đà Lạt under 8tr must rank"
     assert comp["tour_snapshots"]
     assert comp["analysis"]["benefits"]
+    assert comp["decision_trace"]["scanned_tours"] == comp["candidates_considered"]
+    assert comp["decision_trace"]["scanned_offers"] >= comp["decision_trace"]["eligible_offers"]
+
+    page = client.get(f"/comparisons/{comp['id']}/eliminated?limit=1").json()
+    assert page["total"] == comp["decision_trace"]["excluded_offers"]
+    if page["items"]:
+        assert page["items"][0]["conditions"]
+        assert page["items"][0]["conditions"][0]["state"] in {"pass", "fail", "unknown"}
+    if page["next_cursor"]:
+        next_page = client.get(
+            f"/comparisons/{comp['id']}/eliminated?limit=1&cursor={page['next_cursor']}"
+        ).json()
+        assert next_page["items"][0]["offer"]["id"] != page["items"][0]["offer"]["id"]
+
+    cost_scenario = client.post(
+        f"/comparisons/{comp['id']}/scenarios",
+        json={"kind": "cost", "assumptions": {
+            "travelers": 1, "traveler_mix": {"adult": 1}, "rooms": 1,
+            "single_rooms": 0, "nights": 2,
+        }},
+    )
+    assert cost_scenario.status_code == 200
+    assert cost_scenario.json()["scenario"]["source_comparison_id"] == comp["id"]
+    assert cost_scenario.json()["scenario"]["items"]
 
     again = client.get(f"/comparisons/{comp['id']}").json()["comparison"]
     assert again["id"] == comp["id"]
     assert again["tour_snapshots"] == comp["tour_snapshots"]
+
+
+def test_criteria_scenario_uses_baseline_snapshot_without_replacing_it(tmp_path, monkeypatch):
+    calls = {}
+
+    async def fake_decision(_self, owner_id, agent_session_id, requirement, snapshot_comparison_id=None):
+        calls.update(
+            owner_id=owner_id,
+            agent_session_id=agent_session_id,
+            requirement_id=requirement.id,
+            source_id=snapshot_comparison_id,
+        )
+        return {
+            "comparison": {
+                "id": "scenario-comparison",
+                "scenario_source_comparison_id": snapshot_comparison_id,
+            }
+        }
+
+    monkeypatch.setattr(AgentService, "decision", fake_decision)
+    monkeypatch.setattr(OpenCodeRunner, "_executable", lambda _self: "opencode")
+    client = _client(tmp_path, opencode_server_url="http://127.0.0.1:4098")
+    session = client.post("/sessions").json()
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    requirement = client.post(
+        "/requirements", headers=headers, json={"form": {"destinations": ["Da Lat"]}}
+    ).json()["requirement"]
+    baseline = client.post(
+        "/comparisons", headers=headers, json={"requirement_id": requirement["id"]}
+    ).json()["comparison"]
+    agent_id = client.post("/agent/sessions", headers=headers).json()["agent_session_id"]
+
+    response = client.post(
+        f"/comparisons/{baseline['id']}/scenarios",
+        headers=headers,
+        json={
+            "kind": "criteria",
+            "agent_session_id": agent_id,
+            "requirement": baseline["requirement"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["comparison"]["scenario_source_comparison_id"] == baseline["id"]
+    assert calls["owner_id"] == session["session_id"]
+    assert calls["agent_session_id"] == agent_id
+    assert calls["source_id"] == baseline["id"]
+    assert calls["requirement_id"] != baseline["requirement"]["id"]
+    unchanged = client.get(f"/comparisons/{baseline['id']}", headers=headers).json()["comparison"]
+    assert unchanged["id"] == baseline["id"]
+    assert unchanged["requirement"] == baseline["requirement"]
 
 
 def test_free_text_is_not_interpreted_without_explicit_fields(tmp_path):

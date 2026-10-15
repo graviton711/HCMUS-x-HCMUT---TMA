@@ -398,6 +398,8 @@ function ActiveChat({
             messages={chat.msgs}
             busy={chat.busy}
             clientReady={Boolean(chat.client) && !expired}
+            client={chat.client}
+            agentSessionId={session.agentSessionId ?? null}
             selectedArtifactId={selectedArtifactId}
             onOpenArtifact={openArtifact}
             onUpdateDecisionDraft={chat.updateDecisionDraft}

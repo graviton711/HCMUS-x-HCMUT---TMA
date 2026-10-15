@@ -468,7 +468,9 @@ class AgentTools:
         ranking: QueryRankingInput | None = None,
         requirement_id: str = "",
         traveler_mix: TravelerMixInput | None = None,
+        snapshot_comparison_id: str = "",
     ) -> str:
+        """Filter the active catalog, or the signed-off scan snapshot for a what-if run."""
         if not re.fullmatch(r"dec_[0-9a-f]{32}", decision_run_id):
             raise AppError("DECISION_RUN_INVALID", "Invalid decision run ID.", 422)
         structured_conditions = [
@@ -493,7 +495,23 @@ class AgentTools:
             require_weights=True,
             traveler_mix=(traveler_mix.model_dump(exclude_none=True) if traveler_mix else None),
         )
-        comparison = self.workflows.comparison(requirement, self.settings.supabase_scan_limit)
+        if snapshot_comparison_id:
+            store = self.result_store or SessionStore(self.settings.database_url)
+            should_close = self.result_store is None
+            try:
+                baseline = store.get_scenario_snapshot_handoff(decision_run_id)
+            finally:
+                if should_close:
+                    store.close()
+            if baseline.id != snapshot_comparison_id:
+                raise AppError("SCENARIO_SNAPSHOT_MISMATCH", "Scenario scan snapshot mismatch.", 409)
+            comparison = compare(
+                requirement,
+                baseline.tour_snapshots,
+                cfg=self.settings.tuning.decide,
+            ).model_copy(update={"scenario_source_comparison_id": baseline.id})
+        else:
+            comparison = self.workflows.comparison(requirement, self.settings.supabase_scan_limit)
         return self._comparison_payload(
             requirement, comparison, decision_run_id=decision_run_id or None
         )
@@ -659,11 +677,15 @@ class AgentTools:
                 soft_verdicts=context.verdicts,
                 metric_facts=context.metric_facts,
             )
+            if context.comparison.scenario_source_comparison_id:
+                comparison = comparison.model_copy(update={
+                    "scenario_source_comparison_id": context.comparison.scenario_source_comparison_id,
+                })
             self._ranking_contexts.pop(context_id, None)
-            comparison = limit_comparison(comparison)
             if context.decision_run_id:
                 self._save_decision_result(context.decision_run_id, comparison)
                 return _json(self._decision_receipt(context.decision_run_id, comparison))
+            comparison = limit_comparison(comparison)
             return _json({
                 "requirement": context.requirement.model_dump(mode="json"),
                 "comparison": comparison.model_dump(mode="json"),
@@ -726,16 +748,21 @@ class AgentTools:
             ]
             batches = _review_batches(candidates_to_review)
             if not batches:
+                scenario_source_id = comparison.scenario_source_comparison_id
                 comparison = compare(
                     requirement,
                     comparison.tour_snapshots,
                     cfg=self.settings.tuning.decide,
                     metric_facts=cached_facts,
                 )
-                comparison = limit_comparison(comparison)
+                if scenario_source_id:
+                    comparison = comparison.model_copy(update={
+                        "scenario_source_comparison_id": scenario_source_id,
+                    })
                 if decision_run_id:
                     self._save_decision_result(decision_run_id, comparison)
                     return _json(self._decision_receipt(decision_run_id, comparison))
+                comparison = limit_comparison(comparison)
                 payload["comparison"] = comparison.model_dump(mode="json")
                 if additional:
                     payload.update(additional)
@@ -754,10 +781,10 @@ class AgentTools:
                 self._ranking_contexts[context_id] = context
             payload["soft_review"] = self._soft_review_payload(context)
         else:
-            comparison = limit_comparison(comparison)
             if decision_run_id:
                 self._save_decision_result(decision_run_id, comparison)
                 return _json(self._decision_receipt(decision_run_id, comparison))
+            comparison = limit_comparison(comparison)
             payload["comparison"] = comparison.model_dump(mode="json")
         if additional:
             payload.update(additional)

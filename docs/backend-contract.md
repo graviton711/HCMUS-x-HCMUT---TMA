@@ -4,6 +4,12 @@ API HTTP cho frontend và các consumer. Schema live ở `/openapi.json`; models
 
 ## Current runtime
 
+- A comparison includes `decision_trace`: scanned tour/offer counts, hard-condition state counts, a sequential offer funnel, and first-blocker counts. Per-condition totals may overlap because one offer can fail or remain unknown on several conditions; `unknown` is never counted as `fail`.
+- `GET /comparisons/{id}/eliminated?limit=&cursor=` returns owner-scoped, paginated excluded offers with each hard condition's `pass`/`fail`/`unknown` evaluation and reason. Trace counts are computed from the full scan before agent/UI response trimming.
+- Full scan data is retained in an owner-scoped runtime record keyed by comparison ID. The user-facing comparison remains bounded. Legacy comparisons without a retained snapshot report drill-down and what-if as unavailable and can be rerun. No SQL schema migration is required.
+- `POST /comparisons/{id}/scenarios` compares a criteria or cost-assumption scenario against the retained scan snapshot and returns deltas without changing the source comparison. Criteria changes are returned as a proposal to copy into the Brief for user review; cost assumptions remain scenario-local. A scenario may only publish newly admitted tours after their soft evidence has been evaluated; otherwise those metrics remain explicitly unknown.
+- Each selected option carries metric comparisons against the eligible reference group, including value, unit, currency/scope, state, and evidence. Metrics are compared only when dimensions match; missing values remain unknown.
+
 - `GET /health` → `{status, version}`.
 - `POST /sessions` → guest session Bearer token with expiry. Only a SHA-256 token hash is persisted.
 - `GET /catalog` → `{destinations}` from the active read-only catalog provider; this is a basic lookup, not the richer frontend catalog contract.
@@ -40,13 +46,13 @@ Metric/objective views: `cheapest` (exact group total, same currency), `best_fit
 
 `candidates_considered` là số tour đã quét, không phải tổng catalog. `ranked`/`near_miss` và các tool `ask_choice`, `catalog_facets`, `discover_destinations`, `draft_requirement`, `tour_detail`, `clarify_date` vẫn tương thích. Thay brief/trọng số để chạy what-if tính result mới, không ghi đè comparison cũ. Không tự nới điều kiện; nếu thiếu ba tour, trả số thực có và kịch bản nới điều kiện cần user review.
 
-## Remaining integration target (not yet runtime)
+## Remaining integration target
 
 - `/auth/*` → Supabase Auth adapter; backend verify identity với đúng provider project, không tin owner ID từ client.
 - `/requirements/{id}/revisions/{revision}`, `/requirements/{id}/proposals`, `/proposals/{id}/*` → revision, draft proposal, confirm/cancel/discard explicit.
 - `POST /comparison-jobs`, `GET /jobs/{id}`, `GET /jobs/{id}/events`, `POST /jobs/{id}/cancel` → progress có thứ tự và trạng thái terminal; không đổi kết quả comparison đồng bộ hiện có.
 - `/history/*` → rename/pin/archive, transcript, metadata CAS và guest-session linking explicit (basic list/detail are runtime).
-- `POST /comparisons/{id}/what-if`, `GET /what-if/{id}`, `POST /what-if/{id}/scenarios/{scenario}/proposals` → phân tích bound với comparison, apply chỉ tạo proposal; cần confirm trước lần tìm kế tiếp.
+- `GET /comparisons/{id}/eliminated` and `POST /comparisons/{id}/scenarios` are runtime APIs as described above. A durable scenario history/proposal resource is not implemented; applying criteria still requires editing and confirming the Brief.
 - `/evidence/*`, `/requirements/{id}/messages/*`, `/contacts` → evidence lookup, conversation follow-up và contact ticket.
 
 Lỗi HTTP dùng `{error: {code, message}}`; SSE dùng event `error` với `{code, message}`; MCP trả cùng envelope JSON trong tool content. `code` ổn định để consumer map ngôn ngữ hiển thị; `message` là tiếng Anh. Lỗi 4xx thông thường không được log. Lỗi 5xx hoặc retryable được log một lần tại ranh giới transport với metadata an toàn; exception không dự kiến trả `INTERNAL_ERROR` chung, không lộ nội dung exception. Agent không có deadline tổng; tiến trình kết thúc khi OpenCode hoàn tất hoặc client ngắt kết nối. Timeout riêng của MCP tool và kết nối dữ liệu vẫn áp dụng.
