@@ -54,7 +54,7 @@ class _Process:
 def _runner(settings):
     configured = settings.model_copy(update={
         "opencode_server_url": "http://127.0.0.1:4098",
-        "opencode_model": "provider/test-model",
+        "opencode": settings.opencode.model_copy(update={"model": "provider/test-model"}),
     })
     return OpenCodeRunner(configured)
 
@@ -109,7 +109,7 @@ def test_agent_runner_logs_safe_stderr_and_exit_code(settings, monkeypatch, capl
     configured = settings.model_copy(update={
         "opencode_server_url": "http://127.0.0.1:4098",
         "opencode_server_password": "server-password-secret",
-        "opencode_model": "provider/test-model",
+        "opencode": settings.opencode.model_copy(update={"model": "provider/test-model"}),
     })
     process = _Process(
         _Stdout(),

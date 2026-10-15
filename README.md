@@ -28,7 +28,7 @@ uv sync
 pnpm.cmd --dir src/frontend install
 ```
 
-Đặt `OPENCODE_SERVER_URL` và `OPENCODE_SERVER_PASSWORD` trong `.env`. Sau đó mở ba terminal tại repo root và chạy:
+Đặt `OPENCODE_SERVER_URL` và `OPENCODE_SERVER_PASSWORD` trong `.env`. Model OpenCode dùng chung cho chat và ingest nằm tại `opencode.model` trong `configs/settings.yaml`. Sau đó mở ba terminal tại repo root và chạy:
 
 **Terminal 1 — OpenCode**
 

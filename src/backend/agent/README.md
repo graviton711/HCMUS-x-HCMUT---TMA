@@ -39,9 +39,7 @@ OpenCode's JSON stream can wrap MCP calls in a `tool_use` event for the Code Mod
 
 ## Chạy local
 
-Cấu hình `OPENCODE_SERVER_URL` và `OPENCODE_SERVER_PASSWORD` trong `.env`. Backend nạp mật khẩu vào cấu hình và truyền nó cho mỗi tiến trình `opencode run --server <URL>`. Mỗi lượt backend lấy model từ `OPENCODE_MODEL` nếu có; nếu không, đọc model hiện tại của agent từ OpenCode server và truyền rõ bằng `--model`. Việc này đồng bộ session cũ với model của agent sau khi cấu hình model thay đổi. CLI dùng thư mục làm việc của tiến trình làm project context; backend lấy thư mục từ `OPENCODE_PROJECT_DIR` hoặc mặc định root repo:
-
-Trong đợt thử nghiệm hiện tại, `travel-consultant` dùng `opencode/big-pickle`; nếu đặt `OPENCODE_MODEL`, giá trị đó sẽ override model trong agent profile.
+Cấu hình model dùng chung tại `configs/settings.yaml` (`opencode.model`). Backend truyền chính giá trị đó bằng `--model`; agent profile và biến môi trường không khai báo model riêng. Cấu hình `OPENCODE_SERVER_URL`, `OPENCODE_SERVER_PASSWORD`, `OPENCODE_AGENT` và `OPENCODE_PROJECT_DIR` trong `.env`. Backend truyền mật khẩu cho mỗi tiến trình `opencode run --server <URL>`. CLI dùng thư mục làm việc làm project context; mặc định là root repo:
 
 ```powershell
 # Terminal 1

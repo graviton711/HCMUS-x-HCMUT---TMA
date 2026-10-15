@@ -30,7 +30,6 @@ from urllib.parse import urlsplit
 
 from shared import ensure_utf8_stdout
 
-MODEL = "opencode/muse-spark-1.3-contributor-free"
 VARIANT = "xhigh"
 
 DEFAULT_AGENT_SPEC = Path(__file__).resolve().parents[2] / "configs" / "agents" / "site-surveyor.yaml"
@@ -196,8 +195,6 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
                         help="short name, e.g. pys (default: all sources in configs/sources-mvp.csv)")
     parser.add_argument("--origin", default=None,
                         help="https://example.test/ (default: looked up from configs/sources-mvp.csv)")
-    parser.add_argument("--model", default=None,
-                        help="default: survey.model in settings")
     parser.add_argument("--variant", default=None,
                         help="default: survey.variant in settings")
     parser.add_argument("--timeout-min", type=int, default=None,
@@ -249,10 +246,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         from .extract import load_settings
 
         settings = load_settings()
-    except (ValueError, RuntimeError, OSError):
-        settings = {}
+    except (ValueError, RuntimeError, OSError) as exc:
+        print(f"Could not load settings: {exc}", file=sys.stderr)
+        return 2
+    opencode_cfg = settings.get("opencode", {})
+    model = opencode_cfg.get("model") if isinstance(opencode_cfg, dict) else None
+    if not isinstance(model, str) or not model.strip():
+        print("Missing opencode.model in configs/settings.yaml.", file=sys.stderr)
+        return 2
     survey_cfg = settings.get("survey", {})
-    model = args.model or str(survey_cfg.get("model", MODEL))
     variant = args.variant or str(survey_cfg.get("variant", VARIANT))
     timeout_min = (args.timeout_min if args.timeout_min is not None
                    else int(survey_cfg.get("timeout_min", 20)))

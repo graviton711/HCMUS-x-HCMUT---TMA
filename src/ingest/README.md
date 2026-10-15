@@ -4,7 +4,7 @@ Luồng chính 5 bước: danh sách link (sitemap trong `pipeline`) → agent v
 
 Tài liệu này đặc tả hợp đồng kỹ thuật giữa Agent khảo sát (`survey.py`) và engine thu thập (`extract.py` + `pipeline.py`).
 
-Mọi thông số vận hành (timeout, retry, workers, model survey, `min_evidence`...) nằm ở `configs/settings.yaml` theo `configs/settings.schema.json`; code chỉ giữ fallback, không phải nguồn sự thật. Transport dùng connection reuse theo thread + `Accept-Encoding: gzip`, DNS cache `fetch.dns_ttl_s`, retry `fetch.retries` lần với backoff cho lỗi thoáng qua (timeout/reset/5xx/429, không retry lỗi SSL cert hay 4xx).
+Mọi thông số vận hành (timeout, retry, workers, model OpenCode dùng chung, `min_evidence`...) nằm ở `configs/settings.yaml` theo `configs/settings.schema.json`. `opencode.model` là nguồn model duy nhất cho backend agent và survey; khảo sát chỉ cấu hình thêm `survey.variant`. Transport dùng connection reuse theo thread + `Accept-Encoding: gzip`, DNS cache `fetch.dns_ttl_s`, retry `fetch.retries` lần với backoff cho lỗi thoáng qua (timeout/reset/5xx/429, không retry lỗi SSL cert hay 4xx).
 
 Mọi timestamp quan sát (`observed_at`, `fetched_at`) đều là giờ Việt Nam (`Asia/Ho_Chi_Minh`, `shared.now_vn_iso`), ISO-8601 kèm offset.
 

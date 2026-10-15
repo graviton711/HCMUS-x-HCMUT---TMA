@@ -56,10 +56,17 @@
       },
       "additionalProperties": true
     },
+    "opencode": {
+      "type": "object",
+      "properties": {
+        "model": {"type": "string", "minLength": 1}
+      },
+      "required": ["model"],
+      "additionalProperties": true
+    },
     "survey": {
       "type": "object",
       "properties": {
-        "model": {"type": "string"},
         "variant": {"type": "string"},
         "timeout_min": {"type": "integer"},
         "prefetch_timeout_s": {"type": "number"},
@@ -134,5 +141,6 @@
       "additionalProperties": true
     }
   },
+  "required": ["opencode"],
   "additionalProperties": true
 }

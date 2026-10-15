@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from backend.settings import Settings
 
 _YAML = """
+opencode: {model: opencode/test-model}
 backend:
   data_provider: fixture
   database_url: sqlite:///tmp/test.db
@@ -29,6 +30,7 @@ def _configs(tmp_path, yaml_text=_YAML):
 def test_yaml_tuning_loaded(tmp_path):
     settings = Settings.load(_configs(tmp_path))
     assert settings.data_provider == "fixture"
+    assert settings.opencode.model == "opencode/test-model"
     assert settings.candidate_limit == 7
     assert settings.supabase_scan_limit == 50
     assert settings.tuning.decide.top_n == 1
@@ -39,10 +41,10 @@ def test_yaml_tuning_loaded(tmp_path):
 
 def test_env_wins_over_yaml(tmp_path, monkeypatch):
     monkeypatch.setenv("CANDIDATE_LIMIT", "42")
-    monkeypatch.setenv("OPENCODE_MODEL", "opencode/test-model")
+    monkeypatch.setenv("OPENCODE_MODEL", "opencode/env-model-ignored")
     settings = Settings.load(_configs(tmp_path))
     assert settings.candidate_limit == 42
-    assert settings.opencode_model == "opencode/test-model"
+    assert settings.opencode.model == "opencode/test-model"
 
 
 def test_legacy_price_trust_and_ttl_settings_are_ignored(tmp_path):
@@ -61,7 +63,7 @@ def test_dotenv_file_wins_over_yaml(tmp_path):
     env.write_text("CANDIDATE_LIMIT=33\nOPENCODE_MODEL=opencode/dotenv-model\n", encoding="utf-8")
     settings = Settings.load(_configs(tmp_path), _env_file=str(env))
     assert settings.candidate_limit == 33
-    assert settings.opencode_model == "opencode/dotenv-model"
+    assert settings.opencode.model == "opencode/test-model"
 
 
 def test_cors_origins_env_accepts_bare_csv_and_json(tmp_path, monkeypatch):
@@ -107,13 +109,18 @@ def test_incomplete_yaml_fails_loud(tmp_path):
 
 def test_repo_configs_load():
     settings = Settings.load()
+    assert settings.opencode.model == "opencode/muse-spark-1.3-contributor-free"
     assert settings.tuning.decide.quote_chars <= 200
     assert settings.tuning.data.providers_limit == 100
     assert settings.tuning.api.port == 8000
     import yaml
 
     agent = Path(".opencode/agents/travel-consultant.md").read_text(encoding="utf-8")
-    assert "model: opencode/muse-spark-1.3-contributor-free" in agent
+    frontmatter = agent.split("---", 2)[1]
+    assert not any(line.startswith("model:") for line in frontmatter.splitlines())
+    assert "OPENCODE_MODEL" not in Path(".env.example").read_text(encoding="utf-8")
+    assert "OPENCODE_MODEL" not in Path("render.yaml").read_text(encoding="utf-8")
+    assert "model" not in yaml.safe_load(Path("configs/settings.yaml").read_text(encoding="utf-8"))["survey"]
     prompt = yaml.safe_load(Path("configs/prompts/agent.yaml").read_text(encoding="utf-8"))
     assert agent.split("---", 2)[2].strip() == prompt["system"].strip()
     assert "`any` for multiple alternatives" in prompt["system"]

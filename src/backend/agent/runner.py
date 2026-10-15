@@ -10,8 +10,6 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 from backend.errors import AppError
 from backend.opencode_binary import resolve_opencode_binary
 from backend.settings import Settings
@@ -111,63 +109,6 @@ class OpenCodeRunner:
         except FileNotFoundError as exc:
             raise AppError("OPENCODE_UNAVAILABLE", "OpenCode CLI is not installed.", 503) from exc
 
-    async def _model_for_run(self, working_dir: Path) -> str:
-        configured_model = self.settings.opencode_model.strip()
-        if configured_model:
-            return configured_model
-
-        auth = (
-            httpx.BasicAuth("opencode", self.settings.opencode_server_password)
-            if self.settings.opencode_server_password
-            else None
-        )
-        base_url = self.settings.opencode_server_url.rstrip("/")
-        try:
-            async with httpx.AsyncClient(timeout=5.0, auth=auth) as client:
-                response = await client.get(
-                    f"{base_url}/api/agent",
-                    params={"directory": str(working_dir)},
-                )
-                response.raise_for_status()
-                payload = response.json()
-        except (httpx.HTTPError, ValueError) as exc:
-            response = getattr(exc, "response", None)
-            status_code = getattr(response, "status_code", None)
-            _log.warning(
-                "opencode_agent_model_lookup_failed exception_type=%s http_status=%s",
-                type(exc).__name__,
-                status_code if isinstance(status_code, int) else "-",
-            )
-            raise AppError(
-                "OPENCODE_AGENT_MODEL_UNAVAILABLE",
-                "Could not read the configured agent model from OpenCode.",
-                503,
-                retryable=True,
-            ) from exc
-
-        agents = payload.get("data") if isinstance(payload, dict) else None
-        agent = next(
-            (
-                item
-                for item in agents or []
-                if isinstance(item, dict)
-                and (item.get("id") == self.settings.opencode_agent or item.get("name") == self.settings.opencode_agent)
-            ),
-            None,
-        )
-        model = agent.get("model") if agent else None
-        if isinstance(model, dict):
-            provider_id = model.get("providerID")
-            model_id = model.get("id") or model.get("modelID")
-            if isinstance(provider_id, str) and isinstance(model_id, str) and provider_id and model_id:
-                return f"{provider_id}/{model_id}"
-
-        raise AppError(
-            "OPENCODE_AGENT_MODEL_UNAVAILABLE",
-            "The configured OpenCode agent has no resolvable model.",
-            503,
-        )
-
     async def events(self, message: str, session_id: str | None) -> AsyncIterator[dict[str, Any]]:
         if not self.configured:
             raise AppError("AGENT_DISABLED", "OpenCode agent is not configured.", 503)
@@ -183,7 +124,7 @@ class OpenCodeRunner:
                 "Configured OpenCode project directory is unavailable.",
                 503,
             )
-        model = await self._model_for_run(working_dir)
+        model = self.settings.opencode.model
         args = [
             self._executable(),
             "run",

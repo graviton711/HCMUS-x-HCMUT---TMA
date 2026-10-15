@@ -24,8 +24,9 @@ sitemap:
   attempts: 2
 audit:
   min_evidence: 0.9
-survey:
+opencode:
   model: "opencode/muse-spark-1.3-contributor-free"
+survey:
   variant: "xhigh"
   timeout_min: 20
   prefetch_timeout_s: 15

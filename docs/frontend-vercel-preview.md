@@ -62,8 +62,9 @@ ping `/health` backend và `/global/health` opencode.
   catalog server-side), không cần thêm gì. Copy URL public của nó.
 - Render `mlai-tour-backend`: `SUPABASE_TOUR_DB_URL`, `CORS_ORIGINS`
   (domain web Vercel), `OPENCODE_SERVER_URL` = URL opencode ở trên,
-  `OPENCODE_MODEL` + `OPENCODE_AGENT` + `OPENCODE_PROJECT_DIR=/app` đã có
-  value trong yaml; CLI dùng đường dẫn này làm working directory khi gửi request.
+  `OPENCODE_AGENT` + `OPENCODE_PROJECT_DIR=/app`; model lấy từ
+  `opencode.model` trong `configs/settings.yaml`. CLI dùng đường dẫn này làm
+  working directory khi gửi request.
 - Vercel `web`: `VITE_API_BASE_URL` = URL backend (không đổi nếu giữ service
   cũ — vẫn `mlai-tour-backend[-suffix].onrender.com` như trước).
 - Vercel `api` (legacy): giữ env cũ nếu còn dùng route đồng bộ ở đó.

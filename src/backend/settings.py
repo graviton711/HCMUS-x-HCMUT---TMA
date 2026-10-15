@@ -1,6 +1,7 @@
-"""Backend settings. Every tunable comes from YAML or env; code holds no values.
+"""Backend settings. Runtime values come from YAML or env; code holds no secrets.
 
-Precedence: explicit constructor args > env vars > YAML file.
+Precedence: explicit constructor args > env vars > YAML file, except OpenCode
+model selection, which has one source in `configs/settings.yaml`.
 Missing YAML keys fail loud with ValidationError. Only credentials may be
 empty (absent key = feature off, guarded at use time).
 """
@@ -53,6 +54,20 @@ class Tuning(BaseModel):
     api: ApiCfg
 
 
+class OpenCodeConfig(BaseModel):
+    model_config = SettingsConfigDict(extra="ignore")
+
+    model: str = Field(min_length=1)
+
+    @field_validator("model")
+    @classmethod
+    def _strip_model(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("OpenCode model must not be empty.")
+        return value
+
+
 def _string_list(value: Any) -> list[str]:
     """Env/dashboard operators hand-edit these; accept JSON or bare CSV."""
     if value is None:
@@ -88,7 +103,7 @@ def _resolve(path: str | Path | None, *parts: str) -> Path | None:
     return None
 
 
-def _read_settings(path: str | Path | None) -> dict[str, Any]:
+def _read_config(path: str | Path | None) -> dict[str, Any]:
     import yaml
 
     resolved = _resolve(path, "settings.yaml")
@@ -97,8 +112,7 @@ def _read_settings(path: str | Path | None) -> dict[str, Any]:
     data = yaml.safe_load(resolved.read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict):
         raise ValueError(f"Settings must be a mapping: {resolved}")
-    backend = data.get("backend", {})
-    return backend if isinstance(backend, dict) else {}
+    return data
 
 
 # YAML key -> flat Settings field. Env var of the same name wins over YAML.
@@ -126,10 +140,10 @@ class Settings(BaseSettings):
         default_factory=lambda: {"departure_date": 86400}
     )
 
+    opencode: OpenCodeConfig
     opencode_server_url: str = ""
     opencode_server_password: str = ""
     opencode_binary: str = "opencode"
-    opencode_model: str = ""
     opencode_agent: str = "travel-consultant"
     # OpenCode CLI working directory / shared project path. Empty uses repo root.
     opencode_project_dir: str = ""
@@ -161,7 +175,11 @@ class Settings(BaseSettings):
     @classmethod
     def load(cls, path: str | Path | None = None, **overrides: Any) -> Settings:
         """Build settings from configs, letting env and kwargs win."""
-        backend = _read_settings(path)
+        config = _read_config(path)
+        backend = config.get("backend", {})
+        backend = backend if isinstance(backend, dict) else {}
+        opencode = config.get("opencode", {})
+        opencode = opencode if isinstance(opencode, dict) else {}
         from dotenv import dotenv_values
 
         try:
@@ -183,7 +201,7 @@ class Settings(BaseSettings):
         tuning: dict[str, Any] = {}
         tuning.update({k: v for k, v in backend.items()
                        if k in Tuning.model_fields and v is not None})
-        init: dict[str, Any] = {"tuning": tuning}
+        init: dict[str, Any] = {"tuning": tuning, "opencode": opencode}
         for key, field in _FLAT_MAP.items():
             if isinstance(key, tuple):
                 section, sub = key
