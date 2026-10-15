@@ -414,6 +414,7 @@ class Comparison(BaseModel):
     ranking_currencies: list[str] = Field(default_factory=list)
     decision_views: list[DecisionView] = Field(default_factory=list)
     metric_profiles: list[MetricProfile] = Field(default_factory=list)
+    near_miss_profiles: list[MetricProfile] = Field(default_factory=list)
     decision_options: list[DecisionOption] = Field(default_factory=list)
 
 

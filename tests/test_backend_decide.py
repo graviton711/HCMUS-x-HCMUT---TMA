@@ -450,3 +450,59 @@ def test_option_tradeoff_sentence_changes_with_trace(decide_cfg):
     narrowed_sentence = narrowed.decision_options[0].tradeoffs[0]
     assert "trong 3" in base_sentence
     assert "trong 1" in narrowed_sentence
+
+
+def test_near_miss_offers_get_metric_profiles(decide_cfg):
+    comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    assert comparison.near_miss, "sample rows must yield near-miss offers"
+    by_offer = {item.offer_id: item for item in comparison.near_miss_profiles}
+    for candidate in comparison.near_miss:
+        assert candidate.offer_id in by_offer
+    halong = by_offer["sgt-halong-3n-20261227"]
+    assert halong.cost.listed_price == 8_900_000
+    assert halong.cost.state in {"partial", "observed", "unknown"}
+
+
+def test_family_suitability_observed_with_child_pricing(decide_cfg):
+    from backend.input.pipeline import validate_requirement
+
+    row = TourRow(
+        provider={},
+        tour={
+            "record_key": "fam-1",
+            "url": "https://example.test/fam",
+            "departure_city": "Sài Gòn",
+            "destinations": ["Đà Lạt"],
+            "child_policy": "Trẻ em 5-10 tuổi tính 50%.",
+            "observed_at": "2026-10-15T00:00:00+07:00",
+        },
+        offers=[{
+            "record_key": "fam-1-offer",
+            "departure_date": "2026-12-25",
+            "price": 7000000,
+            "currency": "VND",
+            "price_type": "fixed",
+            "availability": "available",
+            "price_by_age": {"adult": 7000000, "child": 3500000},
+            "observed_at": "2026-10-15T00:00:00+07:00",
+        }],
+    )
+    req = validate_requirement(
+        "Đà Lạt cho gia đình 2 người lớn 1 trẻ em",
+        [{"id": "h1", "field": "destination", "operator": "contains",
+          "value": "Đà Lạt", "strength": "hard", "quote": "Đà Lạt"}],
+        travelers=3, traveler_mix={"adult": 2, "child": 1},
+    )
+    comparison = compare(req, rows_to_snapshots([row]), decide_cfg)
+    metric = comparison.metric_profiles[0].metrics["family_suitability"]
+    assert metric.state == "observed"
+    assert metric.value == 1.0
+    assert metric.evidence
+
+
+def test_family_suitability_unknown_without_child_groups(decide_cfg):
+    comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    for profile in comparison.metric_profiles:
+        metric = profile.metrics["family_suitability"]
+        assert metric.state == "unknown"
+        assert metric.value is None

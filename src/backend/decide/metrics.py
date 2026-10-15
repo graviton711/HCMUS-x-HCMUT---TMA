@@ -16,6 +16,7 @@ from backend.models import (
     MetricEvidence,
     MetricMeasure,
     MetricProfile,
+    MetricState,
     PreferenceScore,
     Requirement,
     TourSnapshot,
@@ -333,12 +334,33 @@ def build_metric_profiles(
         )
 
         family_evidence = [fact.evidence for fact in facts.family_facts]
+        family_ratio: float | None = None
+        family_state: MetricState = "unknown"
+        mix = req.traveler_mix
+        if mix and sum(mix.values()) == req.travelers:
+            child_groups = [
+                group for group in ("child", "small_child", "infant")
+                if mix.get(group, 0) > 0
+            ]
+            if child_groups:
+                priced_groups = set((offer.price_by_age or {}).keys())
+                covered = [group for group in child_groups if group in priced_groups]
+                for group in covered:
+                    family_evidence.append(MetricEvidence(
+                        source_field="offers.price_by_age",
+                        quote=f"{offer.price_by_age[group]} {offer.currency}",
+                        observed_at=offer.evidence.observed_at,
+                        url=offer.evidence.url or tour.url,
+                    ))
+                if covered or family_evidence:
+                    family_ratio = len(covered) / len(child_groups)
+                    family_state = "observed"
         measures["family_suitability"] = MetricMeasure(
-            value=None,
+            value=family_ratio,
             unit="age_eligibility_and_party_match",
-            state="unknown",
+            state=family_state,
             evidence=family_evidence,
-            method_version=facts.method_version,
+            method_version=facts.method_version or "party-price-v1",
         )
         measures["family_policy_coverage"] = MetricMeasure(
             value=len(facts.family_facts),

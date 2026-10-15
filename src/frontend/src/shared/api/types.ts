@@ -169,6 +169,7 @@ export interface CurrentComparison {
   decision_views?: CurrentDecisionView[];
   metric_profiles?: CurrentMetricProfile[];
   decision_options?: CurrentDecisionOption[];
+  near_miss_profiles?: CurrentMetricProfile[];
 }
 
 export interface CurrentDecisionView {

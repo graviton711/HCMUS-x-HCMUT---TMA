@@ -65,6 +65,7 @@ def limit_comparison(comparison: Comparison, limit: int = 5) -> Comparison:
             "decision_views": limited_views,
             "decision_options": [item for item in selected_options if item.tour_id in selected_tours],
             "metric_profiles": [item for item in comparison.metric_profiles if item.offer_id in offer_ids],
+            "near_miss_profiles": [item for item in comparison.near_miss_profiles if item.offer_id in offer_ids],
         }
     )
 

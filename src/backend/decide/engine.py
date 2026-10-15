@@ -1164,6 +1164,13 @@ def compare(
     near = near_miss(req, tours, evaluations, {c.offer_id for c in ranked}, cfg.near_miss_max_fails)
     near = near[: cfg.top_n]
     profiles = build_metric_profiles(req, surviving, verdicts, metric_facts)
+    tour_by_id = {tour.id: tour for tour in tours}
+    near_pairs = [
+        (tour_by_id[candidate.tour_id], candidate.offer_id)
+        for candidate in near
+        if candidate.tour_id in tour_by_id
+    ]
+    near_profiles = build_metric_profiles(req, near_pairs, verdicts, metric_facts)
     views = _objective_views(profiles, _decision_views(req, surviving, verdicts, profiles))
     trace = _decision_trace(req, tours, evals)
     options = _decision_options(req, views, profiles, ranked, tours, trace)
@@ -1186,5 +1193,6 @@ def compare(
         }),
         decision_views=views,
         metric_profiles=profiles,
+        near_miss_profiles=near_profiles,
         decision_options=options,
     )
