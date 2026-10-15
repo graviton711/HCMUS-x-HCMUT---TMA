@@ -5,7 +5,7 @@ Bài toán gốc ở `idea.md` (không sửa). Demo Day 17/10/2026.
 ## Phạm vi
 
 - Nguồn: 3–5 site lữ hành, bắt đầu từ `dulichviet`. Thêm nguồn bằng `python -m ingest.survey --source <source> --promote`; nghiệm thu profile mới hoặc đã đổi bằng self-test toàn bộ inventory PASS và holdout `audit` PASS. Chỉ dùng crawler chung cùng profile YAML, không viết parser riêng theo site hoặc sửa profile tay (resurvey để tái sinh).
-- Demo: query tự do trên Supabase thật qua chat agent, không khóa tuyến cố định. `fixture-catalog.yaml` chỉ phục vụ dev/test offline, không dùng demo. Trước demo kiểm tra freshness/TTL và rehearsal 2–3 query (tránh budget/date cứng khi giá stale hoặc `price_basis=from`, vì policy ép các trường hợp này về `unknown`).
+- Demo: query tự do trên Supabase thật qua chat agent, không khóa tuyến cố định. `fixture-catalog.yaml` chỉ phục vụ dev/test offline, không dùng demo. Ngày khởi hành dùng snapshot crawl mới nhất hiện có (`freshness_seconds.departure_date: null`), vẫn hiện thời điểm ghi nhận và không xác nhận tồn chỗ live. Giá `from` vẫn là lower bound, không được coi như giá chính xác.
 - Không điểm số bí mật: mọi thứ tự hiển thị đều kèm lý do tính bằng code từ field có nguồn. Không "học preference", chỉ lưu lựa chọn đã chốt. Không nhận thời gian thực.
 
 ## Pipeline hiện tại

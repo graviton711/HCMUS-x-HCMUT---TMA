@@ -36,7 +36,7 @@ def test_yaml_tuning_loaded(tmp_path):
     assert settings.tuning.decide.top_n == 1
     assert settings.tuning.decide.quote_chars == 120
     assert settings.tuning.data.providers_limit == 5
-    assert settings.supabase_tour_freshness_seconds == {"departure_date": 86400}
+    assert settings.supabase_tour_freshness_seconds == {"departure_date": None}
 
 
 def test_env_wins_over_yaml(tmp_path, monkeypatch):
@@ -56,6 +56,15 @@ def test_legacy_price_trust_and_ttl_settings_are_ignored(tmp_path):
     settings = Settings.load(_configs(tmp_path, yaml_text))
     assert settings.supabase_tour_freshness_seconds == {"departure_date": 7200}
     assert not hasattr(settings, "supabase_tour_trusted_domains")
+
+
+def test_demo_freshness_policy_can_disable_age_expiry(tmp_path):
+    yaml_text = _YAML.replace(
+        "data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3}",
+        "data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3, freshness_seconds: {departure_date: null}}",
+    )
+    settings = Settings.load(_configs(tmp_path, yaml_text))
+    assert settings.supabase_tour_freshness_seconds == {"departure_date": None}
 
 
 def test_dotenv_file_wins_over_yaml(tmp_path):

@@ -145,7 +145,11 @@ def test_missing_destination_data_is_unknown(decide_cfg):
 
 def test_stale_price_can_pass_budget_while_stale_departure_cannot_pass_date(decide_cfg):
     future = datetime.now(UTC) + timedelta(days=2)
-    stale_tours = rows_to_snapshots(FixtureCatalog().list_tours(10), now=future)
+    stale_tours = rows_to_snapshots(
+        FixtureCatalog().list_tours(10),
+        freshness_seconds={"departure_date": 86400},
+        now=future,
+    )
     req = _req({"destinations": ["Đà Lạt"], "budget_max": 8_000_000})
     req.conditions.append(Condition(id="old-date", field="date_from", value="2026-12-01"))
     comparison = compare(req, stale_tours, decide_cfg)

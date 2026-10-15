@@ -57,7 +57,7 @@ backend:
     scan_limit: 2000
     providers_limit: 100
     connect_timeout_s: 8
-    freshness_seconds: {departure_date: 86400}
+    freshness_seconds: {departure_date: null}
   decide:
     soft_fields: [itinerary, inclusions, exclusions, child_policy, cancellation_policy]
     quote_chars: 200

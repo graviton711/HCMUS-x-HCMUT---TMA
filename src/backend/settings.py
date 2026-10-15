@@ -136,8 +136,8 @@ class Settings(BaseSettings):
 
     supabase_tour_db_url: str = ""
     supabase_scan_limit: int
-    supabase_tour_freshness_seconds: dict[str, int] = Field(
-        default_factory=lambda: {"departure_date": 86400}
+    supabase_tour_freshness_seconds: dict[str, int | None] = Field(
+        default_factory=lambda: {"departure_date": None}
     )
 
     opencode: OpenCodeConfig
@@ -160,11 +160,17 @@ class Settings(BaseSettings):
 
     @field_validator("supabase_tour_freshness_seconds", mode="before")
     @classmethod
-    def _departure_freshness_only(cls, value: Any) -> dict[str, int]:
+    def _departure_freshness_only(cls, value: Any) -> dict[str, int | None]:
         if not isinstance(value, dict):
             return {}
-        departure_ttl = value.get("departure_date")
-        return {"departure_date": departure_ttl} if isinstance(departure_ttl, int) else {}
+        if "departure_date" not in value:
+            return {}
+        departure_ttl = value["departure_date"]
+        if departure_ttl is None:
+            return {"departure_date": None}
+        if isinstance(departure_ttl, int) and not isinstance(departure_ttl, bool):
+            return {"departure_date": departure_ttl}
+        return {}
 
     @field_validator("database_url", "supabase_tour_db_url", mode="before")
     @classmethod

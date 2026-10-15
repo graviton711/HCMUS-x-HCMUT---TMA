@@ -23,5 +23,5 @@ Map fields vô hướng (enums transport/accommodation, durations, destinations)
 - Giá chỉ dùng `offers.price_type`; thiếu basis là `unknown`, không fallback từ tour.
 - Giữ `price_by_age` và từng phụ thu theo nguyên dạng có cấu trúc để code tính tổng nhóm khi có đủ thành phần.
 - `exclusions` là nguồn trọng yếu để phát hiện chi phí chưa bao gồm; việc phân loại bắt buộc/tùy chọn/có điều kiện cần evidence và không do normalizer suy diễn.
-- `observed_at` là bằng chứng thời điểm ghi nhận. Freshness TTL chỉ áp dụng cho ngày khởi hành.
+- `observed_at` là bằng chứng thời điểm crawl. Demo đặt TTL ngày khởi hành là `null`: snapshot có timestamp là bản mới nhất hiện có trong catalog, không phải xác nhận tồn chỗ live. TTL dương bật lại trạng thái stale theo tuổi dữ liệu.
 - Chuẩn hóa chữ chỉ phục vụ so khớp cùng một nhãn; ánh xạ quốc gia/vùng sang destination catalog thuộc agent.

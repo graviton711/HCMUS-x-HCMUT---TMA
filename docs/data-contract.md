@@ -119,7 +119,7 @@ Plain text thuần túy cho cả 6 field: sạch thẻ HTML, giải mã entities
 - Khi nguồn không công bố ngày cụ thể: ghi `departure_pattern` ở `Tour.fields` kèm `status: partial`, và `offers` để rỗng.
 - Field phụ nguồn không công bố thì bỏ hẳn khỏi dict, không ghi null đoán mò.
 
-`offers.field_meta.pricing` có thể bổ sung quote có cấu trúc nhưng không thay các trường chuẩn `offers.price`, `offers.price_type` và currency trong catalog. `tours.price_type` chỉ là tham chiếu cấp tour. Backend dùng basis của offer, không kiểm tra lại host hoặc ràng buộc quote với raw columns. `from` luôn là lower bound; giá thấp hơn ngân sách không chứng minh giá cuối cùng nằm trong ngân sách. Không áp dụng TTL cho giá; `observed_at` vẫn được giữ làm bằng chứng. Freshness của ngày khởi hành tiếp tục được đánh giá theo policy backend.
+`offers.field_meta.pricing` có thể bổ sung quote có cấu trúc nhưng không thay các trường chuẩn `offers.price`, `offers.price_type` và currency trong catalog. `tours.price_type` chỉ là tham chiếu cấp tour. Migration `006` chỉ backfill basis tour xuống offer khi offer còn `unknown`; đây là dữ liệu kế thừa cho demo, không thay việc ingest basis riêng khi nguồn có thông tin theo từng ngày. Backend dùng basis của offer và không kiểm tra lại host hoặc ràng buộc quote với raw columns. `from` luôn là lower bound; giá thấp hơn ngân sách không chứng minh giá cuối cùng nằm trong ngân sách. Không áp dụng TTL cho giá; `observed_at` vẫn được giữ làm bằng chứng. Với cấu hình demo `freshness_seconds.departure_date: null`, bản ghi crawl có timestamp hợp lệ được xem là snapshot mới nhất trong catalog, không phải xác nhận trạng thái trực tiếp của nhà cung cấp. Đặt TTL dương để bật đánh dấu ngày khởi hành stale theo thời gian.
 
 ## Canonical decision metrics
 
@@ -146,7 +146,7 @@ Standard objective views use one metric or a disclosed Pareto comparison: lowest
 
 ## Định dạng lưu trữ
 
-JSON Lines (`.jsonl`): mỗi dòng 1 Tour hoàn chỉnh, giữ native types (`int`, `list[str]`, `list[dict]`), stream nối dòng. Catalog runtime là Supabase: bảng `providers`/`tours`/`offers` theo `migrations/001_tour_schema.sql`, cột `evidence` (`002`) và `field_meta` (`003`) giữ bằng chứng + trạng thái từng field. Backend chỉ đọc catalog, không trigger crawl.
+JSON Lines (`.jsonl`): mỗi dòng 1 Tour hoàn chỉnh, giữ native types (`int`, `list[str]`, `list[dict]`), stream nối dòng. Catalog runtime là Supabase: bảng `providers`/`tours`/`offers` theo `migrations/001_tour_schema.sql`, cột `evidence` (`002`) và `field_meta` (`003`) giữ bằng chứng + trạng thái từng field. Migration `005` bổ sung basis/phụ thu offer; `006` backfill basis đã có ở tour cha cho offer cũ còn `unknown`. Backend chỉ đọc catalog, không trigger crawl.
 
 ## Giao diện backend
 

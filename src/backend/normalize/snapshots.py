@@ -12,7 +12,7 @@ from decimal import Decimal
 from backend.models import Evidence, OfferSnapshot, TourRow, TourSnapshot
 
 _TRANSPORTS = {"flight", "bus", "train", "cruise", "mixed"}
-_DEFAULT_FRESHNESS_SECONDS = {"departure_date": 86400}
+_DEFAULT_FRESHNESS_SECONDS: dict[str, int | None] = {"departure_date": None}
 
 def _text(value: object) -> str:
     return value if isinstance(value, str) else ""
@@ -67,10 +67,12 @@ def _parsed_time(value: object) -> datetime | None:
 
 
 def _freshness(value: object, ttl: int | None, now: datetime) -> str:
-    if not isinstance(ttl, int) or isinstance(ttl, bool) or ttl <= 0:
-        return "unknown"
     observed = _parsed_time(value)
     if observed is None or observed > now:
+        return "unknown"
+    if ttl is None:
+        return "fresh"
+    if not isinstance(ttl, int) or isinstance(ttl, bool) or ttl <= 0:
         return "unknown"
     return "fresh" if (now - observed).total_seconds() <= ttl else "stale"
 
@@ -119,7 +121,7 @@ def _offer(
     tour: dict,
     tour_id: str,
     tour_url: str,
-    freshness_seconds: dict[str, int],
+    freshness_seconds: dict[str, int | None],
     now: datetime,
 ) -> OfferSnapshot:
     price = _int(o.get("price"))
@@ -159,7 +161,7 @@ def _offer(
 def rows_to_snapshots(
     rows: list[TourRow],
     *,
-    freshness_seconds: dict[str, int] | None = None,
+    freshness_seconds: dict[str, int | None] | None = None,
     now: datetime | None = None,
 ) -> list[TourSnapshot]:
     ttl = _DEFAULT_FRESHNESS_SECONDS if freshness_seconds is None else freshness_seconds

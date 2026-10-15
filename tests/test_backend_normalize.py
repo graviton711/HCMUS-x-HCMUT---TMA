@@ -170,6 +170,23 @@ def test_stale_departure_date_is_retained_without_price_freshness_state():
                  "observed_at": "2026-10-01T00:00:00+00:00"}],
     )
     later = datetime.fromisoformat("2026-10-10T00:00:00+00:00")
-    offer = rows_to_snapshots([row], now=later)[0].offers[0]
+    offer = rows_to_snapshots(
+        [row], freshness_seconds={"departure_date": 86400}, now=later
+    )[0].offers[0]
     assert offer.departure_freshness == "stale"
     assert not hasattr(offer, "price_freshness")
+
+
+def test_demo_uses_crawled_snapshot_as_latest_without_claiming_live_availability():
+    row = TourRow(
+        tour={"record_key": "snapshot"},
+        offers=[{"record_key": "snapshot-offer", "departure_date": "2026-10-11",
+                 "observed_at": "2026-10-01T00:00:00+00:00"}],
+    )
+    later = datetime.fromisoformat("2026-10-15T00:00:00+00:00")
+    offer = rows_to_snapshots(
+        [row], freshness_seconds={"departure_date": None}, now=later
+    )[0].offers[0]
+    assert offer.departure_freshness == "fresh"
+    assert offer.evidence.observed_at == "2026-10-01T00:00:00+00:00"
+    assert offer.availability == "unknown"

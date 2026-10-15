@@ -54,6 +54,7 @@ flowchart LR
 - Metric dùng đơn vị/scale riêng và evidence. Không ép thành một điểm tổng; unknown tạo khoảng hoặc trạng thái chưa so sánh được.
 - Objective views tối ưu metric cụ thể hoặc người dùng; Pareto chỉ so trên dimensions có thứ tự/đơn vị hợp lệ và không bị thiếu evidence làm giả thứ hạng.
 - Metric cache được khóa bằng hash nội dung nguồn và phiên bản extractor; freshness và độ phủ hiển thị riêng, không gọi là xác suất tin cậy.
+- Demo dùng thời điểm crawl làm mốc snapshot mới nhất hiện có (`freshness_seconds.departure_date: null`); UI vẫn cho biết thời điểm ghi nhận và không diễn đạt đó là xác nhận tồn chỗ trực tiếp.
 - Kết quả có tối thiểu ba tour khác nhau nếu scan có đủ tour qua hard filter; thiếu thì báo số thực có và kịch bản nới điều kiện chờ duyệt. Nhiều góc nhìn không tự bảo đảm có ba phương án khác nhau.
 - Không đặt deadline tổng cho agent. Giữ timeout riêng cho MCP/data calls và hủy process khi client disconnect.
 - Kết quả quyết định đi từ MCP tới API qua runtime store bằng `decision_run_id`; không phụ thuộc OpenCode có lặp lại JSON của tool trong output model hay không.
