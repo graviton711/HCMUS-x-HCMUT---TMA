@@ -1,5 +1,6 @@
 """Hard rules, tri-state eligibility, soft verdict ranking and analysis."""
 
+import re
 from datetime import UTC, datetime, timedelta
 
 from sample_rows import sample_rows
@@ -428,3 +429,24 @@ def test_cost_scenario_recalculates_room_and_age_costs_from_source_values(decide
     assert scenario.items[0].known_total == 2_250_000
     assert scenario.items[0].state == "observed"
     assert scenario.items[0].evidence
+
+
+
+def test_option_tradeoff_sentence_is_grounded_in_numbers(decide_cfg):
+    comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    assert comparison.decision_options, "sample rows must yield options"
+    sentence = comparison.decision_options[0].tradeoffs[0]
+    assert sentence.startswith("Đánh đổi:")
+    assert re.search(r"\d", sentence), "tradeoff sentence must carry numbers"
+
+
+def test_option_tradeoff_sentence_changes_with_trace(decide_cfg):
+    from sample_rows import sample_rows
+
+    base = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
+    subset = rows_to_snapshots(sample_rows()[:1])
+    narrowed = compare(_req({"destinations": ["Đà Lạt"]}), subset, decide_cfg)
+    base_sentence = base.decision_options[0].tradeoffs[0]
+    narrowed_sentence = narrowed.decision_options[0].tradeoffs[0]
+    assert "trong 3" in base_sentence
+    assert "trong 1" in narrowed_sentence

@@ -546,6 +546,79 @@ def _objective_views(profiles: list[MetricProfile], base: list[DecisionView]) ->
     ) if key in base_by_kind]
 
 
+_HARD_FIELD_VI = {
+    "destination": "điểm đến",
+    "departure_city": "nơi khởi hành",
+    "date_from": "ngày khởi hành",
+    "date_to": "ngày khởi hành",
+    "duration_days": "thời lượng",
+    "budget_max": "ngân sách",
+    "transport": "phương tiện",
+    "accommodation": "chỗ nghỉ",
+}
+
+
+def _option_tradeoff_sentence(
+    req: Requirement,
+    profile: MetricProfile,
+    trace: DecisionTrace | None,
+) -> str:
+    """One "Đánh đổi:" sentence built from real numbers. Empty when unsupported."""
+    if trace is None or trace.scanned_tours <= 0:
+        return ""
+    if trace.eligible_tours == 1:
+        parts = [f"Đánh đổi: tour duy nhất trong {trace.scanned_tours} đã quét đạt điều kiện"]
+    else:
+        parts = [f"Đánh đổi: {trace.eligible_tours} trong {trace.scanned_tours} tour đạt "
+                 f"điều kiện ({trace.eligible_offers} offer)"]
+    blockers = sorted(trace.first_blockers, key=lambda item: (-item.tours, item.condition_id))
+    if blockers and blockers[0].tours > 0:
+        blocker = blockers[0]
+        label = next(
+            (_HARD_FIELD_VI.get(condition.field, condition.field)
+             for condition in req.hard() if condition.id == blocker.condition_id),
+            blocker.condition_id,
+        )
+        parts.append(f"{blocker.tours} tour khác trượt {label}")
+    unpriced = len(profile.cost.unpriced_exclusions)
+    conditional = sum(
+        1 for item in profile.cost.optional_or_conditional if item.obligation == "conditional"
+    )
+    if unpriced:
+        parts.append(f"{unpriced} khoản loại trừ chưa niêm yết giá")
+    if conditional:
+        parts.append(f"{conditional} khoản có điều kiện chưa cộng")
+    return "; ".join(parts) + "."
+
+
+def _comparative_sentences(
+    selected: list[DecisionOption],
+    profiles: list[MetricProfile],
+) -> dict[str, str]:
+    """One "So với ..." sentence per option vs the cheapest priced option."""
+    totals: dict[str, tuple[int | None, str]] = {}
+    for profile in profiles:
+        cost = profile.cost
+        totals[profile.offer_id] = (cost.group_total_calculated or cost.listed_price, cost.currency)
+    priced = [(offer_id, total, currency) for offer_id, (total, currency) in totals.items()
+              if total is not None]
+    if len(selected) < 2 or not priced:
+        return {}
+    cheapest_id = min(priced, key=lambda item: item[1])[0]
+    cheapest_total = totals[cheapest_id][0]
+    out: dict[str, str] = {}
+    for option in selected:
+        if option.offer_id == cheapest_id:
+            continue
+        total, currency = totals.get(option.offer_id, (None, ""))
+        if total is None or cheapest_total is None or total <= cheapest_total:
+            continue
+        out[option.offer_id] = (
+            f"So với phương án rẻ nhất: cao hơn {total - cheapest_total:,} {currency}."
+        )
+    return out
+
+
 def _option_tradeoffs(profile: MetricProfile) -> list[str]:
     tradeoffs: list[str] = []
     cost = profile.cost
@@ -841,10 +914,12 @@ def _median(values: Sequence[float | int | None]) -> float | None:
 
 
 def _decision_options(
+    req: Requirement,
     views: list[DecisionView],
     profiles: list[MetricProfile],
     ranked: list[RankedCandidate],
     tours: list[TourSnapshot],
+    trace: DecisionTrace | None,
 ) -> list[DecisionOption]:
     profile_by_offer = {profile.offer_id: profile for profile in profiles}
     offer_by_id = {
@@ -900,6 +975,7 @@ def _decision_options(
                 reason = "Nằm trên tập Pareto theo các metric có dữ kiện; không bị phương án khác vượt trội đồng thời."
             else:
                 reason = view.note
+            sentence = _option_tradeoff_sentence(req, profile, trace)
             selected.append(DecisionOption(
                 tour_id=candidate.tour_id,
                 offer_id=candidate.offer_id,
@@ -914,33 +990,44 @@ def _decision_options(
                     "balanced": "Phương án cân bằng",
                 }.get(kind, "Phương án"),
                 reason=reason,
-                tradeoffs=_option_tradeoffs(profile),
+                tradeoffs=(
+                    [sentence, *_option_tradeoffs(profile)] if sentence
+                    else _option_tradeoffs(profile)
+                ),
                 metric_comparisons=_option_metric_comparisons(profile, profiles, tours),
             ))
             seen.add(candidate.tour_id)
             if len(selected) >= 3:
-                return selected
-    # Keep three real choices visible when the scan has at least three hard-pass tours,
-    # even if some metrics are unavailable; mark them as unranked candidates.
+                break
     for candidate in ranked:
         if candidate.tour_id in seen:
             continue
         profile = profile_by_offer.get(candidate.offer_id)
         if profile is None:
             continue
+        sentence = _option_tradeoff_sentence(req, profile, trace)
         selected.append(DecisionOption(
             tour_id=candidate.tour_id,
             offer_id=candidate.offer_id,
             objective="multi_objective",
             title="Phương án để cân nhắc",
             reason="Metric hiện có chưa đủ để xếp hạng riêng phương án này.",
-            tradeoffs=_option_tradeoffs(profile),
+            tradeoffs=(
+                [sentence, *_option_tradeoffs(profile)] if sentence
+                else _option_tradeoffs(profile)
+            ),
             metric_comparisons=_option_metric_comparisons(profile, profiles, tours),
         ))
         seen.add(candidate.tour_id)
         if len(selected) >= 3:
             break
-    return selected
+    comparative = _comparative_sentences(selected, profiles)
+    return [
+        option if option.offer_id not in comparative else option.model_copy(update={
+            "tradeoffs": [option.tradeoffs[0], comparative[option.offer_id], *option.tradeoffs[1:]],
+        })
+        for option in selected
+    ]
 
 
 def _candidate_value(
@@ -1078,7 +1165,8 @@ def compare(
     near = near[: cfg.top_n]
     profiles = build_metric_profiles(req, surviving, verdicts, metric_facts)
     views = _objective_views(profiles, _decision_views(req, surviving, verdicts, profiles))
-    options = _decision_options(views, profiles, ranked, tours)
+    trace = _decision_trace(req, tours, evals)
+    options = _decision_options(req, views, profiles, ranked, tours, trace)
     return Comparison(
         id=uid("cmp"),
         requirement=req,
@@ -1088,7 +1176,7 @@ def compare(
         evaluations=evaluations,
         analysis=analyze(tours, ranked + near, cfg),
         candidates_considered=len(tours),
-        decision_trace=_decision_trace(req, tours, evals),
+        decision_trace=trace,
         ranking_currencies=sorted({
             offer.currency.upper()
             for tour, offer_id in surviving

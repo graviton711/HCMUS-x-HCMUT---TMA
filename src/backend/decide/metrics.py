@@ -6,6 +6,7 @@ import hashlib
 import json
 
 from backend.decide.costing import age_group_total, exposure_quantity
+from backend.decide.parse import count_activities, count_legs, full_refund_cutoff
 from backend.models import (
     ActivityFact,
     CostExposure,
@@ -201,6 +202,14 @@ def build_metric_profiles(
             unique_activities.setdefault(_fold(activity.name), activity)
         activity_count = len(unique_activities)
         activity_evidence = [activity.evidence for activity in unique_activities.values()]
+        activity_version = facts.method_version
+        if not activity_count and tour.itinerary.strip():
+            activity_count, activity_quotes = count_activities(tour.itinerary)
+            activity_evidence = [MetricEvidence(
+                source_field="itinerary", quote=quote,
+                observed_at=tour.observed_at, url=tour.url,
+            ) for quote in activity_quotes]
+            activity_version = "code-parse-v1"
         experience_state = "observed" if activity_count else "unknown"
         measures: dict[str, MetricMeasure] = {
             "experience_density": MetricMeasure(
@@ -212,7 +221,7 @@ def build_metric_profiles(
                 unit="distinct_stated_activities",
                 state=experience_state,
                 evidence=activity_evidence,
-                method_version=facts.method_version,
+                method_version=activity_version,
             ),
         }
 
@@ -222,9 +231,18 @@ def build_metric_profiles(
                 source_field="route", quote=" → ".join(tour.route),
                 observed_at=tour.observed_at, url=tour.url,
             )]
+            route_version = facts.method_version
         else:
             route_count = len(facts.route_legs)
             route_evidence = [leg.evidence for leg in facts.route_legs]
+            route_version = facts.method_version
+            if not route_evidence and tour.itinerary.strip():
+                route_count, leg_quotes = count_legs(tour.itinerary)
+                route_evidence = [MetricEvidence(
+                    source_field="itinerary", quote=quote,
+                    observed_at=tour.observed_at, url=tour.url,
+                ) for quote in leg_quotes]
+                route_version = "code-parse-v1"
         modes = [leg.mode.casefold() for leg in facts.route_legs if leg.mode.strip()]
         mode_changes = sum(left != right for left, right in zip(modes, modes[1:], strict=False)) if modes else None
         measures["route_complexity"] = MetricMeasure(
@@ -232,7 +250,7 @@ def build_metric_profiles(
             unit="legs_and_changes",
             state="observed" if route_evidence else "unknown",
             evidence=route_evidence,
-            method_version=facts.method_version,
+            method_version=route_version,
         )
 
         coverage_counts = {status: 0 for status in ("included", "partial", "excluded", "unknown")}
@@ -295,12 +313,23 @@ def build_metric_profiles(
             rule.days_before_departure for rule in facts.cancellation_rules
             if rule.refund_percent == 100 and rule.days_before_departure is not None
         ]
+        cancellation_evidence = [rule.evidence for rule in facts.cancellation_rules]
+        cancellation_version = facts.method_version
+        if not cancellation_evidence and tour.cancellation_policy.strip():
+            parsed_days, parsed_quote = full_refund_cutoff(tour.cancellation_policy)
+            if parsed_days is not None and parsed_quote:
+                full_refund_days = [parsed_days]
+                cancellation_evidence = [MetricEvidence(
+                    source_field="cancellation_policy", quote=parsed_quote,
+                    observed_at=tour.observed_at, url=tour.url,
+                )]
+                cancellation_version = "code-parse-v1"
         measures["cancellation_flexibility"] = MetricMeasure(
             value=min(full_refund_days) if full_refund_days else None,
             unit="days_before_departure_for_full_refund",
-            state="observed" if facts.cancellation_rules else "unknown",
-            evidence=[rule.evidence for rule in facts.cancellation_rules],
-            method_version=facts.method_version,
+            state="observed" if cancellation_evidence else "unknown",
+            evidence=cancellation_evidence,
+            method_version=cancellation_version,
         )
 
         family_evidence = [fact.evidence for fact in facts.family_facts]
