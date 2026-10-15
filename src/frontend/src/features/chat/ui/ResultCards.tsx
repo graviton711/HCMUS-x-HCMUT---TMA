@@ -1452,32 +1452,18 @@ function DecisionViews({
               `Criteria matrix · ${comparison.requirement.conditions.filter((condition) => condition.strength === "soft").length} preferences`,
             )}
           </summary>
-          <div className={styles["decision-matrix-scroll"]}>
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">
-                    {t("Tiêu chí / trọng số", "Preference / weight")}
-                  </th>
-                  {entries.map((entry) => (
-                    <th scope="col" key={entry.offer_id}>
-                      {comparison.tour_snapshots.find(
-                        (tour) => tour.id === entry.tour_id,
-                      )?.name ?? entry.tour_id}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {comparison.requirement.conditions
-                  .filter((condition) => condition.strength === "soft")
-                  .map((condition) => (
-                    <tr key={condition.id}>
-                      <th scope="row">
-                        {String(condition.value)}{" "}
-                        <span>{condition.weight_percent ?? 0}%</span>
-                      </th>
-                      {entries.map((entry) => {
+          <div className={styles["decision-matrix-grid"]}>
+            {entries.map((entry) => {
+              const tourName = comparison.tour_snapshots.find(
+                (tour) => tour.id === entry.tour_id,
+              )?.name ?? entry.tour_id;
+              return (
+                <section className={styles["decision-matrix-card"]} key={entry.offer_id}>
+                  <h4>{tourName}</h4>
+                  <dl>
+                    {comparison.requirement.conditions
+                      .filter((condition) => condition.strength === "soft")
+                      .map((condition) => {
                         const evaluation = comparison.evaluations.find(
                           (item) =>
                             item.offer_id === entry.offer_id &&
@@ -1485,27 +1471,30 @@ function DecisionViews({
                         );
                         const state = evaluation?.state ?? "unknown";
                         return (
-                          <td key={`${entry.offer_id}-${condition.id}`}>
-                            <span
-                              className={styles["matrix-state"]}
-                              data-state={state}
-                            >
-                              {state === "pass"
-                                ? t("Đạt", "Pass")
-                                : state === "fail"
-                                  ? t("Không đạt", "Fail")
-                                  : state === "partial"
-                                    ? t("Đạt một phần", "Partial")
-                                    : t("Chưa rõ", "Unknown")}
-                            </span>
-                            {evaluation?.quote && <q>{evaluation.quote}</q>}
-                          </td>
+                          <div key={`${entry.offer_id}-${condition.id}`}>
+                            <dt>
+                              {String(condition.value)}
+                              <span>{condition.weight_percent ?? 0}%</span>
+                            </dt>
+                            <dd>
+                              <span className={styles["matrix-state"]} data-state={state}>
+                                {state === "pass"
+                                  ? t("\u0110\u1ea1t", "Pass")
+                                  : state === "fail"
+                                    ? t("Kh\u00f4ng \u0111\u1ea1t", "Fail")
+                                    : state === "partial"
+                                      ? t("\u0110\u1ea1t m\u1ed9t ph\u1ea7n", "Partial")
+                                      : t("Ch\u01b0a r\u00f5", "Unknown")}
+                              </span>
+                              {evaluation?.quote && <q>{evaluation.quote}</q>}
+                            </dd>
+                          </div>
                         );
                       })}
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
+                  </dl>
+                </section>
+              );
+            })}
           </div>
         </details>
       )}

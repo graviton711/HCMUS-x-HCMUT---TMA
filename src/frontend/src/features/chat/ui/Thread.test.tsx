@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PreferencesProvider } from '../../../shared/preferences';
 import type { ChatMsg } from '../model/types';
 import { Thread } from './Thread';
@@ -42,7 +42,7 @@ describe('Thread tool activity', () => {
 
     render(
       <PreferencesProvider>
-        <Thread messages={[message]} busy onSend={() => {}} onRelax={() => {}} />
+        <Thread messages={[message]} busy onSend={() => {}} />
       </PreferencesProvider>,
     );
 
@@ -78,14 +78,14 @@ describe('Thread tool activity', () => {
 
     const { rerender } = render(
       <PreferencesProvider>
-        <Thread messages={[message]} busy onSend={() => {}} onRelax={() => {}} />
+        <Thread messages={[message]} busy onSend={() => {}} />
       </PreferencesProvider>,
     );
     expect(screen.getByText('Đang tổng hợp kết quả')).toBeTruthy();
 
     rerender(
       <PreferencesProvider>
-        <Thread messages={[message]} busy={false} onSend={() => {}} onRelax={() => {}} />
+        <Thread messages={[message]} busy={false} onSend={() => {}} />
       </PreferencesProvider>,
     );
     expect(screen.getByText('Đã kiểm tra 2 bước')).toBeTruthy();
@@ -104,7 +104,7 @@ describe('Thread tool activity', () => {
 
     render(
       <PreferencesProvider>
-        <Thread messages={[message]} busy={false} onSend={() => {}} onRelax={() => {}} />
+        <Thread messages={[message]} busy={false} onSend={() => {}} />
       </PreferencesProvider>,
     );
 
@@ -118,4 +118,31 @@ describe('Thread tool activity', () => {
     expect(rows[1].getAttribute('data-state')).toBe('completed');
   });
 
+});
+
+describe('Thread decision links', () => {
+  it('links to a structured brief without rendering the brief form inline', () => {
+    const onOpenArtifact = vi.fn();
+    const brief: ChatMsg = {
+      id: 'brief-1',
+      kind: 'decision_draft',
+      requirement: {
+        id: 'req-1',
+        conditions: [],
+        missing: [],
+        raw_text: 'Đà Lạt',
+        travelers: 1,
+      },
+      status: 'draft',
+    };
+    render(
+      <PreferencesProvider>
+        <Thread messages={[brief]} busy={false} onSend={() => {}} onOpenArtifact={onOpenArtifact} />
+      </PreferencesProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Mở bản yêu cầu để duyệt/u }));
+    expect(onOpenArtifact).toHaveBeenCalledWith('brief-1');
+    expect(screen.queryByRole('heading', { name: 'Kiểm tra tiêu chí chuyến đi' })).toBeNull();
+  });
 });

@@ -15,9 +15,8 @@ src/frontend/
 ├── src/
 │   ├── app/                 # App.tsx, main.tsx; providers/, routing/, runtime/, shell/
 │   ├── pages/
-│   │   ├── chat/              # ChatPage + useChat (route `/`); ui/, model/, lib/
-│   │   ├── public/          # SupportPage, UnavailablePage (ui/ + barrel)
-│   │   └── workspace/       # Legacy WorkspacePage (route `/tours` ẩn); ui/, model/, lib/
+│   │   ├── chat/              # ChatPage + useChat + Decision Workspace (route `/`); ui/, model/, lib/
+│   │   └── public/          # SupportPage, UnavailablePage (ui/ + barrel)
 │   ├── features/
 │   │   ├── preferences/     # Control ngôn ngữ/theme (ui/; state qua shared/preferences)
 │   │   └── session-history/ # Session trình duyệt (model/, ui/, lib/ + barrel)
@@ -39,9 +38,8 @@ ESLint enforce chiều layer, cấm import chéo slice và bắt buộc public e
 | Module                     | Trách nhiệm và interface                                                                                                                                                                                                         |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `app`                      | Bootstrap trình duyệt, providers, navigation và lắp ghép shell. Sở hữu session bar (điểm điều khiển sidebar duy nhất) và instance layout sidebar; không sở hữu business rule session hay tìm kiếm.                                  |
-| `pages/chat`               | Màn hình search-first (`/`) và orchestration hội thoại: entry, composer, hỏi từng slot thiếu, so sánh 2 nhóm, nới điều kiện, hoàn tác, title từ destination, recovery hết hạn phiên. Dùng feature chat/session-history, entity search-draft và current API. |
+| `pages/chat`               | Route chính `/`: orchestration agent và Decision Workspace. Chat giữ hội thoại/tiến độ; pane quyết định review Brief và so sánh artifact có cấu trúc. Dùng feature chat/session-history và current API. |
 | `pages/public`             | Màn hình hỗ trợ và fallback. Dùng shared UI và preferences; render nội dung public và link điều hướng.                                                                                                                           |
-| `pages/workspace`          | Legacy: màn hình form/so sánh cũ (route `/tours` ẩn khỏi nav, giữ cho tới agent phase). Dùng feature session-history, entity search-draft, preferences và current API.                                                             |
 | `features/session-history` | Tạo, đọc, sửa, xóa session lưu trên trình duyệt; export type/action session, `useSidebarLayout` và `SessionHistoryPanel` cho `app` (`SessionHistory`/`SessionSidebar` là nội bộ của panel). Giữ nguyên storage keys và behavior phân scope identity; bản lưu cũ có key thừa được strip khi load. |
 | `features/chat`            | Primitive hội thoại (types message, Thread/Composer/ToolStatus/QuickReplies/ResultCards, helper format). Không gọi API, không đọc session; orchestration nằm ở `pages/chat`.                                                         |
 | `features/preferences`     | Control ngôn ngữ và theme (`compact` cho rail/drawer); đọc/ghi qua interface shared preferences. Render duy nhất từ `app`.                                                                                                       |
@@ -57,10 +55,10 @@ Quy tắc tránh lỗi layout tái diễn: component cha chỉ điều khiển v
 ## Ranh giới runtime
 
 - `shared/api` là HTTP client duy nhất ở runtime. Chỉ dùng route backend hiện tại; không fallback `/v2`, không fake resource, không fixture fallback ở runtime. Error message backend là tiếng Anh, `code` trong `{error: {code, message}}` ổn định để UI map sang VI/EN khi cần.
-- Flow đã kết nối: guest session → OpenCode agent session → MCP tools → hard filter/soft verdict → snapshot/history đã persist.
+- Flow đã kết nối: guest session → OpenCode agent session → MCP tools → hard filter/soft verdict → snapshot/history đã persist. Decision Workspace đọc artifact từ transcript; `/tours` chuyển về `/` và giữ session.
 - Browser storage là persistence, không phải authorization. Profile reader chỉ chọn scope history đã có trên trình duyệt; không authenticate hay authorize request. Giữ nguyên các key history, access-token, display-preference, sidebar-layout và behavior tương thích của chúng.
 - Auth/account, gửi contact, proposals/revisions, jobs/events, what-if, evidence/messages và validation pricing/freshness nâng cao chưa kết nối. Chỉ implement khi có backend contract và test tương ứng; không bao giờ tin owner ID do client gửi.
-- Giữ nguyên điều hướng URL/hash, VI/EN, sáng/tối, reduced-motion, bàn phím và responsive. Style page/component đặt trong CSS Module cạnh bên; global styles chỉ giới hạn ở primitive dùng chung.
+- Giữ nguyên điều hướng URL/hash, VI/EN, sáng/tối, reduced-motion, bàn phím và responsive. Desktop trình bày chat và quyết định song song; mobile dùng tab, tự chuyển sang quyết định khi có artifact mới và giữ composer khả dụng. Style dùng cùng tokens/components hiện tại.
 
 ## Kiểm chứng
 

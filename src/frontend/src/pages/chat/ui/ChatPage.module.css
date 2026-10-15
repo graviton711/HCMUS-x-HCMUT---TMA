@@ -11,8 +11,73 @@
   overflow: hidden;
 }
 
-.workspace-wide {
-  width: min(100%, 1160px);
+
+.active {
+  width: min(100%, 1600px);
+  padding-inline: clamp(12px, 2vw, 32px);
+  container-type: inline-size;
+  container-name: decision-workspace;
+}
+
+.active-layout {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.workspace-switcher {
+  position: sticky;
+  top: calc(var(--header-height) + 56px);
+  z-index: 4;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 5px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 95%, transparent);
+  backdrop-filter: blur(12px) saturate(1.08);
+}
+
+.workspace-switcher button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.workspace-switcher button[aria-pressed='true'] {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-rest);
+}
+
+.workspace-switcher button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.pane-hidden {
+  display: none !important;
+}
+
+.decision-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.splitter {
+  display: none;
 }
 
 /* ---------- First-use canvas ---------- */
@@ -187,6 +252,11 @@
   backdrop-filter: blur(10px) saturate(1.08);
 }
 
+.active .composer-dock {
+  width: 100%;
+  padding: 20px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+}
+
 .workspace:not(.entry) {
   animation: entry-fade 280ms ease both;
 }
@@ -198,11 +268,117 @@
     overflow: visible;
   }
 
+  .active-layout {
+    height: auto;
+    min-height: calc(100dvh - var(--header-height) - 56px);
+  }
+
   .thread-scroll {
     flex: 1 0 auto;
     min-height: auto;
     overflow: visible;
     overscroll-behavior: auto;
+  }
+
+  .active .decision-pane {
+    flex: 0 0 auto;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .active .composer-dock {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding: 14px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--paper) 0%, transparent),
+      color-mix(in srgb, var(--paper) 86%, transparent) 24%,
+      var(--paper) 76%
+    );
+    backdrop-filter: blur(10px) saturate(1.08);
+  }
+}
+
+@container decision-workspace (min-width: 1040px) {
+  .active-layout {
+    display: grid;
+    grid-template-columns: minmax(320px, var(--chat-pane-size, 42%)) 10px minmax(420px, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'thread splitter decision'
+      'composer splitter decision';
+    height: 100%;
+    min-height: 0;
+  }
+
+  .workspace-switcher {
+    display: none;
+  }
+
+  .thread-scroll {
+    grid-area: thread;
+    width: 100%;
+    padding: 30px 16px 22px 4px;
+  }
+
+  .splitter {
+    position: relative;
+    z-index: 6;
+    display: block;
+    grid-area: splitter;
+    width: 10px;
+    min-height: 100%;
+    border: 0;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .splitter::after {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 1px;
+    background: var(--line);
+    content: '';
+    transition: background-color var(--dur-fast) var(--ease), width var(--dur-fast) var(--ease);
+  }
+
+  .splitter:hover::after,
+  .splitter:focus-visible::after,
+  .active-layout[data-split-dragging='true'] .splitter::after {
+    left: 3px;
+    width: 3px;
+    background: color-mix(in srgb, var(--accent) 65%, var(--line-strong));
+  }
+
+  .splitter:focus-visible {
+    outline: none;
+  }
+
+  .decision-pane {
+    display: block !important;
+    grid-area: decision;
+    height: 100%;
+    overflow: hidden;
+    padding-left: 8px;
+  }
+
+  .active .composer-dock {
+    position: relative;
+    grid-area: composer;
+    width: min(100%, var(--chat-reading-width));
+    padding: 18px 0 14px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .splitter {
+    display: none;
   }
 }
 
@@ -262,5 +438,9 @@
     position: sticky;
     bottom: 0;
     padding: 18px 0 calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .active .composer-dock {
+    padding: 12px 0 calc(8px + env(safe-area-inset-bottom, 0px));
   }
 }

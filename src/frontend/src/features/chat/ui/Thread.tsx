@@ -2,13 +2,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ReactNode } from 'react';
-import type { CurrentComparison, CurrentRequirement } from '../../../shared/api';
 import { usePreferences } from '../../../shared/preferences';
 import type { ChatMsg } from '../model/types';
 import { QuickReplies } from './QuickReplies';
 import { rise } from './motion';
-import { ResultCards } from './ResultCards';
-import { DecisionBrief } from './DecisionBrief';
 import styles from './chat.module.css';
 
 const TOOL_LABEL: Record<string, [string, string]> = {
@@ -28,23 +25,17 @@ export function Thread({
   busy,
   activeToolActivityId,
   onSend,
-  onRelax,
   renderRecovery,
-  isSavedTour,
-  onToggleSavedTour,
-  onUpdateDecisionDraft,
-  onRunDecision,
+  onOpenArtifact,
+  selectedArtifactId,
 }: {
   messages: ChatMsg[];
   busy: boolean;
   activeToolActivityId?: string | null;
   onSend: (text: string) => void;
-  onRelax: (field: string) => void;
   renderRecovery?: (expired: boolean) => ReactNode;
-  isSavedTour?: (tourId: string, offerId: string) => boolean;
-  onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
-  onUpdateDecisionDraft?: (id: string, requirement: CurrentRequirement) => void;
-  onRunDecision?: (id: string, requirement: CurrentRequirement) => void;
+  onOpenArtifact?: (id: string) => void;
+  selectedArtifactId?: string | null;
 }) {
   const { t } = usePreferences();
   const latestActivityId = [...messages]
@@ -212,26 +203,43 @@ export function Thread({
             }
             case 'comparison':
               return (
-                <motion.div key={message.id} {...rise}>
-                  <ResultCards
-                    comparison={message.comparison}
-                    busy={busy}
-                    onRelax={onRelax}
-                    isSavedTour={isSavedTour}
-                    onToggleSavedTour={onToggleSavedTour}
-                    onAsk={onSend}
-                  />
+                <motion.div key={message.id} {...rise} className={styles['decision-link-wrap']}>
+                  <button
+                    type="button"
+                    className={styles['decision-link']}
+                    aria-pressed={selectedArtifactId === message.id}
+                    onClick={() => onOpenArtifact?.(message.id)}
+                  >
+                    <span className={styles['decision-link-title']}>
+                      {t('Mở bảng so sánh', 'Open comparison workspace')}
+                    </span>
+                    <span className={styles['decision-link-detail']}>
+                      {t(
+                        `${message.comparison.decision_views?.length ?? 0} góc nhìn · ${message.comparison.candidates_considered} tour đã quét`,
+                        `${message.comparison.decision_views?.length ?? 0} views · ${message.comparison.candidates_considered} tours scanned`,
+                      )}
+                    </span>
+                  </button>
                 </motion.div>
               );
             case 'decision_draft':
               return (
-                <motion.div key={message.id} {...rise}>
-                  <DecisionBrief
-                    message={message}
-                    busy={busy}
-                    onChange={(requirement) => onUpdateDecisionDraft?.(message.id, requirement)}
-                    onRun={(requirement) => onRunDecision?.(message.id, requirement)}
-                  />
+                <motion.div key={message.id} {...rise} className={styles['decision-link-wrap']}>
+                  <button
+                    type="button"
+                    className={styles['decision-link']}
+                    aria-pressed={selectedArtifactId === message.id}
+                    onClick={() => onOpenArtifact?.(message.id)}
+                  >
+                    <span className={styles['decision-link-title']}>
+                      {message.status === 'complete'
+                        ? t('Mở bản yêu cầu đã so sánh', 'Open compared brief')
+                        : t('Mở bản yêu cầu để duyệt', 'Open brief for review')}
+                    </span>
+                    <span className={styles['decision-link-detail']}>
+                      {t(`${message.requirement.conditions.length} điều kiện`, `${message.requirement.conditions.length} criteria`)}
+                    </span>
+                  </button>
                 </motion.div>
               );
             case 'error':

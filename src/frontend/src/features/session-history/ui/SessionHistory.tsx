@@ -68,8 +68,7 @@ export function SessionHistory({
         {matching.map((session) => {
           const selected =
             currentId === session.id && (routePath === '/tours' || routePath === '/');
-          const target =
-            routePath === '/tours' ? `/tours?session=${session.id}` : `/?session=${session.id}`;
+          const target = `/?session=${session.id}`;
           return (
             <div key={session.id} className={`session-item ${selected ? 'selected' : ''}`}>
               <a

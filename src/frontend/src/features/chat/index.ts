@@ -12,5 +12,6 @@ export {
 export { Composer } from './ui/Composer';
 export { QuickReplies } from './ui/QuickReplies';
 export { ResultCards } from './ui/ResultCards';
+export { DecisionBrief } from './ui/DecisionBrief';
 export { Thread } from './ui/Thread';
 export { ToolStatus } from './ui/ToolStatus';

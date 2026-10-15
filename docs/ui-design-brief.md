@@ -18,18 +18,12 @@ Không có thang đo phổ quát cho “đẹp”. Dùng [Material Design 3 elev
 
 ## Audit giao diện hiện tại
 
-Quan sát ảnh render ở 1440×1000 và 390×844 cho trang chat, trang hỗ trợ, route legacy `/tours`, trang đăng nhập placeholder, 404 và trạng thái chờ/lỗi của chat. Lỗi 502 trong ảnh audit được tạo bằng mock cục bộ để xem trạng thái giao diện.
+Audit source hiện tại tập trung vào luồng quyết định. `tokens.css` đã cung cấp nền ấm, indigo, typography và trạng thái dùng chung; `AppShell` lấy từ các token này.
 
-- `tokens.css` định nghĩa nền ấm, tím chàm và Manrope; workspace trong `AppShell.module.css` ghi đè sang xám lạnh, gần đen và Inter. Đây là hai visual language song song.
-- Trang chat mới trên desktop dành phần lớn canvas cho khoảng trắng. Composer ban đầu rộng tới 880px và cao khoảng 136px; prompt mẫu có trọng lượng thị giác ngang nhau, chủ yếu được tách bằng viền.
-- Composer trong hội thoại nổi sát đáy nhưng viền, nền và bóng còn gần với một khung nhập liệu phẳng. Nút gửi disabled chìm vào nền.
-- Trạng thái agent dùng một dòng chấm và thông báo tổng quát. Lỗi hiện thành dải đỏ; nút thử lại đứng riêng bên dưới. Cả hai chưa tạo thành một cụm trạng thái có phân cấp.
-- Tour card và thông tin nguồn phần lớn dựa vào viền; shadow/hover giữa card không tạo các tầng rõ ràng.
-- Sidebar xám, active row xám và canvas gần trắng tách nhau bằng đường viền. Mark tím là điểm màu gần như duy nhất trong workspace.
-- Mỗi dòng lịch sử có nút bút chì mở hộp thoại vừa đổi tên vừa chứa lệnh xóa; hai hành động khác mức rủi ro đang bị ghép chung, còn menu hành động không được biểu đạt trực quan.
-- Dialog đổi tên/xóa và picker ngôn ngữ dùng surface trắng, bóng/ánh sáng và phân cấp nội dung còn cơ bản; confirm xóa chưa có nút Hủy ngang hàng với nút xóa.
-- Trang hỗ trợ có bố cục nội dung dễ đọc, nhưng cùng header và card trắng phẳng. `/auth`, `/account`, `/contact` và 404 dùng empty-state rộng, ít định hướng thị giác; CTA 404 hiện ghi “Về Giới thiệu” dù route `/` là tìm tour.
-- `/tours` vẫn render màn workspace legacy với phong cách khác trang chat. Cần thống nhất bề mặt và typography dù giữ nguyên hành vi route.
+- `/` đang render Brief/kết quả trực tiếp trong transcript, nên người dùng phải tìm artifact giữa hội thoại.
+- `/tours` đang dùng form legacy gọi `/requirements` và `/comparisons` trực tiếp, bỏ qua luồng agent/MCP metric-enrichment; trang còn thông báo sai về tuổi dữ liệu ngày khởi hành.
+- Local session và agent response đã có artifact `decision_draft`/`comparison` có cấu trúc, đủ để dựng pane quyết định mà không đọc văn xuôi.
+- Thay đổi này giữ nguyên visual language hiện tại và đưa artifact vào bố cục ổn định; không cần thêm theme hoặc API backend.
 
 ## Quy tắc visual system
 
@@ -82,11 +76,11 @@ Thay đổi chỉ đạt khi các ảnh trước/sau thể hiện được cải
 
 ## Decision workspace
 
-- Chat thu thập nhu cầu; sau đó hiển thị Decision Brief inline để review điều kiện cứng và sở thích mềm trước khi truy vấn catalog. Có thể sửa hoặc bỏ điều kiện trước khi chạy.
-- Trọng số soft dùng tổng 100 điểm. Mặc định chia đều, có thao tác “Chia đều”, và trạng thái xác nhận bị khóa khi tổng khác 100. Mỗi tiêu chí cho thấy trọng số và mô tả ngắn; không dùng gauge hay điểm tin cậy.
-- Kết quả chuyển khỏi hình thức một đoạn chat đơn thành decision workspace với các góc nhìn theo metric có dữ liệu: giá thấp nhất, hợp ưu tiên, nhiều trải nghiệm, ít chặng, linh hoạt hủy, phù hợp gia đình, độ bao gồm/ít khoản chưa định giá và cân bằng Pareto. Mỗi góc nhìn nêu metric, đơn vị, currency/phạm vi so sánh và số tour đã quét.
-- Giá chỉ kết luận thấp nhất từ tổng exact cùng currency. Hiển thị riêng giá `from`/`contact`, phần tổng đã tính được và các khoản loại trừ chưa định giá. Exclusions là nguồn chính để tìm chi phí ẩn; phân loại bắt buộc/tùy chọn/có điều kiện và chỉ cộng khoản có số tiền, đơn vị cùng điều kiện áp dụng rõ.
-- Hiển thị tối thiểu ba tour khác nhau nếu hard-pass catalog đủ; khi thiếu, nêu số thực có và kịch bản nới điều kiện. Mỗi phương án cho thấy vector đánh đổi, ma trận soft criteria, bằng chứng và unknown; không tạo điểm tổng hợp hay chọn hộ quán quân.
-- Tour card cho phép mở evidence, so sánh/lưu tour; các số như trải nghiệm, chặng và cancellation chỉ hiện khi được tính từ nguồn, kèm độ phủ dữ kiện và thời điểm quan sát.
-- Có thể giữ saved tours và chat suggestions hiện có như công cụ phụ trợ quanh workspace, không để chúng cạnh tranh với review/so sánh làm luồng chính.
-- Thành phần và trạng thái cần hoạt động với bàn phím, mobile, light/dark mode. Unknown, không có kết quả, đang chạy, dừng và lỗi dùng cùng ngôn ngữ thị giác hiện có; không biến chúng thành card phụ trang trí.
+- Chat tiếp tục thu thập nhu cầu và giải thích; Brief có cấu trúc và kết quả được mở trong workspace quyết định cố định, không lặp toàn bộ artifact trong transcript. Transcript giữ lời thoại, tiến độ và liên kết để mở đúng Brief/kết quả.
+- Desktop chia canvas giữa chat/tiến độ và Decision Workspace. Tay nắm kéo đổi tỷ lệ hai pane, lưu tùy chọn và hỗ trợ bàn phím. Nội dung ma trận/option co theo bề rộng, không cuộn ngang; workspace chỉ có một vùng cuộn dọc cho nội dung dài. Mobile dùng tab “Trao đổi”/“Quyết định”, tự mở “Quyết định” khi nhận Brief/kết quả có cấu trúc. Composer luôn khả dụng; gửi từ tab quyết định chuyển về trao đổi.
+- Chỉ artifact có cấu trúc đã lưu trong phiên mới được dựng thành Brief/kết quả. Giữ Brief khi lỗi hoặc dừng; chỉ coi kết quả hiện hành nếu điều kiện của nó khớp Brief đã duyệt. Khi tiêu chí đổi, kết quả cũ được đánh dấu và còn mở được từ lịch sử.
+- Brief giữ điều kiện cứng và sở thích mềm đã duyệt; trọng số soft tổng 100 điểm, mặc định chia đều, có thao tác “Chia đều”, và không cho chạy khi tổng sai. Không dùng gauge hay điểm tin cậy.
+- Kết quả dùng các góc nhìn theo metric có dữ liệu: giá thấp nhất, hợp ưu tiên, nhiều trải nghiệm, ít chặng, linh hoạt hủy, phù hợp gia đình, độ bao gồm/ít khoản chưa định giá và cân bằng Pareto. Mỗi góc nhìn nêu metric, đơn vị, currency/phạm vi so sánh và số tour đã quét.
+- Giá chỉ kết luận thấp nhất từ tổng exact cùng currency. Hiển thị riêng giá `from`/`contact`, phần tổng đã tính được và các khoản loại trừ chưa định giá. Exclusions là nguồn chính để tìm chi phí ẩn; chỉ cộng khoản có số tiền, đơn vị cùng điều kiện áp dụng rõ.
+- Hiển thị tối thiểu ba tour khác nhau nếu hard-pass catalog đủ; khi thiếu, nêu số thực có và kịch bản nới điều kiện. Mỗi phương án cho thấy vector đánh đổi, ma trận soft criteria, bằng chứng và unknown; không tạo metric từ dữ liệu chưa có hay chọn hộ quán quân.
+- Brief, kết quả cũ và kết quả mới dùng chung token, typography, surface/elevation và màu trạng thái của giao diện hiện tại; trạng thái unknown, chạy, dừng, lỗi và rỗng không tạo theme riêng.

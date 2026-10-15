@@ -229,7 +229,7 @@ test('guest reviews a brief, compares decision views, and restores the result', 
   await page.getByRole('button', { name: 'So sánh tour' }).click();
   await expect(page.getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' })).toBeVisible();
   await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
-  await expect(page.getByText('1 tour đã quét')).toBeVisible();
+  await expect(page.getByText('1 tour đã quét', { exact: true })).toBeVisible();
   await expect(
     page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' }),
   ).toHaveCount(2);
@@ -263,6 +263,41 @@ test('guest reviews a brief, compares decision views, and restores the result', 
   await expect(
     page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' }),
   ).toHaveCount(2);
+});
+
+test('desktop decision workspace remains within the canvas and splitter is keyboard-resizable', async ({ page }) => {
+  await page.setViewportSize({ width: 1680, height: 1000 });
+  await mockBackend(page);
+  await startChat(page);
+  await page.locator('textarea:visible').first().fill(draft);
+  await page.locator('button[class*="composer-submit"]').click();
+  await expect(page.locator('section[class*="decision-brief"]')).toBeVisible();
+
+  const splitter = page.locator('[class*="splitter"]');
+  await expect(splitter).toBeVisible();
+  const initialSplit = Number(await splitter.getAttribute('aria-valuenow'));
+  await splitter.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(splitter).toHaveAttribute('aria-valuenow', String(initialSplit + 2));
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('tourlens:decision-split:v1')))
+    .toBe(String((initialSplit + 2) / 100));
+
+  await page.locator('footer[class*="brief-footer"] button.btn-primary').click();
+  await expect(page.locator('[role="tablist"] [role="tab"]').first()).toBeVisible();
+  const matrix = page.locator('details[class*="decision-matrix"]');
+  await matrix.locator('summary').click();
+  const matrixGrid = matrix.locator('[class*="decision-matrix-grid"]');
+  await expect(matrixGrid).toBeVisible();
+  const matrixDimensions = await matrixGrid.evaluate((element) => ({
+    client: element.clientWidth,
+    content: element.scrollWidth,
+  }));
+  expect(matrixDimensions.content).toBeLessThanOrEqual(matrixDimensions.client + 1);
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    page: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.page).toBeLessThanOrEqual(dimensions.viewport + 1);
 });
 
 test('expired guest starts a new session and resends the draft once', async ({ page }) => {
@@ -308,10 +343,12 @@ test('guest chat fits a narrow mobile viewport', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Kiểm tra tiêu chí chuyến đi' })).toBeVisible();
   await page.getByRole('button', { name: 'So sánh tour' }).click();
   await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
+  await page.locator('[class*="workspace-switcher"] button').nth(0).click();
   const details = page.locator('details').filter({ hasText: 'Kiểm tra lựa chọn có trong dữ liệu' });
   await expect(details.locator('summary')).toBeVisible();
   await details.locator('summary').click();
   await expect(details.getByRole('listitem')).toHaveCount(2);
+  await page.locator('[class*="workspace-switcher"] button').nth(1).click();
   const sizes = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth,

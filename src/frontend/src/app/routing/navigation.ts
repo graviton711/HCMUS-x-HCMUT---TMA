@@ -32,6 +32,11 @@ export function useNavigation() {
     setRoute(locationState());
   }, []);
 
+  const replace = useCallback((url: string) => {
+    window.history.replaceState(null, '', url);
+    setRoute(locationState());
+  }, []);
+
   const link = useCallback(
     (url: string) => (event: MouseEvent<HTMLAnchorElement>) => {
       if (isLinkClick(event)) {
@@ -42,5 +47,5 @@ export function useNavigation() {
     [navigate],
   );
 
-  return { route, navigate, link };
+  return { route, navigate, replace, link };
 }

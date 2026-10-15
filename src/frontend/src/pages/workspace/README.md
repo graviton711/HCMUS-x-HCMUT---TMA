@@ -1,10 +1,6 @@
-# pages/workspace (legacy)
+# pages/workspace (retired)
 
-Màn hình form/so sánh cũ, route `/tours` ẩn khỏi nav, giữ cho tới agent phase. Mọi flow mới ở `pages/chat`; không thêm tính năng tại đây.
+The legacy form-based workspace and its direct `/requirements` → `/comparisons` flow have been removed. `/tours` is normalized by `app` and renders the chat Decision Workspace at `/`.
 
-- Input: `LocalSession` đang active, các callback session từ `app`.
-- Output: empty state hoặc `CurrentWorkspace` (heading, form, requirement, comparison, expired-recovery).
-- Workflow: `WorkspacePage` (shell) → `CurrentWorkspace` (lắp ghép) → `RequirementForm` / `RequirementView` / `ComparisonView`; state lấy từ `model/useCurrentWorkspace`. Mapping draft→form dùng chung ở `entities/search-draft`.
-- Interface: `src/pages/workspace` export `WorkspacePage`, `CurrentWorkspace`. `model/` nội bộ; không giữ bản copy `access`/`title`/`format` per-page — dùng chung từ `features/session-history`, `shared/lib`, `features/chat`.
-- Quyết định kỹ thuật: session bar và sidebar toggle do `app` sở hữu; page không render toolbar riêng. Title dùng `sessionTitle` cùng fallback chuẩn, không slice thô theo UTF-16 code unit.
-- Trình bày: route legacy dùng cùng visual system với chat để tránh cảm giác chuyển sang sản phẩm khác; form và kết quả là các bề mặt có cấp elevation rõ, có thể co về một cột ở màn hình nhỏ. Hành vi nghiệp vụ của route này không đổi theo tài liệu `docs/ui-design-brief.md`.
+- Do not add a second decision or comparison flow here.
+- Current brief, comparison, and legacy-session restoration live in `pages/chat`.

@@ -13,6 +13,7 @@ import { accessFor, isSessionExpired } from '../../../features/session-history';
 import { sessionTitle } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import type { Locale } from '../../../shared/preferences';
+import { sameDecision } from '../lib/decisionArtifacts';
 
 const uid = () =>
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -203,9 +204,18 @@ export function useChat(
       Boolean(target.draft.text.trim());
     let active = true;
     setClient(null);
-    const restoredMessages = target.messages.filter(isChatMsg);
+    const restoredMessages = target.messages
+      .filter(isChatMsg)
+      .map((message) =>
+        message.kind === 'decision_draft' && message.status === 'running'
+          ? { ...message, status: 'draft' as const }
+          : message,
+      );
     transcriptRef.current = restoredMessages;
     setMsgs(restoredMessages);
+    if (restoredMessages.some((message, index) => message !== target.messages[index])) {
+      onChangeSessionRef.current({ messages: restoredMessages });
+    }
     setInitialSendPending(false);
     setSessionExpired(false);
     toolActivityIdRef.current = null;
@@ -229,14 +239,56 @@ export function useChat(
         if (!active) return;
         setClient(api);
         setInitialSendPending(shouldAutoSendInitial);
-        const restoredComparison = restoredMessages.some(
-          (message) =>
-            message.kind === 'comparison' && message.comparison.id === target.comparisonId,
+        let requirement = restoredMessages.find(
+          (message) => message.kind === 'decision_draft' && message.requirement.id === target.requirementId,
         );
-        if (target.comparisonId && !restoredComparison) {
-          const previous = await api.comparison(target.comparisonId);
+        let comparison = restoredMessages.find(
+          (message) => message.kind === 'comparison' && message.comparison.id === target.comparisonId,
+        );
+
+        if (target.comparisonId && !comparison) {
+          const loaded = await api.comparison(target.comparisonId);
           if (!active) return;
-          push({ id: uid(), kind: 'comparison', comparison: previous.comparison });
+          push({ id: uid(), kind: 'comparison', comparison: loaded.comparison });
+          comparison = { id: 'hydrated-comparison', kind: 'comparison', comparison: loaded.comparison };
+        }
+
+        if (!requirement && target.requirementId) {
+          try {
+            const loaded = await api.requirement(target.requirementId);
+            if (!active) return;
+            requirement = {
+              id: 'hydrated-requirement',
+              kind: 'decision_draft',
+              requirement: loaded.requirement,
+              status: 'draft',
+            };
+          } catch (cause) {
+            if (!(cause instanceof CurrentApiError && cause.status === 404)) throw cause;
+          }
+        }
+
+        const comparisonRequirement = comparison?.kind === 'comparison'
+          ? comparison.comparison.requirement
+          : null;
+        if (!requirement && comparisonRequirement) {
+          requirement = {
+            id: 'hydrated-requirement',
+            kind: 'decision_draft',
+            requirement: comparisonRequirement,
+            status: 'complete',
+          };
+        }
+        if (requirement?.kind === 'decision_draft' && !restoredMessages.includes(requirement)) {
+          const loadedRequirement = withEqualSoftWeights(requirement.requirement);
+          const matchesComparison = Boolean(
+            comparisonRequirement && sameDecision(loadedRequirement, comparisonRequirement),
+          );
+          push({
+            ...requirement,
+            requirement: loadedRequirement,
+            status: matchesComparison ? 'complete' : 'draft',
+          });
         }
       } catch (cause) {
         if (active) {
@@ -462,7 +514,7 @@ export function useChat(
           );
           applyResponse(response, requirement.raw_text);
           completeToolActivity();
-          setDecisionDraftStatus(messageId, 'complete');
+          setDecisionDraftStatus(messageId, response.comparison ? 'complete' : 'draft');
         } catch (cause) {
           if (controller.signal.aborted) {
             setDecisionDraftStatus(messageId, 'draft');

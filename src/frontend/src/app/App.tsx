@@ -10,7 +10,6 @@ import {
 import { SavedToursDialog, useSavedTours } from '../features/saved-tours';
 import { PreferencesControl } from '../features/preferences';
 import { SupportPage, UnavailablePage } from '../pages/public';
-import { WorkspacePage } from '../pages/workspace';
 import { ChatPage } from '../pages/chat';
 import { usePreferences } from '../shared/preferences';
 import { useNavigation } from './routing';
@@ -35,7 +34,7 @@ function useIsDesktop() {
 
 export function App() {
   const { t } = usePreferences();
-  const { route, navigate, link } = useNavigation();
+  const { route, navigate, replace, link } = useNavigation();
   const [profile] = useState<AuthProfile | null>(readAuthProfile);
   const { sessions, storageError, createSession, updateSession, removeSession } = useLocalSessions(
     profile?.id,
@@ -47,10 +46,15 @@ export function App() {
   const [savedToursOpen, setSavedToursOpen] = useState(false);
   const current =
     sessions.find((session) => session.id === route.session) ||
-    (route.path === '/' ? sessions[0] || null : null);
+    (route.path === '/' || route.path === '/tours' ? sessions[0] || null : null);
   const isWorkspace = route.path === '/' || route.path === '/tours';
 
   useEffect(() => setDrawerOpen(false), [route.path, route.session, route.hash]);
+
+  useEffect(() => {
+    if (route.path !== '/tours') return;
+    replace(`/${window.location.search}${route.hash}`);
+  }, [replace, route.hash, route.path]);
 
   useEffect(() => {
     const label =
@@ -110,7 +114,7 @@ export function App() {
   );
 
   const page =
-    route.path === '/' ? (
+    route.path === '/' || route.path === '/tours' ? (
       <ChatPage
         session={current}
         onStart={startSession}
@@ -120,8 +124,6 @@ export function App() {
       />
     ) : route.path === '/support' ? (
       <SupportPage onStart={continueTours} />
-    ) : route.path === '/tours' ? (
-      <WorkspacePage session={current} onStart={startSession} onChangeSession={updateSession} />
     ) : route.path === '/auth' || route.path === '/account' || route.path === '/contact' ? (
       <UnavailablePage
         route={route.path.slice(1) as 'auth' | 'account' | 'contact'}

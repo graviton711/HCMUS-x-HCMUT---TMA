@@ -423,6 +423,47 @@
   font-size: var(--text-xs);
 }
 
+.decision-link-wrap {
+  display: flex;
+  max-width: min(100%, var(--measure));
+}
+
+.decision-link {
+  display: grid;
+  gap: 3px;
+  min-width: min(100%, 280px);
+  padding: 9px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.decision-link:hover .decision-link-title,
+.decision-link[aria-pressed='true'] .decision-link-title {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.decision-link:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.decision-link-title {
+  font-size: var(--text-sm);
+  font-weight: 650;
+}
+
+.decision-link-detail {
+  color: var(--subtle);
+  font-size: var(--text-xs);
+}
+
 @media (max-width: 560px) {
   .tool-steps li {
     grid-template-columns: 8px minmax(0, 1fr);
@@ -1305,7 +1346,8 @@
 
 .decision-workspace {
   gap: 17px;
-  width: min(100%, 1120px);
+  width: 100%;
+  max-width: 1120px;
   padding: clamp(14px, 2.4vw, 22px);
   border: 1px solid var(--line);
   border-radius: 22px;
@@ -1434,7 +1476,7 @@
 .decision-choice-grid,
 .metric-choice-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 10px;
 }
 
@@ -1582,9 +1624,7 @@
 }
 
 .metric-source-text {
-  max-height: 180px;
   margin-top: 10px;
-  overflow: auto;
   padding: 8px;
   border-radius: 8px;
   background: var(--surface-2);
@@ -1621,51 +1661,67 @@
   cursor: pointer;
 }
 
-.decision-matrix-scroll {
-  max-width: 100%;
+.decision-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   margin-top: 12px;
-  overflow-x: auto;
+}
+
+.decision-matrix-card {
+  min-width: 0;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
+  background: var(--surface);
 }
 
-.decision-matrix table {
-  width: 100%;
-  min-width: 540px;
-  border-collapse: collapse;
+.decision-matrix-card h4 {
+  margin: 0 0 8px;
   color: var(--ink);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.decision-matrix-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.decision-matrix-card dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 5px 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.decision-matrix-card dt {
+  min-width: 0;
+  color: var(--muted);
   font-size: var(--text-xs);
-  text-align: left;
+  overflow-wrap: anywhere;
 }
 
-.decision-matrix th,
-.decision-matrix td {
-  max-width: 240px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
-}
-
-.decision-matrix thead th {
-  background: var(--surface-2);
-  font-weight: 650;
-}
-
-.decision-matrix tbody tr:last-child > * {
-  border-bottom: 0;
-}
-
-.decision-matrix tbody th {
-  min-width: 150px;
-  font-weight: 600;
-}
-
-.decision-matrix tbody th span {
-  display: block;
-  margin-top: 3px;
+.decision-matrix-card dt span {
+  display: inline-block;
+  margin-left: 6px;
   color: var(--subtle);
   font-family: var(--numeric);
   font-size: 10px;
+}
+
+.decision-matrix-card dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  text-align: left;
 }
 
 .matrix-state {
@@ -1688,12 +1744,32 @@
   color: var(--danger-ink, var(--muted));
 }
 
-.decision-matrix td q {
+.decision-matrix-card q {
+  flex: 1 1 100%;
   display: block;
   margin-top: 5px;
   color: var(--subtle);
   font-size: 10px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+@container decision-panel (max-width: 620px) {
+  .decision-choice-grid,
+  .metric-choice-grid,
+  .decision-matrix-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .decision-tabs {
+    flex-wrap: wrap;
+  }
+
+  .decision-tab {
+    flex: 1 1 105px;
+    padding-inline: 8px;
+  }
 }
 
 .decision-near-miss {
@@ -1748,14 +1824,14 @@
   }
 
   .decision-tabs {
-    overflow-x: auto;
-    scrollbar-width: none;
+    flex-wrap: wrap;
+    overflow: visible;
   }
 
   .decision-tab {
-    flex: 1 0 auto;
+    flex: 1 1 105px;
     padding-inline: 9px;
-    white-space: nowrap;
+    white-space: normal;
   }
 }
 
