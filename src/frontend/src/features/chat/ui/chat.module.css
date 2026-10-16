@@ -424,6 +424,7 @@
 
 .decision-link-wrap {
   display: flex;
+  flex-direction: column;
   max-width: min(100%, var(--measure));
 }
 

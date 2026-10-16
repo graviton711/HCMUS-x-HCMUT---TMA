@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import type { LocalSession } from '../../../features/session-history';
 import { Composer, QuickReplies, Thread, ToolStatus } from '../../../features/chat';
 import type { CurrentComparison } from '../../../shared/api';
+import { Icon } from '../../../shared/ui';
 import { usePreferences } from '../../../shared/preferences';
 import { useChat } from '../model/useChat';
 import { latestDecisionArtifact } from '../lib/decisionArtifacts';
@@ -463,11 +464,9 @@ function ActiveChat({
             className={styles['decision-rail']}
             onClick={toggleDecision}
             aria-label={t('Mở không gian quyết định', 'Open decision workspace')}
+            title={t('Mở không gian quyết định', 'Open decision workspace')}
           >
-            <span aria-hidden="true">‹</span>
-            <span className={styles['decision-rail-label']}>
-              {t('Quyết định', 'Decision')}
-            </span>
+            <Icon name="panel" size={18} />
             {hasNewResult && <span className={styles['decision-rail-dot']} aria-hidden="true" />}
           </button>
         )}

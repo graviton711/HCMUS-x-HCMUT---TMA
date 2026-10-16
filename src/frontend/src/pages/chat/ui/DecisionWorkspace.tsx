@@ -9,6 +9,7 @@ import type {
 } from '../../../shared/api';
 import type { ChatMsg } from '../../../features/chat';
 import { DecisionBrief, ResultCards, conditionText, fieldLabel } from '../../../features/chat';
+import { Icon } from '../../../shared/ui';
 import { usePreferences } from '../../../shared/preferences';
 import {
   draftForComparison,
@@ -135,8 +136,9 @@ export function DecisionWorkspace({
           className={styles.collapse}
           onClick={onToggleWorkspace}
           aria-label={t('Thu gọn không gian quyết định', 'Collapse decision workspace')}
+          title={t('Thu gọn không gian quyết định', 'Collapse decision workspace')}
         >
-          <span aria-hidden="true">›</span>
+          <Icon name="chevron" size={16} className={styles['collapse-icon']} />
         </button>
       </header>
 

@@ -54,7 +54,6 @@
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--muted);
-  font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
@@ -68,6 +67,10 @@
 .collapse:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+.collapse-icon {
+  transform: rotate(-90deg);
 }
 
 .status {

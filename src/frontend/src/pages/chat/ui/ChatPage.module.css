@@ -365,13 +365,12 @@
   .active-layout[data-collapsed='true'] .decision-rail {
     grid-area: rail;
     flex-direction: column;
-    width: 36px;
+    width: 48px;
     min-height: 0;
     height: 100%;
     padding: 12px 0;
     border-top: 0;
     border-left: 1px solid var(--line);
-    writing-mode: vertical-rl;
   }
 
   .workspace-switcher {
