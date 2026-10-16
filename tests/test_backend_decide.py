@@ -515,3 +515,20 @@ def test_assumptions_cover_party_costs_and_snapshot(decide_cfg):
     assert "Giá công bố" in text
     assert "snapshot" in text
     assert comparison.assumptions
+
+def test_departure_city_variants_match_across_admin_prefixes():
+    from backend.decide.engine import _city_key, eval_hard
+
+    assert (
+        _city_key("TP. Hồ Chí Minh")
+        == _city_key("TP Hồ Chí Minh")
+        == _city_key("Hồ Chí Minh")
+    )
+    assert _city_key("Hà Nội") != _city_key("Hồ Chí Minh")
+    base = next(t for t in _snapshots() if t.departure_city and t.offers)
+    variant = base.model_copy(update={"departure_city": "Hồ Chí Minh"})
+    cond = Condition(id="h1", field="departure_city", operator="contains",
+                     value="TP. Hồ Chí Minh", strength="hard", quote="x")
+    assert eval_hard(cond, variant, variant.offers[0]) == ("pass", "")
+    other = cond.model_copy(update={"id": "h2", "value": "Hà Nội"})
+    assert eval_hard(other, variant, variant.offers[0])[0] == "fail"

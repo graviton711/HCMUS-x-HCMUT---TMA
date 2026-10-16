@@ -41,6 +41,24 @@ def _contains(haystack: str, needle: str) -> bool:
     return _fold(needle) in _fold(haystack)
 
 
+_CITY_PREFIXES = ("thanhpho", "tp", "tinh")
+
+
+def _city_key(value: str) -> str:
+    """Fold a city label past administrative prefixes.
+
+    The catalog records one city under several labels ("TP. Hồ Chí Minh",
+    "TP Hồ Chí Minh", "Hồ Chí Minh"); all fold to the same key so a condition
+    using any observed variant matches the others. Only known prefixes are
+    stripped, so distinct cities never collapse.
+    """
+    key = _fold(value or "")
+    for prefix in _CITY_PREFIXES:
+        if key.startswith(prefix) and len(key) > len(prefix):
+            return key[len(prefix):]
+    return key
+
+
 def _destination_state(value: str, tour: TourSnapshot) -> State:
     if any(_contains(place, value) for place in tour.destinations):
         return "pass"
@@ -65,9 +83,10 @@ def eval_hard(condition: Condition, tour: TourSnapshot, offer: OfferSnapshot) ->
         )
     if f == "departure_city":
         vals = v if any_op else [v]
+        city = _city_key(tour.departure_city or "")
         return (
             ("pass", "")
-            if any(_contains(tour.departure_city, str(x)) for x in vals)
+            if city and any(_city_key(str(x)) in city for x in vals)
             else ("fail", "DEPARTURE_CITY_MISMATCH")
         )
     if f == "transport":
