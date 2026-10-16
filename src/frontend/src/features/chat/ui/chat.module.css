@@ -1622,6 +1622,11 @@
   background: var(--surface-2);
 }
 
+.decision-choice {
+  container-type: inline-size;
+  container-name: decision-choice;
+}
+
 .decision-choice > span {
   color: var(--accent);
   font-size: 10px;
@@ -1694,7 +1699,7 @@
 
 .decision-metric-comparisons > div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
   align-items: baseline;
   gap: 3px 10px;
   padding-top: 7px;
@@ -1729,8 +1734,21 @@
   border-left: 2px solid var(--line);
 }
 
+@container decision-choice (max-width: 340px) {
+  .decision-metric-comparisons > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .decision-metric-comparisons > div > span {
+    text-align: left;
+  }
+}
+
 .metric-choice {
   background: var(--surface);
+  container-type: inline-size;
+  container-name: metric-card;
 }
 
 .metric-choice dl {
@@ -1741,7 +1759,7 @@
 
 .metric-choice dl > div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
   align-items: baseline;
   gap: 6px 10px;
   padding-bottom: 7px;
@@ -1749,6 +1767,7 @@
 }
 
 .metric-choice dt {
+  min-width: 0;
   color: var(--muted);
   font-size: 10px;
 }
@@ -1773,9 +1792,10 @@
   overflow-wrap: anywhere;
 }
 
-@container decision-panel (max-width: 560px) {
+@container metric-card (max-width: 340px) {
   .metric-choice dl > div {
     grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
   }
 
   .metric-choice dd {
@@ -1956,15 +1976,6 @@
   .metric-choice-grid,
   .decision-matrix-grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .decision-metric-comparisons > div {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
-  }
-
-  .decision-metric-comparisons > div > span {
-    text-align: left;
   }
 
   .decision-tabs {
