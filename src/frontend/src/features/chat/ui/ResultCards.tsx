@@ -1344,22 +1344,62 @@ function DecisionViews({  comparison,
           ))}
         </div>
       ) : (
-        <p className={styles['decision-empty']} role="status">
-          {activeView.kind === 'best_fit' && !hasSoft
-            ? t(
-                'Thêm một sở thích mềm để xếp tour theo mức hợp ưu tiên.',
-                'Add a preference to rank tours by fit.',
-              )
-            : activeView.kind === 'balanced'
-              ? t(
-                  'Chưa có đủ giá số cùng tiền tệ để tạo phương án Pareto.',
-                  'There is not enough same-currency numeric price data to form a Pareto set.',
-                )
-              : t(
-                  'Chưa có tour qua toàn bộ điều kiện bắt buộc trong phạm vi đã quét.',
-                  'No scanned tours pass every must-have criterion.',
+        <>
+          {(comparison.relaxation_options ?? []).length > 0 ? (
+            <div className={styles['relaxation-options']}>
+              <p className={styles['relaxation-title']}>
+                {t(
+                  'Nới điều kiện nào để mở thêm lựa chọn:',
+                  'Relax a requirement to open more options:',
                 )}
-        </p>
+              </p>
+              <div className={styles['relaxation-chips']}>
+                {(comparison.relaxation_options ?? []).map((relax) => {
+                  const condition = [
+                    ...comparison.requirement.conditions,
+                    ...(comparison.requirement.alternatives ?? []).flatMap((branch) => branch.conditions),
+                  ].find((item) => item.id === relax.condition_id);
+                  const label = condition
+                    ? `${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`
+                    : relax.condition_id;
+                  return (
+                    <button
+                      key={relax.condition_id}
+                      type="button"
+                      className={`btn ${styles['relaxation-chip']}`}
+                      disabled={busy}
+                      onClick={() => onRelax(condition?.field ?? '')}
+                    >
+                      <span className={styles['relaxation-chip-label']}>
+                        {t('Bỏ', 'Drop')}: {label}
+                      </span>
+                      <span className={styles['relaxation-chip-gain']}>
+                        +{relax.gained_tours} {t('tour', 'tours')}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <p className={styles['decision-empty']} role="status">
+              {activeView.kind === 'best_fit' && !hasSoft
+                ? t(
+                    'Thêm một sở thích mềm để xếp tour theo mức hợp ưu tiên.',
+                    'Add a preference to rank tours by fit.',
+                  )
+                : activeView.kind === 'balanced'
+                  ? t(
+                      'Chưa có đủ giá số cùng tiền tệ để tạo phương án Pareto.',
+                      'There is not enough same-currency numeric price data to form a Pareto set.',
+                    )
+                  : t(
+                      'Chưa có tour qua toàn bộ điều kiện bắt buộc trong phạm vi đã quét.',
+                      'No scanned tours pass every must-have criterion.',
+                    )}
+            </p>
+          )}
+        </>
       )}
 
       {activeView && entries.length > 0 && (
