@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Any
 
@@ -119,6 +120,14 @@ def validate_requirement(
                     )
                 if not isinstance(condition.value, str) or not condition.value.strip():
                     raise _invalid("A soft preference must be non-empty text.")
+                # Bundled soft preferences ("Xe, an uong, ve, tron goi") cannot be
+                # evidenced reliably — each item needs its own condition + quote.
+                clauses = [part.strip() for part in re.split(r"[,;]", condition.value) if part.strip()]
+                if len(clauses) > 1:
+                    raise _invalid(
+                        f"Soft preference '{condition.id}' bundles {len(clauses)} items. "
+                        "Split into one condition per verifiable item (xe / cho nghi / an uong / ve / tron goi)."
+                    )
             elif condition.weight_percent is not None:
                 raise _invalid("Only soft preferences can have a weight.")
             else:

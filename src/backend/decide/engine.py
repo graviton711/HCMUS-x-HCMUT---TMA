@@ -679,11 +679,10 @@ def _option_tradeoff_sentence(
     """One "Đánh đổi:" sentence built from real numbers. Empty when unsupported."""
     if trace is None or trace.scanned_tours <= 0:
         return ""
-    if trace.eligible_tours == 1:
-        parts = [f"Đánh đổi: tour duy nhất trong {trace.scanned_tours} đã quét đạt điều kiện"]
-    else:
-        parts = [f"Đánh đổi: {trace.eligible_tours} trong {trace.scanned_tours} tour đạt "
-                 f"điều kiện ({trace.eligible_offers} offer)"]
+    if trace.eligible_tours < 2:
+        return "Không có tour thứ hai đạt điều kiện để so trực tiếp."
+    parts = [f"Đánh đổi: {trace.eligible_tours} trong {trace.scanned_tours} tour đạt "
+             f"điều kiện ({trace.eligible_offers} offer)"]
     blockers = sorted(trace.first_blockers, key=lambda item: (-item.tours, item.condition_id))
     if blockers and blockers[0].tours > 0:
         blocker = blockers[0]
@@ -702,6 +701,32 @@ def _option_tradeoff_sentence(
     if conditional:
         parts.append(f"{conditional} khoản có điều kiện chưa cộng")
     return "; ".join(parts) + "."
+
+
+def _metric_tradeoff_sentence(
+    candidate: MetricProfile,
+    anchor: MetricProfile | None,
+) -> str:
+    """1-2 plain-language tradeoff lines citing the strongest-evidence metric
+    with delta vs the anchor (cheapest) option. Empty when no anchor or no data."""
+    if anchor is None:
+        return ""
+    lines: list[str] = []
+    cand_cancel = _measure_number(candidate, "cancellation_flexibility")
+    anchor_cancel = _measure_number(anchor, "cancellation_flexibility")
+    if cand_cancel is not None and anchor_cancel is not None and cand_cancel != anchor_cancel:
+        direction = "sớm hơn" if cand_cancel > anchor_cancel else "muộn hơn"
+        lines.append(
+            f"Hoàn 100% {direction} {abs(int(cand_cancel - anchor_cancel))} ngày so với phương án rẻ nhất."
+        )
+    cand_coverage = _measure_number(candidate, "included_coverage", "ratio")
+    anchor_coverage = _measure_number(anchor, "included_coverage", "ratio")
+    if cand_coverage is not None and anchor_coverage is not None:
+        diff = round((cand_coverage - anchor_coverage) * 100)
+        if diff != 0:
+            direction = "nhiều hơn" if diff > 0 else "ít hơn"
+            lines.append(f"Bao gồm {direction} {abs(diff)}% so với phương án rẻ nhất.")
+    return " ".join(lines[:2])
 
 
 def _comparative_sentences(
@@ -1137,12 +1162,26 @@ def _decision_options(
         if len(selected) >= 3:
             break
     comparative = _comparative_sentences(selected, profiles)
-    return [
-        option if option.offer_id not in comparative else option.model_copy(update={
-            "tradeoffs": [option.tradeoffs[0], comparative[option.offer_id], *option.tradeoffs[1:]],
-        })
-        for option in selected
+    profile_by_offer = {profile.offer_id: profile for profile in profiles}
+    priced = [
+        (profile.offer_id, profile.cost.group_total_calculated or profile.cost.listed_price or 0)
+        for profile in profiles
+        if (profile.cost.group_total_calculated or profile.cost.listed_price) is not None
     ]
+    anchor_id = min(priced, key=lambda item: item[1])[0] if priced else None
+    anchor_profile = profile_by_offer.get(anchor_id) if anchor_id else None
+    enriched: list[DecisionOption] = []
+    for option in selected:
+        updates: dict[str, object] = {}
+        if option.offer_id in comparative:
+            updates["tradeoffs"] = [option.tradeoffs[0], comparative[option.offer_id], *option.tradeoffs[1:]]
+        metric_line = _metric_tradeoff_sentence(profile_by_offer.get(option.offer_id), anchor_profile)
+        if metric_line:
+            current = list(updates.get("tradeoffs", option.tradeoffs))
+            current.append(metric_line)
+            updates["tradeoffs"] = current
+        enriched.append(option.model_copy(update=updates) if updates else option)
+    return enriched
 
 
 def _candidate_value(

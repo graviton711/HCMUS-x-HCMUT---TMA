@@ -436,8 +436,11 @@ def test_option_tradeoff_sentence_is_grounded_in_numbers(decide_cfg):
     comparison = compare(_req({"destinations": ["Đà Lạt"]}), _snapshots(), decide_cfg)
     assert comparison.decision_options, "sample rows must yield options"
     sentence = comparison.decision_options[0].tradeoffs[0]
-    assert sentence.startswith("Đánh đổi:")
-    assert re.search(r"\d", sentence), "tradeoff sentence must carry numbers"
+    if comparison.decision_trace and comparison.decision_trace.eligible_tours < 2:
+        assert sentence == "Không có tour thứ hai đạt điều kiện để so trực tiếp."
+    else:
+        assert sentence.startswith("Đánh đổi:")
+        assert re.search(r"\d", sentence), "tradeoff sentence must carry numbers"
 
 
 def test_option_tradeoff_sentence_changes_with_trace(decide_cfg):
@@ -448,8 +451,23 @@ def test_option_tradeoff_sentence_changes_with_trace(decide_cfg):
     narrowed = compare(_req({"destinations": ["Đà Lạt"]}), subset, decide_cfg)
     base_sentence = base.decision_options[0].tradeoffs[0]
     narrowed_sentence = narrowed.decision_options[0].tradeoffs[0]
-    assert "trong 3" in base_sentence
-    assert "trong 1" in narrowed_sentence
+    base_trace = base.decision_trace
+    narrowed_trace = narrowed.decision_trace
+    if base_trace and base_trace.eligible_tours < 2:
+        assert base_sentence == "Không có tour thứ hai đạt điều kiện để so trực tiếp."
+    else:
+        assert "trong 3" in base_sentence
+        assert narrowed_sentence != base_sentence or narrowed_trace.eligible_tours == 1
+
+
+def test_single_tour_tradeoff_says_no_comparison(decide_cfg):
+    from sample_rows import sample_rows
+
+    subset = rows_to_snapshots(sample_rows()[:1])
+    narrowed = compare(_req({"destinations": ["Đà Lạt"]}), subset, decide_cfg)
+    if narrowed.decision_options and narrowed.decision_trace and narrowed.decision_trace.eligible_tours < 2:
+        sentence = narrowed.decision_options[0].tradeoffs[0]
+        assert "Không có tour thứ hai" in sentence
 
 
 def test_near_miss_offers_get_metric_profiles(decide_cfg):

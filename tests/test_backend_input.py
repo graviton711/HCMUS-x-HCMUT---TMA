@@ -194,6 +194,22 @@ def test_reviewed_soft_weights_must_total_100():
         ], require_weights=True)
 
 
+def test_bundled_soft_preference_is_rejected():
+    raw = "có xe, ăn uống, vé tham quan"
+    with pytest.raises(AppError, match="bundles"):
+        validate_requirement(raw, [
+            condition("preference", "có xe, ăn uống, vé tham quan", "có xe, ăn uống, vé tham quan", strength="soft"),
+        ], require_weights=True)
+
+
+def test_single_clause_soft_preference_passes():
+    raw = "có xe di chuyển"
+    req = validate_requirement(raw, [
+        {**condition("preference", "có xe di chuyển", "có xe di chuyển", strength="soft"), "weight_percent": 100},
+    ], require_weights=True)
+    assert len(req.soft()) == 1
+
+
 def test_lunar_date_requires_valid_round_trip():
     assert resolve_lunar({"year": 2026, "month": 12, "day": 27}) == "2027-02-03"
     assert resolve_lunar({"year": 2027, "month": 1, "day": 4}) == "2027-02-09"
