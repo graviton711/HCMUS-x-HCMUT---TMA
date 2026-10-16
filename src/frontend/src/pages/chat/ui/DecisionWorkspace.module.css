@@ -136,8 +136,30 @@
 
 .tracePanel > summary {
   color: var(--accent);
+  font-size: var(--text-sm);
   font-weight: 650;
   cursor: pointer;
+  list-style: none;
+}
+
+.tracePanel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tracePanel > summary::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.tracePanel[open] > summary::before {
+  transform: rotate(45deg);
 }
 
 .traceContent {
@@ -227,8 +249,30 @@
 
 .scenarioPanel > summary {
   color: var(--accent);
+  font-size: var(--text-sm);
   font-weight: 650;
   cursor: pointer;
+  list-style: none;
+}
+
+.scenarioPanel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.scenarioPanel > summary::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.scenarioPanel[open] > summary::before {
+  transform: rotate(45deg);
 }
 
 .scenarioPanel section {
@@ -336,5 +380,79 @@
 
   .empty {
     margin-top: 12vh;
+  }
+}
+
+.optionMatrix {
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.optionMatrix h3 {
+  font-size: var(--text-sm);
+  margin: 0 0 8px;
+}
+
+.optionMatrix-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 14px);
+  background: var(--surface);
+}
+
+.optionMatrix-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 560px;
+  font-size: var(--text-sm);
+}
+
+.optionMatrix-table th,
+.optionMatrix-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.optionMatrix-table thead th {
+  border-bottom: 2px solid var(--line-strong, var(--line));
+}
+
+.optionMatrix-table thead small {
+  display: block;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.optionMatrix-table tbody th[scope='row'] {
+  white-space: nowrap;
+}
+
+.optionMatrix-table tbody tr:last-child th,
+.optionMatrix-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.matrix-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--surface-2);
+}
+
+.matrix-chip[data-relation='favorable'] {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+@container decision-panel (max-width: 560px) {
+  .optionMatrix-table th,
+  .optionMatrix-table td {
+    padding: 6px 8px;
   }
 }

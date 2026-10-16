@@ -103,6 +103,32 @@ export function Thread({
               const cancelledSteps = message.tools.filter(
                 (tool) => tool.status === 'cancelled',
               ).length;
+              const groupedTools = (() => {
+                const groups: {
+                  name: string;
+                  message: string;
+                  count: number;
+                  worst: (typeof message.tools)[number]['status'];
+                }[] = [];
+                const rank = (status: string) =>
+                  status === 'error' ? 3 : status === 'cancelled' ? 2 : status === 'running' ? 1 : 0;
+                for (const tool of message.tools) {
+                  const label =
+                    tool.message ||
+                    t(
+                      ...(TOOL_LABEL[tool.name] ?? ['Đã tra cứu dữ kiện', 'Checked evidence']),
+                    );
+                  const existing = groups.find((group) => group.message === label);
+                  if (!existing) {
+                    groups.push({ name: tool.name, message: label, count: 1, worst: tool.status });
+                  } else {
+                    existing.count += 1;
+                    if (rank(tool.status) > rank(existing.worst)) existing.worst = tool.status;
+                  }
+                }
+                return groups;
+              })();
+              const distinctSteps = groupedTools.length;
               const isCurrentActivity = busy && message.id === currentActivityId;
               const state = isCurrentActivity
                 ? 'running'
@@ -130,8 +156,8 @@ export function Thread({
                         `Completed · ${failedCalls} tool call${failedCalls === 1 ? '' : 's'} did not succeed`,
                       )
                     : t(
-                        `Đã kiểm tra ${message.tools.length} bước`,
-                        `Checked ${message.tools.length} steps`,
+                        `Đã kiểm tra ${distinctSteps} bước${message.tools.length > distinctSteps ? ` · ${message.tools.length} lượt gọi` : ''}`,
+                        `Checked ${distinctSteps} steps${message.tools.length > distinctSteps ? ` · ${message.tools.length} calls` : ''}`,
                       )
                   : message.outcome === 'cancelled' || cancelledSteps > 0
                     ? t('Đã dừng lượt tìm', 'Search stopped')
@@ -143,8 +169,8 @@ export function Thread({
                             `${failedCalls} tool call${failedCalls === 1 ? '' : 's'} did not succeed`,
                           )
                         : t(
-                            `Đã kiểm tra ${message.tools.length} bước`,
-                            `Checked ${message.tools.length} steps`,
+                            `Đã kiểm tra ${distinctSteps} bước${message.tools.length > distinctSteps ? ` · ${message.tools.length} lượt gọi` : ''}`,
+                            `Checked ${distinctSteps} steps${message.tools.length > distinctSteps ? ` · ${message.tools.length} calls` : ''}`,
                           );
 
               return (
@@ -163,35 +189,30 @@ export function Thread({
                       className={styles['tool-steps']}
                       aria-label={t('Các bước đã thực hiện', 'Steps performed')}
                     >
-                      {message.tools.map((tool) => (
-                        <li key={tool.id} data-state={tool.status}>
+                      {groupedTools.map((group) => (
+                        <li key={group.message} data-state={group.worst}>
                           <span
                             className={`${styles.dot} ${
-                              tool.status === 'running'
+                              group.worst === 'running'
                                 ? styles['dot-active']
-                                : tool.status === 'error'
+                                : group.worst === 'error'
                                   ? styles['dot-error']
-                                  : tool.status === 'cancelled'
+                                  : group.worst === 'cancelled'
                                     ? styles['dot-cancelled']
                                     : styles['dot-done']
                             }`}
                             aria-hidden="true"
                           />
                           <span className={styles['tool-step-message']}>
-                            {tool.message ||
-                              t(
-                                ...(TOOL_LABEL[tool.name] ?? [
-                                  'Đã tra cứu dữ kiện',
-                                  'Checked evidence',
-                                ]),
-                              )}
+                            {group.message}
+                            {group.count > 1 ? ` ×${group.count}` : ''}
                           </span>
                           <span className={styles['tool-state']}>
-                            {tool.status === 'running'
+                            {group.worst === 'running'
                               ? t('Đang chạy', 'Working')
-                              : tool.status === 'error'
+                              : group.worst === 'error'
                                 ? t('Chưa hoàn tất', 'Incomplete')
-                                : tool.status === 'cancelled'
+                                : group.worst === 'cancelled'
                                   ? t('Đã dừng', 'Stopped')
                                   : t('Hoàn tất', 'Done')}
                           </span>

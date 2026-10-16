@@ -17,6 +17,7 @@ import {
   sameDecision,
 } from '../lib/decisionArtifacts';
 import styles from './DecisionWorkspace.module.css';
+import { OptionMatrix } from './OptionMatrix';
 
 export function DecisionWorkspace({
   messages,
@@ -219,6 +220,9 @@ export function DecisionWorkspace({
               onToggleSavedTour={onToggleSavedTour}
               onAsk={onSend}
             />
+            {hasMetrics && (comparison.decision_options ?? []).length > 0 && (
+              <OptionMatrix comparison={comparison} />
+            )}
             {comparison.decision_trace?.snapshot_available && (
               <ScenarioWorkbench
                 comparison={comparison}

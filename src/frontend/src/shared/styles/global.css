@@ -122,6 +122,22 @@ p + p {
   margin-top: 10px;
 }
 
+/* Reading surfaces never show a text caret; inputs keep the native caret. */
+main [class*='msg-'],
+main [class*='result'],
+main [class*='decision-'],
+main [class*='metric-'],
+main [class*='trace'],
+main [class*='scenario'] {
+  caret-color: transparent;
+}
+
+input,
+textarea,
+[contenteditable='true'] {
+  caret-color: auto;
+}
+
 /* Focus: one consistent ring everywhere. */
 button:focus-visible,
 a:focus-visible,

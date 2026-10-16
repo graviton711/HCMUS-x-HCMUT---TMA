@@ -69,26 +69,59 @@ export function DecisionBrief({
         condition.id === id ? { ...condition, ...changes } : condition,
       ),
     }));
-    const conditionById = new Map(
-      [...conditions, ...nextAlternatives.flatMap((alternative) => alternative.conditions)].map(
-        (condition) => [condition.id, condition],
-      ),
+    const editedCondition = [...conditions, ...nextAlternatives.flatMap((a) => a.conditions)].find(
+      (condition) => condition.id === id,
     );
-    onChange({
-      ...requirement,
-      conditions,
-      alternatives: nextAlternatives,
-      assumptions: requirement.assumptions?.map((assumption) => {
-        if (!assumption.condition_ids.includes(id)) return assumption;
+    const editedBranch = nextAlternatives.find((alternative) =>
+      alternative.conditions.some((condition) => condition.id === id),
+    );
+    const assumptions = (requirement.assumptions ?? []).flatMap((assumption) => {
+      if (!assumption.condition_ids.includes(id)) return [assumption];
+      // Shared assumption: split the edited branch into its own assumption.
+      const remaining = assumption.condition_ids.filter((conditionId) => conditionId !== id);
+      const editedPair = editedBranch
+        ? editedBranch.conditions.filter(
+            (condition) =>
+              condition.field === 'date_from' ||
+              condition.field === 'date_to' ||
+              condition.id === id,
+          )
+        : [];
+      const otherBranches = remaining.filter((conditionId) => {
+        const owner = nextAlternatives.find((alternative) =>
+          alternative.conditions.some((condition) => condition.id === conditionId),
+        );
+        return owner && owner.id !== editedBranch?.id;
+      });
+      if (!editedBranch || !otherBranches.length || !editedCondition) {
+        const conditionById = new Map(
+          [...conditions, ...nextAlternatives.flatMap((a) => a.conditions)].map((c) => [c.id, c]),
+        );
         const linked = assumption.condition_ids
           .map((conditionId) => conditionById.get(conditionId))
           .filter((condition): condition is CurrentCondition => Boolean(condition));
         const start = linked.find((condition) => condition.field === 'date_from')?.value;
         const end = linked.find((condition) => condition.field === 'date_to')?.value;
         if (typeof start !== 'string' || typeof end !== 'string')
-          return { ...assumption, edited: true };
-        return { ...assumption, date_from: start, date_to: end, edited: true };
-      }),
+          return [{ ...assumption, edited: true }];
+        return [{ ...assumption, date_from: start, date_to: end, edited: true }];
+      }
+      const editedIds = editedPair.map((condition) => condition.id);
+      return [
+        { ...assumption, condition_ids: remaining, edited: true },
+        {
+          ...assumption,
+          id: `${assumption.id}-${editedBranch.id}`,
+          condition_ids: editedIds,
+          edited: true,
+        },
+      ];
+    });
+    onChange({
+      ...requirement,
+      conditions,
+      alternatives: nextAlternatives,
+      assumptions,
     });
   }
 
@@ -363,17 +396,30 @@ export function DecisionBrief({
           aria-label={t('Giả định có thể chỉnh sửa', 'Editable assumptions')}
         >
           <h3>{t('Giả định ngày', 'Date assumptions')}</h3>
-          {requirement.assumptions.map((assumption) => (
-            <p key={assumption.id}>
+          {Object.values(
+            (requirement.assumptions ?? []).reduce<
+              Record<string, { key: string; sample: (typeof requirement.assumptions)[number]; branches: number }>
+            >((grouped, assumption) => {
+              const key = `${assumption.quote}｜${assumption.date_from}｜${assumption.date_to}`;
+              const entry = grouped[key] ?? { key, sample: assumption, branches: 0 };
+              entry.branches += 1;
+              grouped[key] = entry;
+              return grouped;
+            }, {}),
+          ).map(({ key, sample, branches }) => (
+            <p key={key}>
               <strong>
-                {assumption.edited
+                {sample.edited
                   ? t('Khoảng ngày đã chỉnh sửa', 'Edited date range')
-                  : assumption.label}
+                  : sample.label}
+                {branches > 1
+                  ? t(` · dùng chung ${branches} nhánh`, ` · shared by ${branches} branches`)
+                  : ''}
               </strong>
               <span>
                 {t(
-                  `Diễn giải từ: “${assumption.quote}” · ${assumption.date_from} đến ${assumption.date_to} · ${assumption.timezone}. Có thể chỉnh ngày trong bản yêu cầu.`,
-                  `Interpreted from “${assumption.quote}” · ${assumption.date_from} to ${assumption.date_to} · ${assumption.timezone}. You can edit the linked dates in this brief.`,
+                  `Diễn giải từ: “${sample.quote}” · ${sample.date_from} đến ${sample.date_to} · ${sample.timezone}. Có thể chỉnh ngày trong bản yêu cầu.`,
+                  `Interpreted from “${sample.quote}” · ${sample.date_from} to ${sample.date_to} · ${sample.timezone}. You can edit the linked dates in this brief.`,
                 )}
               </span>
             </p>

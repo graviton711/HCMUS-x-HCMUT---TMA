@@ -25,10 +25,10 @@ flowchart LR
 
 ## Workflow
 
-`date_from`/`date_to` là biên bao gồm của khoảng ngày khởi hành được ghi trong catalog, không xác minh ngày về. Nếu các nhánh có khoảng ngày riêng, lưu mỗi khoảng thành một date assumption riêng.
+`date_from`/`date_to` là biên bao gồm của khoảng ngày khởi hành được ghi trong catalog, không xác minh ngày về. Một khoảng ngày distinct lưu thành một date assumption dùng chung cho mọi nhánh cùng range.
 
 1. Agent trích hard conditions, soft preferences và các lựa chọn còn mở. `catalog_facets` phân giải nhãn thực; `discover_destinations` kiểm tra điều kiện chung và từng nhánh lựa chọn trên cùng catalog scan. Preflight được chạy một lần cho cùng bộ điều kiện.
-2. Brief biểu diễn `conditions` dùng chung theo phép AND và `alternatives` theo phép OR; các điều kiện trong mỗi nhánh vẫn là AND. Các lựa chọn không ghép cặp được giữ như các giá trị OR; lựa chọn được người dùng ghép rõ ràng được giữ cùng một nhánh. Mốc thời gian mơ hồ được chuẩn hóa thành khoảng ngày có giả định năm/múi giờ hiển thị để người dùng sửa. Người dùng review Brief và trọng số; final comparison chỉ bắt đầu sau khi xác nhận.
+2. Brief biểu diễn `conditions` dùng chung theo phép AND và `alternatives` theo phép OR; các điều kiện trong mỗi nhánh vẫn là AND. Các lựa chọn độc lập được group theo `(duration,date_window)`, destination linh hoạt gộp bằng `destination any [...]`. Mốc thời gian mơ hồ được chuẩn hóa thành khoảng ngày có giả định năm/múi giờ hiển thị để người dùng sửa. Người dùng review Brief và trọng số; final comparison chỉ bắt đầu sau khi xác nhận.
 3. Backend đọc index nhẹ của toàn phạm vi quét, chuẩn hóa và áp hard filter trước. Offer chỉ qua khi mọi điều kiện chung pass và có ít nhất một nhánh pass đầy đủ; unknown không được xem là pass. Sau đó backend tải itinerary, exclusions, phụ phí và policy chỉ cho hard-pass candidates và nhóm near-miss cần hiển thị. Decision trace vẫn dùng index/evaluations của toàn bộ scan.
 4. Metric enrichment đọc riêng itinerary, inclusions, exclusions, surcharges, cancellation và child policy. Structured facts phải có quote khớp nguồn; code chuẩn hóa, tính cost/route/coverage và ghi unknown khi không đủ căn cứ. Kết quả được cache theo content hash và extractor version.
 5. Engine tạo metric vector chung cho từng tour: cost, preference fit, experience density, route complexity, inclusion coverage, cancellation flexibility, family suitability và evidence coverage. Từ đó tạo các góc nhìn khả dụng và ít nhất ba tour khác nhau nếu có.

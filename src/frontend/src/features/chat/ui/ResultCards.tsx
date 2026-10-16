@@ -11,12 +11,15 @@ import type {
 import { evaluationStateText, observedLabel, priceText, safeUrl } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import {
+  METRIC_NAMES,
+  METRIC_RELATIONS,
   conditionState,
   conditionText,
-  evaluationsForOffer,
   failedDetailsForOffer,
   fieldLabel,
+  formatMetricValue,
   mostFailedField,
+  relevantEvaluationsForOffer,
 } from '../lib/format';
 import { rise, staggerParent } from './motion';
 import { QuickReplies } from './QuickReplies';
@@ -165,7 +168,7 @@ function TourCard({
   const state = conditionState(comparison, offer.id);
   const url = safeUrl(offer.evidence.url || tour.url || tour.evidence.url);
   const observed = observedLabel(offer.evidence.observed_at || tour.observed_at, locale);
-  const details = evaluationsForOffer(comparison, offer.id);
+  const details = relevantEvaluationsForOffer(comparison, offer.id);
   const failed = failedDetailsForOffer(comparison, offer.id);
   const failedCount = failed.filter(({ evaluation }) => evaluation.state === 'fail').length;
   const unknownCount = failed.filter(({ evaluation }) => evaluation.state === 'unknown').length;
@@ -750,11 +753,11 @@ function MetricComparisonPanel({
   }
 
   function evidenceQuote(profile: CurrentMetricProfile, key: string) {
-    return [
+    const quotes = [
       ...new Set((profile.metrics[key]?.evidence ?? []).map((item) => item.quote).filter(Boolean)),
-    ]
-      .slice(0, 2)
-      .join(' · ');
+    ];
+    if (quotes.length <= 2) return quotes.join(' · ');
+    return `${quotes.slice(0, 2).join(' · ')} · +${quotes.length - 2}`;
   }
 
   return (
@@ -977,22 +980,6 @@ function MetricComparisonPanel({
   );
 }
 
-const METRIC_NAMES: Record<string, [string, string]> = {
-  group_total: ['Tổng nhóm', 'Group total'],
-  preference_fit: ['Khớp ưu tiên', 'Preference fit'],
-  experience_density: ['Hoạt động được nêu', 'Stated activities'],
-  route_complexity: ['Số chặng được nêu', 'Stated route legs'],
-  included_coverage: ['Độ bao gồm đã biết', 'Known inclusion coverage'],
-  cancellation_flexibility: ['Mốc hoàn đủ tiền', 'Full-refund cutoff'],
-};
-
-const METRIC_RELATIONS: Record<string, [string, string]> = {
-  favorable: ['Thuận lợi hơn trung vị', 'More favorable than median'],
-  tradeoff: ['Đánh đổi so với trung vị', 'Trade-off vs median'],
-  similar: ['Gần trung vị', 'Near median'],
-  unknown: ['Chưa đủ dữ kiện so sánh', 'Not enough evidence to compare'],
-};
-
 function DecisionViews({  comparison,
   busy,
   onRelax,
@@ -1169,6 +1156,19 @@ function DecisionViews({  comparison,
                   <small>{t(...optimizesLabel)}</small>
                   {lead && <p>{lead}</p>}
                   {rest.length > 0 && (
+                    <ul className={styles['decision-hidden-costs']}>
+                      {rest
+                        .filter(
+                          (tradeoff) =>
+                            tradeoff.includes('chưa thể định giá') ||
+                            tradeoff.includes('chưa cộng vào tổng'),
+                        )
+                        .map((tradeoff) => (
+                          <li key={tradeoff}>{tradeoff}</li>
+                        ))}
+                    </ul>
+                  )}
+                  {rest.length > 0 && (
                     <details>
                       <summary>{t('Số liệu chi tiết', 'Detailed figures')}</summary>
                       <ul>
@@ -1184,16 +1184,8 @@ function DecisionViews({  comparison,
                         .filter((metric) => metric.relation !== 'unknown' || metric.value != null)
                         .map((metric) => {
                           const name = METRIC_NAMES[metric.key] ?? [metric.key, metric.key];
-                        const format = (value: number | null) =>
-                          value == null
-                            ? t('Chưa rõ', 'Unknown')
-                            : metric.key === 'group_total'
-                              ? `${value.toLocaleString()} ${metric.currency}`
-                              : metric.key === 'included_coverage'
-                                ? `${(value * 100).toFixed(0)}%`
-                                : metric.key === 'preference_fit'
-                                  ? `${value.toFixed(0)}/100`
-                                  : `${value}${metric.unit === 'days before departure for full refund' ? ` ${t('ngày', 'days')}` : ''}`;
+                          const format = (value: number | null) =>
+                            formatMetricValue({ ...metric, value }, t);
                         const relation = METRIC_RELATIONS[metric.relation] ?? METRIC_RELATIONS.unknown;
                         return (
                           <div key={metric.key} data-relation={metric.relation}>

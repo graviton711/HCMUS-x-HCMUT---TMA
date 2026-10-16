@@ -2,12 +2,15 @@ export type { ChatMsg, ChatPhase } from './model/types';
 export type { WeightedItem } from './lib/weightAllocation';
 export { normalizeWeights } from './lib/weightAllocation';
 export {
+  METRIC_NAMES,
+  METRIC_RELATIONS,
   conditionState,
   conditionText,
   display,
   evaluationsForOffer,
   failedDetailsForOffer,
   fieldLabel,
+  formatMetricValue,
   mostFailedField,
   operatorLabel,
 } from './lib/format';

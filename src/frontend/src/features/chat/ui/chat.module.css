@@ -1615,6 +1615,7 @@
 }
 
 .decision-choice ul,
+.decision-hidden-costs,
 .metric-cost-details ul {
   display: grid;
   gap: 5px;
@@ -1623,6 +1624,15 @@
   color: var(--muted);
   font-size: var(--text-xs);
   line-height: 1.45;
+}
+
+.decision-hidden-costs {
+  margin: 8px 0 0;
+  padding: 8px 10px 8px 28px;
+  border: 1px solid var(--warn, var(--line-strong));
+  border-radius: 10px;
+  background: var(--warn-bg, var(--surface));
+  color: var(--ink);
 }
 
 .decision-metric-comparisons {
@@ -1692,17 +1702,32 @@
 
 .metric-choice dd {
   margin: 0;
+  min-width: 0;
   color: var(--ink);
   font-size: 11px;
   font-weight: 650;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .metric-choice dl small {
+  display: block;
   grid-column: 1 / -1;
+  min-width: 0;
   color: var(--subtle);
   font-size: 10px;
-  line-height: 1.4;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+@container decision-panel (max-width: 560px) {
+  .metric-choice dl > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .metric-choice dd {
+    text-align: left;
+  }
 }
 
 .metric-cost-details {

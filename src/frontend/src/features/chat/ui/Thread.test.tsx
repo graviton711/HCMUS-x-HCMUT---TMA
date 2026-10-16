@@ -114,8 +114,10 @@ describe('Thread tool activity', () => {
 
     fireEvent.click(details?.querySelector('summary') as HTMLElement);
     const rows = within(details as HTMLElement).getAllByRole('listitem');
+    expect(rows).toHaveLength(1);
     expect(rows[0].getAttribute('data-state')).toBe('error');
-    expect(rows[1].getAttribute('data-state')).toBe('completed');
+    expect(rows[0].textContent).toContain('Preparing reviewed criteria');
+    expect(rows[0].textContent).toContain('×2');
   });
 
 });

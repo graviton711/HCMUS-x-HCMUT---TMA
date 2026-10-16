@@ -60,6 +60,86 @@ def test_structured_destination_choices_use_any_operator():
     assert req.conditions[0].value == ["Đà Lạt", "Hạ Long"]
 
 
+def test_shared_date_assumption_links_branches_with_same_range():
+    raw = "cuối tháng 11 hoặc tháng 12, Cần Thơ hoặc Ninh Chữ"
+    req = validate_requirement(
+        raw,
+        [],
+        alternatives=[
+            {
+                "id": "a1",
+                "label": "Can Tho late Nov",
+                "conditions": [
+                    condition("destination", "Cần Thơ", "Cần Thơ", condition_id="c1"),
+                    condition("date_from", "2026-11-21", "cuối tháng 11", operator="eq", condition_id="c2"),
+                    condition("date_to", "2026-11-30", "cuối tháng 11", operator="eq", condition_id="c3"),
+                ],
+            },
+            {
+                "id": "a2",
+                "label": "Ninh Chu late Nov",
+                "conditions": [
+                    condition("destination", "Ninh Chữ", "Ninh Chữ", condition_id="c4"),
+                    condition("date_from", "2026-11-21", "cuối tháng 11", operator="eq", condition_id="c5"),
+                    condition("date_to", "2026-11-30", "cuối tháng 11", operator="eq", condition_id="c6"),
+                ],
+            },
+        ],
+        assumptions=[
+            {
+                "id": "d1",
+                "kind": "date_window",
+                "label": "late Nov",
+                "quote": "cuối tháng 11",
+                "date_from": "2026-11-21",
+                "date_to": "2026-11-30",
+                "condition_ids": ["c2", "c3", "c5", "c6"],
+                "timezone": "Asia/Ho_Chi_Minh",
+            }
+        ],
+    )
+    assert req.assumptions[0].condition_ids == ["c2", "c3", "c5", "c6"]
+
+
+def test_shared_date_assumption_rejects_mixed_ranges():
+    raw = "cuối tháng 11 hoặc tháng 12"
+    with pytest.raises(AppError, match="must match"):
+        validate_requirement(
+            raw,
+            [],
+            alternatives=[
+                {
+                    "id": "a1",
+                    "label": "late Nov",
+                    "conditions": [
+                        condition("date_from", "2026-11-21", "cuối tháng 11", operator="eq", condition_id="c1"),
+                        condition("date_to", "2026-11-30", "cuối tháng 11", operator="eq", condition_id="c2"),
+                    ],
+                },
+                {
+                    "id": "a2",
+                    "label": "Dec",
+                    "conditions": [
+                        condition("date_from", "2026-12-01", "tháng 12", operator="eq", condition_id="c3"),
+                        condition("date_to", "2026-12-31", "tháng 12", operator="eq", condition_id="c4"),
+                    ],
+                },
+            ],
+            assumptions=[
+                {
+                    "id": "d1",
+                    "kind": "date_window",
+                    "label": "mixed",
+                    "quote": "cuối tháng 11",
+                    "date_from": "2026-11-21",
+                    "date_to": "2026-11-30",
+                    "condition_ids": ["c1", "c2", "c3", "c4"],
+                    "timezone": "Asia/Ho_Chi_Minh",
+                }
+            ],
+        )
+
+
 def test_departure_city_can_match_multiple_catalog_labels():
     raw = "Sài Gòn hoặc TP.HCM"
     req = validate_requirement(raw, [condition(

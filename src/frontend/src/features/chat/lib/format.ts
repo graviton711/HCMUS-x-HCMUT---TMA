@@ -1,4 +1,5 @@
 import type { CurrentComparison, CurrentCondition, CurrentEvaluation } from '../../../shared/api';
+import type { CurrentOptionMetricComparison } from '../../../shared/api';
 
 export function display(value: unknown): string {
   if (typeof value === 'string') return value;
@@ -34,6 +35,69 @@ export function evaluationsForOffer(
       evaluation,
       condition: conditions.get(evaluation.condition_id) ?? null,
     }));
+}
+
+/** Best-branch scoring shared by the why-panel and blocker helpers. */
+function bestBranch(
+  comparison: CurrentComparison,
+  states: Map<string, CurrentEvaluation['state']>,
+): { alternative: NonNullable<CurrentComparison['requirement']['alternatives']>[number] } | null {
+  const alternatives = comparison.requirement.alternatives ?? [];
+  if (!alternatives.length) return null;
+  const scored = alternatives
+    .map((alternative) => {
+      const branchStates = alternative.conditions.map(
+        (condition) => states.get(condition.id) ?? 'unknown',
+      );
+      return {
+        alternative,
+        failed: branchStates.filter((state) => state === 'fail').length,
+        unknown: branchStates.filter((state) => state === 'unknown').length,
+        passed: branchStates.filter((state) => state === 'pass').length,
+      };
+    })
+    .sort(
+      (left, right) =>
+        left.failed - right.failed ||
+        left.unknown - right.unknown ||
+        right.passed - left.passed ||
+        left.alternative.id.localeCompare(right.alternative.id),
+    );
+  return scored[0] ?? null;
+}
+
+/**
+ * Relevant evaluations: shared criteria plus the best OR branch.
+ * Pass offers show the winning branch; failed offers show shared blockers
+ * or the closest branch. Never the full cross-product.
+ */
+export function relevantEvaluationsForOffer(
+  comparison: CurrentComparison,
+  offerId: string,
+): OfferEvaluation[] {
+  const details = evaluationsForOffer(comparison, offerId);
+  const alternatives = comparison.requirement.alternatives ?? [];
+  if (!alternatives.length) return details;
+  const states = new Map(
+    details.map(({ evaluation }) => [evaluation.condition_id, evaluation.state]),
+  );
+  const common = comparison.requirement.conditions.filter(
+    (condition) => condition.strength === 'hard',
+  );
+  const commonBlockers = common.filter((condition) => states.get(condition.id) !== 'pass');
+  if (commonBlockers.length) {
+    return details.filter(({ evaluation }) =>
+      commonBlockers.some((condition) => condition.id === evaluation.condition_id),
+    );
+  }
+  const best = bestBranch(comparison, states);
+  if (!best) return details;
+  const branchIds = new Set(best.alternative.conditions.map((condition) => condition.id));
+  return details.filter(
+    ({ evaluation }) =>
+      branchIds.has(evaluation.condition_id) ||
+      common.some((condition) => condition.id === evaluation.condition_id),
+  );
 }
 
 /** Blocking evaluations for an offer, using only shared criteria and its best OR branch. */
@@ -253,4 +317,33 @@ const FIELD_LABEL: Record<string, [string, string]> = {
 export function fieldLabel(field: string, t: (vi: string, en: string) => string): string {
   const label = FIELD_LABEL[field];
   return label ? t(...label) : t(field.replaceAll('_', ' '), field.replaceAll('_', ' '));
+}
+
+export const METRIC_NAMES: Record<string, [string, string]> = {
+  group_total: ['Tổng nhóm', 'Group total'],
+  preference_fit: ['Khớp ưu tiên', 'Preference fit'],
+  experience_density: ['Hoạt động được nêu', 'Stated activities'],
+  route_complexity: ['Số chặng được nêu', 'Stated route legs'],
+  included_coverage: ['Độ bao gồm đã biết', 'Known inclusion coverage'],
+  cancellation_flexibility: ['Mốc hoàn đủ tiền', 'Full-refund cutoff'],
+};
+
+export const METRIC_RELATIONS: Record<string, [string, string]> = {
+  favorable: ['Thuận lợi hơn trung vị', 'More favorable than median'],
+  tradeoff: ['Đánh đổi so với trung vị', 'Trade-off vs median'],
+  similar: ['Gần trung vị', 'Near median'],
+  unknown: ['Chưa đủ dữ kiện so sánh', 'Not enough evidence to compare'],
+};
+
+/** Format one option metric value exactly like the decision cards do. */
+export function formatMetricValue(
+  metric: Pick<CurrentOptionMetricComparison, 'key' | 'value' | 'currency' | 'unit'>,
+  t: (vi: string, en: string) => string,
+): string {
+  const { value } = metric;
+  if (value == null) return t('Chưa rõ', 'Unknown');
+  if (metric.key === 'group_total') return `${value.toLocaleString()} ${metric.currency}`;
+  if (metric.key === 'included_coverage') return `${(value * 100).toFixed(0)}%`;
+  if (metric.key === 'preference_fit') return `${value.toFixed(0)}/100`;
+  return `${value}${metric.unit === 'days before departure for full refund' ? ` ${t('ngày', 'days')}` : ''}`;
 }

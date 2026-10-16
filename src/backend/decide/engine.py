@@ -654,12 +654,16 @@ def _option_tradeoffs(profile: MetricProfile) -> list[str]:
     elif cost.listed_price is not None:
         tradeoffs.append(f"Giá công bố: {cost.listed_price:,} {cost.currency}; chưa tính tổng nhóm")
     if cost.unpriced_exclusions:
-        tradeoffs.append(f"{len(cost.unpriced_exclusions)} khoản loại trừ/chi phí chưa thể định giá")
-    conditional_count = sum(
-        item.obligation == "conditional" for item in cost.optional_or_conditional
-    )
-    if conditional_count:
-        tradeoffs.append(f"{conditional_count} khoản có điều kiện, chưa cộng vào tổng nhóm")
+        names = ", ".join(item.name for item in cost.unpriced_exclusions[:3] if item.name)
+        suffix = f": {names}" if names else ""
+        tradeoffs.append(f"{len(cost.unpriced_exclusions)} khoản loại trừ/chi phí chưa thể định giá{suffix}")
+    conditional_items = [
+        item for item in cost.optional_or_conditional if item.obligation == "conditional"
+    ]
+    if conditional_items:
+        names = ", ".join(str(item.name) for item in conditional_items[:3] if item.name)
+        suffix = f": {names}" if names else ""
+        tradeoffs.append(f"{len(conditional_items)} khoản có điều kiện, chưa cộng vào tổng nhóm{suffix}")
     fit = profile.metrics.get("preference_fit")
     if fit is not None:
         tradeoffs.append(f"Khớp ưu tiên: {fit.lower_bound or 0:.0f}–{fit.upper_bound or 0:.0f}/100")

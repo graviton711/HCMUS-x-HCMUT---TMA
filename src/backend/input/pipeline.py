@@ -162,20 +162,23 @@ def validate_requirement(
         if start > end or not assumption.quote or assumption.quote not in raw_text:
             raise _invalid("Date assumptions need an ordered range and an exact user quote.")
         linked = [condition_by_id.get(condition_id) for condition_id in assumption.condition_ids]
-        if len(linked) != 2 or any(condition is None for condition in linked):
-            raise _invalid("A date assumption must link both date conditions.")
+        if len(linked) < 2 or len(linked) % 2 != 0 or any(condition is None for condition in linked):
+            raise _invalid("A date assumption must link date conditions in from/to pairs.")
         linked_conditions = [condition for condition in linked if condition is not None]
-        linked_dates = {condition.field: condition.value for condition in linked_conditions}
-        if set(linked_dates) != {"date_from", "date_to"}:
+        if {condition.field for condition in linked_conditions} != {"date_from", "date_to"}:
             raise _invalid("A date assumption must link both date conditions.")
-        linked_groups = {
-            alternative_by_condition.get(condition.id, "common")
-            for condition in linked_conditions
-        }
-        if len(linked_groups) != 1:
-            raise _invalid("A date assumption cannot span separate option branches.")
-        if assumption.date_from != linked_dates["date_from"] or assumption.date_to != linked_dates["date_to"]:
-            raise _invalid("A date assumption must match its linked date conditions.")
+        pairs: dict[str, dict[str, Any]] = {}
+        for condition in linked_conditions:
+            group = alternative_by_condition.get(condition.id, "common")
+            slot = pairs.setdefault(group, {})
+            if condition.field in slot:
+                raise _invalid("A date assumption must pair dates within the same scope or branch.")
+            slot[condition.field] = condition.value
+        for slot in pairs.values():
+            if set(slot) != {"date_from", "date_to"}:
+                raise _invalid("A date assumption must pair dates within the same scope or branch.")
+            if (slot["date_from"], slot["date_to"]) != (assumption.date_from, assumption.date_to):
+                raise _invalid("A date assumption must match its linked date conditions.")
         parsed_assumptions.append(assumption)
 
     soft_conditions = [condition for condition in cleaned if condition.strength == "soft"]
