@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { usePreferences } from '../../../shared/preferences';
 import { Icon } from '../../../shared/ui';
 import styles from './chat.module.css';
@@ -21,6 +21,7 @@ export function Composer({
   const { t } = usePreferences();
   const [value, setValue] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const wasBusy = useRef(busy);
   const fieldId = useId();
   const ready = value.trim().length > 0 && !busy;
 
@@ -29,7 +30,13 @@ export function Composer({
     onSend(value.trim());
     setValue('');
     textareaRef.current?.style.removeProperty('height');
+    textareaRef.current?.focus();
   }
+
+  useEffect(() => {
+    if (wasBusy.current && !busy) textareaRef.current?.focus();
+    wasBusy.current = busy;
+  }, [busy]);
 
   const label = t('Nhắn cho TourLens', 'Message TourLens');
 
