@@ -99,6 +99,10 @@ def test_query_tours_mcp_schema_requires_complete_condition_contract(settings, m
         assert top[param].get("description"), param
     assert "exact quote" in top["conditions"]["description"]
     assert "adult" in top["traveler_mix"]["description"]
+    tools_by_name = {tool.name: tool.inputSchema for tool in tools}
+    score_props = tools_by_name["score_soft"]["properties"]
+    assert "offer_id" in score_props["verdicts"].get("description", "")
+    assert "tour_id" in score_props["metric_facts"].get("description", "")
     assert "relax_criterion" not in {tool.name for tool in tools}
     assert "discover_destinations" in {tool.name for tool in tools}
 

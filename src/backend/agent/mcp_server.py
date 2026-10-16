@@ -851,14 +851,19 @@ class AgentTools:
 
     def score_soft(
         self,
-        context_id: Annotated[str, Field(description="Ranking context id from the soft_review batch.")],
+        context_id: Annotated[str, Field(description="Ranking context id from soft_review.context_id.")],
         verdicts: Annotated[
             list[SoftVerdictInput],
-            Field(description="Exactly one verdict per candidate/preference pair in the active batch."),
+            Field(description="Exactly one verdict per candidate/preference pair in the active batch. "
+                  "Each item has exactly offer_id, condition_id, verdict, quote, reason — e.g. "
+                  "{\"offer_id\": \"...\", \"condition_id\": \"s1\", \"verdict\": \"fit\", "
+                  "\"quote\": \"...\", \"reason\": \"...\"}. No tour_id, candidate_id, or batch_index."),
         ],
         metric_facts: Annotated[
             list[TourMetricFactsInput],
-            Field(description="One metric-facts object per tour in the active batch."),
+            Field(description="One metric-facts object per tour in the active batch, e.g. "
+                  "{\"tour_id\": \"...\", \"reviewed_fields\": [\"itinerary\"], "
+                  "\"activities\": [...], \"exclusions\": [...]}."),
         ],
     ) -> str:
         with self._ranking_context_lock:
