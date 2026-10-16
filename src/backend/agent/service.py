@@ -220,10 +220,14 @@ class AgentService:
         lock = self._locks.setdefault(key, asyncio.Lock())
         try:
             async with lock:
+                headed = (
+                    f"Conversation {local_id} (pass as conversation_id in catalog tool calls).\n"
+                    f"{message}"
+                )
                 async for event in self._message_events(
                     owner_id,
                     local_id,
-                    message,
+                    headed,
                     expected_requirement=requirement,
                     decision_run_id=decision_run_id,
                     snapshot_comparison_id=snapshot_comparison_id,
