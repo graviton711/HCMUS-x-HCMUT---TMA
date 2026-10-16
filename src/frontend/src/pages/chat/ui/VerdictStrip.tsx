@@ -52,12 +52,16 @@ export function VerdictStrip({
   agentSessionId,
   onOpenDecision,
   layout = 'grid',
+  onRelaxCondition,
 }: {
   comparison: CurrentComparison;
   client: CurrentBackendClient | null;
   agentSessionId: string | null;
   onOpenDecision: () => void;
   layout?: 'grid' | 'stack';
+  /** When provided, "Thử nới này" sends an agent turn in chat (with live
+   *  progress) instead of running a silent snapshot scenario inline. */
+  onRelaxCondition?: (conditionId: string, label: string) => void;
 }) {
   const { locale, t } = usePreferences();
   const [scenarios, setScenarios] = useState<Record<string, ScenarioState>>({});
@@ -252,8 +256,17 @@ export function VerdictStrip({
                 <button
                   type="button"
                   className="btn"
-                  disabled={!client || !agentSessionId}
-                  onClick={() => void runRelaxation(relax)}
+                  disabled={onRelaxCondition ? false : !client || !agentSessionId}
+                  onClick={() => {
+                    if (onRelaxCondition) {
+                      const label = condition
+                        ? `${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`
+                        : relax.condition_id;
+                      onRelaxCondition(relax.condition_id, label);
+                      return;
+                    }
+                    void runRelaxation(relax);
+                  }}
                 >
                   {t('Thử nới này', 'Try this relaxation')}
                 </button>

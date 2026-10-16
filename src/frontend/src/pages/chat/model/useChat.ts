@@ -639,6 +639,12 @@ export function useChat(
     [sendMessage],
   );
 
+  const relaxCondition = useCallback(
+    (conditionId: string, label: string) =>
+      void sendMessage(`Hãy bỏ điều kiện ${label} (${conditionId}) rồi tìm lại tour.`, true),
+    [sendMessage],
+  );
+
   const retry = useCallback(() => {
     if (sessionExpired) return;
     if (failedStep === 'init') setReload((value) => value + 1);
@@ -660,6 +666,7 @@ export function useChat(
     send,
     stop,
     relax,
+    relaxCondition,
     updateDecisionDraft,
     runDecision,
   };

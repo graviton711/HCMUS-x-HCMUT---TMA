@@ -144,4 +144,23 @@ describe('VerdictStrip', () => {
     ];
     expect(sent.conditions.map((c) => c.id)).toEqual(['h1']);
   });
+
+  it('routes relaxation through the chat agent turn when a handler is provided', () => {
+    const onRelaxCondition = vi.fn();
+    render(
+      <PreferencesProvider>
+        <VerdictStrip
+          comparison={comparison()}
+          client={null}
+          agentSessionId={null}
+          onOpenDecision={() => {}}
+          onRelaxCondition={onRelaxCondition}
+        />
+      </PreferencesProvider>,
+    );
+    fireEvent.click(screen.getByText('Thử nới này'));
+    expect(onRelaxCondition).toHaveBeenCalledOnce();
+    expect(onRelaxCondition.mock.calls[0][0]).toBe('h2');
+    expect(onRelaxCondition.mock.calls[0][1]).toMatch(/ngân sách/i);
+  });
 });

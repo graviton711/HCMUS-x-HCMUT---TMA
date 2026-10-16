@@ -354,6 +354,10 @@ function ActiveChat({
                 setDecisionOpen(true);
                 setMobilePane('decision');
               }}
+              onRelaxCondition={(conditionId, label) => {
+                setMobilePane('chat');
+                chat.relaxCondition(conditionId, label);
+              }}
             />
           )}
           renderRecovery={

@@ -1651,7 +1651,14 @@
   border-top: 1px solid var(--line);
 }
 
+.decision-metric-comparisons > div > strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .decision-metric-comparisons > div > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
   color: var(--muted);
   text-align: right;
 }
@@ -1904,6 +1911,15 @@
   .metric-choice-grid,
   .decision-matrix-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .decision-metric-comparisons > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .decision-metric-comparisons > div > span {
+    text-align: left;
   }
 
   .decision-tabs {
