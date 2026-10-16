@@ -172,6 +172,7 @@ export interface CurrentComparison {
   decision_options?: CurrentDecisionOption[];
   near_miss_profiles?: CurrentMetricProfile[];
   relaxation_options?: CurrentRelaxationOption[];
+  relaxation_pairs?: CurrentRelaxationPair[];
   assumptions?: string[];
 }
 
@@ -186,6 +187,13 @@ export interface CurrentRelaxationExample {
 
 export interface CurrentRelaxationOption {
   condition_id: string;
+  gained_offers: number;
+  gained_tours: number;
+  examples: CurrentRelaxationExample[];
+}
+
+export interface CurrentRelaxationPair {
+  condition_ids: string[];
   gained_offers: number;
   gained_tours: number;
   examples: CurrentRelaxationExample[];

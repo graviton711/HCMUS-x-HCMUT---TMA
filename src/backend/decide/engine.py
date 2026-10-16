@@ -28,6 +28,7 @@ from backend.models import (
     RankingKey,
     RelaxationExample,
     RelaxationOption,
+    RelaxationPair,
     Requirement,
     State,
     TourSnapshot,
@@ -269,6 +270,62 @@ def relaxation_options(
     options.sort(key=lambda item: (
         -item.gained_tours, -item.gained_offers, order.get(item.condition_id, 0)))
     return options
+
+
+def relaxation_pair_options(
+    req: Requirement,
+    tours: list[TourSnapshot],
+    evals: list[Evaluation],
+    ranked_offer_ids: set[str],
+    limit_examples: int = 3,
+    max_pairs: int = 6,
+) -> list[RelaxationPair]:
+    """Pairwise relaxations: drop exactly 2 hard conditions.
+
+    For each unordered pair, counts offers failing ONLY those 2 conditions
+    (passing all others). Sorted by tours gained. Capped at max_pairs.
+    """
+    hard = req.hard()
+    if len(hard) < 2:
+        return []
+    order = {condition.id: index for index, condition in enumerate(hard)}
+    states_by_offer = _states_by_offer(evals)
+    gained: dict[tuple[str, str], list[tuple[int, str, str]]] = {}
+    tour_by_id = {tour.id: tour for tour in tours}
+    for tour in tours:
+        for offer in tour.offers:
+            if offer.id in ranked_offer_ids:
+                continue
+            states = states_by_offer.get(offer.id, {})
+            relevant = _relevant_hard(req, states)
+            failed = [condition.id for condition in relevant
+                      if states.get(condition.id, "unknown") == "fail"]
+            if len(failed) != 2:
+                continue
+            pair = tuple(sorted(failed, key=lambda cid: order.get(cid, 0)))
+            price_key = offer.price if offer.price is not None and offer.currency.strip() else 10**15
+            gained.setdefault(pair, []).append((price_key, tour.id, offer.id))
+    options: list[RelaxationPair] = []
+    for pair, rows in gained.items():
+        examples = []
+        for _, tour_id, offer_id in sorted(rows)[:limit_examples]:
+            tour = tour_by_id.get(tour_id)
+            offer = next((item for item in tour.offers if item.id == offer_id), None) if tour else None
+            if tour is None or offer is None:
+                continue
+            examples.append(RelaxationExample(
+                tour_id=tour_id, offer_id=offer_id, tour_name=tour.name,
+                price=offer.price, currency=offer.currency,
+                departure_date=offer.departure_date,
+            ))
+        options.append(RelaxationPair(
+            condition_ids=list(pair), gained_offers=len(rows),
+            gained_tours=len({row[1] for row in rows}), examples=examples,
+        ))
+    options.sort(key=lambda item: (
+        -item.gained_tours, -item.gained_offers,
+        min(order.get(cid, 0) for cid in item.condition_ids)))
+    return options[:max_pairs]
 
 
 def near_miss(
@@ -1350,6 +1407,9 @@ def compare(
         near_miss_profiles=near_profiles,
         decision_options=options,
         relaxation_options=relaxation_options(
+            req, tours, evaluations, {c.offer_id for c in ranked},
+        ),
+        relaxation_pairs=relaxation_pair_options(
             req, tours, evaluations, {c.offer_id for c in ranked},
         ),
         assumptions=_assumptions(req, tours, profiles),

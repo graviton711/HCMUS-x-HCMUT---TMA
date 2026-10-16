@@ -639,6 +639,15 @@ export function useChat(
     [sendMessage],
   );
 
+  const relaxPair = useCallback(
+    (conditionIds: string[], label: string) =>
+      void sendMessage(
+        `Hãy bỏ các điều kiện ${label} (${conditionIds.join(', ')}) rồi tìm lại tour.`,
+        true,
+      ),
+    [sendMessage],
+  );
+
   const relaxCondition = useCallback(
     (conditionId: string, label: string) =>
       void sendMessage(`Hãy bỏ điều kiện ${label} (${conditionId}) rồi tìm lại tour.`, true),
@@ -667,6 +676,7 @@ export function useChat(
     stop,
     relax,
     relaxCondition,
+    relaxPair,
     updateDecisionDraft,
     runDecision,
   };

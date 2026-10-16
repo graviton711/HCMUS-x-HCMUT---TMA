@@ -316,6 +316,7 @@ export function ResultCards({
   comparison,
   busy,
   onRelax,
+  onRelaxPair,
   isSavedTour,
   onToggleSavedTour,
   onAsk,
@@ -323,6 +324,7 @@ export function ResultCards({
   comparison: CurrentComparison;
   busy: boolean;
   onRelax: (field: string) => void;
+  onRelaxPair?: (conditionIds: string[], label: string) => void;
   isSavedTour?: (tourId: string, offerId: string) => boolean;
   onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
   onAsk?: (text: string) => void;
@@ -526,45 +528,75 @@ export function ResultCards({
         </div>
       </div>
 
-      {empty && (comparison.relaxation_options ?? []).length > 0 && (
-        <div className={styles['relaxation-options']}>
-          <p className={styles['relaxation-title']}>
-            {t(
-              'Nới điều kiện nào để mở thêm lựa chọn:',
-              'Relax a requirement to open more options:',
-            )}
-          </p>
-          <div className={styles['relaxation-chips']}>
-            {(comparison.relaxation_options ?? []).map((relax) => {
-              const condition = [
-                ...comparison.requirement.conditions,
-                ...(comparison.requirement.alternatives ?? []).flatMap((branch) => branch.conditions),
-              ].find((item) => item.id === relax.condition_id);
-              const label = condition
+      {empty && ((comparison.relaxation_options ?? []).length > 0 || (comparison.relaxation_pairs ?? []).length > 0) && (
+    <div className={styles['relaxation-options']}>
+      <p className={styles['relaxation-title']}>
+        {t(
+          'Nới điều kiện nào để mở thêm lựa chọn:',
+          'Relax a requirement to open more options:',
+        )}
+      </p>
+      <div className={styles['relaxation-chips']}>
+        {(comparison.relaxation_options ?? []).map((relax) => {
+          const condition = [
+            ...comparison.requirement.conditions,
+            ...(comparison.requirement.alternatives ?? []).flatMap((branch) => branch.conditions),
+          ].find((item) => item.id === relax.condition_id);
+          const label = condition
+            ? `${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`
+            : relax.condition_id;
+          return (
+            <button
+              key={relax.condition_id}
+              type="button"
+              className={`btn ${styles['relaxation-chip']}`}
+              disabled={busy}
+              onClick={() => (onRelax(condition?.field ?? ''))}
+            >
+              <span className={styles['relaxation-chip-label']}>
+                {t('Bỏ', 'Drop')}: {label}
+              </span>
+              <span className={styles['relaxation-chip-gain']}>
+                +{relax.gained_tours} {t('tour', 'tours')}
+              </span>
+            </button>
+          );
+        })}
+        {(comparison.relaxation_pairs ?? []).map((relax) => {
+          const conditions = relax.condition_ids.map((id) =>
+            [...comparison.requirement.conditions, ...(comparison.requirement.alternatives ?? []).flatMap((branch) => branch.conditions)]
+              .find((item) => item.id === id),
+          );
+          const label = conditions
+            .map((condition) =>
+              condition
                 ? `${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`
-                : relax.condition_id;
-              return (
-                <button
-                  key={relax.condition_id}
-                  type="button"
-                  className={`btn ${styles['relaxation-chip']}`}
-                  disabled={busy}
-                  onClick={() => onRelax(condition?.field ?? '')}
-                >
-                  <span className={styles['relaxation-chip-label']}>
-                    {t('Bỏ', 'Drop')}: {label}
-                  </span>
-                  <span className={styles['relaxation-chip-gain']}>
-                    +{relax.gained_tours} {t('tour', 'tours')}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+                : relax.condition_ids[conditions.indexOf(condition) ?? 0] ?? '',
+            )
+            .join(' + ');
+          const ids = relax.condition_ids;
+          return (
+            <button
+              key={relax.condition_ids.join('::')}
+              type="button"
+              className={`btn ${styles['relaxation-chip']}`}
+              disabled={busy}
+              onClick={() => onRelaxPair ? onRelaxPair(ids, label) : onRelax(label)}
+            >
+              <span className={styles['relaxation-chip-label']}>
+                {t('Bỏ', 'Drop')}: {label}
+              </span>
+              <span className={styles['relaxation-chip-gain']}>
+                +{relax.gained_tours} {t('tour', 'tours')}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  )}
 
-      {softConditions.length > 0 && ranked.length > 1 && (
+  {softConditions.length > 0 && ranked.length > 1 && (
         <details className={styles['preference-controls']} open>
           <summary>
             <span>{t('Điều chỉnh mức ưu tiên', 'Adjust priorities')}</span>
@@ -1021,6 +1053,7 @@ function MetricComparisonPanel({
 function DecisionViews({  comparison,
   busy,
   onRelax,
+  onRelaxPair,
   isSavedTour,
   onToggleSavedTour,
   onAsk,
@@ -1028,6 +1061,7 @@ function DecisionViews({  comparison,
   comparison: CurrentComparison;
   busy: boolean;
   onRelax: (field: string) => void;
+  onRelaxPair?: (conditionIds: string[], label: string) => void;
   isSavedTour?: (tourId: string, offerId: string) => boolean;
   onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
   onAsk?: (text: string) => void;
@@ -1345,7 +1379,7 @@ function DecisionViews({  comparison,
         </div>
       ) : (
         <>
-          {(comparison.relaxation_options ?? []).length > 0 ? (
+          {((comparison.relaxation_options ?? []).length > 0 || (comparison.relaxation_pairs ?? []).length > 0) ? (
             <div className={styles['relaxation-options']}>
               <p className={styles['relaxation-title']}>
                 {t(
@@ -1369,6 +1403,36 @@ function DecisionViews({  comparison,
                       className={`btn ${styles['relaxation-chip']}`}
                       disabled={busy}
                       onClick={() => onRelax(condition?.field ?? '')}
+                    >
+                      <span className={styles['relaxation-chip-label']}>
+                        {t('Bỏ', 'Drop')}: {label}
+                      </span>
+                      <span className={styles['relaxation-chip-gain']}>
+                        +{relax.gained_tours} {t('tour', 'tours')}
+                      </span>
+                    </button>
+                  );
+                })}
+                {(comparison.relaxation_pairs ?? []).map((relax) => {
+                  const conditions = relax.condition_ids.map((id) =>
+                    [...comparison.requirement.conditions, ...(comparison.requirement.alternatives ?? []).flatMap((branch) => branch.conditions)]
+                      .find((item) => item.id === id),
+                  );
+                  const label = conditions
+                    .map((condition) =>
+                      condition
+                        ? `${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`
+                        : relax.condition_ids[conditions.indexOf(condition) ?? 0] ?? '',
+                    )
+                    .join(' + ');
+                  const ids = relax.condition_ids;
+                  return (
+                    <button
+                      key={relax.condition_ids.join('::')}
+                      type="button"
+                      className={`btn ${styles['relaxation-chip']}`}
+                      disabled={busy}
+                      onClick={() => onRelaxPair ? onRelaxPair(ids, label) : onRelax(label)}
                     >
                       <span className={styles['relaxation-chip-label']}>
                         {t('Bỏ', 'Drop')}: {label}

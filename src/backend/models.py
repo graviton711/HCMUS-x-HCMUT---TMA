@@ -361,6 +361,13 @@ class RelaxationOption(BaseModel):
     examples: list[RelaxationExample] = Field(default_factory=list)
 
 
+class RelaxationPair(BaseModel):
+    condition_ids: list[str] = Field(min_length=2, max_length=2)
+    gained_offers: int = 0
+    gained_tours: int = 0
+    examples: list[RelaxationExample] = Field(default_factory=list)
+
+
 class DecisionConditionCount(BaseModel):
     condition_id: str
     pass_offers: int = 0
@@ -433,6 +440,7 @@ class Comparison(BaseModel):
     near_miss_profiles: list[MetricProfile] = Field(default_factory=list)
     decision_options: list[DecisionOption] = Field(default_factory=list)
     relaxation_options: list[RelaxationOption] = Field(default_factory=list)
+    relaxation_pairs: list[RelaxationPair] = Field(default_factory=list)
     assumptions: list[str] = Field(default_factory=list)
 
 

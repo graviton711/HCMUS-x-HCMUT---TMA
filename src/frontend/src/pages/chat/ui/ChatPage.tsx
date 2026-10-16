@@ -457,6 +457,10 @@ function ActiveChat({
               setMobilePane('chat');
               chat.relax(field);
             }}
+            onRelaxPair={(conditionIds, label) => {
+              setMobilePane('chat');
+              chat.relaxPair(conditionIds, label);
+            }}
             onSend={sendFromWorkspace}
             onToggleWorkspace={toggleDecision}
             isSavedTour={isSavedTour}

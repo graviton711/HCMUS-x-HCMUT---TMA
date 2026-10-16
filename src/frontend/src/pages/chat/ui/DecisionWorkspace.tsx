@@ -46,6 +46,7 @@ export function DecisionWorkspace({
   onUpdateDecisionDraft: (id: string, requirement: CurrentRequirement) => void;
   onRunDecision: (id: string, requirement: CurrentRequirement) => void;
   onRelax: (field: string) => void;
+  onRelaxPair?: (conditionIds: string[], label: string) => void;
   onSend: (text: string) => void;
   onToggleWorkspace: () => void;
   isSavedTour?: (tourId: string, offerId: string) => boolean;
@@ -310,6 +311,7 @@ function ScenarioWorkbench({
   onApply: (requirement: CurrentRequirement) => void;
   onRunDecision: (requirement: CurrentRequirement) => void;
   onRelax: (field: string) => void;
+  onRelaxPair?: (conditionIds: string[], label: string) => void;
   onSend: (text: string) => void;
   isSavedTour?: (tourId: string, offerId: string) => boolean;
   onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;

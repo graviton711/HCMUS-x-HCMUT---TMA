@@ -26,7 +26,7 @@ export type {
   CurrentOffer,
   CurrentRelaxationExample,
   CurrentRelaxationOption,
-  CurrentRequirement,
+  CurrentRelaxationPair,  CurrentRequirement,
   CurrentSession,
   CurrentTourSnapshot,
 } from "./types";
