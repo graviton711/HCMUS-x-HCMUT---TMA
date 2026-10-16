@@ -21,7 +21,7 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 class DecideCfg(BaseModel):
     model_config = SettingsConfigDict(extra="ignore")
 
-    quote_chars: int
+    quote_max_sentences: int = 3
     risk_words: list[str]
     analysis_chars: int
     analysis_items: int

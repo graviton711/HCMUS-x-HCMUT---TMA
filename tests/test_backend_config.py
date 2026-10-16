@@ -15,7 +15,7 @@ backend:
   api: {host: "127.0.0.1", port: 8000, candidate_default: 7, candidate_min: 1, candidate_max: 100,
     session_ttl_seconds: 2592000}
   data: {scan_limit: 50, providers_limit: 5, connect_timeout_s: 3}
-  decide: {soft_fields: [itinerary], quote_chars: 120,
+  decide: {soft_fields: [itinerary], quote_max_sentences: 2,
     risk_words: [x], analysis_chars: 9, analysis_items: 2, top_n: 1}
 """
 
@@ -34,7 +34,7 @@ def test_yaml_tuning_loaded(tmp_path):
     assert settings.candidate_limit == 7
     assert settings.supabase_scan_limit == 50
     assert settings.tuning.decide.top_n == 1
-    assert settings.tuning.decide.quote_chars == 120
+    assert settings.tuning.decide.quote_max_sentences == 2
     assert settings.tuning.data.providers_limit == 5
     assert settings.supabase_tour_freshness_seconds == {"departure_date": None}
 
@@ -122,7 +122,7 @@ def test_repo_configs_load():
     assert settings.codex.model == "gpt-6-luna"
     assert settings.codex.reasoning_effort == "medium"
     assert settings.agent_provider == "codex"
-    assert settings.tuning.decide.quote_chars <= 200
+    assert settings.tuning.decide.quote_max_sentences <= 10
     assert settings.tuning.data.providers_limit == 100
     assert settings.tuning.api.port == 8000
     import yaml

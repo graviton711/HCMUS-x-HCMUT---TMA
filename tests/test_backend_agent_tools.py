@@ -497,3 +497,77 @@ def test_empty_turn_falls_back_to_retry_text(settings):
     assert "comparison" not in response
     assert "choices" not in response
     service.store.close()
+
+
+def test_snap_quote_expands_mid_word_cuts_to_word_boundaries():
+    from backend.agent.mcp_server import _snap_quote
+
+    source = "Du ngoạn sông nước miền Tây. Thưởng thức món ăn."
+    assert (
+        _snap_quote(source, "u ngoạn sông nước miền Tây. Thưởng thức món", 3)
+        == "Du ngoạn sông nước miền Tây. Thưởng thức món"
+    )
+    assert _snap_quote("Thưởng thức", "ưởng thứ", 3) == "Thưởng thức"
+
+
+def test_snap_quote_keeps_clean_quotes_byte_identical():
+    from backend.agent.mcp_server import _snap_quote
+
+    source = "Hủy trước 7 ngày hoàn 100%."
+    assert _snap_quote(source, source, 3) == source
+
+
+def test_snap_quote_rejects_absent_empty_and_over_cap_quotes():
+    from backend.agent.mcp_server import _snap_quote
+
+    source = "Ngày 1: đi. Ngày 2: về. Ngày 3: nghỉ. Ngày 4: về."
+    assert _snap_quote(source, "không có trong nguồn", 3) is None
+    assert _snap_quote(source, source, 3) is None
+    assert _snap_quote(source, "   ", 3) is None
+
+
+def _evaluation_for(result, candidate, condition_id):
+    return next(
+        item for item in result["comparison"]["evaluations"]
+        if item["offer_id"] == candidate["offer_id"] and item["condition_id"] == condition_id
+    )
+
+
+def test_score_soft_snaps_mid_word_quote_to_word_boundaries(settings):
+    tools = _tools(settings)
+    query = _query(tools, **_phu_requirement())
+    review = query["soft_review"]
+    candidate = review["candidates"][0]
+    result = _score_soft(tools, review["context_id"], [{
+        "offer_id": candidate["offer_id"],
+        "condition_id": "s1",
+        "verdict": "fit",
+        "quote": "ài Gòn - Phú Quốc, tắm biển Bãi S",
+        "reason": "Lịch trình nêu tắm biển Bãi Sao.",
+    }])
+    evaluation = _evaluation_for(result, candidate, "s1")
+    assert evaluation["state"] == "pass"
+    assert evaluation["quote"] == "Sài Gòn - Phú Quốc, tắm biển Bãi Sao"
+
+
+def test_score_soft_rejects_quote_over_sentence_cap(settings):
+    tools = _tools(settings)
+    query = _query(tools, **_phu_requirement())
+    review = query["soft_review"]
+    candidate = review["candidates"][0]
+    long_quote = (
+        "Ngày 1: Bay Sài Gòn - Phú Quốc, tắm biển Bãi Sao. "
+        "Ngày 2: VinWonders, Safari. "
+        "Ngày 3: Tour 4 đảo, lặn ngắm san hô. "
+        "Ngày 4: Chợ Dương Đông, bay về."
+    )
+    result = _score_soft(tools, review["context_id"], [{
+        "offer_id": candidate["offer_id"],
+        "condition_id": "s1",
+        "verdict": "fit",
+        "quote": long_quote,
+        "reason": "Lịch trình dài bốn ngày.",
+    }])
+    evaluation = _evaluation_for(result, candidate, "s1")
+    assert evaluation["state"] == "unknown"
+    assert evaluation["quote"] == ""

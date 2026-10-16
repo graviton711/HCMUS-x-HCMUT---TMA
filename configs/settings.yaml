@@ -63,7 +63,7 @@ backend:
     connect_timeout_s: 8
     freshness_seconds: {departure_date: null}
   decide:
-    quote_chars: 200
+    quote_max_sentences: 3
     risk_words: ["không hoàn", "thu phí 100%", "sold_out", "unknown"]
     analysis_chars: 160
     analysis_items: 6

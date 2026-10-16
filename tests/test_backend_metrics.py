@@ -112,7 +112,7 @@ def test_empty_extraction_does_not_claim_nonempty_exclusions_were_reviewed():
         )],
     )
 
-    facts, rejected = _validate_metric_facts(tour, payload)
+    facts, rejected = _validate_metric_facts(tour, payload, 3)
     profile = build_metric_profiles(_req(), [(tour, offer.id)], {}, {tour.id: facts})[0]
 
     assert rejected == 0
@@ -120,3 +120,18 @@ def test_empty_extraction_does_not_claim_nonempty_exclusions_were_reviewed():
     assert facts.reviewed_fields == []
     assert profile.metrics["unpriced_cost_exposures"].state == "unknown"
     assert profile.cost.state == "partial"
+
+
+def test_mid_word_fact_quote_is_stored_snapped():
+    tour, offer = _tour()
+    payload = TourMetricFactsInput(
+        tour_id=tour.id,
+        exclusions=[CostExposureInput(
+            name="Vé tham quan",
+            obligation="mandatory",
+            quote="hông bao gồm vé tham qua",
+        )],
+    )
+    facts, rejected = _validate_metric_facts(tour, payload, 3)
+    assert rejected == 0
+    assert facts.exclusions[0].quote == "Không bao gồm vé tham quan"

@@ -767,7 +767,7 @@ class AgentTools:
                 )
 
             batch_tour_by_offer = {offer_id: tour for tour, offer_id in batch}
-            max_quote = min(self.settings.tuning.decide.quote_chars, 200)
+            max_sentences = self.settings.tuning.decide.quote_max_sentences
             for item in parsed:
                 key = (item.offer_id, item.condition_id)
                 tour = batch_tour_by_offer[item.offer_id]
@@ -778,7 +778,8 @@ class AgentTools:
                     state: State = "unknown"
                     quote, reason = "", item.reason.strip()[:500]
                 else:
-                    quote_is_grounded = bool(item.quote) and len(item.quote) <= max_quote and item.quote in source
+                    snapped = _snap_quote(source, item.quote, max_sentences)
+                    quote_is_grounded = snapped is not None
                     reason_is_bounded = (
                         bool(item.reason.strip())
                         and len(item.reason) <= 500
@@ -786,7 +787,7 @@ class AgentTools:
                     )
                     if quote_is_grounded and reason_is_bounded:
                         state = _VERDICT_STATES[item.verdict]
-                        quote, reason = item.quote, item.reason.strip()
+                        quote, reason = snapped, item.reason.strip()
                     else:
                         state, quote, reason = "unknown", "", "Chưa có trích dẫn hợp lệ để xác nhận."
                 context.verdicts[key] = (state, quote, reason)
@@ -798,7 +799,9 @@ class AgentTools:
             batch_tour_by_id = {tour.id: tour for tour, _ in batch}
             facts_to_cache: list[tuple[TourSnapshot, ExtractedTourFacts]] = []
             for item in parsed_facts:
-                extracted, rejected = _validate_metric_facts(batch_tour_by_id[item.tour_id], item)
+                extracted, rejected = _validate_metric_facts(
+                    batch_tour_by_id[item.tour_id], item, max_sentences
+                )
                 context.metric_facts[item.tour_id] = extracted
                 facts_to_cache.append((batch_tour_by_id[item.tour_id], extracted))
                 accepted_facts += len(extracted.activities) + len(extracted.route_legs)
@@ -1022,6 +1025,32 @@ def _sentence_count(value: str) -> int:
     return len(sentences) or (1 if value.strip() else 0)
 
 
+def _snap_quote(source: str, quote: str, max_sentences: int) -> str | None:
+    """Snap a submitted quote outward to word boundaries within its source.
+
+    Returns the snapped verbatim substring, or None when the quote is absent
+    or exceeds the sentence cap. `str.isalnum` understands stacked Vietnamese
+    diacritics, so no folding is needed. Snapping never invents text: the
+    result stays a substring of `source`, keeping every downstream `in` check
+    valid.
+    """
+    text = quote.strip()
+    if not text:
+        return None
+    start = source.find(text)
+    if start < 0:
+        return None
+    end = start + len(text)
+    while start > 0 and source[start - 1].isalnum():
+        start -= 1
+    while end < len(source) and source[end].isalnum():
+        end += 1
+    snapped = source[start:end]
+    if _sentence_count(snapped) > max_sentences:
+        return None
+    return snapped
+
+
 def _review_batches(
     candidates: list[tuple[TourSnapshot, str]],
     *,
@@ -1059,13 +1088,16 @@ def _metric_source_fields(tour: TourSnapshot) -> dict[str, str]:
     }
 
 
-def _metric_evidence(tour: TourSnapshot, source_field: str, quote: str) -> MetricEvidence | None:
+def _metric_evidence(
+    tour: TourSnapshot, source_field: str, quote: str, max_sentences: int
+) -> MetricEvidence | None:
     source = _metric_source_fields(tour).get(source_field, "")
-    if not quote or len(quote) > 1000 or quote not in source:
+    snapped = _snap_quote(source, quote, max_sentences)
+    if snapped is None:
         return None
     return MetricEvidence(
         source_field=source_field,
-        quote=quote,
+        quote=snapped,
         observed_at=tour.observed_at,
         url=tour.url,
     )
@@ -1163,7 +1195,7 @@ def _number_with_word(number: int | None, quote: str, words: tuple[str, ...]) ->
 
 
 def _validate_metric_facts(
-    tour: TourSnapshot, item: TourMetricFactsInput
+    tour: TourSnapshot, item: TourMetricFactsInput, max_sentences: int
 ) -> tuple[ExtractedTourFacts, int]:
     accepted_activities: list[ActivityFact] = []
     accepted_legs: list[RouteLegFact] = []
@@ -1175,7 +1207,7 @@ def _validate_metric_facts(
     rejected = 0
 
     for fact in item.activities:
-        evidence = _metric_evidence(tour, "itinerary", fact.quote)
+        evidence = _metric_evidence(tour, "itinerary", fact.quote, max_sentences)
         if evidence is None or not fact.name.strip() or fact.name not in fact.quote:
             rejected += 1
             continue
@@ -1184,8 +1216,8 @@ def _validate_metric_facts(
 
     for fact in item.route_legs:
         field = next((name for name in ("route", "itinerary")
-                      if _metric_evidence(tour, name, fact.quote) is not None), "")
-        evidence = _metric_evidence(tour, field, fact.quote) if field else None
+                      if _metric_evidence(tour, name, fact.quote, max_sentences) is not None), "")
+        evidence = _metric_evidence(tour, field, fact.quote, max_sentences) if field else None
         if (evidence is None or not fact.origin.strip() or not fact.destination.strip()
                 or fact.origin not in fact.quote or fact.destination not in fact.quote):
             rejected += 1
@@ -1197,7 +1229,7 @@ def _validate_metric_facts(
 
     for fact in item.inclusions:
         source_field = "exclusions" if fact.status == "excluded" else "inclusions"
-        evidence = _metric_evidence(tour, source_field, fact.quote)
+        evidence = _metric_evidence(tour, source_field, fact.quote, max_sentences)
         if evidence is None:
             rejected += 1
             continue
@@ -1210,7 +1242,7 @@ def _validate_metric_facts(
         ("surcharges", item.surcharges, accepted_surcharges),
     ):
         for fact in facts:
-            evidence = _metric_evidence(tour, source_field, fact.quote)
+            evidence = _metric_evidence(tour, source_field, fact.quote, max_sentences)
             if evidence is None or not fact.name.strip():
                 rejected += 1
                 continue
@@ -1222,11 +1254,11 @@ def _validate_metric_facts(
                 name=fact.name.strip(), obligation=fact.obligation,
                 amount=amount, currency=currency, unit=unit,
                 applies_when=applies_when, source_field=source_field,
-                quote=fact.quote,
+                quote=evidence.quote,
             ))
 
     for fact in item.cancellation_rules:
-        evidence = _metric_evidence(tour, "cancellation_policy", fact.quote)
+        evidence = _metric_evidence(tour, "cancellation_policy", fact.quote, max_sentences)
         if evidence is None:
             rejected += 1
             continue
@@ -1244,7 +1276,7 @@ def _validate_metric_facts(
         ))
 
     for fact in item.family_facts:
-        evidence = _metric_evidence(tour, "child_policy", fact.quote)
+        evidence = _metric_evidence(tour, "child_policy", fact.quote, max_sentences)
         if evidence is None:
             rejected += 1
             continue
