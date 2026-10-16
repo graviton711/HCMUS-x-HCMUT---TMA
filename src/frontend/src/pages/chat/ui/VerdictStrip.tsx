@@ -40,9 +40,6 @@ function tourName(comparison: CurrentComparison, tourId: string, fallback: strin
   return comparison.tour_snapshots.find((tour) => tour.id === tourId)?.name || fallback;
 }
 
-const short = (value: string) =>
-  value.length > 48 ? `${value.slice(0, 47).trimEnd()}…` : value;
-
 function findOffer(comparison: CurrentComparison, tourId: string, offerId: string) {
   return comparison.tour_snapshots
     .find((tour) => tour.id === tourId)
@@ -143,6 +140,7 @@ export function VerdictStrip({
           const tour = comparison.tour_snapshots.find((item) => item.id === option.tour_id);
           const kicker = OBJECTIVE_KICKER[option.objective] ?? OBJECTIVE_KICKER.multi_objective;
           const comparative = option.tradeoffs.find((line) => line.startsWith('So với'));
+          const funnel = option.tradeoffs.find((line) => line.startsWith('Đánh đổi:'));
           const metricName = (key: string) => {
             const name = METRIC_NAMES[key] ?? [key, key];
             return t(...name);
@@ -156,7 +154,7 @@ export function VerdictStrip({
             .slice(0, 3)
             .map((metric) =>
               metric.reference_median != null
-                ? `${metricName(metric.key)}: ${formatMetricValue(metric, t)} (${t('trung vị', 'median')} ${formatMetricValue({ ...metric, value: metric.reference_median }, t)})`
+                ? `${metricName(metric.key)}: ${formatMetricValue(metric, t)} (${t('giữa nhóm', 'group median')} ${formatMetricValue({ ...metric, value: metric.reference_median }, t)})`
                 : `${metricName(metric.key)}: ${formatMetricValue(metric, t)}`,
             );
           const softConds = [
@@ -167,7 +165,7 @@ export function VerdictStrip({
           const softLost: string[] = [];
           const softUnknown: string[] = [];
           for (const condition of softConds) {
-            const label = short(String(condition.value ?? ''));
+            const label = String(condition.value ?? '');
             if (!label) continue;
             const evaluation = (comparison.evaluations ?? []).find(
               (item) => item.offer_id === option.offer_id && item.condition_id === condition.id,
@@ -212,6 +210,7 @@ export function VerdictStrip({
                 </p>
               )}
               {comparative && <p className={styles.tradeoff}>{comparative}</p>}
+              {!comparative && funnel && <p className={styles.tradeoff}>{funnel}</p>}
               {concerns.length > 0 && (
                 <p className={styles.caveat}>
                   {t('Cân nhắc', 'Watch out')}: {concerns.join(' · ')}

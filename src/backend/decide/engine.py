@@ -644,8 +644,9 @@ def _assumptions(
     """Assumptions the comparison rests on, each grounded in real counts."""
     notes = []
     mix = req.traveler_mix
+    ages = {"adult": "người lớn", "child": "trẻ em", "small_child": "trẻ nhỏ", "infant": "em bé"}
     if mix and sum(mix.values()) == req.travelers:
-        parts = ", ".join(f"{count} {group}" for group, count in sorted(mix.items()) if count > 0)
+        parts = ", ".join(f"{count} {ages.get(group, group)}" for group, count in sorted(mix.items()) if count > 0)
         notes.append(f"Tính cho {req.travelers} khách ({parts}).")
     else:
         notes.append(f"Tính cho {req.travelers} khách; chưa có cơ cấu tuổi nên chỉ dùng giá niêm yết.")
@@ -659,7 +660,7 @@ def _assumptions(
     if conditional:
         notes.append(f"{conditional} khoản có điều kiện chưa cộng vào tổng.")
     notes.append("Giá công bố dùng để lọc và so sánh, không phải tổng cuối cùng phải trả.")
-    notes.append("Ngày khởi hành so trực tiếp với yêu cầu; snapshot khóa ngày crawl, không xác nhận còn chỗ.")
+    notes.append("Ngày khởi hành đối chiếu trực tiếp; snapshot ghi theo ngày crawl dữ liệu, không xác nhận còn chỗ.")
     if any(offer.single_supplement is not None for tour in tours for offer in tour.offers):
         notes.append("Phụ thu phòng đơn chưa cộng vì chưa rõ số phòng.")
     return notes
@@ -760,7 +761,7 @@ def _option_tradeoffs(profile: MetricProfile) -> list[str]:
         tradeoffs.append(f"{int(legs)} chặng được ghi rõ")
     coverage = _measure_number(profile, "included_coverage", "ratio")
     if coverage is not None:
-        tradeoffs.append(f"Tỷ lệ hạng mục gồm/ gồm một phần: {coverage * 100:.0f}% trên phần đã biết")
+        tradeoffs.append(f"Bao gồm: {coverage * 100:.0f}% trên phần đã biết")
     return tradeoffs
 
 
@@ -1063,16 +1064,14 @@ def _decision_options(
             if kind == "cheapest":
                 offer = offer_by_id.get(candidate.offer_id)
                 reason = (
-                    f"Giá công bố {_vn(offer.price)} {offer.currency.upper()} thuộc nhóm thấp nhất "
-                    "trong cùng tiền tệ; tổng nhóm và khoản loại trừ được trình bày riêng."
+                    f"Giá công bố thấp nhất: {_vn(offer.price)} {offer.currency.upper()}."
                     if offer and offer.price is not None and offer.currency
                     else view.note
                 )
             elif kind == "best_fit":
                 fit = profile.metrics.get("preference_fit")
                 reason = (
-                    f"Cận điểm khớp ưu tiên {fit.lower_bound * 100:.0f}–{(fit.upper_bound or 1) * 100:.0f}/100 "
-                    "theo trọng số đã duyệt."
+                    f"Điểm khớp ưu tiên: {fit.lower_bound * 100:.0f}–{(fit.upper_bound or 1) * 100:.0f}/100."
                     if fit and fit.lower_bound is not None else view.note
                 )
             elif kind == "experience_rich":
@@ -1086,9 +1085,9 @@ def _decision_options(
                 reason = f"Điều khoản nêu hoàn 100% đến {int(days)} ngày trước khởi hành." if days is not None else view.note
             elif kind == "included_value":
                 coverage = _measure_number(profile, "included_coverage", "ratio")
-                reason = f"{coverage * 100:.0f}% hạng mục đã biết được gồm hoặc gồm một phần." if coverage is not None else view.note
+                reason = f"Bao gồm: {coverage * 100:.0f}% trên phần đã biết." if coverage is not None else view.note
             elif kind == "balanced":
-                reason = "Nằm trên tập Pareto theo các metric có dữ kiện; không bị phương án khác vượt trội đồng thời."
+                reason = "Không phương án nào vượt trội hơn ở mọi mặt."
             else:
                 reason = view.note
             sentence = _option_tradeoff_sentence(req, profile, trace)
@@ -1127,7 +1126,7 @@ def _decision_options(
             offer_id=candidate.offer_id,
             objective="multi_objective",
             title="Phương án để cân nhắc",
-            reason="Metric hiện có chưa đủ để xếp hạng riêng phương án này.",
+            reason="Chưa đủ dữ kiện để xếp hạng riêng phương án này.",
             tradeoffs=(
                 [sentence, *_option_tradeoffs(profile)] if sentence
                 else _option_tradeoffs(profile)
