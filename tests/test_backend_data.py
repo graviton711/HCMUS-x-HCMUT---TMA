@@ -138,3 +138,14 @@ def test_agent_session_mapping_reuses_records_and_is_owner_scoped(settings):
     assert exc.value.status == 404
     assert store.list_history(owner) == ([], False)
     store.close()
+def test_conversation_turns_round_trip_and_trim_oldest_first(settings):
+    store = SessionStore(settings.database_url)
+    store.save_conversation_turn("agt_conv", "first message " + "x" * 7900)
+    store.save_conversation_turn("agt_conv", "second")
+    text = store.get_conversation_text("agt_conv")
+    assert "second" in text
+    assert len(text) <= 8000
+    assert store.get_conversation_text("agt_nope") is None
+    store.save_conversation_turn("agt_conv", "   ")
+    assert store.get_conversation_text("agt_conv") == text
+    store.close()

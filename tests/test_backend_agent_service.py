@@ -404,3 +404,22 @@ def test_decision_uses_persisted_result_when_codex_turn_errors_after_tools(setti
     saved = store.get_comparison(response["comparison"]["id"], owner_id)
     assert saved.requirement == requirement
     store.close()
+def test_message_saves_turn_and_passes_conversation_header(settings):
+    settings = settings.model_copy(update={"database_url": "sqlite:///:memory:"})
+    store = SessionStore(settings.database_url)
+    service = AgentService(settings, store)
+    owner_id = store.create_session(3600)["id"]
+    local_id = store.create_agent_session(owner_id)
+    seen: list[str] = []
+
+    async def fake_events(message, _session_id):
+        seen.append(message)
+        yield {"type": "text", "part": {"id": "p1", "messageID": "m1", "text": "ok"}}
+
+    service.runner.events = fake_events
+    asyncio.run(service.message(owner_id, local_id, "Đi Đà Lạt"))
+
+    assert store.get_conversation_text(local_id) == "Đi Đà Lạt"
+    assert seen[0].startswith(f"Conversation {local_id}")
+    assert seen[0].endswith("Đi Đà Lạt")
+    store.close()

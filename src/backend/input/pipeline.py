@@ -80,18 +80,27 @@ def validate_requirement(
             try:
                 condition = Condition.model_validate(item)
             except ValidationError as exc:
-                raise _invalid("A condition has an invalid shape.") from exc
+                detail = "; ".join(
+                    f"{'.'.join(map(str, err['loc']))}: {err['msg']}"
+                    for err in exc.errors()[:3]
+                )
+                raise _invalid(f"A condition has an invalid shape ({detail}).") from exc
             if condition.id in seen_ids:
                 raise _invalid("Condition IDs must be unique across the requirement.")
             seen_ids.add(condition.id)
             if not condition.quote or condition.quote not in raw_text:
-                raise _invalid("Every condition needs an exact quote from the conversation.")
+                raise _invalid(
+                    f"Condition '{condition.id}' needs an exact quote from the conversation "
+                    "(raw_text holds the full user-side history)."
+                )
 
             if alternative and condition.strength != "hard":
                 raise _invalid("Alternative branches may contain hard conditions only.")
             if condition.strength == "soft":
                 if condition.field != "preference" or condition.operator != "contains":
-                    raise _invalid("Soft conditions must use the preference field.")
+                    raise _invalid(
+                        "Soft conditions must use field 'preference' with operator 'contains'."
+                    )
                 if not isinstance(condition.value, str) or not condition.value.strip():
                     raise _invalid("A soft preference must be non-empty text.")
             elif condition.weight_percent is not None:
@@ -160,7 +169,10 @@ def validate_requirement(
             raise _invalid("Assumption IDs must be unique.")
         assumption_ids.add(assumption.id)
         if start > end or not assumption.quote or assumption.quote not in raw_text:
-            raise _invalid("Date assumptions need an ordered range and an exact user quote.")
+            raise _invalid(
+                f"Date assumption '{assumption.id}' needs an ordered range and an exact "
+                "user quote from the conversation."
+            )
         linked = [condition_by_id.get(condition_id) for condition_id in assumption.condition_ids]
         if len(linked) < 2 or len(linked) % 2 != 0 or any(condition is None for condition in linked):
             raise _invalid("A date assumption must link date conditions in from/to pairs.")
@@ -269,15 +281,17 @@ def requirement_from_form(form: Any) -> Requirement:
 def _validate_hard(condition: Condition) -> None:
     field, operator, value = condition.field, condition.operator, condition.value
     if field not in _HARD_FIELDS:
-        raise _invalid("Unsupported hard condition field.")
+        raise _invalid(
+            f"Unsupported hard condition field '{field}'. Use one of {sorted(_HARD_FIELDS)}."
+        )
 
     if field == "budget_max":
         if operator != "lte" or not isinstance(value, int) or isinstance(value, bool) or value <= 0:
-            raise _invalid("Budget must be a positive integer in VND.")
+            raise _invalid("Budget must use operator 'lte' with a positive integer in VND.")
         return
     if field in {"date_from", "date_to"}:
         if operator != "eq" or not isinstance(value, str):
-            raise _invalid("Travel dates must be ISO dates.")
+            raise _invalid("Travel dates must use operator 'eq' with an ISO date value.")
         try:
             date.fromisoformat(value)
         except ValueError as exc:
@@ -285,12 +299,12 @@ def _validate_hard(condition: Condition) -> None:
         return
     if field == "duration_days":
         if operator != "eq" or not isinstance(value, int) or isinstance(value, bool) or value <= 0:
-            raise _invalid("Duration must be a positive integer in days.")
+            raise _invalid("Duration must use operator 'eq' with a positive integer in days.")
         return
     if field == "destination":
         values = value if operator == "any" else [value]
         if operator not in {"contains", "any"} or not isinstance(values, list):
-            raise _invalid("Destination must be text or a list of choices.")
+            raise _invalid("Destination must use operator 'contains' with text or 'any' with choices.")
         if not values or any(not isinstance(part, str) or not part.strip() for part in values):
             raise _invalid("Destination values must be non-empty text.")
         if operator == "any" and len(values) < 2:
@@ -306,12 +320,16 @@ def _validate_hard(condition: Condition) -> None:
             and all(isinstance(part, str) and part.strip() for part in value)
         ):
             return
-        raise _invalid("Departure city must be text or multiple catalog labels.")
+        raise _invalid(
+            "Departure city must use operator 'contains' with text or 'any' with catalog labels."
+        )
     if field == "transport":
         if operator != "eq" or not isinstance(value, str) or value not in _TRANSPORTS:
-            raise _invalid("Transport must use a supported transport value.")
+            raise _invalid(
+                f"Transport must use operator 'eq' with one of {sorted(_TRANSPORTS)}."
+            )
         return
     if field == "accommodation" and (
         operator != "contains" or not isinstance(value, str) or not value.strip()
     ):
-        raise _invalid("Accommodation must be non-empty text.")
+        raise _invalid("Accommodation must use operator 'contains' with non-empty text.")

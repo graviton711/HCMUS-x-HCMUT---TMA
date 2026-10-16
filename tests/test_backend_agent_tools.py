@@ -7,7 +7,7 @@ from secrets import token_hex
 import pytest
 from sample_rows import StaticCatalog
 
-from backend.agent.mcp_server import AgentTools, create_server
+from backend.agent.mcp_server import AgentTools, QueryConditionInput, create_server
 from backend.agent.results import limit_comparison
 from backend.data.sessions import SessionStore
 from backend.errors import AppError
@@ -601,3 +601,50 @@ def test_condition_operator_still_rejects_unknown_operators():
             "strength": "hard",
             "quote": "2 ngày",
         })
+def _tools_with_store(settings):
+    catalog = StaticCatalog()
+    store = SessionStore(settings.database_url)
+    tools = AgentTools(settings, catalog, TourWorkflows(settings, catalog), result_store=store)
+    return tools, store
+
+
+def test_draft_requirement_resolves_quotes_from_conversation_token(settings):
+    tools, store = _tools_with_store(settings)
+    try:
+        store.save_conversation_turn("agt_conv1", "Nhóm 5 người lớn, đi Đà Lạt 2 ngày")
+        store.save_conversation_turn("agt_conv1", "ok")
+        result = json.loads(tools.draft_requirement(
+            raw_text="ok",
+            conditions=[{"id": "h1", "field": "duration_days", "operator": "eq",
+                         "value": 2, "strength": "hard", "quote": "2 ngày"}],
+            travelers=5,
+            conversation_id="agt_conv1",
+        ))
+        assert result["requirement_draft"]["travelers"] == 5
+    finally:
+        store.close()
+
+
+def test_unknown_conversation_token_falls_back_to_raw_text(settings):
+    tools, store = _tools_with_store(settings)
+    try:
+        with pytest.raises(AppError, match="exact quote"):
+            tools.draft_requirement(
+                raw_text="ok",
+                conditions=[{"id": "h1", "field": "duration_days", "operator": "eq",
+                             "value": 2, "strength": "hard", "quote": "2 ngày"}],
+                conversation_id="agt_unknown",
+            )
+    finally:
+        store.close()
+
+
+def test_tool_schema_exposes_enum_guidance_and_conversation_token(settings):
+    import inspect
+
+    fields = QueryConditionInput.model_fields
+    assert all(tok in fields["operator"].description for tok in ("contains", "any", "eq", "lte"))
+    assert "flight" in fields["value"].description
+    assert "departure_dates" in AgentTools.catalog_facets.__doc__
+    for name in ("discover_destinations", "draft_requirement", "query_tours"):
+        assert "conversation_id" in inspect.signature(getattr(AgentTools, name)).parameters

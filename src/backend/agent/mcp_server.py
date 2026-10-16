@@ -55,9 +55,12 @@ class QueryConditionInput(BaseModel):
     field: Literal[
         "destination", "departure_city", "date_from", "date_to", "budget_max",
         "duration_days", "transport", "accommodation", "preference",
-    ] = Field(description="Condition field supported by the travel requirement contract.")
+    ] = Field(description="Condition field: destination, departure_city, date_from, date_to, "
+              "budget_max, duration_days, transport, accommodation, or preference (soft only).")
     operator: Literal["contains", "any", "eq", "lte"] = Field(
-        description="Operator compatible with the selected field."
+        description="Operator for the selected field: contains (single text match: destination, "
+        "departure_city, accommodation, preference), any (list of destination choices), "
+        "eq (exact value: dates, duration_days, transport), lte (budget_max only)."
     )
 
     @field_validator("operator", mode="before")
@@ -69,10 +72,12 @@ class QueryConditionInput(BaseModel):
             return "eq"
         return value
     value: str | int | list[str] = Field(
-        description="Condition value: text, positive integer, or destination choices."
+        description="Condition value: text, positive integer, or destination choices. "
+        "Transport must be one of flight, bus, train, cruise, mixed."
     )
     strength: Literal["hard", "soft"] = Field(description="Whether this is a hard or soft condition.")
-    quote: str = Field(description="Exact substring copied from raw_text that supports this condition.")
+    quote: str = Field(description="Exact substring from the conversation "
+                        "that supports this condition.")
     weight_percent: int | None = Field(
         default=None,
         ge=0,
@@ -250,6 +255,34 @@ def _json(payload: Any) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
+def _effective_raw_text(
+    store: BaseStore | None,
+    settings: Settings,
+    conversation_id: str,
+    raw_text: str,
+) -> str:
+    """Resolve the server-side conversation transcript for a chat token.
+
+    The backend stores every user message under the conversation id it puts in the
+    chat header; the agent only copies that token. Falls back to the call's raw_text
+    when the token is missing or unknown, so older single-turn callers keep working.
+    """
+    token = (conversation_id or "").strip()
+    if token:
+        active = store or SessionStore(settings.database_url)
+        should_close = store is None
+        try:
+            history = active.get_conversation_text(token)
+        except Exception:
+            history = None
+        finally:
+            if should_close:
+                active.close()
+        if history:
+            return history
+    return raw_text
+
+
 class AgentTools:
     def __init__(
         self,
@@ -305,7 +338,12 @@ class AgentTools:
         fields: list[Literal["destinations", "departure_cities", "prices_vnd", "departure_dates"]]
         | None = None,
     ) -> str:
-        """Return only requested facet groups; omitted fields preserve the legacy full response."""
+        """Return only requested facet groups; omitted fields preserve the legacy full response.
+
+        Valid fields: destinations, departure_cities, prices_vnd, departure_dates.
+        Transport, accommodation, and duration are per-tour fields — check them in query
+        results, not facets.
+        """
         tours = self.workflows.snapshots(self.settings.supabase_scan_limit)
         requested = set(fields) if fields is not None else {
             "destinations", "departure_cities", "prices_vnd", "departure_dates"
@@ -339,12 +377,15 @@ class AgentTools:
         alternatives: list[QueryAlternativeInput] | None = None,
         travelers: int = 1,
         traveler_mix: TravelerMixInput | None = None,
+        conversation_id: str = "",
     ) -> str:
         """Preview catalog options under common conditions and OR branches.
 
         This read-only feasibility scan is used before the user reviews a brief.
-        It never ranks soft preferences or creates a comparison.
+        It never ranks soft preferences or creates a comparison. Pass conversation_id
+        from the chat header to check quotes against the stored user-side history.
         """
+        raw_text = _effective_raw_text(self.result_store, self.settings, conversation_id, raw_text)
         structured_conditions = [
             item.model_dump(mode="json")
             if isinstance(item, QueryConditionInput)
@@ -600,8 +641,10 @@ class AgentTools:
         requirement_id: str = "",
         traveler_mix: TravelerMixInput | None = None,
         snapshot_comparison_id: str = "",
+        conversation_id: str = "",
     ) -> str:
         """Filter the active catalog, or the signed-off scan snapshot for a what-if run."""
+        raw_text = _effective_raw_text(self.result_store, self.settings, conversation_id, raw_text)
         if not re.fullmatch(r"dec_[0-9a-f]{32}", decision_run_id):
             raise AppError("DECISION_RUN_INVALID", "Invalid decision run ID.", 422)
         structured_conditions = [
@@ -670,8 +713,14 @@ class AgentTools:
         travelers: int = 1,
         ranking: QueryRankingInput | None = None,
         traveler_mix: TravelerMixInput | None = None,
+        conversation_id: str = "",
     ) -> str:
-        """Validate a reviewable brief without reading the tour catalog."""
+        """Validate a reviewable brief without reading the tour catalog.
+
+        Pass conversation_id from the chat header to check quotes against the stored
+        user-side history.
+        """
+        raw_text = _effective_raw_text(self.result_store, self.settings, conversation_id, raw_text)
         structured_conditions = [
             item.model_dump(mode="json")
             if isinstance(item, QueryConditionInput)

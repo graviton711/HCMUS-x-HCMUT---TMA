@@ -199,3 +199,13 @@ def test_lunar_date_requires_valid_round_trip():
     assert resolve_lunar({"year": 2027, "month": 1, "day": 4}) == "2027-02-09"
     assert resolve_lunar({"year": 2026, "month": 13, "day": 1}) is None
     assert resolve_lunar({"year": 2026, "month": 2, "day": 40}) is None
+def test_transport_error_names_allowed_values():
+    with pytest.raises(AppError, match="flight"):
+        validate_requirement("đi xe khách", [condition("transport", "xe khách", "xe khách")])
+
+
+def test_quote_error_names_condition_id():
+    with pytest.raises(AppError, match="h9"):
+        validate_requirement(
+            "Đà Lạt 3 ngày", [condition("destination", "Đà Lạt", "Da Lat", condition_id="h9")]
+        )

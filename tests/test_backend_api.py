@@ -304,7 +304,8 @@ def test_agent_session_is_owner_scoped_and_uses_request_response(tmp_path, monke
     monkeypatch.setattr(OpenCodeRunner, "_executable", lambda _self: "opencode")
 
     async def fake_events(_self, message, session_id):
-        assert message == "Tôi muốn đi Phú Quốc"
+        assert message.startswith("Conversation agt_")
+        assert message.endswith("Tôi muốn đi Phú Quốc")
         assert session_id is None
         yield {
             "type": "text",

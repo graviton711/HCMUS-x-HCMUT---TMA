@@ -140,7 +140,12 @@ class AgentService:
         key = (owner_id, local_id)
         lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
-            async for event in self._message_events(owner_id, local_id, message.strip()):
+            self.store.save_conversation_turn(local_id, message.strip())
+            headed = (
+                f"Conversation {local_id} (pass as conversation_id in catalog tool calls).\n"
+                f"{message.strip()}"
+            )
+            async for event in self._message_events(owner_id, local_id, headed):
                 yield event
 
     async def decision(

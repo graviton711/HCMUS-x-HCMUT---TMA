@@ -26,6 +26,9 @@ if TYPE_CHECKING:
     from psycopg import Connection
 
 
+_CONVERSATION_CHARS = 8000
+
+
 class BaseStore:
     """SQL with shared semantics. Drivers override tables, placeholder, I/O."""
 
@@ -264,6 +267,47 @@ class BaseStore:
             json.dumps(payload),
             owner_session_id,
         )
+
+    def save_conversation_turn(self, local_id: str, text: str) -> None:
+        """Append one user message to the transcript keyed by the local chat id.
+
+        Keyed by the unguessable local_id with no owner scope so the MCP server process
+        (which never sees the owner session) can resolve it from a conversation_id token.
+        Trims oldest turns first to mirror the requirement-context length cap.
+        """
+        if not isinstance(local_id, str) or not local_id.strip():
+            raise ValueError("Conversation turn needs a chat id.")
+        cleaned = text.strip() if isinstance(text, str) else ""
+        if not cleaned:
+            return
+        # Namespaced record id: the records table upserts on bare id, which the
+        # agent_session row already owns for this chat.
+        rid = f"conversation:{local_id.strip()}"
+        try:
+            payload = self._load("conversation", rid, None)
+            turns = json.loads(payload)
+        except (AppError, ValueError, AttributeError):
+            turns = []
+        if not isinstance(turns, list):
+            turns = []
+        turns = [item for item in turns if isinstance(item, str)] + [cleaned]
+        while len("\n".join(turns)) > _CONVERSATION_CHARS and len(turns) > 1:
+            turns.pop(0)
+        self._save("conversation", rid, json.dumps(turns, ensure_ascii=False), None)
+
+    def get_conversation_text(self, local_id: str) -> str | None:
+        """Return the stored user-side transcript, oldest first, or None when unknown."""
+        if not isinstance(local_id, str) or not local_id.strip():
+            return None
+        try:
+            payload = self._load("conversation", f"conversation:{local_id.strip()}", None)
+            turns = json.loads(payload)
+        except (AppError, ValueError, AttributeError):
+            return None
+        if not isinstance(turns, list):
+            return None
+        texts = [item for item in turns if isinstance(item, str) and item.strip()]
+        return "\n".join(texts) if texts else None
 
     def list_history(
         self,
