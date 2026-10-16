@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite --config config/vite.config.ts --host 127.0.0.1",
     "dev:all": "concurrently --names backend,codex,web --prefix-colors magenta,cyan,green \"uv run --no-sync python -m backend.cli serve --reload\" \"uv run --no-sync python -m backend.codex_cli serve\" \"corepack pnpm dev\"",
+    "predev:all": "node scripts/clean-dev.mjs",
     "build": "tsc -b config/tsconfig.json && vite build --config config/vite.config.ts",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run --config config/vite.config.ts",

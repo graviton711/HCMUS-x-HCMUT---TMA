@@ -10,6 +10,7 @@ export default defineConfig({
       'src/features/**/*.test.{ts,tsx}',
       'src/pages/**/*.test.{ts,tsx}',
       'tests/**/*.test.{ts,tsx}',
+      'scripts/**/*.test.mjs',
     ],
   },
   plugins: [react(), tailwindcss()],
