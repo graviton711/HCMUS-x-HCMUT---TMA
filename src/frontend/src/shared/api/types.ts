@@ -34,6 +34,7 @@ export interface CurrentAgentResponse {
 
 export type CurrentAgentProgressEvent =
   | { type: 'progress'; status: string }
+  | { type: 'text'; text: string }
   | {
       type: 'tool';
       id: string;

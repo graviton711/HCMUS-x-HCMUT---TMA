@@ -423,3 +423,30 @@ def test_message_saves_turn_and_passes_conversation_header(settings):
     assert seen[0].startswith(f"Conversation {local_id}")
     assert seen[0].endswith("Đi Đà Lạt")
     store.close()
+
+
+def test_interim_assistant_text_streams_before_final_result(settings):
+    settings = settings.model_copy(update={"database_url": "sqlite:///:memory:"})
+    store = SessionStore(settings.database_url)
+    service = AgentService(settings, store)
+    owner_id = store.create_session(3600)["id"]
+    local_id = store.create_agent_session(owner_id)
+
+    async def fake_events(_message, _session_id):
+        yield {"type": "text", "part": {"id": "p1", "messageID": "m1", "text": "First."}}
+        yield {"type": "text", "part": {"id": "p1", "messageID": "m1", "text": "First."}}
+        yield {"type": "tool", "part": {"id": "call-1", "tool": "tour-catalog.catalog_facets",
+               "state": {"status": "completed", "input": {}}}}
+        yield {"type": "text", "part": {"id": "p2", "messageID": "m1", "text": "Second."}}
+
+    service.runner.events = fake_events
+
+    async def collect():
+        return [event async for event in service.stream_message(owner_id, local_id, "Hi")]
+
+    events = asyncio.run(collect())
+    texts = [event["text"] for event in events if event.get("type") == "text"]
+    assert texts == ["First.", "First.\n\nSecond."]
+    result = next(event["response"] for event in events if event.get("type") == "result")
+    assert result["assistant_text"] == "First.\n\nSecond."
+    store.close()

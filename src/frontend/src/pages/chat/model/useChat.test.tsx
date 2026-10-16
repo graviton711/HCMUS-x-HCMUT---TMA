@@ -304,6 +304,51 @@ describe('useChat OpenCode agent loop', () => {
     expect(screen.getByTestId('message-texts').textContent).toContain('Đã kiểm tra.');
   });
 
+  it('streams interim assistant text before the final response without duplicating it', async () => {
+    const fallback = makeBackend();
+    let finishStream = () => {};
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const path = new URL(String(input), 'http://local').pathname;
+      if (!path.endsWith('/messages')) return fallback(input, init);
+
+      const encoder = new TextEncoder();
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            const emit = (name: string, payload: unknown) =>
+              controller.enqueue(
+                encoder.encode(`event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`),
+              );
+            emit('text', { text: 'Mình sẽ kiểm tra.' });
+            finishStream = () => {
+              emit('result', {
+                assistant_text: 'Mình sẽ kiểm tra.\n\nĐã kiểm tra.',
+                tool_calls: [],
+              });
+              controller.close();
+            };
+          },
+        }),
+        { headers: { 'Content-Type': 'text/event-stream' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const apiRef: { current: ChatApi | null } = { current: null };
+    render(<Probe initial={newSession()} apiRef={apiRef} />);
+    await waitFor(() => expect(screen.getByTestId('busy').textContent).toBe('idle'));
+
+    apiRef.current?.send('Tìm tour');
+    await waitFor(() =>
+      expect(screen.getByTestId('message-texts').textContent).toContain('Mình sẽ kiểm tra.'),
+    );
+
+    finishStream();
+    await waitFor(() =>
+      expect(screen.getByTestId('msgs').textContent).toBe('user,assistant'),
+    );
+    expect(screen.getByTestId('message-texts').textContent).toContain('Đã kiểm tra.');
+  });
+
   it('explains when OpenCode rejects the configured free model', async () => {
     vi.stubGlobal('fetch', makeBackend(true));
     const apiRef: { current: ChatApi | null } = { current: null };

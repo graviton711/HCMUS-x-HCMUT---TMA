@@ -297,7 +297,11 @@ class AgentService:
                     continue
                 kind = event.get("type")
                 if kind == "text" and isinstance(part.get("text"), str):
+                    before = assistant_text.render()
                     assistant_text.add(part)
+                    after = assistant_text.render()
+                    if after and after != before:
+                        yield {"type": "text", "text": after}
                     continue
 
                 state = part.get("state")

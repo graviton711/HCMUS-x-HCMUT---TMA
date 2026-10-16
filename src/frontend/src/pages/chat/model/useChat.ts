@@ -104,6 +104,7 @@ export function useChat(
   const lastMessageRef = useRef('');
   const lastDecisionRef = useRef<{ messageId: string; requirement: CurrentRequirement } | null>(null);
   const toolActivityIdRef = useRef<string | null>(null);
+  const streamingTextIdRef = useRef<string | null>(null);
   const hasLiveToolEventsRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
@@ -150,8 +151,34 @@ export function useChat(
     [],
   );
 
+  const upsertStreamingText = useCallback((text: string) => {
+    if (!text.trim()) return;
+    const id = streamingTextIdRef.current ?? uid();
+    streamingTextIdRef.current = id;
+    const message = { id, kind: 'assistant', text } as const;
+    const transcriptIndex = transcriptRef.current.findIndex(
+      (item) => item.id === id && item.kind === 'assistant',
+    );
+    transcriptRef.current =
+      transcriptIndex >= 0
+        ? transcriptRef.current.map((item, index) => (index === transcriptIndex ? message : item))
+        : [...transcriptRef.current, message];
+    setMsgs((all) => {
+      const messageIndex = all.findIndex(
+        (item) => item.id === id && item.kind === 'assistant',
+      );
+      return messageIndex >= 0
+        ? all.map((item, index) => (index === messageIndex ? message : item))
+        : [...all, message];
+    });
+  }, []);
+
   const recordToolProgress = useCallback(
     (event: CurrentAgentProgressEvent) => {
+      if (event.type === 'text') {
+        upsertStreamingText(event.text);
+        return;
+      }
       if (event.type !== 'tool') return;
       hasLiveToolEventsRef.current = true;
       const activityId = toolActivityIdRef.current ?? uid();
@@ -179,7 +206,7 @@ export function useChat(
         outcome: 'running',
       });
     },
-    [upsertToolActivity],
+    [upsertToolActivity, upsertStreamingText],
   );
 
   const failRunningTools = useCallback(() => {
@@ -361,7 +388,27 @@ export function useChat(
         upsertToolActivity({ id: activityId, kind: 'tool_activity', tools });
       }
       if (response.assistant_text.trim()) {
-        push({ id: uid(), kind: 'assistant', text: response.assistant_text.trim() });
+        const text = response.assistant_text.trim();
+        const streamId = streamingTextIdRef.current;
+        streamingTextIdRef.current = null;
+        const streamed = streamId
+          ? transcriptRef.current.find(
+              (message) => message.id === streamId && message.kind === 'assistant',
+            )
+          : undefined;
+        if (streamed) {
+          const updated = { ...streamed, text };
+          transcriptRef.current = transcriptRef.current.map((message) =>
+            message.id === streamId && message.kind === 'assistant' ? updated : message,
+          );
+          setMsgs((all) =>
+            all.map((message) =>
+              message.id === streamId && message.kind === 'assistant' ? updated : message,
+            ),
+          );
+        } else {
+          push({ id: uid(), kind: 'assistant', text });
+        }
       }
       if (response.choices) push({ id: uid(), kind: 'choice', choice: response.choices });
       if (response.decision_draft) {
@@ -435,6 +482,7 @@ export function useChat(
       setFailedStep(null);
       setPhase('working');
       toolActivityIdRef.current = null;
+      streamingTextIdRef.current = null;
       setActiveToolActivityId(null);
       hasLiveToolEventsRef.current = false;
       lastMessageRef.current = text.trim();
@@ -519,6 +567,7 @@ export function useChat(
       setDecisionDraftStatus(messageId, 'running');
       setPhase('working');
       toolActivityIdRef.current = null;
+      streamingTextIdRef.current = null;
       setActiveToolActivityId(null);
       hasLiveToolEventsRef.current = false;
       void (async () => {

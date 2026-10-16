@@ -241,7 +241,7 @@ export class CurrentBackendClient {
         resultHolder.value = value as unknown as CurrentAgentResponse;
         return;
       }
-      if (eventName === 'progress' || eventName === 'tool') {
+      if (eventName === 'progress' || eventName === 'tool' || eventName === 'text') {
         onEvent({ type: eventName, ...value } as CurrentAgentProgressEvent);
       }
     };
