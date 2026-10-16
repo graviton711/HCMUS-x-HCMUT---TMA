@@ -333,27 +333,17 @@ textarea:focus-visible,
 }
 
 .btn-primary {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent));
+  background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent-edge);
   font-weight: 650;
-  box-shadow:
-    inset 0 1px 0 var(--button-highlight),
-    0 1px 1px rgba(25, 22, 55, 0.12),
-    0 5px 12px var(--accent-shadow);
+  box-shadow: var(--shadow-rest);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent-hover) 84%, white),
-    var(--accent-hover)
-  );
+  background: var(--accent-hover);
   border-color: var(--accent-hover);
-  box-shadow:
-    inset 0 1px 0 var(--button-highlight),
-    0 2px 3px rgba(25, 22, 55, 0.14),
-    0 9px 18px var(--accent-shadow);
+  box-shadow: var(--shadow-card);
 }
 
 .btn-primary:active:not(:disabled) {

@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ReactNode } from 'react';
+import type { CurrentComparison } from '../../../shared/api';
 import { usePreferences } from '../../../shared/preferences';
 import type { ChatMsg } from '../model/types';
 import { QuickReplies } from './QuickReplies';
@@ -28,6 +29,7 @@ export function Thread({
   renderRecovery,
   onOpenArtifact,
   selectedArtifactId,
+  renderComparisonExtra,
 }: {
   messages: ChatMsg[];
   busy: boolean;
@@ -36,6 +38,7 @@ export function Thread({
   renderRecovery?: (expired: boolean) => ReactNode;
   onOpenArtifact?: (id: string) => void;
   selectedArtifactId?: string | null;
+  renderComparisonExtra?: (comparison: CurrentComparison) => ReactNode;
 }) {
   const { t } = usePreferences();
   const latestActivityId = [...messages]
@@ -226,6 +229,7 @@ export function Thread({
             case 'comparison':
               return (
                 <motion.div key={message.id} {...rise} className={styles['decision-link-wrap']}>
+                  {renderComparisonExtra?.(message.comparison)}
                   <button
                     type="button"
                     className={styles['decision-link']}

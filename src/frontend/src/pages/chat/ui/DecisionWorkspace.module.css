@@ -22,6 +22,11 @@
   background: color-mix(in srgb, var(--paper) 88%, transparent);
 }
 
+.header > div:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
 .eyebrow {
   color: var(--accent);
   font-size: 10px;
@@ -35,6 +40,34 @@
   font-size: var(--text-lg);
   font-weight: 650;
   letter-spacing: -0.025em;
+}
+
+.collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.collapse:hover {
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.collapse:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
 
 .status {

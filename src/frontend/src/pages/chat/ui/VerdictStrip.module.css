@@ -23,6 +23,10 @@
   min-width: 0;
 }
 
+.strip[data-layout='stack'] .cards {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .card {
   display: grid;
   align-content: start;

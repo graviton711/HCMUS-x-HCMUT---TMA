@@ -35,3 +35,42 @@ describe('ChatPage expired-session recovery', () => {
     expect(onStart).toHaveBeenCalledWith('Đà Lạt 3 ngày');
   });
 });
+
+describe('ChatPage decision workspace collapse', () => {
+  it('collapses the pane, persists the choice, and reopens from the rail', () => {
+    const session = newSession();
+    render(
+      <PreferencesProvider>
+        <ChatPage session={session} onStart={() => {}} onChangeSession={() => {}} />
+      </PreferencesProvider>,
+    );
+
+    expect(
+      screen.queryByRole('button', { name: 'Mở không gian quyết định' }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Thu gọn không gian quyết định' }));
+    expect(
+      screen.getByRole('button', { name: 'Mở không gian quyết định' }),
+    ).toBeDefined();
+    expect(window.localStorage.getItem('tourlens:decision-open:v1')).toBe('0');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mở không gian quyết định' }));
+    expect(
+      screen.queryByRole('button', { name: 'Mở không gian quyết định' }),
+    ).toBeNull();
+    expect(window.localStorage.getItem('tourlens:decision-open:v1')).toBe('1');
+  });
+
+  it('restores the collapsed state from storage', () => {
+    window.localStorage.setItem('tourlens:decision-open:v1', '0');
+    const session = newSession();
+    render(
+      <PreferencesProvider>
+        <ChatPage session={session} onStart={() => {}} onChangeSession={() => {}} />
+      </PreferencesProvider>,
+    );
+    expect(
+      screen.getByRole('button', { name: 'Mở không gian quyết định' }),
+    ).toBeDefined();
+  });
+});

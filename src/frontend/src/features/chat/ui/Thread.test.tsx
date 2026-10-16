@@ -147,4 +147,25 @@ describe('Thread decision links', () => {
     expect(onOpenArtifact).toHaveBeenCalledWith('brief-1');
     expect(screen.queryByRole('heading', { name: 'Kiểm tra tiêu chí chuyến đi' })).toBeNull();
   });
+
+  it('renders verdict content inside the comparison message when provided', () => {
+    const message: ChatMsg = {
+      id: 'cmp-1',
+      kind: 'comparison',
+      comparison: { id: 'c1', decision_views: [], candidates_considered: 10 },
+    } as unknown as ChatMsg;
+    render(
+      <PreferencesProvider>
+        <Thread
+          messages={[message]}
+          busy={false}
+          onSend={() => {}}
+          renderComparisonExtra={() => <p>Verdict summary</p>}
+        />
+      </PreferencesProvider>,
+    );
+
+    expect(screen.getByText('Verdict summary')).toBeDefined();
+    expect(screen.getByRole('button', { name: /Mở bảng so sánh/u })).toBeDefined();
+  });
 });

@@ -31,6 +31,7 @@ export function DecisionWorkspace({
   onRunDecision,
   onRelax,
   onSend,
+  onToggleWorkspace,
   isSavedTour,
   onToggleSavedTour,
 }: {
@@ -45,6 +46,7 @@ export function DecisionWorkspace({
   onRunDecision: (id: string, requirement: CurrentRequirement) => void;
   onRelax: (field: string) => void;
   onSend: (text: string) => void;
+  onToggleWorkspace: () => void;
   isSavedTour?: (tourId: string, offerId: string) => boolean;
   onToggleSavedTour?: (comparison: CurrentComparison, tourId: string, offerId: string) => void;
 }) {
@@ -128,6 +130,14 @@ export function DecisionWorkspace({
         >
           {status}
         </span>
+        <button
+          type="button"
+          className={styles.collapse}
+          onClick={onToggleWorkspace}
+          aria-label={t('Thu gọn không gian quyết định', 'Collapse decision workspace')}
+        >
+          <span aria-hidden="true">›</span>
+        </button>
       </header>
 
       <div className={styles.content}>

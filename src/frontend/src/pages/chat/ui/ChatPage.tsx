@@ -17,6 +17,7 @@ const SUGGESTIONS: [string, string][] = [
 ];
 
 const SPLIT_STORAGE_KEY = 'tourlens:decision-split:v1';
+const DECISION_OPEN_KEY = 'tourlens:decision-open:v1';
 const DEFAULT_CHAT_SPLIT = 0.42;
 const MIN_CHAT_SPLIT = 0.28;
 const MAX_CHAT_SPLIT = 0.58;
@@ -145,6 +146,14 @@ function ActiveChat({
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   const [chatSplit, setChatSplit] = useState(readChatSplit);
   const [splitDragging, setSplitDragging] = useState(false);
+  const [decisionOpen, setDecisionOpen] = useState(() => {
+    try {
+      return localStorage.getItem(DECISION_OPEN_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const [hasNewResult, setHasNewResult] = useState(false);
   const latestArtifact = latestDecisionArtifact(chat.msgs);
 
   useEffect(() => {
@@ -154,6 +163,25 @@ function ActiveChat({
       // Resizing remains available when storage is disabled.
     }
   }, [chatSplit]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(DECISION_OPEN_KEY, decisionOpen ? '1' : '0');
+    } catch {
+      // The pane toggle still works for this session when storage is disabled.
+    }
+  }, [decisionOpen]);
+
+  useEffect(() => {
+    if (!decisionOpen && latestArtifact) setHasNewResult(true);
+  }, [decisionOpen, latestArtifact]);
+
+  const toggleDecision = () => {
+    setDecisionOpen((open) => {
+      if (!open) setHasNewResult(false);
+      return !open;
+    });
+  };
 
   useLayoutEffect(() => {
     const workspace = workspaceRef.current;
@@ -260,24 +288,11 @@ function ActiveChat({
     setChatSplit(Math.min(max, Math.max(min, next)));
   };
 
-  const latestComparisonMsg = [...chat.msgs]
-    .reverse()
-    .find((message) => message.kind === 'comparison');
-  const latestComparison =
-    latestComparisonMsg?.kind === 'comparison' ? latestComparisonMsg.comparison : null;
-
   return (
     <div className={`${styles.workspace} ${styles.active}`} ref={workspaceRef}>
-      {latestComparison && (
-        <VerdictStrip
-          comparison={latestComparison}
-          client={chat.client}
-          agentSessionId={session.agentSessionId ?? null}
-          onOpenDecision={() => setMobilePane('decision')}
-        />
-      )}
       <div
         className={styles['active-layout']}
+        data-collapsed={!decisionOpen}
         ref={layoutRef}
         style={{ '--chat-pane-size': `${chatSplit * 100}%` } as CSSProperties}
         data-split-dragging={splitDragging}
@@ -326,6 +341,18 @@ function ActiveChat({
           onSend={chat.send}
           onOpenArtifact={openArtifact}
           selectedArtifactId={selectedArtifactId}
+          renderComparisonExtra={(comparison) => (
+            <VerdictStrip
+              comparison={comparison}
+              client={chat.client}
+              agentSessionId={session.agentSessionId ?? null}
+              layout="stack"
+              onOpenDecision={() => {
+                setDecisionOpen(true);
+                setMobilePane('decision');
+              }}
+            />
+          )}
           renderRecovery={
             chat.failedStep
               ? (expired) =>
@@ -424,10 +451,26 @@ function ActiveChat({
               chat.relax(field);
             }}
             onSend={sendFromWorkspace}
+            onToggleWorkspace={toggleDecision}
             isSavedTour={isSavedTour}
             onToggleSavedTour={onToggleSavedTour}
           />
         </div>
+
+        {!decisionOpen && (
+          <button
+            type="button"
+            className={styles['decision-rail']}
+            onClick={toggleDecision}
+            aria-label={t('Mở không gian quyết định', 'Open decision workspace')}
+          >
+            <span aria-hidden="true">‹</span>
+            <span className={styles['decision-rail-label']}>
+              {t('Quyết định', 'Decision')}
+            </span>
+            {hasNewResult && <span className={styles['decision-rail-dot']} aria-hidden="true" />}
+          </button>
+        )}
 
         <div className={styles['composer-dock']}>
           <Composer

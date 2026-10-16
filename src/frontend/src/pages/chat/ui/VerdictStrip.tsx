@@ -51,11 +51,13 @@ export function VerdictStrip({
   client,
   agentSessionId,
   onOpenDecision,
+  layout = 'grid',
 }: {
   comparison: CurrentComparison;
   client: CurrentBackendClient | null;
   agentSessionId: string | null;
   onOpenDecision: () => void;
+  layout?: 'grid' | 'stack';
 }) {
   const { locale, t } = usePreferences();
   const [scenarios, setScenarios] = useState<Record<string, ScenarioState>>({});
@@ -121,7 +123,11 @@ export function VerdictStrip({
   const relaxedUsed = relaxedSlots.length > 0;
 
   return (
-    <section className={styles.strip} aria-label={t('Ba lựa chọn nổi bật', 'Top three options')}>
+    <section
+      className={styles.strip}
+      data-layout={layout}
+      aria-label={t('Ba lựa chọn nổi bật', 'Top three options')}
+    >
       {relaxedUsed && (
         <p className={styles.banner} role="status">
           {strictSlots.length === 0
@@ -155,9 +161,7 @@ export function VerdictStrip({
                   : t('chưa rõ giá', 'price unknown')}
                 {tour?.duration_days != null && ` · ${tour.duration_days}N`}
               </p>
-              <p className={styles.verdict}>
-                <strong>{option.title}</strong> {option.reason}
-              </p>
+              <p className={styles.verdict}>{option.reason}</p>
               {lead && <p className={styles.tradeoff}>{lead}</p>}
               {unknowns > 0 && (
                 <p className={styles.caveat}>
@@ -202,7 +206,7 @@ export function VerdictStrip({
               {state.status === 'idle' && (
                 <button
                   type="button"
-                  className="btn btn-primary"
+                  className="btn"
                   disabled={!client || !agentSessionId}
                   onClick={() => void runRelaxation(relax)}
                 >

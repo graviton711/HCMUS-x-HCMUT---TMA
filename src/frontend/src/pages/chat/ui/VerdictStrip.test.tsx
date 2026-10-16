@@ -100,7 +100,7 @@ describe('VerdictStrip', () => {
       </PreferencesProvider>,
     );
     expect(screen.getByText(/Chưa đủ 3 tour đạt đủ điều kiện/)).toBeDefined();
-    expect(screen.getByText('Rẻ nhất trong scan')).toBeDefined();
+    expect(screen.getByText('Đáp ứng cả 2 điều kiện cứng.')).toBeDefined();
     expect(screen.getByText(/Nới.*ngân sách/)).toBeDefined();
     expect(screen.getByText(/mở thêm 2 tour/)).toBeDefined();
   });
