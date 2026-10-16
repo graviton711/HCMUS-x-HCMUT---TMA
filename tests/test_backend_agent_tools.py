@@ -571,3 +571,33 @@ def test_score_soft_rejects_quote_over_sentence_cap(settings):
     evaluation = _evaluation_for(result, candidate, "s1")
     assert evaluation["state"] == "unknown"
     assert evaluation["quote"] == ""
+
+
+def test_condition_operator_accepts_equals_alias():
+    from backend.agent.mcp_server import QueryConditionInput
+
+    item = QueryConditionInput.model_validate({
+        "id": "c1",
+        "field": "duration_days",
+        "operator": "equals",
+        "value": 2,
+        "strength": "hard",
+        "quote": "2 ngày",
+    })
+    assert item.operator == "eq"
+
+
+def test_condition_operator_still_rejects_unknown_operators():
+    from pydantic import ValidationError
+
+    from backend.agent.mcp_server import QueryConditionInput
+
+    with pytest.raises(ValidationError):
+        QueryConditionInput.model_validate({
+            "id": "c1",
+            "field": "duration_days",
+            "operator": "equal_to",
+            "value": 2,
+            "strength": "hard",
+            "quote": "2 ngày",
+        })

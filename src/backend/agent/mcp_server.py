@@ -12,7 +12,7 @@ from threading import RLock
 from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.agent.results import limit_comparison
 from backend.data.catalog import for_settings
@@ -59,6 +59,15 @@ class QueryConditionInput(BaseModel):
     operator: Literal["contains", "any", "eq", "lte"] = Field(
         description="Operator compatible with the selected field."
     )
+
+    @field_validator("operator", mode="before")
+    @classmethod
+    def _normalize_operator_alias(cls, value: object) -> object:
+        # Unambiguous English synonyms agents emit; anything else still fails
+        # the Literal check below instead of being guessed.
+        if isinstance(value, str) and value.strip().lower() == "equals":
+            return "eq"
+        return value
     value: str | int | list[str] = Field(
         description="Condition value: text, positive integer, or destination choices."
     )
