@@ -17,6 +17,22 @@ from backend.models import (
     RequirementAssumption,
     uid,
 )
+from shared.text import fold_vi
+
+_GENERIC_ACCOMMODATION = {
+    # Bare lodging words with no type or standard cannot discriminate between tours.
+    "chonghi",
+    "choo",
+    "noio",
+    "noinghi",
+    "luutru",
+    "choluutru",
+    "khachsan",
+    "hotel",
+    "resort",
+    "nhanghi",
+    "motel",
+}
 
 _HARD_FIELDS = {
     "destination",
@@ -329,7 +345,12 @@ def _validate_hard(condition: Condition) -> None:
                 f"Transport must use operator 'eq' with one of {sorted(_TRANSPORTS)}."
             )
         return
-    if field == "accommodation" and (
-        operator != "contains" or not isinstance(value, str) or not value.strip()
-    ):
-        raise _invalid("Accommodation must use operator 'contains' with non-empty text.")
+    if field == "accommodation":
+        if operator != "contains" or not isinstance(value, str) or not value.strip():
+            raise _invalid("Accommodation must use operator 'contains' with non-empty text.")
+        if fold_vi(value) in _GENERIC_ACCOMMODATION:
+            raise _invalid(
+                f"Accommodation '{value.strip()}' is too generic to filter tours; use the stated "
+                "type or standard, or drop it to a soft preference."
+            )
+        return

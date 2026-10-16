@@ -209,3 +209,15 @@ def test_quote_error_names_condition_id():
         validate_requirement(
             "Đà Lạt 3 ngày", [condition("destination", "Đà Lạt", "Da Lat", condition_id="h9")]
         )
+def test_generic_accommodation_cannot_be_a_hard_condition():
+    with pytest.raises(AppError, match="too generic"):
+        validate_requirement(
+            "cần chỗ nghỉ", [condition("accommodation", "chỗ nghỉ", "chỗ nghỉ")]
+        )
+
+
+def test_qualified_accommodation_stays_a_hard_condition():
+    req = validate_requirement(
+        "khách sạn 5 sao", [condition("accommodation", "khách sạn 5 sao", "khách sạn 5 sao")]
+    )
+    assert req.conditions[0].field == "accommodation"
