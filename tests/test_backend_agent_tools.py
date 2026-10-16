@@ -93,6 +93,12 @@ def test_query_tours_mcp_schema_requires_complete_condition_contract(settings, m
     }
     assert condition["additionalProperties"] is False
     assert "decision_run_id" in schema["required"]
+    discover = next(tool.inputSchema for tool in tools if tool.name == "discover_destinations")
+    top = discover["properties"]
+    for param in ("raw_text", "conditions", "travelers", "traveler_mix", "conversation_id"):
+        assert top[param].get("description"), param
+    assert "exact quote" in top["conditions"]["description"]
+    assert "adult" in top["traveler_mix"]["description"]
     assert "relax_criterion" not in {tool.name for tool in tools}
     assert "discover_destinations" in {tool.name for tool in tools}
 

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from functools import wraps
 from threading import RLock
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -136,10 +136,10 @@ class QueryRankingInput(BaseModel):
 class TravelerMixInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    adult: int | None = Field(default=None, ge=0)
-    child: int | None = Field(default=None, ge=0)
-    small_child: int | None = Field(default=None, ge=0)
-    infant: int | None = Field(default=None, ge=0)
+    adult: int | None = Field(default=None, ge=0, description="Number of adults.")
+    child: int | None = Field(default=None, ge=0, description="Number of children.")
+    small_child: int | None = Field(default=None, ge=0, description="Number of small children.")
+    infant: int | None = Field(default=None, ge=0, description="Number of infants.")
 
 
 class SoftVerdictInput(BaseModel):
@@ -300,7 +300,13 @@ class AgentTools:
         self._ranking_context_lock = RLock()
 
     def ask_choice(
-        self, question: str, options: list[dict[str, str]], allow_custom: bool = True
+        self,
+        question: Annotated[str, Field(description="Single question for the user.")],
+        options: Annotated[
+            list[dict[str, str]],
+            Field(description="Two to eight choices as {label, value} objects."),
+        ],
+        allow_custom: Annotated[bool, Field(description="Whether the user may answer freely.")] = True,
     ) -> str:
         clean = []
         seen: set[str] = set()
@@ -335,8 +341,10 @@ class AgentTools:
 
     def catalog_facets(
         self,
-        fields: list[Literal["destinations", "departure_cities", "prices_vnd", "departure_dates"]]
-        | None = None,
+        fields: Annotated[
+            list[Literal["destinations", "departure_cities", "prices_vnd", "departure_dates"]] | None,
+            Field(description="Facet groups to return; omit for the full legacy response."),
+        ] = None,
     ) -> str:
         """Return only requested facet groups; omitted fields preserve the legacy full response.
 
@@ -372,12 +380,26 @@ class AgentTools:
 
     def discover_destinations(
         self,
-        raw_text: str,
-        conditions: list[QueryConditionInput],
-        alternatives: list[QueryAlternativeInput] | None = None,
-        travelers: int = 1,
-        traveler_mix: TravelerMixInput | None = None,
-        conversation_id: str = "",
+        raw_text: Annotated[str, Field(description="Verbatim user message for this turn.")],
+        conditions: Annotated[
+            list[QueryConditionInput],
+            Field(description="Shared hard conditions, each with id, field, operator, value, "
+                  "strength hard, and an exact quote from the conversation."),
+        ],
+        alternatives: Annotated[
+            list[QueryAlternativeInput] | None,
+            Field(description="OR branches with id, label, and hard conditions; at most 20."),
+        ] = None,
+        travelers: Annotated[int, Field(description="Total party size, at least 1.")] = 1,
+        traveler_mix: Annotated[
+            TravelerMixInput | None,
+            Field(description="Age-group counts (adult, child, small_child, infant) summing to travelers."),
+        ] = None,
+        conversation_id: Annotated[
+            str,
+            Field(description="Conversation token from the chat header; checks quotes against "
+                  "the stored user-side history."),
+        ] = "",
     ) -> str:
         """Preview catalog options under common conditions and OR branches.
 
@@ -631,17 +653,43 @@ class AgentTools:
 
     def query_tours(
         self,
-        raw_text: str,
-        conditions: list[QueryConditionInput],
-        decision_run_id: str,
-        alternatives: list[QueryAlternativeInput] | None = None,
-        assumptions: list[RequirementAssumptionInput] | None = None,
-        travelers: int = 1,
-        ranking: QueryRankingInput | None = None,
-        requirement_id: str = "",
-        traveler_mix: TravelerMixInput | None = None,
-        snapshot_comparison_id: str = "",
-        conversation_id: str = "",
+        raw_text: Annotated[str, Field(description="Verbatim user message for this turn.")],
+        conditions: Annotated[
+            list[QueryConditionInput],
+            Field(description="Shared conditions: hard filters plus soft preferences with "
+                  "weight_percent summing to 100 when present."),
+        ],
+        decision_run_id: Annotated[
+            str, Field(description="Opaque run id from the reviewed-decision instruction (dec_ + 32 hex).")
+        ],
+        alternatives: Annotated[
+            list[QueryAlternativeInput] | None,
+            Field(description="Reviewed OR branches, unchanged from the signed-off brief."),
+        ] = None,
+        assumptions: Annotated[
+            list[RequirementAssumptionInput] | None,
+            Field(description="Reviewed date_window assumptions linking date condition pairs."),
+        ] = None,
+        travelers: Annotated[int, Field(description="Total party size, at least 1.")] = 1,
+        ranking: Annotated[
+            QueryRankingInput | None,
+            Field(description="Ordered ranking keys; earlier keys take priority."),
+        ] = None,
+        requirement_id: Annotated[
+            str, Field(description="Reviewed requirement id to reuse; empty starts a new one.")
+        ] = "",
+        traveler_mix: Annotated[
+            TravelerMixInput | None,
+            Field(description="Age-group counts (adult, child, small_child, infant) summing to travelers."),
+        ] = None,
+        snapshot_comparison_id: Annotated[
+            str, Field(description="Baseline comparison id for a what-if run; empty scans live.")
+        ] = "",
+        conversation_id: Annotated[
+            str,
+            Field(description="Conversation token from the chat header; checks quotes against "
+                  "the stored user-side history."),
+        ] = "",
     ) -> str:
         """Filter the active catalog, or the signed-off scan snapshot for a what-if run."""
         raw_text = _effective_raw_text(self.result_store, self.settings, conversation_id, raw_text)
@@ -706,14 +754,34 @@ class AgentTools:
 
     def draft_requirement(
         self,
-        raw_text: str,
-        conditions: list[QueryConditionInput],
-        alternatives: list[QueryAlternativeInput] | None = None,
-        assumptions: list[RequirementAssumptionInput] | None = None,
-        travelers: int = 1,
-        ranking: QueryRankingInput | None = None,
-        traveler_mix: TravelerMixInput | None = None,
-        conversation_id: str = "",
+        raw_text: Annotated[str, Field(description="Verbatim user message for this turn.")],
+        conditions: Annotated[
+            list[QueryConditionInput],
+            Field(description="Shared conditions: hard filters plus soft preferences (preference + "
+                  "contains); every quote exact from the conversation."),
+        ],
+        alternatives: Annotated[
+            list[QueryAlternativeInput] | None,
+            Field(description="OR branches with id, label, and hard conditions; at most 20."),
+        ] = None,
+        assumptions: Annotated[
+            list[RequirementAssumptionInput] | None,
+            Field(description="Date_window assumptions linking date_from/date_to pairs."),
+        ] = None,
+        travelers: Annotated[int, Field(description="Total party size, at least 1.")] = 1,
+        ranking: Annotated[
+            QueryRankingInput | None,
+            Field(description="Ordered ranking keys; earlier keys take priority."),
+        ] = None,
+        traveler_mix: Annotated[
+            TravelerMixInput | None,
+            Field(description="Age-group counts (adult, child, small_child, infant) summing to travelers."),
+        ] = None,
+        conversation_id: Annotated[
+            str,
+            Field(description="Conversation token from the chat header; checks quotes against "
+                  "the stored user-side history."),
+        ] = "",
     ) -> str:
         """Validate a reviewable brief without reading the tour catalog.
 
@@ -772,7 +840,10 @@ class AgentTools:
             })
         return _json({"requirement_draft": requirement.model_dump(mode="json")})
 
-    def tour_detail(self, tour_id: str) -> str:
+    def tour_detail(
+        self,
+        tour_id: Annotated[str, Field(description="Tour id from a discover or query result.")],
+    ) -> str:
         tour = self.workflows.tour_detail(tour_id)
         if tour is None:
             return _json({"error": "Tour not found in the active catalog."})
@@ -780,9 +851,15 @@ class AgentTools:
 
     def score_soft(
         self,
-        context_id: str,
-        verdicts: list[SoftVerdictInput],
-        metric_facts: list[TourMetricFactsInput],
+        context_id: Annotated[str, Field(description="Ranking context id from the soft_review batch.")],
+        verdicts: Annotated[
+            list[SoftVerdictInput],
+            Field(description="Exactly one verdict per candidate/preference pair in the active batch."),
+        ],
+        metric_facts: Annotated[
+            list[TourMetricFactsInput],
+            Field(description="One metric-facts object per tour in the active batch."),
+        ],
     ) -> str:
         with self._ranking_context_lock:
             context = self._ranking_contexts.get(context_id)
@@ -1058,7 +1135,14 @@ class AgentTools:
             "ranking_complete": True,
         }
 
-    def clarify_date(self, calendar: str, year: int, month: int, day: int, leap: bool = False) -> str:
+    def clarify_date(
+        self,
+        calendar: Annotated[str, Field(description="lunar or solar.")],
+        year: Annotated[int, Field(description="Full year, e.g. 2026.")],
+        month: Annotated[int, Field(description="Month 1-12.")],
+        day: Annotated[int, Field(description="Day of month.")],
+        leap: Annotated[bool, Field(description="Lunar leap month flag.")] = False,
+    ) -> str:
         if calendar == "lunar":
             result = resolve_lunar({"year": year, "month": month, "day": day, "leap": leap})
         elif calendar == "solar":
