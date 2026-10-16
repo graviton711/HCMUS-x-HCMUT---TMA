@@ -11,6 +11,9 @@ import httpx
 
 from backend.errors import AppError
 from backend.settings import Settings
+from shared import get_logger
+
+_log = get_logger("backend.agent.codex_runner")
 
 _RATE_LIMIT = re.compile(r"rate.?limit|too many requests|http.?429", re.I)
 _AUTH_FAILURE = re.compile(
@@ -87,6 +90,12 @@ def normalize_codex_event(event: dict[str, Any]) -> list[dict[str, Any]]:
                     "code": _error_code(item.get("error") or item.get("message")),
                     "message": "Codex could not complete this turn.",
                 }}]
+            if item_type not in {"reasoning", "token_count"} and kind == "item.completed":
+                _log.debug(
+                    "codex_non_catalog_tool_call name=%s status=%s",
+                    item.get("tool") or item.get("name"),
+                    item.get("status"),
+                )
             return []
 
         server = item.get("server") or item.get("server_name") or "tour-catalog"

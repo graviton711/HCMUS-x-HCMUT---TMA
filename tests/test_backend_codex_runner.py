@@ -80,6 +80,30 @@ def test_ignores_non_result_jsonl_and_classifies_safe_gateway_errors():
     assert _classify_error("provider crashed") == "CODEX_RUN_FAILED"
 
 
+def test_normalizes_prefixed_mcp_tool_names_from_codex():
+    completed = normalize_codex_event({
+        "type": "item.completed",
+        "item": {
+            "id": "call-9",
+            "type": "mcp_tool_call",
+            "server": "tour-catalog",
+            "tool": "mcp__tour_catalog__catalog_facets",
+            "arguments": {},
+            "result": [{"type": "text", "text": "{}"}],
+            "status": "completed",
+        },
+    })
+    assert completed[0]["type"] == "tool"
+    assert completed[0]["part"]["tool"] == "tour-catalog.mcp__tour_catalog__catalog_facets"
+
+
+def test_drops_exec_repl_calls_without_events():
+    assert normalize_codex_event({
+        "type": "item.completed",
+        "item": {"id": "call-x", "type": "custom_tool_call", "tool": "exec", "status": "completed"},
+    }) == []
+
+
 def test_command_uses_only_project_mcp_and_read_only_chatgpt_configuration(settings, tmp_path):
     configured = settings.model_copy(update={"codex_server_url": "http://127.0.0.1:4099"})
     state = CodexGatewayState(configured)
@@ -91,7 +115,7 @@ def test_command_uses_only_project_mcp_and_read_only_chatgpt_configuration(setti
     assert command[:4] == ["codex", "exec", "resume", "01900123-abcd-4567-8901-234567890123"]
     assert "--cd" not in command
     assert "--model gpt-6-luna" in joined
-    assert "model_reasoning_effort=\"medium\"" in joined
+    assert "model_reasoning_effort=\"xhigh\"" in joined
     assert 'sandbox_mode="read-only"' in joined
     assert "--disable shell_tool" in joined
     assert "--disable multi_agent" in joined

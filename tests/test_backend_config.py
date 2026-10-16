@@ -120,7 +120,7 @@ def test_repo_configs_load():
     settings = Settings.load()
     assert settings.opencode.model == "opencode/muse-spark-1.3-contributor-free"
     assert settings.codex.model == "gpt-6-luna"
-    assert settings.codex.reasoning_effort == "medium"
+    assert settings.codex.reasoning_effort == "xhigh"
     assert settings.agent_provider == "codex"
     assert settings.tuning.decide.quote_max_sentences <= 10
     assert settings.tuning.data.providers_limit == 100
@@ -141,5 +141,7 @@ def test_repo_configs_load():
     assert "Never disclose" in prompt["system"] and "model names" in prompt["system"]
     assert "travel planning only" in prompt["system"]
     assert "immutable" in prompt["system"]
+    assert "mcp__tour_catalog__*" in prompt["system"]
+    assert "never claim you cannot access the catalog" in prompt["system"]
     for leaked in ("gpt-", "Muse", "deepseek", "gemini", "xkiro"):
         assert leaked not in prompt["system"]
