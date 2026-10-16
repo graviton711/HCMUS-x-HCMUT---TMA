@@ -5,7 +5,7 @@ import type {
   CurrentComparison,
   CurrentRelaxationOption,
 } from '../../../shared/api';
-import { conditionText, fieldLabel } from '../../../features/chat';
+import { conditionText, fieldLabel, formatMetricValue, METRIC_NAMES } from '../../../features/chat';
 import { priceText } from '../../../shared/lib';
 import { usePreferences } from '../../../shared/preferences';
 import { relaxRequirement } from '../lib/relaxRequirement';
@@ -39,6 +39,9 @@ function findCondition(comparison: CurrentComparison, conditionId: string) {
 function tourName(comparison: CurrentComparison, tourId: string, fallback: string) {
   return comparison.tour_snapshots.find((tour) => tour.id === tourId)?.name || fallback;
 }
+
+const short = (value: string) =>
+  value.length > 48 ? `${value.slice(0, 47).trimEnd()}…` : value;
 
 function findOffer(comparison: CurrentComparison, tourId: string, offerId: string) {
   return comparison.tour_snapshots
@@ -75,13 +78,6 @@ export function VerdictStrip({
     if (!example) continue;
     seen.add(example.tour_id);
     relaxedSlots.push({ relax, tourId: example.tour_id });
-  }
-
-  const unknownByOffer = new Map<string, number>();
-  for (const evaluation of comparison.evaluations ?? []) {
-    if (evaluation.state === 'unknown') {
-      unknownByOffer.set(evaluation.offer_id, (unknownByOffer.get(evaluation.offer_id) ?? 0) + 1);
-    }
   }
 
   async function runRelaxation(relax: CurrentRelaxationOption) {
@@ -146,9 +142,57 @@ export function VerdictStrip({
           const offer = findOffer(comparison, option.tour_id, option.offer_id);
           const tour = comparison.tour_snapshots.find((item) => item.id === option.tour_id);
           const kicker = OBJECTIVE_KICKER[option.objective] ?? OBJECTIVE_KICKER.multi_objective;
-          const lead =
-            option.tradeoffs.find((line) => line.startsWith('Đánh đổi:')) ?? option.tradeoffs[0];
-          const unknowns = unknownByOffer.get(option.offer_id) ?? 0;
+          const comparative = option.tradeoffs.find((line) => line.startsWith('So với'));
+          const metricName = (key: string) => {
+            const name = METRIC_NAMES[key] ?? [key, key];
+            return t(...name);
+          };
+          const strengths = (option.metric_comparisons ?? [])
+            .filter((metric) => metric.relation === 'favorable')
+            .slice(0, 3)
+            .map((metric) => `${metricName(metric.key)}: ${formatMetricValue(metric, t)}`);
+          const sacrifices = (option.metric_comparisons ?? [])
+            .filter((metric) => metric.relation === 'tradeoff')
+            .slice(0, 3)
+            .map((metric) =>
+              metric.reference_median != null
+                ? `${metricName(metric.key)}: ${formatMetricValue(metric, t)} (${t('trung vị', 'median')} ${formatMetricValue({ ...metric, value: metric.reference_median }, t)})`
+                : `${metricName(metric.key)}: ${formatMetricValue(metric, t)}`,
+            );
+          const softConds = [
+            ...comparison.requirement.conditions,
+            ...(comparison.requirement.alternatives ?? []).flatMap((branch) => branch.conditions),
+          ].filter((condition) => condition.strength === 'soft');
+          const softWon: string[] = [];
+          const softLost: string[] = [];
+          const softUnknown: string[] = [];
+          for (const condition of softConds) {
+            const label = short(String(condition.value ?? ''));
+            if (!label) continue;
+            const evaluation = (comparison.evaluations ?? []).find(
+              (item) => item.offer_id === option.offer_id && item.condition_id === condition.id,
+            );
+            if (!evaluation || evaluation.state === 'unknown') softUnknown.push(label);
+            else if (evaluation.state === 'fail') softLost.push(label);
+            else softWon.push(`${label}${evaluation.state === 'partial' ? ` (${t('một phần', 'partial')})` : ''}`);
+          }
+          const profile = (comparison.metric_profiles ?? []).find(
+            (item) => item.tour_id === option.tour_id && item.offer_id === option.offer_id,
+          );
+          const unpriced = profile?.cost.unpriced_exclusions.length ?? 0;
+          const concerns = [
+            ...sacrifices,
+            ...softLost.map((label) => `${t('chưa đạt', 'missed')}: ${label}`),
+            ...softUnknown.map((label) => `${t('chưa rõ', 'unknown')}: ${label}`),
+            ...(unpriced > 0
+              ? [
+                  t(
+                    `${unpriced} khoản nhà cung cấp chưa niêm yết — hỏi trước khi đặt`,
+                    `${unpriced} items have no listed price — ask before booking`,
+                  ),
+                ]
+              : []),
+          ];
           return (
             <article className={styles.card} key={`${option.tour_id}-${option.offer_id}`}>
               <span className={styles.kicker}>{t(...kicker)}</span>
@@ -162,13 +206,15 @@ export function VerdictStrip({
                 {tour?.duration_days != null && ` · ${tour.duration_days}N`}
               </p>
               <p className={styles.verdict}>{option.reason}</p>
-              {lead && <p className={styles.tradeoff}>{lead}</p>}
-              {unknowns > 0 && (
+              {(strengths.length > 0 || softWon.length > 0) && (
+                <p className={styles.tradeoff}>
+                  {t('Được', 'Pros')}: {[...strengths, ...softWon.slice(0, 3)].join(' · ')}
+                </p>
+              )}
+              {comparative && <p className={styles.tradeoff}>{comparative}</p>}
+              {concerns.length > 0 && (
                 <p className={styles.caveat}>
-                  {t(
-                    `${unknowns} dữ kiện chưa rõ cho offer này.`,
-                    `${unknowns} data points still unknown for this offer.`,
-                  )}
+                  {t('Cân nhắc', 'Watch out')}: {concerns.join(' · ')}
                 </p>
               )}
             </article>

@@ -267,6 +267,8 @@ function ActiveChat({
   };
   const openArtifact = (id: string) => {
     setSelectedArtifactId(id);
+    setDecisionOpen(true);
+    setHasNewResult(false);
     if (compact) setMobilePane('decision');
   };
   const setSplitFromPointer = (clientX: number) => {

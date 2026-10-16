@@ -665,6 +665,11 @@ def _assumptions(
     return notes
 
 
+def _vn(amount: int) -> str:
+    """Format money the Vietnamese way (dots), matching frontend priceText."""
+    return f"{amount:,}".replace(",", ".")
+
+
 def _option_tradeoff_sentence(
     req: Requirement,
     profile: MetricProfile,
@@ -721,7 +726,7 @@ def _comparative_sentences(
         if total is None or cheapest_total is None or total <= cheapest_total:
             continue
         out[option.offer_id] = (
-            f"So với phương án rẻ nhất: cao hơn {total - cheapest_total:,} {currency}."
+            f"So với phương án rẻ nhất: cao hơn {_vn(total - cheapest_total)} {currency}."
         )
     return out
 
@@ -730,9 +735,9 @@ def _option_tradeoffs(profile: MetricProfile) -> list[str]:
     tradeoffs: list[str] = []
     cost = profile.cost
     if cost.group_total_calculated is not None:
-        tradeoffs.append(f"Tổng nhóm tính được: {cost.group_total_calculated:,} {cost.currency}")
+        tradeoffs.append(f"Tổng nhóm tính được: {_vn(cost.group_total_calculated)} {cost.currency}")
     elif cost.listed_price is not None:
-        tradeoffs.append(f"Giá công bố: {cost.listed_price:,} {cost.currency}; chưa tính tổng nhóm")
+        tradeoffs.append(f"Giá công bố: {_vn(cost.listed_price)} {cost.currency}; chưa tính tổng nhóm")
     if cost.unpriced_exclusions:
         names = ", ".join(item.name for item in cost.unpriced_exclusions[:3] if item.name)
         suffix = f": {names}" if names else ""
@@ -1058,7 +1063,7 @@ def _decision_options(
             if kind == "cheapest":
                 offer = offer_by_id.get(candidate.offer_id)
                 reason = (
-                    f"Giá công bố {offer.price:,} {offer.currency.upper()} thuộc nhóm thấp nhất "
+                    f"Giá công bố {_vn(offer.price)} {offer.currency.upper()} thuộc nhóm thấp nhất "
                     "trong cùng tiền tệ; tổng nhóm và khoản loại trừ được trình bày riêng."
                     if offer and offer.price is not None and offer.currency
                     else view.note

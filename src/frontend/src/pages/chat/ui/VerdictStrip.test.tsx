@@ -76,6 +76,20 @@ function comparison(): CurrentComparison {
         title: 'Rẻ nhất trong scan',
         reason: 'Đáp ứng cả 2 điều kiện cứng.',
         tradeoffs: ['Đánh đổi: rẻ nhất nhóm.'],
+        metric_comparisons: [
+          {
+            key: 'group_total',
+            value: 8250000,
+            reference_median: 15000000,
+            unit: 'VND',
+            currency: 'VND',
+            scope: '',
+            state: 'observed',
+            relation: 'favorable',
+            higher_is_better: false,
+            evidence: [],
+          },
+        ],
       },
     ],
     relaxation_options: [
@@ -101,6 +115,8 @@ describe('VerdictStrip', () => {
     );
     expect(screen.getByText(/Chưa đủ 3 tour đạt đủ điều kiện/)).toBeDefined();
     expect(screen.getByText('Đáp ứng cả 2 điều kiện cứng.')).toBeDefined();
+    expect(screen.getByText(/Được:/)).toBeDefined();
+    expect(screen.getByText(/Tổng nhóm/)).toBeDefined();
     expect(screen.getByText(/Nới.*ngân sách/)).toBeDefined();
     expect(screen.getByText(/mở thêm 2 tour/)).toBeDefined();
   });
