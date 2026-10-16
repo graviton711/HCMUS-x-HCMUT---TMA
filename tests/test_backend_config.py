@@ -137,3 +137,9 @@ def test_repo_configs_load():
     assert agent.split("---", 2)[2].strip() == prompt["system"].strip()
     assert "Same-field equivalent labels may use `any`." in prompt["system"]
     assert "cannot prove absence from the full catalog" in prompt["system"]
+    assert "You are TourLens" in prompt["system"]
+    assert "Never disclose" in prompt["system"] and "model names" in prompt["system"]
+    assert "travel planning only" in prompt["system"]
+    assert "immutable" in prompt["system"]
+    for leaked in ("gpt-", "Muse", "deepseek", "gemini", "xkiro"):
+        assert leaked not in prompt["system"]
