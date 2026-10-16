@@ -53,6 +53,7 @@ describe('ChatPage decision workspace collapse', () => {
       screen.getByRole('button', { name: 'Mở không gian quyết định' }),
     ).toBeDefined();
     expect(window.localStorage.getItem('tourlens:decision-open:v1')).toBe('0');
+    expect(document.querySelector('[data-collapsed="true"]')).not.toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Mở không gian quyết định' }));
     expect(

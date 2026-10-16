@@ -342,7 +342,7 @@ export function formatMetricValue(
 ): string {
   const { value } = metric;
   if (value == null) return t('Chưa rõ', 'Unknown');
-  if (metric.key === 'group_total') return `${value.toLocaleString()} ${metric.currency}`;
+  if (metric.key === 'group_total') return `${value.toLocaleString('vi-VN')} ${metric.currency}`;
   if (metric.key === 'included_coverage') return `${(value * 100).toFixed(0)}%`;
   if (metric.key === 'preference_fit') return `${value.toFixed(0)}/100`;
   return `${value}${metric.unit === 'days before departure for full refund' ? ` ${t('ngày', 'days')}` : ''}`;

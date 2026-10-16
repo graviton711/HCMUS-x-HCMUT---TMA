@@ -85,9 +85,9 @@
   width: 100%;
   min-height: 40px;
   padding: 8px 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
   color: var(--muted);
   font: inherit;
   font-size: var(--text-sm);
@@ -96,8 +96,8 @@
 }
 
 .decision-rail:hover {
-  border-color: var(--line-strong);
   color: var(--ink);
+  background: var(--surface);
 }
 
 .decision-rail-dot {
@@ -109,7 +109,7 @@
 
 .active-layout[data-collapsed='true'] .decision-pane,
 .active-layout[data-collapsed='true'] .splitter {
-  display: none;
+  display: none !important;
 }
 
 .active-layout[data-collapsed='true'] .decision-rail {
@@ -365,10 +365,12 @@
   .active-layout[data-collapsed='true'] .decision-rail {
     grid-area: rail;
     flex-direction: column;
-    width: 40px;
+    width: 36px;
     min-height: 0;
     height: 100%;
     padding: 12px 0;
+    border-top: 0;
+    border-left: 1px solid var(--line);
     writing-mode: vertical-rl;
   }
 

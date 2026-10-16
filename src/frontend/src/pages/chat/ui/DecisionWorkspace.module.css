@@ -168,9 +168,9 @@
 }
 
 .tracePanel > summary {
-  color: var(--accent);
+  color: var(--ink);
   font-size: var(--text-sm);
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
   list-style: none;
 }
@@ -185,8 +185,8 @@
   width: 6px;
   height: 6px;
   margin-right: 8px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
+  border-right: 1.5px solid var(--subtle);
+  border-bottom: 1.5px solid var(--subtle);
   transform: rotate(-45deg);
   transition: transform var(--dur-fast) var(--ease);
 }
@@ -281,9 +281,9 @@
 }
 
 .scenarioPanel > summary {
-  color: var(--accent);
+  color: var(--ink);
   font-size: var(--text-sm);
-  font-weight: 650;
+  font-weight: 600;
   cursor: pointer;
   list-style: none;
 }
@@ -298,8 +298,8 @@
   width: 6px;
   height: 6px;
   margin-right: 8px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
+  border-right: 1.5px solid var(--subtle);
+  border-bottom: 1.5px solid var(--subtle);
   transform: rotate(-45deg);
   transition: transform var(--dur-fast) var(--ease);
 }
@@ -436,8 +436,9 @@
 .optionMatrix-table {
   border-collapse: collapse;
   width: 100%;
-  min-width: 560px;
+  min-width: 480px;
   font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
 }
 
 .optionMatrix-table th,
@@ -450,18 +451,29 @@
   overflow-wrap: anywhere;
 }
 
-.optionMatrix-table thead th {
-  border-bottom: 2px solid var(--line-strong, var(--line));
-}
-
-.optionMatrix-table thead small {
+.optionMatrix-table thead th small {
   display: block;
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 400;
   line-height: 1.5;
 }
 
 .optionMatrix-table tbody th[scope='row'] {
+  color: var(--muted);
+  font-weight: 550;
   white-space: nowrap;
+}
+
+.optionMatrix-table tbody td {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.optionMatrix-table thead th {
+  border-bottom: 2px solid var(--line-strong, var(--line));
 }
 
 .optionMatrix-table tbody tr:last-child th,
