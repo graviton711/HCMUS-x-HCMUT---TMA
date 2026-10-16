@@ -886,9 +886,12 @@ class AgentTools:
             ]
             supplied = [(item.offer_id, item.condition_id) for item in parsed]
             if len(supplied) != len(set(supplied)) or set(supplied) != expected:
+                missing = sorted(expected - set(supplied))
                 raise AppError(
                     "SOFT_BATCH_INCOMPLETE",
-                    "Submit exactly one verdict for every candidate and soft condition in the active batch.",
+                    "Submit exactly one verdict per candidate and soft condition in the active batch. "
+                    f"Missing {len(missing)}: {missing[:8]}. "
+                    'Each verdict has exactly offer_id, condition_id, verdict, quote, reason.',
                     422,
                 )
 
@@ -900,9 +903,15 @@ class AgentTools:
             batch_tour_ids = {tour.id for tour, _ in batch if tour.id not in context.metric_facts}
             supplied_tour_ids = [item.tour_id for item in parsed_facts]
             if len(supplied_tour_ids) != len(set(supplied_tour_ids)) or set(supplied_tour_ids) != batch_tour_ids:
+                missing = sorted(batch_tour_ids - set(supplied_tour_ids))
+                extra = sorted(set(supplied_tour_ids) - batch_tour_ids)
                 raise AppError(
                     "METRIC_FACTS_INCOMPLETE",
-                    "Submit one metric fact object for every tour in the active batch.",
+                    "Submit one metric fact object for every tour in the active batch. "
+                    f"Missing tour_ids: {missing}."
+                    + (f" Unexpected tour_ids: {extra}." if extra else "")
+                    + ' Minimal shape per tour: {"tour_id": "...", "reviewed_fields": [...]}; '
+                      "tours with no usable data still need an object with empty lists.",
                     422,
                 )
 

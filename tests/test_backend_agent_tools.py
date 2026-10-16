@@ -658,3 +658,31 @@ def test_tool_schema_exposes_enum_guidance_and_conversation_token(settings):
     assert "departure_dates" in AgentTools.catalog_facets.__doc__
     for name in ("discover_destinations", "draft_requirement", "query_tours"):
         assert "conversation_id" in inspect.signature(getattr(AgentTools, name)).parameters
+def test_metric_facts_error_names_missing_tours_and_minimal_shape(settings):
+    tools = _tools(settings)
+    query = _query(tools, **_phu_requirement())
+    review = query["soft_review"]
+    context = tools._ranking_contexts[review["context_id"]]
+    batch = context.batches[context.batch_index]
+    verdicts = [
+        {"offer_id": offer_id, "condition_id": condition.id,
+         "verdict": "unknown", "quote": "", "reason": "x"}
+        for _, offer_id in batch
+        for condition in context.requirement.soft()
+    ]
+    with pytest.raises(AppError) as exc:
+        tools.score_soft(review["context_id"], verdicts, [])
+    assert exc.value.code == "METRIC_FACTS_INCOMPLETE"
+    missing = {tour.id for tour, _ in batch}
+    assert any(tour_id in exc.value.message for tour_id in missing)
+    assert "reviewed_fields" in exc.value.message
+
+
+def test_soft_batch_error_names_missing_verdict_pairs(settings):
+    tools = _tools(settings)
+    query = _query(tools, **_phu_requirement())
+    review = query["soft_review"]
+    with pytest.raises(AppError) as exc:
+        tools.score_soft(review["context_id"], [], [{"tour_id": "t-nope"}])
+    assert exc.value.code == "SOFT_BATCH_INCOMPLETE"
+    assert "Missing" in exc.value.message
