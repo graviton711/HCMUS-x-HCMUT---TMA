@@ -171,7 +171,24 @@ export interface CurrentComparison {
   metric_profiles?: CurrentMetricProfile[];
   decision_options?: CurrentDecisionOption[];
   near_miss_profiles?: CurrentMetricProfile[];
+  relaxation_options?: CurrentRelaxationOption[];
   assumptions?: string[];
+}
+
+export interface CurrentRelaxationExample {
+  tour_id: string;
+  offer_id: string;
+  tour_name: string;
+  price: number | null;
+  currency: string;
+  departure_date: string;
+}
+
+export interface CurrentRelaxationOption {
+  condition_id: string;
+  gained_offers: number;
+  gained_tours: number;
+  examples: CurrentRelaxationExample[];
 }
 
 export interface CurrentDecisionView {

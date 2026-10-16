@@ -7,6 +7,7 @@ import { usePreferences } from '../../../shared/preferences';
 import { useChat } from '../model/useChat';
 import { latestDecisionArtifact } from '../lib/decisionArtifacts';
 import { DecisionWorkspace } from './DecisionWorkspace';
+import { VerdictStrip } from './VerdictStrip';
 import styles from './ChatPage.module.css';
 
 const SUGGESTIONS: [string, string][] = [
@@ -259,8 +260,22 @@ function ActiveChat({
     setChatSplit(Math.min(max, Math.max(min, next)));
   };
 
+  const latestComparisonMsg = [...chat.msgs]
+    .reverse()
+    .find((message) => message.kind === 'comparison');
+  const latestComparison =
+    latestComparisonMsg?.kind === 'comparison' ? latestComparisonMsg.comparison : null;
+
   return (
     <div className={`${styles.workspace} ${styles.active}`} ref={workspaceRef}>
+      {latestComparison && (
+        <VerdictStrip
+          comparison={latestComparison}
+          client={chat.client}
+          agentSessionId={session.agentSessionId ?? null}
+          onOpenDecision={() => setMobilePane('decision')}
+        />
+      )}
       <div
         className={styles['active-layout']}
         ref={layoutRef}

@@ -26,6 +26,8 @@ from backend.models import (
     OptionMetricComparison,
     RankedCandidate,
     RankingKey,
+    RelaxationExample,
+    RelaxationOption,
     Requirement,
     State,
     TourSnapshot,
@@ -191,6 +193,84 @@ def passing_offers(
     return out
 
 
+def _relevant_hard(req: Requirement, states: dict[str, State]) -> list[Condition]:
+    """Shared plus best-branch hard conditions, mirroring near-miss scoping."""
+    if not req.alternatives:
+        return list(req.shared_hard())
+    branch_conditions = [
+        [condition for condition in branch.conditions if condition.strength == "hard"]
+        for branch in req.alternatives
+    ]
+    branch_scores = [
+        (
+            sum(states.get(condition.id, "unknown") == "fail" for condition in conditions),
+            sum(states.get(condition.id, "unknown") == "unknown" for condition in conditions),
+            -sum(states.get(condition.id, "unknown") == "pass" for condition in conditions),
+            conditions,
+        )
+        for conditions in branch_conditions
+    ]
+    _branch_fails, _branch_unknowns, _branch_passes, best_branch = min(
+        branch_scores, key=lambda row: row[:3]
+    )
+    return [*req.shared_hard(), *best_branch]
+
+
+def relaxation_options(
+    req: Requirement,
+    tours: list[TourSnapshot],
+    evals: list[Evaluation],
+    ranked_offer_ids: set[str],
+    limit_examples: int = 3,
+) -> list[RelaxationOption]:
+    """Single-condition relaxations ranked by distinct tours gained.
+
+    For each hard condition, counts offers failing ONLY that condition; relaxing it
+    would admit them. Sorted by tours gained, then offers gained, then requirement
+    order. Examples are the cheapest gained offers with inline tour facts so the UI
+    can preview slots without extra snapshots.
+    """
+    hard = req.hard()
+    if not hard:
+        return []
+    order = {condition.id: index for index, condition in enumerate(hard)}
+    states_by_offer = _states_by_offer(evals)
+    gained: dict[str, list[tuple[int, str, str]]] = {}
+    tour_by_id = {tour.id: tour for tour in tours}
+    for tour in tours:
+        for offer in tour.offers:
+            if offer.id in ranked_offer_ids:
+                continue
+            states = states_by_offer.get(offer.id, {})
+            relevant = _relevant_hard(req, states)
+            failed = [condition.id for condition in relevant
+                      if states.get(condition.id, "unknown") == "fail"]
+            if len(failed) != 1:
+                continue
+            price_key = offer.price if offer.price is not None and offer.currency.strip() else 10**15
+            gained.setdefault(failed[0], []).append((price_key, tour.id, offer.id))
+    options = []
+    for condition_id, rows in gained.items():
+        examples = []
+        for _, tour_id, offer_id in sorted(rows)[:limit_examples]:
+            tour = tour_by_id.get(tour_id)
+            offer = next((item for item in tour.offers if item.id == offer_id), None) if tour else None
+            if tour is None or offer is None:
+                continue
+            examples.append(RelaxationExample(
+                tour_id=tour_id, offer_id=offer_id, tour_name=tour.name,
+                price=offer.price, currency=offer.currency,
+                departure_date=offer.departure_date,
+            ))
+        options.append(RelaxationOption(
+            condition_id=condition_id, gained_offers=len(rows),
+            gained_tours=len({row[1] for row in rows}), examples=examples,
+        ))
+    options.sort(key=lambda item: (
+        -item.gained_tours, -item.gained_offers, order.get(item.condition_id, 0)))
+    return options
+
+
 def near_miss(
     req: Requirement,
     tours: list[TourSnapshot],
@@ -213,26 +293,7 @@ def near_miss(
             if offer.id in ranked_offer_ids:
                 continue
             states = states_by_offer.get(offer.id, {})
-            if req.alternatives:
-                branch_conditions = [
-                    [condition for condition in branch.conditions if condition.strength == "hard"]
-                    for branch in req.alternatives
-                ]
-                branch_scores = [
-                    (
-                        sum(states.get(condition.id, "unknown") == "fail" for condition in conditions),
-                        sum(states.get(condition.id, "unknown") == "unknown" for condition in conditions),
-                        -sum(states.get(condition.id, "unknown") == "pass" for condition in conditions),
-                        conditions,
-                    )
-                    for conditions in branch_conditions
-                ]
-                _branch_fails, _branch_unknowns, _branch_passes, best_branch = min(
-                    branch_scores, key=lambda row: row[:3]
-                )
-            else:
-                best_branch = []
-            relevant = [*req.shared_hard(), *best_branch]
+            relevant = _relevant_hard(req, states)
             failed = sum(states.get(condition.id, "unknown") == "fail" for condition in relevant)
             unknown = sum(states.get(condition.id, "unknown") == "unknown" for condition in relevant)
             passed = sum(states.get(condition.id, "unknown") == "pass" for condition in relevant)
@@ -1245,5 +1306,8 @@ def compare(
         metric_profiles=profiles,
         near_miss_profiles=near_profiles,
         decision_options=options,
+        relaxation_options=relaxation_options(
+            req, tours, evaluations, {c.offer_id for c in ranked},
+        ),
         assumptions=_assumptions(req, tours, profiles),
     )

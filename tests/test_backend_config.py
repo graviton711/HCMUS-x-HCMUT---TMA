@@ -144,5 +144,7 @@ def test_repo_configs_load():
     assert "never ask the user to send links" in prompt["system"]
     assert "conversation_id" in prompt["system"]
     assert "backend holds the full user-side history" in prompt["system"]
+    assert "without naming which blocking conditions could relax" in prompt["system"]
+    assert "never absolute best" in prompt["system"]
     for leaked in ("gpt-", "Muse", "deepseek", "gemini", "xkiro"):
         assert leaked not in prompt["system"]

@@ -1,0 +1,236 @@
+import { useState } from 'react';
+
+import type {
+  CurrentBackendClient,
+  CurrentComparison,
+  CurrentRelaxationOption,
+} from '../../../shared/api';
+import { conditionText, fieldLabel } from '../../../features/chat';
+import { priceText } from '../../../shared/lib';
+import { usePreferences } from '../../../shared/preferences';
+import { relaxRequirement } from '../lib/relaxRequirement';
+import styles from './VerdictStrip.module.css';
+
+const OBJECTIVE_KICKER: Record<string, [string, string]> = {
+  cheapest: ['Giá thấp nhất', 'Lowest price'],
+  best_fit: ['Hợp ưu tiên nhất', 'Best fit'],
+  experience_rich: ['Nhiều trải nghiệm', 'Most experiences'],
+  fewest_legs: ['Ít chặng', 'Fewest legs'],
+  cancellation_flexible: ['Dễ hủy hơn', 'Flexible cancellation'],
+  included_value: ['Dịch vụ bao gồm', 'Included value'],
+  balanced: ['Cân bằng', 'Balanced'],
+  multi_objective: ['Đa mục tiêu', 'Multi-objective'],
+};
+
+type ScenarioState =
+  | { status: 'idle' }
+  | { status: 'running' }
+  | { status: 'done'; eligibleTours: number; eligibleOffers: number; names: string[] }
+  | { status: 'error'; message: string };
+
+function findCondition(comparison: CurrentComparison, conditionId: string) {
+  const all = [
+    ...(comparison.requirement.conditions ?? []),
+    ...(comparison.requirement.alternatives ?? []).flatMap((branch) => branch.conditions),
+  ];
+  return all.find((condition) => condition.id === conditionId);
+}
+
+function tourName(comparison: CurrentComparison, tourId: string, fallback: string) {
+  return comparison.tour_snapshots.find((tour) => tour.id === tourId)?.name || fallback;
+}
+
+function findOffer(comparison: CurrentComparison, tourId: string, offerId: string) {
+  return comparison.tour_snapshots
+    .find((tour) => tour.id === tourId)
+    ?.offers.find((offer) => offer.id === offerId);
+}
+
+export function VerdictStrip({
+  comparison,
+  client,
+  agentSessionId,
+  onOpenDecision,
+}: {
+  comparison: CurrentComparison;
+  client: CurrentBackendClient | null;
+  agentSessionId: string | null;
+  onOpenDecision: () => void;
+}) {
+  const { locale, t } = usePreferences();
+  const [scenarios, setScenarios] = useState<Record<string, ScenarioState>>({});
+
+  const seen = new Set<string>();
+  const strictSlots = (comparison.decision_options ?? []).filter((option) => {
+    if (seen.has(option.tour_id) || seen.size >= 3) return false;
+    seen.add(option.tour_id);
+    return true;
+  });
+  const relaxedSlots: { relax: CurrentRelaxationOption; tourId: string }[] = [];
+  for (const relax of comparison.relaxation_options ?? []) {
+    if (seen.size >= 3) break;
+    const example = relax.examples.find((item) => !seen.has(item.tour_id));
+    if (!example) continue;
+    seen.add(example.tour_id);
+    relaxedSlots.push({ relax, tourId: example.tour_id });
+  }
+
+  const unknownByOffer = new Map<string, number>();
+  for (const evaluation of comparison.evaluations ?? []) {
+    if (evaluation.state === 'unknown') {
+      unknownByOffer.set(evaluation.offer_id, (unknownByOffer.get(evaluation.offer_id) ?? 0) + 1);
+    }
+  }
+
+  async function runRelaxation(relax: CurrentRelaxationOption) {
+    if (!client || !agentSessionId || scenarios[relax.condition_id]?.status === 'running') return;
+    setScenarios((current) => ({ ...current, [relax.condition_id]: { status: 'running' } }));
+    try {
+      const response = await client.criteriaScenario(
+        comparison.id,
+        agentSessionId,
+        relaxRequirement(comparison.requirement, relax.condition_id),
+      );
+      const scenario = response.comparison;
+      const trace = scenario?.decision_trace;
+      const names = (scenario?.tour_snapshots ?? [])
+        .slice(0, 2)
+        .map((tour) => tour.name)
+        .filter(Boolean);
+      setScenarios((current) => ({
+        ...current,
+        [relax.condition_id]: {
+          status: 'done',
+          eligibleTours: trace?.eligible_tours ?? scenario?.ranked.length ?? 0,
+          eligibleOffers: trace?.eligible_offers ?? 0,
+          names,
+        },
+      }));
+    } catch {
+      setScenarios((current) => ({
+        ...current,
+        [relax.condition_id]: {
+          status: 'error',
+          message: t('Không chạy được kịch bản này.', 'Could not run this scenario.'),
+        },
+      }));
+    }
+  }
+
+  if (strictSlots.length === 0 && relaxedSlots.length === 0) return null;
+  const relaxedUsed = relaxedSlots.length > 0;
+
+  return (
+    <section className={styles.strip} aria-label={t('Ba lựa chọn nổi bật', 'Top three options')}>
+      {relaxedUsed && (
+        <p className={styles.banner} role="status">
+          {strictSlots.length === 0
+            ? t(
+                'Không có tour nào đạt đủ điều kiện. Dưới đây là 3 tour gần nhất — mỗi thẻ ghi rõ đã nới điều kiện nào.',
+                'No tour meets every condition. Below are the 3 closest tours — each card states what was relaxed.',
+              )
+            : t(
+                'Chưa đủ 3 tour đạt đủ điều kiện. Các thẻ đánh dấu NỚI cần nới điều kiện ghi trên thẻ.',
+                'Fewer than 3 tours meet every condition. Cards marked RELAXED need the stated condition relaxed.',
+              )}
+        </p>
+      )}
+      <div className={styles.cards}>
+        {strictSlots.map((option, index) => {
+          const offer = findOffer(comparison, option.tour_id, option.offer_id);
+          const tour = comparison.tour_snapshots.find((item) => item.id === option.tour_id);
+          const kicker = OBJECTIVE_KICKER[option.objective] ?? OBJECTIVE_KICKER.multi_objective;
+          const lead =
+            option.tradeoffs.find((line) => line.startsWith('Đánh đổi:')) ?? option.tradeoffs[0];
+          const unknowns = unknownByOffer.get(option.offer_id) ?? 0;
+          return (
+            <article className={styles.card} key={`${option.tour_id}-${option.offer_id}`}>
+              <span className={styles.kicker}>{t(...kicker)}</span>
+              <h3>
+                {t(`Phương án ${index + 1}`, `Option ${index + 1}`)} · {tourName(comparison, option.tour_id, option.tour_id)}
+              </h3>
+              <p className={styles.numbers}>
+                {offer
+                  ? `${priceText(offer.price, offer.currency, locale, t)} · ${offer.departure_date || t('chưa rõ ngày', 'date unknown')}`
+                  : t('chưa rõ giá', 'price unknown')}
+                {tour?.duration_days != null && ` · ${tour.duration_days}N`}
+              </p>
+              <p className={styles.verdict}>
+                <strong>{option.title}</strong> {option.reason}
+              </p>
+              {lead && <p className={styles.tradeoff}>{lead}</p>}
+              {unknowns > 0 && (
+                <p className={styles.caveat}>
+                  {t(
+                    `${unknowns} dữ kiện chưa rõ cho offer này.`,
+                    `${unknowns} data points still unknown for this offer.`,
+                  )}
+                </p>
+              )}
+            </article>
+          );
+        })}
+        {relaxedSlots.map(({ relax, tourId }) => {
+          const condition = findCondition(comparison, relax.condition_id);
+          const example = relax.examples.find((item) => item.tour_id === tourId) ?? relax.examples[0];
+          const state = scenarios[relax.condition_id] ?? { status: 'idle' as const };
+          return (
+            <article
+              className={`${styles.card} ${styles.relaxed}`}
+              key={`relax-${relax.condition_id}`}
+            >
+              <span className={`${styles.kicker} ${styles.relaxedKicker}`}>
+                {t('Nới', 'Relaxed')}:{' '}
+                {condition
+                  ? `${fieldLabel(condition.field, t)} ${conditionText(condition.operator, condition.value, t)}`
+                  : relax.condition_id}
+              </span>
+              <h3>{example?.tour_name || tourName(comparison, tourId, tourId)}</h3>
+              <p className={styles.numbers}>
+                {example?.price != null
+                  ? priceText(example.price, example.currency, locale, t)
+                  : t('chưa rõ giá', 'price unknown')}
+                {example?.departure_date ? ` · ${example.departure_date}` : ''}
+                {` · +${relax.gained_tours} tour`}
+              </p>
+              <p className={styles.tradeoff}>
+                {t(
+                  `Bỏ điều kiện này mở thêm ${relax.gained_tours} tour (${relax.gained_offers} offer).`,
+                  `Dropping this condition opens ${relax.gained_tours} more tours (${relax.gained_offers} offers).`,
+                )}
+              </p>
+              {state.status === 'idle' && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={!client || !agentSessionId}
+                  onClick={() => void runRelaxation(relax)}
+                >
+                  {t('Thử nới này', 'Try this relaxation')}
+                </button>
+              )}
+              {state.status === 'running' && (
+                <p className={styles.caveat}>{t('Đang chạy kịch bản…', 'Running scenario…')}</p>
+              )}
+              {state.status === 'done' && (
+                <div>
+                  <p className={styles.verdict}>
+                    {t(
+                      `Có ${state.eligibleTours} tour đạt (${state.eligibleOffers} offer) khi nới.`,
+                      `${state.eligibleTours} tours qualify (${state.eligibleOffers} offers) when relaxed.`,
+                    )}
+                    {state.names.length > 0 && ` ${state.names.join(' · ')}`}
+                  </p>
+                  <button type="button" className="btn" onClick={onOpenDecision}>
+                    {t('Xem trong panel quyết định', 'View in decision panel')}
+                  </button>
+                </div>
+              )}
+              {state.status === 'error' && <p className={styles.caveat}>{state.message}</p>}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}

@@ -345,6 +345,22 @@ class DecisionOption(BaseModel):
     metric_comparisons: list[OptionMetricComparison] = Field(default_factory=list)
 
 
+class RelaxationExample(BaseModel):
+    tour_id: str
+    offer_id: str
+    tour_name: str = ""
+    price: int | None = None
+    currency: str = ""
+    departure_date: str = ""
+
+
+class RelaxationOption(BaseModel):
+    condition_id: str
+    gained_offers: int = 0
+    gained_tours: int = 0
+    examples: list[RelaxationExample] = Field(default_factory=list)
+
+
 class DecisionConditionCount(BaseModel):
     condition_id: str
     pass_offers: int = 0
@@ -416,6 +432,7 @@ class Comparison(BaseModel):
     metric_profiles: list[MetricProfile] = Field(default_factory=list)
     near_miss_profiles: list[MetricProfile] = Field(default_factory=list)
     decision_options: list[DecisionOption] = Field(default_factory=list)
+    relaxation_options: list[RelaxationOption] = Field(default_factory=list)
     assumptions: list[str] = Field(default_factory=list)
 
 

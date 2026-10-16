@@ -532,3 +532,33 @@ def test_departure_city_variants_match_across_admin_prefixes():
     assert eval_hard(cond, variant, variant.offers[0]) == ("pass", "")
     other = cond.model_copy(update={"id": "h2", "value": "Hà Nội"})
     assert eval_hard(other, variant, variant.offers[0])[0] == "fail"
+
+
+def test_relaxation_options_rank_single_condition_gains(decide_cfg):
+    from backend.decide.engine import hard_filter, relaxation_options
+
+    tours = _snapshots()
+    req = _req({"destinations": ["Đà Lạt"], "budget_max": 1_000_000})
+    options = relaxation_options(req, tours, hard_filter(req, tours), set())
+    assert options
+    hard_ids = {condition.id for condition in req.hard()}
+    for option in options:
+        assert option.condition_id in hard_ids
+        assert option.gained_tours >= 1
+        assert option.gained_offers >= len(option.examples) >= 1
+        prices = [example.price for example in option.examples if example.price is not None]
+        assert prices == sorted(prices)
+    gains = [(option.gained_tours, option.gained_offers) for option in options]
+    assert gains == sorted(gains, reverse=True)
+    comparison = compare(req, tours, decide_cfg)
+    assert [option.condition_id for option in comparison.relaxation_options] == [
+        option.condition_id for option in options
+    ]
+
+
+def test_relaxation_options_empty_without_hard_conditions(decide_cfg):
+    from backend.decide.engine import hard_filter, relaxation_options
+
+    tours = _snapshots()
+    req = _req({})
+    assert relaxation_options(req, tours, hard_filter(req, tours), set()) == []

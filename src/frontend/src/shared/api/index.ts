@@ -24,6 +24,8 @@ export type {
   CurrentMetricMeasure,
   CurrentMetricProfile,
   CurrentOffer,
+  CurrentRelaxationExample,
+  CurrentRelaxationOption,
   CurrentRequirement,
   CurrentSession,
   CurrentTourSnapshot,
