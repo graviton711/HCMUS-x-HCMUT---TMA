@@ -143,5 +143,6 @@ def test_repo_configs_load():
     assert "immutable" in prompt["system"]
     assert "mcp__tour_catalog__*" in prompt["system"]
     assert "never claim you cannot access the catalog" in prompt["system"]
+    assert "verbatim as `raw_text`" in prompt["system"]
     for leaked in ("gpt-", "Muse", "deepseek", "gemini", "xkiro"):
         assert leaked not in prompt["system"]
