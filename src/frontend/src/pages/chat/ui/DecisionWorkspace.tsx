@@ -232,7 +232,7 @@ export function DecisionWorkspace({
               onToggleSavedTour={onToggleSavedTour}
               onAsk={onSend}
             />
-            {hasMetrics && (comparison.decision_options ?? []).length > 0 && (
+            {hasMetrics && (comparison.decision_options ?? []).length > 1 && (
               <OptionMatrix comparison={comparison} />
             )}
             {comparison.decision_trace?.snapshot_available && (

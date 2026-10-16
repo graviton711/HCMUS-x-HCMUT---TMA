@@ -245,6 +245,9 @@ describe("ResultCards", () => {
     expect(screen.getAllByText("Tour Mộc Châu")).toHaveLength(2);
     expect(screen.getByText(/1 tour đã quét/)).toBeTruthy();
     expect(screen.getByText("Đánh đổi và chi phí cần kiểm tra")).toBeTruthy();
+    expect(
+      screen.getByText("Đánh đổi và chi phí cần kiểm tra").closest("details")?.open,
+    ).toBe(false);
     expect(screen.getByText("Khoản chưa định giá / có điều kiện")).toBeTruthy();
     fireEvent.click(screen.getByText(/Loại trừ, phụ thu/));
     expect(screen.getAllByText("Không bao gồm vé tham quan")).toHaveLength(2);

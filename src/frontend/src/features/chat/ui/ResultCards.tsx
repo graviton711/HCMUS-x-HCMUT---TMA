@@ -761,19 +761,19 @@ function MetricComparisonPanel({
   }
 
   return (
-    <section
+    <details
       className={styles['metric-comparison']}
       aria-label={t('So sánh dữ kiện và chi phí', 'Compare evidence and costs')}
     >
-      <div className={styles['metric-comparison-heading']}>
-        <h3>{t('Đánh đổi và chi phí cần kiểm tra', 'Trade-offs and costs to inspect')}</h3>
-        <p>
-          {t(
-            'Khoản chưa bao gồm và phụ thu được tách theo nghĩa vụ và bằng chứng; khoản chưa rõ không được cộng vào tổng.',
-            'Exclusions and surcharges are separated by obligation and evidence; unknown items are not added to the total.',
-          )}
-        </p>
-      </div>
+      <summary>
+        {t('Đánh đổi và chi phí cần kiểm tra', 'Trade-offs and costs to inspect')}
+      </summary>
+      <p>
+        {t(
+          'Khoản chưa bao gồm và phụ thu được tách theo nghĩa vụ và bằng chứng; khoản chưa rõ không được cộng vào tổng.',
+          'Exclusions and surcharges are separated by obligation and evidence; unknown items are not added to the total.',
+        )}
+      </p>
       <div className={styles['metric-choice-grid']}>
         {entries.slice(0, 3).map((entry) => {
           const profile = profiles.get(`${entry.tour_id}:${entry.offer_id}`);
@@ -976,7 +976,7 @@ function MetricComparisonPanel({
           );
         })}
       </div>
-    </section>
+    </details>
   );
 }
 

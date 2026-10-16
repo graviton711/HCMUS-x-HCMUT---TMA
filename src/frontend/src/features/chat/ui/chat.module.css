@@ -1549,11 +1549,17 @@
   border-top: 1px solid var(--line);
 }
 
-.decision-choices > h3,
-.metric-comparison-heading h3 {
+.decision-choices > h3 {
   margin: 0;
   color: var(--ink);
   font-size: var(--text-sm);
+}
+
+.metric-comparison > summary {
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  cursor: pointer;
 }
 
 .decision-choice-grid,
@@ -1608,7 +1614,7 @@
 }
 
 .decision-choice p,
-.metric-comparison-heading p {
+.metric-comparison > p {
   margin: 5px 0 0;
   color: var(--muted);
   font-size: var(--text-xs);
@@ -1677,11 +1683,6 @@
   margin: 4px 0;
   padding-left: 8px;
   border-left: 2px solid var(--line);
-}
-
-.metric-comparison-heading {
-  display: grid;
-  gap: 3px;
 }
 
 .metric-choice {
