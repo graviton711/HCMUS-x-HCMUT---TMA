@@ -656,6 +656,68 @@ def test_concurrent_batch_keeps_input_order(tmp_path, monkeypatch):
     assert [r["url"] for r in rows] == urls
 
 
+def test_batch_without_fresh_tours_does_not_burn_quality_baseline(tmp_path, monkeypatch):
+    import json
+
+    import ingest.pipeline as pipeline_mod
+    from ingest.pipeline import run_batch
+
+    settings = {"output": {"dir": str(tmp_path)}, "batch": {"workers": 1, "delay_s": 0}}
+    out_csv = tmp_path / "out.csv"
+    # utf-8-sig prepends the BOM; a literal \ufeff prefix would double it and
+    # corrupt the header key for _read_done.
+    out_csv.write_text("url\nhttps://example.test/1\n", encoding="utf-8-sig", newline="")
+    source_dir = tmp_path / "s"
+    quality_path = source_dir / "quality.json"
+    baseline = json.dumps({
+        "observed_at": "2026-10-17T10:21:04+07:00",
+        "summary": {"tours": 37, "price_mean": 1.0, "fills": {}, "fallback_count": 0},
+        "warnings": [],
+    }, ensure_ascii=False)
+    source_dir.mkdir(parents=True)
+    quality_path.write_text(baseline, encoding="utf-8")
+
+    calls: list[str] = []
+
+    def boom(url, profile, settings, out_dir, robots_cache=None, state_entry=None):
+        calls.append(url)
+        return {"url": url, "status": "ok", "detail_file": ""}
+
+    monkeypatch.setattr(pipeline_mod, "run_tour", boom)
+    assert run_batch(["https://example.test/1"], {"name": "s"}, settings,
+                     out_csv, tmp_path / "json") == 0
+    assert calls == []  # resume skipped the done URL; nothing crawled
+    assert quality_path.read_text(encoding="utf-8") == baseline  # baseline preserved
+
+
+def test_batch_with_fresh_details_writes_quality(tmp_path, monkeypatch):
+    import json
+
+    import ingest.pipeline as pipeline_mod
+    from ingest.pipeline import run_batch
+
+    settings = {"output": {"dir": str(tmp_path)}, "batch": {"workers": 2, "delay_s": 0}}
+    out_csv = tmp_path / "out.csv"
+    detail_path = tmp_path / "json" / "d.json"
+    detail_path.parent.mkdir(parents=True)
+    detail_path.write_text(json.dumps({
+        "record": {"tour_name": "Tour A", "price": 1500000, "currency": "VND",
+                   "departure_city": "Sài Gòn"},
+    }, ensure_ascii=False), encoding="utf-8")
+
+    def fake_run_tour(url, profile, settings_, out_dir, robots_cache=None, state_entry=None):
+        return {"url": url, "status": "ok", "detail_file": str(detail_path)}
+
+    monkeypatch.setattr(pipeline_mod, "run_tour", fake_run_tour)
+    monkeypatch.setattr(pipeline_mod, "fetch_robots", lambda *a: None)
+    monkeypatch.setattr(pipeline_mod, "make_fetcher", lambda settings_: type(
+        "F", (), {"fetch": staticmethod(lambda url, origin_host="", extra_headers=None: url)})())
+    assert run_batch([f"https://example.test/{index}" for index in range(1, 3)],
+                     {"name": "s", "flows": ["static"]}, settings, out_csv, tmp_path / "json") == 0
+    snapshot = json.loads((tmp_path / "s" / "quality.json").read_text(encoding="utf-8"))
+    assert snapshot["summary"]["tours"] == 2
+
+
 def test_conditional_fetch_skips_unchanged_pages(tmp_path, monkeypatch):
     import hashlib as _hashlib
 

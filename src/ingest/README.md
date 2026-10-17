@@ -2,6 +2,36 @@
 
 Luồng chính 5 bước: danh sách link (sitemap trong `pipeline`) → agent vẽ map (`survey.py`) → crawl hàng loạt (`python -m ingest`, trang tĩnh qua `extract.py`, site động qua `browser` khi profile khai báo) → CSV sạch → database.
 
+## Chạy nhanh
+
+Mọi thông số vận hành nằm ở `configs/settings.yaml`; profile nằm ở `configs/profiles/<name>.yaml`. Output mặc định ghi xuống `.local/<source>/` (CSV, JSON detail, `quality.json`); state resume dùng chung `.local/_state.json`, key theo URL đầy đủ nên các source không xung đột.
+
+```bash
+# Chuỗi đầy đủ 5 bước cho 1 source (survey -> discover -> batch -> migrate -> publish)
+uv run python -m ingest.run --source vietravel            # --limit 5: chỉ 5 tour; --skip-survey: tái dùng profile đã promote
+
+# Crawl 1 tour duy nhất (trừu tượng debug một URL)
+uv run python -m ingest https://travel.com.vn/chuong-trinh/...-pid-4363 -p vietravel
+
+# Đổ danh sách URL từ sitemap/search trang nguồn -> .local/<source>/discovered.csv
+uv run python -m ingest --discover -p vietravel           # --limit N: giới hạn; --since YYYY-MM-DD: chỉ URL lastmod mới hơn
+
+# Crawl hàng loạt theo discovered.csv (resume: URL đã có trong tours.csv sẽ bị skip)
+uv run python -m ingest --batch -p vietravel              # log "batch: 0 urls (490 skipped)" nghĩa là không còn URL mới — bình thường
+uv run python -m ingest --batch meo.csv -p vietravel      # dùng CSV khác; --output tours-x.csv đổi nơi ghi kết quả
+
+# Crawl mọi URL trong sitemap profile (bỏ qua bước discover)
+uv run python -m ingest --sitemap -p vietravel
+
+# Database: áp migrations, rồi publish detail JSON vào bảng tour
+uv run python -m ingest --migrate
+uv run python -m ingest --publish -p vietravel            # đọc .local/<source>/tours/ (hoặc --publish <DIR>)
+
+# Site động: các flow browser/combo chạy tuần tự; --no-browser chặn tầng browser khi debug tĩnh
+```
+
+Chi tiết kỹ thuật từng bước nằm ở các mục dưới: workflow khảo sát (`survey.py`), chuẩn DSL profile (`extract.py`), hành vi resume/failure budget của batch, và hợp đồng publish.
+
 Tài liệu này đặc tả hợp đồng kỹ thuật giữa Agent khảo sát (`survey.py`) và engine thu thập (`extract.py` + `pipeline.py`).
 
 Mọi thông số vận hành (timeout, retry, workers, model survey, `min_evidence`...) nằm ở `configs/settings.yaml` theo `configs/settings.schema.json`. `opencode.model` cấu hình model OpenCode cho survey và chat legacy trên Render; local chat dùng riêng `codex.model` và `codex.reasoning_effort`. Survey tiếp tục gọi OpenCode CLI và chỉ cấu hình thêm `survey.variant`. Transport dùng connection reuse theo thread + `Accept-Encoding: gzip`, DNS cache `fetch.dns_ttl_s`, retry `fetch.retries` lần với backoff cho lỗi thoáng qua (timeout/reset/5xx/429, không retry lỗi SSL cert hay 4xx).
@@ -148,7 +178,7 @@ Mọi output crawl đều namespac theo source (`.local/<source>/`) nên nhiều
 
 ## Chất lượng run-over-run
 
-Mỗi batch ghi `.local/<source>/quality.json`: số tour, giá trung bình, tỷ lệ fill từng field bắt buộc (`quality.fill_fields`), và số field rơi vào fallback (rỗng). Lần chạy sau so với lần trước theo ngưỡng `quality.*` (`min_tours_ratio`, `max_price_shift`, `min_fill_rate`); lệch băng chỉ cảnh báo (log + file), không fail batch — tỷ lệ fallback tăng dần chính là tín hiệu site đổi layout, rẻ hơn re-survey mù.
+Mỗi batch ghi `.local/<source>/quality.json`: số tour, giá trung bình, tỷ lệ fill từng field bắt buộc (`quality.fill_fields`), và số field rơi vào fallback (rỗng). Lần chạy sau so với lần trước theo ngưỡng `quality.*` (`min_tours_ratio`, `max_price_shift`, `min_fill_rate`); lệch băng chỉ cảnh báo (log + file), không fail batch — tỷ lệ fallback tăng dần chính là tín hiệu site đổi layout, rẻ hơn re-survey mù. Batch không crawl được tour nào (resume hết, hoặc mọi URL fail) **không ghi snapshot và không đè baseline cũ** — so sánh rỗng-vs-không-rỗng chỉ sinh warning giả; quality mới chỉ được ghi khi run có ít nhất một tour (detail JSON) cho từng source.
 
 
 

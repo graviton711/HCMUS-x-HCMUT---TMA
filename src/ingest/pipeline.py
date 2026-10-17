@@ -676,7 +676,10 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
                 _save_state(state_path, state)
                 raise
         _save_state(state_path, state)
-        _write_quality(settings, profile, detail_paths)
+        if detail_paths:
+            _write_quality(settings, profile, detail_paths)
+        else:
+            log.info("quality snapshot skipped: no fresh tours crawled")
         log.info("batch done: wrote %s", output)
         return 0
 
@@ -749,7 +752,10 @@ def run_batch(urls: list[str], profile: dict, settings: dict, output: Path,
             _save_state(state_path, state)
             raise
     _save_state(state_path, state)
-    _write_quality(settings, profile, detail_paths)
+    if detail_paths:
+        _write_quality(settings, profile, detail_paths)
+    else:
+        log.info("quality snapshot skipped: no fresh tours crawled")
     log.info("batch done: wrote %s", output)
     return 0
 
