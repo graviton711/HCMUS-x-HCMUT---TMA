@@ -258,8 +258,10 @@ test('guest reviews a brief, compares decision views, and restores the result', 
       .getByRole('region', { name: 'Các phương án để cân nhắc' })
       .getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' }),
   ).toBeVisible();
-  await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
   await expect(page.getByText(/Tour khuyên cho bạn:/)).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Kết luận' })).toBeVisible();
+  await page.getByRole('tab', { name: 'So sánh' }).click();
+  await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
   await expect(page.getByText('1 tour đã quét', { exact: true })).toBeVisible();
   await expect(page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' })).toHaveCount(2);
 
@@ -294,8 +296,9 @@ test('guest reviews a brief, compares decision views, and restores the result', 
       .getByRole('region', { name: 'Các phương án để cân nhắc' })
       .getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' }),
   ).toBeVisible();
-  await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
   await expect(page.getByText(/Tour khuyên cho bạn:/)).toBeVisible();
+  await page.getByRole('tab', { name: 'So sánh' }).click();
+  await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
   await expect(page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' })).toHaveCount(2);
 });
 
@@ -348,6 +351,7 @@ test('desktop decision workspace remains within the canvas and splitter is keybo
       return Boolean(label && value && value.y > label.y && Math.abs(value.x - label.x) < 2);
     })
     .toBe(true);
+  await page.getByRole('tab', { name: 'Chi tiết' }).click();
   const matrix = page.locator('details[class*="decision-matrix"]');
   await matrix.locator('summary').click();
   const matrixGrid = matrix.locator('[class*="decision-matrix-grid"]');
@@ -436,6 +440,8 @@ test('guest chat fits a narrow mobile viewport', async ({ page }) => {
   await page.getByRole('button', { name: 'Gửi', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Kiểm tra tiêu chí chuyến đi' })).toBeVisible();
   await page.getByRole('button', { name: 'So sánh tour' }).click();
+  await expect(page.getByRole('tab', { name: 'Kết luận' })).toBeVisible();
+  await page.getByRole('tab', { name: 'So sánh' }).click();
   await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
   await page.locator('[class*="workspace-switcher"] button').nth(0).click();
   const details = page.locator('details').filter({ hasText: 'Kiểm tra lựa chọn có trong dữ liệu' });
@@ -448,6 +454,12 @@ test('guest chat fits a narrow mobile viewport', async ({ page }) => {
     content: document.documentElement.scrollWidth,
   }));
   expect(sizes.content).toBeLessThanOrEqual(sizes.viewport + 1);
+  await page.getByRole('tab', { name: 'Chi tiết' }).click();
+  const detailSizes = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    content: document.documentElement.scrollWidth,
+  }));
+  expect(detailSizes.content).toBeLessThanOrEqual(detailSizes.viewport + 1);
 });
 
 test('tool progress expands by keyboard and respects dark mode and reduced motion', async ({

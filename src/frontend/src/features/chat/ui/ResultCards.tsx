@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type {
   CurrentComparison,
   CurrentCondition,
@@ -1469,6 +1469,10 @@ function DecisionViews({  comparison,
   onAsk?: (text: string) => void;
 }) {
   const { t } = usePreferences();
+  const [subTab, setSubTab] = useState<'verdict' | 'compare' | 'details'>('verdict');
+  useEffect(() => {
+    setSubTab('verdict');
+  }, [comparison.id]);
   const views = comparison.decision_views ?? [];
   const hasSoft = comparison.requirement.conditions.some(
     (condition) => condition.strength === 'soft',
@@ -1588,9 +1592,36 @@ function DecisionViews({  comparison,
         </span>
       </header>
 
-      {activeView && entries.length > 0 && (
-        <VerdictHero comparison={comparison} top={entries[0]} viewKind={activeView.kind} />
-      )}
+      <div
+        className={styles['result-subtabs']}
+        role="tablist"
+        aria-label={t('Các phần của kết quả', 'Result sections')}
+      >
+        {(
+          [
+            ['verdict', t('Kết luận', 'Verdict')],
+            ['compare', t('So sánh', 'Compare')],
+            ['details', t('Chi tiết', 'Details')],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={subTab === id}
+            className={styles['result-subtab']}
+            onClick={() => setSubTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'verdict' && (
+        <>
+          {activeView && entries.length > 0 && (
+            <VerdictHero comparison={comparison} top={entries[0]} viewKind={activeView.kind} />
+          )}
 
       {(comparison.decision_options ?? []).length > 0 && (
         <section
@@ -1699,9 +1730,13 @@ function DecisionViews({  comparison,
           </div>
         </section>
       )}
+        </>
+      )}
 
-      {activeView && (
-        <p className={styles['decision-tabs-caption']}>
+      {subTab === 'compare' && (
+        <>
+          {activeView && (
+            <p className={styles['decision-tabs-caption']}>
           {t('Kết luận và xếp hạng theo:', 'Verdict and ranking by:')}
         </p>
       )}
@@ -1883,10 +1918,14 @@ function DecisionViews({  comparison,
           )}
         </>
       )}
-
-      {activeView && entries.length > 0 && (
-        <MetricComparisonPanel comparison={comparison} entries={entries} />
+        </>
       )}
+
+      {subTab === 'details' && (
+        <>
+          {activeView && entries.length > 0 && (
+            <MetricComparisonPanel comparison={comparison} entries={entries} />
+          )}
 
       {hasSoft && entries.length > 0 && (
         <details className={styles['decision-matrix']}>
@@ -1943,7 +1982,20 @@ function DecisionViews({  comparison,
         </details>
       )}
 
-      <div className={styles['result-actions']}>
+          {(!activeView || entries.length === 0) && (
+            <p className={styles['decision-empty']} role="status">
+              {t(
+                'Chưa có tour nào trong góc nhìn này để hiện số liệu.',
+                'No tours in this view to show details for.',
+              )}
+            </p>
+          )}
+        </>
+      )}
+
+      {subTab === 'compare' && (
+        <>
+          <div className={styles['result-actions']}>
         {selected.length > 0 && (
           <button
             type="button"
@@ -2029,6 +2081,8 @@ function DecisionViews({  comparison,
             disabled={busy}
           />
         </div>
+      )}
+        </>
       )}
 
       <DecisionComparisonDialog

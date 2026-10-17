@@ -341,6 +341,23 @@ describe("ResultCards", () => {
       </PreferencesProvider>,
     );
 
+    // Verdict tab (default): hero summary.
+    expect(
+      screen
+        .getByRole("tab", { name: "Kết luận" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(screen.getByText(/Tour khuyên cho bạn:/)).toBeTruthy();
+    expect(
+      screen.getByText(/Giá công bố thấp nhất trong nhóm đạt điều kiện/),
+    ).toBeTruthy();
+    expect(screen.getByText("Không khai báo điều kiện bắt buộc")).toBeTruthy();
+    expect(screen.getByText(/Chấp nhận: 1 khoản chưa định giá/)).toBeTruthy();
+    expect(screen.getByText(/1 tour đã quét/)).toBeTruthy();
+    expect(screen.getAllByText("Tour Mộc Châu")).toHaveLength(1);
+
+    // Compare tab: view switcher and tour cards.
+    fireEvent.click(screen.getByRole("tab", { name: "So sánh" }));
     expect(
       screen
         .getByRole("tab", { name: /Giá thấp nhất/ })
@@ -352,19 +369,18 @@ describe("ResultCards", () => {
         .getByRole("tab", { name: /Nhiều trải nghiệm/ })
         .hasAttribute("disabled"),
     ).toBe(true);
-    expect(screen.getAllByText("Tour Mộc Châu")).toHaveLength(3);
-    expect(screen.getByText(/Tour khuyên cho bạn:/)).toBeTruthy();
-    expect(
-      screen.getByText(/Giá công bố thấp nhất trong nhóm đạt điều kiện/),
-    ).toBeTruthy();
-    expect(screen.getByText("Không khai báo điều kiện bắt buộc")).toBeTruthy();
-    expect(screen.getByText(/Chấp nhận: 1 khoản chưa định giá/)).toBeTruthy();
+    expect(screen.getAllByText("Tour Mộc Châu")).toHaveLength(1);
     expect(screen.getByText("Được")).toBeTruthy();
     expect(screen.getByText(/Mất \/ Chấp nhận/)).toBeTruthy();
     expect(
       screen.getAllByText(/1 khoản chưa định giá — không cộng vào tổng/).length,
     ).toBeGreaterThan(0);
-    expect(screen.getByText(/1 tour đã quét/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Cân bằng/ }));
+    expect(screen.getByText("Pareto options.")).toBeTruthy();
+
+    // Details tab: trade-off/cost panel and matrix.
+    fireEvent.click(screen.getByRole("tab", { name: "Chi tiết" }));
     expect(screen.getByText("Đánh đổi và chi phí cần kiểm tra")).toBeTruthy();
     expect(
       screen.getByText("Đánh đổi và chi phí cần kiểm tra").closest("details")?.open,
@@ -372,9 +388,6 @@ describe("ResultCards", () => {
     expect(screen.getByText("Khoản chưa định giá / có điều kiện")).toBeTruthy();
     fireEvent.click(screen.getByText(/Loại trừ, phụ thu/));
     expect(screen.getAllByText("Không bao gồm vé tham quan")).toHaveLength(2);
-
-    fireEvent.click(screen.getByRole("tab", { name: /Cân bằng/ }));
-    expect(screen.getByText("Pareto options.")).toBeTruthy();
   });
 
   it("shows the recommended tour with plain status and gain/loss checklists", () => {
@@ -390,6 +403,7 @@ describe("ResultCards", () => {
     expect(screen.getByText("Ưu tiên: khớp 1/1 · mức Cao 1/1")).toBeTruthy();
     expect(screen.getByText(/Chấp nhận: 1 khoản chưa định giá/)).toBeTruthy();
 
+    fireEvent.click(screen.getByRole("tab", { name: "So sánh" }));
     expect(screen.getByText("Hợp nhất")).toBeTruthy();
     expect(screen.getAllByText(/5.000.000đ trọn gói/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Có chèo thuyền Kayak/).length).toBeGreaterThan(0);

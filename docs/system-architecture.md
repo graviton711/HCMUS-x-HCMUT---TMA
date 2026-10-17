@@ -43,7 +43,7 @@ Scenario điều kiện chạy lại hard filter trên snapshot gốc; scenario 
 
 - `/` là route chính cho hội thoại và quyết định. `/tours` chỉ là URL tương thích, chuyển về `/` và giữ `session`.
 - Phiên đang hoạt động có chat/progress và Decision Workspace song song trên desktop; mobile dùng hai tab và composer luôn khả dụng. Đây là cách trình bày cùng pipeline, không tạo API quyết định thứ hai.
-- Workspace chia bước: Yêu cầu → Kết quả → Phương án → Kịch bản → Minh bạch. Bước chỉ xuất hiện khi có dữ liệu; panel được giữ mounted khi ẩn để không mất trạng thái kịch bản; comparison mới tự mở bước Kết quả.
+- Workspace chia bước: Yêu cầu → Kết quả → Phương án → Kịch bản → Minh bạch. Bước chỉ xuất hiện khi có dữ liệu; panel được giữ mounted khi ẩn để không mất trạng thái kịch bản; comparison mới tự mở bước Kết quả. Bước Kết quả tách thành ba tab con: Kết luận (thẻ Kết luận và ba phương án), So sánh (chọn góc nhìn, thẻ tour, gần đạt) và Chi tiết (đánh đổi/chi phí, ma trận tiêu chí); kết quả mới mở ở tab Kết luận.
 - Bước Kết quả mở đầu bằng thẻ Kết luận: tour khuyên theo góc nhìn đang chọn, một câu lý do ngắn và ba dòng trạng thái (điều kiện bắt buộc, ưu tiên, điểm phải chấp nhận). Mỗi thẻ tour có hai cột Được / Mất so với tour dẫn đầu (chênh giá, chặng, mốc hủy, khoản chưa định giá) và giữ quote nguồn.
 - Local transcript lưu artifact `decision_draft` và `comparison`. Workspace dựng trạng thái từ chúng, không parse nội dung assistant; session cũ chỉ có `requirementId`/`comparisonId` được hydrate qua endpoint hiện tại.
 - Kết quả chỉ hiện hành khi requirement của comparison khớp Brief đã review. Nếu Brief thay đổi, comparison cũ vẫn được giữ và gắn trạng thái cũ.

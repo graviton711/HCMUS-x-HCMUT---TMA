@@ -1528,6 +1528,36 @@
   font-variant-numeric: tabular-nums;
 }
 
+.result-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 13px;
+  background: var(--surface-2);
+}
+
+.result-subtab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.result-subtab[aria-selected='true'] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--ink) 10%, transparent);
+}
+
 .decision-view-copy {
   display: grid;
   gap: 3px;
@@ -1994,6 +2024,7 @@
 }
 
 .decision-tab:focus-visible,
+.result-subtab:focus-visible,
 .brief-remove:focus-visible,
 .brief-weight-summary button:focus-visible {
   outline: 2px solid var(--focus);
@@ -2037,6 +2068,11 @@
     flex: 1 1 105px;
     padding-inline: 9px;
     white-space: normal;
+  }
+
+  .result-subtab {
+    flex: 1 1 88px;
+    padding-inline: 10px;
   }
 }
 
