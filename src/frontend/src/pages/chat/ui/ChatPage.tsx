@@ -189,7 +189,8 @@ function ActiveChat({
     if (!workspace) return;
     const update = () => {
       const style = window.getComputedStyle(workspace);
-      const horizontalPadding = Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
+      const horizontalPadding =
+        Number.parseFloat(style.paddingLeft) + Number.parseFloat(style.paddingRight);
       setCompact(workspace.clientWidth - horizontalPadding < 1040);
     };
     update();
@@ -283,11 +284,12 @@ function ActiveChat({
   const nudgeSplit = (direction: 'narrower' | 'wider' | 'min' | 'max') => {
     const layoutWidth = layoutRef.current?.getBoundingClientRect().width ?? 0;
     const { min, max } = splitBounds(layoutWidth);
-    const next = direction === 'min'
-      ? min
-      : direction === 'max'
-        ? max
-        : chatSplit + (direction === 'wider' ? 0.02 : -0.02);
+    const next =
+      direction === 'min'
+        ? min
+        : direction === 'max'
+          ? max
+          : chatSplit + (direction === 'wider' ? 0.02 : -0.02);
     setChatSplit(Math.min(max, Math.max(min, next)));
   };
 
@@ -300,7 +302,11 @@ function ActiveChat({
         style={{ '--chat-pane-size': `${chatSplit * 100}%` } as CSSProperties}
         data-split-dragging={splitDragging}
       >
-        <div className={styles['workspace-switcher']} role="group" aria-label={t('Chế độ xem', 'Workspace view')}>
+        <div
+          className={styles['workspace-switcher']}
+          role="group"
+          aria-label={t('Chế độ xem', 'Workspace view')}
+        >
           <button
             type="button"
             aria-pressed={mobilePane === 'chat'}
@@ -321,77 +327,77 @@ function ActiveChat({
           className={`${styles['thread-scroll']} ${mobilePane === 'chat' ? '' : styles['pane-hidden']}`}
           ref={threadRef}
         >
-        {chat.msgs.length === 0 && !chat.busy && (
-          <div className={styles['chat-welcome']}>
-            <h1>{t('Bạn muốn đi đâu?', 'Where would you like to go?')}</h1>
-            <p>
-              {t(
-                'Cho mình biết điểm đến, ngày đi hoặc ngân sách. Mình sẽ tìm tour phù hợp cùng bạn.',
-                'Share a destination, dates or budget. I’ll help you find trips that fit.',
-              )}
-            </p>
-            <QuickReplies
-              options={SUGGESTIONS.map(([text]) => ({ label: text, value: text }))}
-              onPick={chat.send}
-              disabled={chat.busy || !chat.client}
-            />
-          </div>
-        )}
-        <Thread
-          messages={chat.msgs}
-          busy={chat.busy}
-          activeToolActivityId={chat.activeToolActivityId}
-          onSend={chat.send}
-          onOpenArtifact={openArtifact}
-          selectedArtifactId={selectedArtifactId}
-          renderComparisonExtra={(comparison) => (
-            <VerdictStrip
-              comparison={comparison}
-              client={chat.client}
-              agentSessionId={session.agentSessionId ?? null}
-              layout="stack"
-              onOpenDecision={() => {
-                setDecisionOpen(true);
-                setMobilePane('decision');
-              }}
-              onRelaxCondition={(conditionId, label) => {
-                setMobilePane('chat');
-                chat.relaxCondition(conditionId, label);
-              }}
-            />
+          {chat.msgs.length === 0 && !chat.busy && (
+            <div className={styles['chat-welcome']}>
+              <h1>{t('Bạn muốn đi đâu?', 'Where would you like to go?')}</h1>
+              <p>
+                {t(
+                  'Cho mình biết điểm đến, ngày đi hoặc ngân sách. Mình sẽ tìm tour phù hợp cùng bạn.',
+                  'Share a destination, dates or budget. I’ll help you find trips that fit.',
+                )}
+              </p>
+              <QuickReplies
+                options={SUGGESTIONS.map(([text]) => ({ label: text, value: text }))}
+                onPick={chat.send}
+                disabled={chat.busy || !chat.client}
+              />
+            </div>
           )}
-          renderRecovery={
-            chat.failedStep
-              ? (expired) =>
-                  expired ? (
-                    <>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => onStart(draftText || undefined)}
-                      >
-                        {t('Tạo phiên mới', 'Start a new session')}
+          <Thread
+            messages={chat.msgs}
+            busy={chat.busy}
+            activeToolActivityId={chat.activeToolActivityId}
+            onSend={chat.send}
+            onOpenArtifact={openArtifact}
+            selectedArtifactId={selectedArtifactId}
+            renderComparisonExtra={(comparison) => (
+              <VerdictStrip
+                comparison={comparison}
+                client={chat.client}
+                agentSessionId={session.agentSessionId ?? null}
+                layout="stack"
+                onOpenDecision={() => {
+                  setDecisionOpen(true);
+                  setMobilePane('decision');
+                }}
+                onRelaxCondition={(conditionId, label) => {
+                  setMobilePane('chat');
+                  chat.relaxCondition(conditionId, label);
+                }}
+              />
+            )}
+            renderRecovery={
+              chat.failedStep
+                ? (expired) =>
+                    expired ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          onClick={() => onStart(draftText || undefined)}
+                        >
+                          {t('Tạo phiên mới', 'Start a new session')}
+                        </button>
+                        {draftText && (
+                          <span className={styles['error-note']}>
+                            {t(
+                              'Phiên mới gửi lại bản nháp, không chuyển lịch sử chat.',
+                              'The new session resends the draft without the old chat history.',
+                            )}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <button type="button" className="btn" onClick={chat.retry}>
+                        {t('Thử lại', 'Retry')}
                       </button>
-                      {draftText && (
-                        <span className={styles['error-note']}>
-                          {t(
-                            'Phiên mới gửi lại bản nháp, không chuyển lịch sử chat.',
-                            'The new session resends the draft without the old chat history.',
-                          )}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <button type="button" className="btn" onClick={chat.retry}>
-                      {t('Thử lại', 'Retry')}
-                    </button>
-                  )
-              : undefined
-          }
-        />
+                    )
+                : undefined
+            }
+          />
 
-        {chat.phase === 'thinking' && !hasTurnToolActivity && <ToolStatus phase="preparing" />}
-        {chat.phase === 'working' && !hasTurnToolActivity && <ToolStatus phase="working" />}
+          {chat.phase === 'thinking' && !hasTurnToolActivity && <ToolStatus phase="preparing" />}
+          {chat.phase === 'working' && !hasTurnToolActivity && <ToolStatus phase="working" />}
         </div>
 
         <div
@@ -399,9 +405,16 @@ function ActiveChat({
           role="separator"
           tabIndex={0}
           aria-orientation="vertical"
-          aria-label={t('Điều chỉnh độ rộng khung hội thoại và quyết định', 'Resize chat and decision panes')}
-          aria-valuemin={Math.round(splitBounds(layoutRef.current?.getBoundingClientRect().width ?? 0).min * 100)}
-          aria-valuemax={Math.round(splitBounds(layoutRef.current?.getBoundingClientRect().width ?? 0).max * 100)}
+          aria-label={t(
+            'Điều chỉnh độ rộng khung hội thoại và quyết định',
+            'Resize chat and decision panes',
+          )}
+          aria-valuemin={Math.round(
+            splitBounds(layoutRef.current?.getBoundingClientRect().width ?? 0).min * 100,
+          )}
+          aria-valuemax={Math.round(
+            splitBounds(layoutRef.current?.getBoundingClientRect().width ?? 0).max * 100,
+          )}
           aria-valuenow={Math.round(chatSplit * 100)}
           aria-valuetext={`${Math.round(chatSplit * 100)}% chat`}
           onDoubleClick={() => setChatSplit(DEFAULT_CHAT_SPLIT)}
@@ -442,7 +455,9 @@ function ActiveChat({
           }}
         />
 
-        <div className={`${styles['decision-pane']} ${mobilePane === 'decision' ? '' : styles['pane-hidden']}`}>
+        <div
+          className={`${styles['decision-pane']} ${mobilePane === 'decision' ? '' : styles['pane-hidden']}`}
+        >
           <DecisionWorkspace
             messages={chat.msgs}
             busy={chat.busy}
@@ -453,6 +468,7 @@ function ActiveChat({
             onOpenArtifact={openArtifact}
             onUpdateDecisionDraft={chat.updateDecisionDraft}
             onRunDecision={chat.runDecision}
+            onExpandComparison={chat.expandComparison}
             onRelax={(field) => {
               setMobilePane('chat');
               chat.relax(field);

@@ -40,6 +40,18 @@ function isChatMsg(value: unknown): value is ChatMsg {
   return validChatMsg(value);
 }
 
+const LEGACY_INIT_ERRORS = new Set([
+  'Chưa kết nối được dịch vụ tìm tour. Hãy thử lại sau ít phút.',
+  'Could not connect to the tour service. Try again in a moment.',
+]);
+
+function isInitError(message: ChatMsg): boolean {
+  return (
+    message.kind === 'error' &&
+    (message.origin === 'init' || LEGACY_INIT_ERRORS.has(message.text))
+  );
+}
+
 function errorText(cause: unknown, fallback: string, locale: Locale) {
   const t = (vi: string, en: string) => (locale === 'vi' ? vi : en);
   if (cause instanceof CurrentApiError) {
@@ -68,16 +80,10 @@ function errorText(cause: unknown, fallback: string, locale: Locale) {
       );
     }
     if (cause.code === 'OPENCODE_RESPONSE_EMPTY' || cause.code === 'AGENT_RESPONSE_EMPTY') {
-      return t(
-        'Mình chưa lấy được kết quả lần này.',
-        'I couldn’t retrieve the results this time.',
-      );
+      return t('Mình chưa lấy được kết quả lần này.', 'I couldn’t retrieve the results this time.');
     }
     if (cause.code === 'NETWORK_ERROR') {
-      return t(
-        'Không kết nối được dịch vụ tìm tour.',
-        'Could not connect to the tour service.',
-      );
+      return t('Không kết nối được dịch vụ tìm tour.', 'Could not connect to the tour service.');
     }
   }
   return fallback;
@@ -102,7 +108,9 @@ export function useChat(
   const sessionRef = useRef(session);
   const onChangeSessionRef = useRef(onChangeSession);
   const lastMessageRef = useRef('');
-  const lastDecisionRef = useRef<{ messageId: string; requirement: CurrentRequirement } | null>(null);
+  const lastDecisionRef = useRef<{ messageId: string; requirement: CurrentRequirement } | null>(
+    null,
+  );
   const toolActivityIdRef = useRef<string | null>(null);
   const streamingTextIdRef = useRef<string | null>(null);
   const hasLiveToolEventsRef = useRef(false);
@@ -164,9 +172,7 @@ export function useChat(
         ? transcriptRef.current.map((item, index) => (index === transcriptIndex ? message : item))
         : [...transcriptRef.current, message];
     setMsgs((all) => {
-      const messageIndex = all.findIndex(
-        (item) => item.id === id && item.kind === 'assistant',
-      );
+      const messageIndex = all.findIndex((item) => item.id === id && item.kind === 'assistant');
       return messageIndex >= 0
         ? all.map((item, index) => (index === messageIndex ? message : item))
         : [...all, message];
@@ -284,17 +290,23 @@ export function useChat(
         setClient(api);
         setInitialSendPending(shouldAutoSendInitial);
         let requirement = restoredMessages.find(
-          (message) => message.kind === 'decision_draft' && message.requirement.id === target.requirementId,
+          (message) =>
+            message.kind === 'decision_draft' && message.requirement.id === target.requirementId,
         );
         let comparison = restoredMessages.find(
-          (message) => message.kind === 'comparison' && message.comparison.id === target.comparisonId,
+          (message) =>
+            message.kind === 'comparison' && message.comparison.id === target.comparisonId,
         );
 
         if (target.comparisonId && !comparison) {
           const loaded = await api.comparison(target.comparisonId);
           if (!active) return;
           push({ id: uid(), kind: 'comparison', comparison: loaded.comparison });
-          comparison = { id: 'hydrated-comparison', kind: 'comparison', comparison: loaded.comparison };
+          comparison = {
+            id: 'hydrated-comparison',
+            kind: 'comparison',
+            comparison: loaded.comparison,
+          };
         }
 
         if (!requirement && target.requirementId) {
@@ -312,9 +324,8 @@ export function useChat(
           }
         }
 
-        const comparisonRequirement = comparison?.kind === 'comparison'
-          ? comparison.comparison.requirement
-          : null;
+        const comparisonRequirement =
+          comparison?.kind === 'comparison' ? comparison.comparison.requirement : null;
         if (!requirement && comparisonRequirement) {
           requirement = {
             id: 'hydrated-requirement',
@@ -334,6 +345,13 @@ export function useChat(
             status: matchesComparison ? 'complete' : 'draft',
           });
         }
+
+        const readyMessages = transcriptRef.current.filter((message) => !isInitError(message));
+        if (readyMessages.length !== transcriptRef.current.length) {
+          transcriptRef.current = readyMessages;
+          setMsgs(readyMessages);
+          onChangeSessionRef.current({ messages: readyMessages });
+        }
       } catch (cause) {
         if (active) {
           const expired = isSessionExpired(cause);
@@ -348,6 +366,7 @@ export function useChat(
               localeRef.current,
             ),
             expired,
+            origin: 'init',
           });
           setSessionExpired(expired);
           setFailedStep('init');
@@ -446,11 +465,22 @@ export function useChat(
     [push, upsertToolActivity],
   );
 
-  const updateDecisionDraft = useCallback(
-    (messageId: string, requirement: CurrentRequirement) => {
+  const updateDecisionDraft = useCallback((messageId: string, requirement: CurrentRequirement) => {
+    const updated = transcriptRef.current.map((message) =>
+      message.id === messageId && message.kind === 'decision_draft'
+        ? { ...message, requirement: withEqualSoftWeights(requirement), status: 'draft' as const }
+        : message,
+    );
+    transcriptRef.current = updated;
+    setMsgs(updated);
+    onChangeSessionRef.current({ messages: updated });
+  }, []);
+
+  const setDecisionDraftStatus = useCallback(
+    (messageId: string, status: 'draft' | 'running' | 'complete') => {
       const updated = transcriptRef.current.map((message) =>
         message.id === messageId && message.kind === 'decision_draft'
-          ? { ...message, requirement: withEqualSoftWeights(requirement), status: 'draft' as const }
+          ? { ...message, status }
           : message,
       );
       transcriptRef.current = updated;
@@ -459,17 +489,6 @@ export function useChat(
     },
     [],
   );
-
-  const setDecisionDraftStatus = useCallback((messageId: string, status: 'draft' | 'running' | 'complete') => {
-    const updated = transcriptRef.current.map((message) =>
-      message.id === messageId && message.kind === 'decision_draft'
-        ? { ...message, status }
-        : message,
-    );
-    transcriptRef.current = updated;
-    setMsgs(updated);
-    onChangeSessionRef.current({ messages: updated });
-  }, []);
 
   const sendMessage = useCallback(
     async (text: string, showUserMessage: boolean) => {
@@ -633,6 +652,79 @@ export function useChat(
     ],
   );
 
+  const expandComparison = useCallback(
+    (comparisonId: string) => {
+      const api = client;
+      const agentSessionId = sessionRef.current.agentSessionId;
+      if (sessionExpired || !api || !agentSessionId || abortControllerRef.current) return;
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      setPhase('working');
+      toolActivityIdRef.current = null;
+      streamingTextIdRef.current = null;
+      setActiveToolActivityId(null);
+      hasLiveToolEventsRef.current = false;
+      void (async () => {
+        try {
+          const response = await api.expandComparisonStream(
+            comparisonId,
+            agentSessionId,
+            recordToolProgress,
+            controller.signal,
+          );
+          applyResponse(response, response.comparison?.requirement.raw_text ?? '');
+          completeToolActivity();
+        } catch (cause) {
+          if (controller.signal.aborted) {
+            if (controller.signal.reason === 'user' && mountedRef.current) {
+              cancelRunningTools();
+              push({
+                id: uid(),
+                kind: 'notice',
+                text:
+                  localeRef.current === 'vi'
+                    ? 'Đã dừng đánh giá thêm tour.'
+                    : 'Tour expansion stopped.',
+              });
+            }
+          } else {
+            failRunningTools();
+            const expired = isSessionExpired(cause);
+            push({
+              id: uid(),
+              kind: 'error',
+              text: errorText(
+                cause,
+                localeRef.current === 'vi'
+                  ? 'Chưa thể đánh giá thêm nhóm tour này.'
+                  : 'Could not evaluate the next group of tours.',
+                localeRef.current,
+              ),
+              expired,
+            });
+            setSessionExpired(expired);
+          }
+        } finally {
+          if (abortControllerRef.current === controller) abortControllerRef.current = null;
+          if (mountedRef.current) {
+            onChangeSessionRef.current({ messages: transcriptRef.current });
+            setPhase('idle');
+          }
+        }
+      })();
+    },
+    [
+      applyResponse,
+      cancelRunningTools,
+      client,
+      completeToolActivity,
+      failRunningTools,
+      push,
+      recordToolProgress,
+      sessionExpired,
+    ],
+  );
+
   const relax = useCallback(
     (field: string) =>
       void sendMessage(`Hãy nới điều kiện ${field.replaceAll('_', ' ')} rồi tìm lại tour.`, true),
@@ -679,5 +771,6 @@ export function useChat(
     relaxPair,
     updateDecisionDraft,
     runDecision,
+    expandComparison,
   };
 }

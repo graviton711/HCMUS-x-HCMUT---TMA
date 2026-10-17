@@ -26,7 +26,9 @@ export function validChatMsg(v: unknown): boolean {
     return typeof v.text === 'string';
   if (v.kind === 'error') {
     return (
-      typeof v.text === 'string' && (v.expired === undefined || typeof v.expired === 'boolean')
+      typeof v.text === 'string' &&
+      (v.expired === undefined || typeof v.expired === 'boolean') &&
+      (v.origin === undefined || v.origin === 'init')
     );
   }
   if (v.kind === 'choice') {

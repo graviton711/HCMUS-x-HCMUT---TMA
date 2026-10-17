@@ -137,7 +137,8 @@
 .root :global(.session-bar) {
   position: sticky;
   top: var(--header-height);
-  z-index: 10;
+  z-index: var(--z-header);
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -145,6 +146,7 @@
   padding: 8px clamp(20px, 2.4vw, 36px);
   background: var(--paper);
   border-bottom: 1px solid var(--line);
+  pointer-events: auto;
 }
 
 .root :global(.app-shell.workspace-open) :global(.session-bar) {

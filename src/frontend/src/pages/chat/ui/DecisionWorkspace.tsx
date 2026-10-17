@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   CurrentBackendClient,
   CurrentComparison,
@@ -30,6 +30,7 @@ export function DecisionWorkspace({
   onOpenArtifact,
   onUpdateDecisionDraft,
   onRunDecision,
+  onExpandComparison,
   onRelax,
   onSend,
   onToggleWorkspace,
@@ -45,6 +46,7 @@ export function DecisionWorkspace({
   onOpenArtifact: (id: string) => void;
   onUpdateDecisionDraft: (id: string, requirement: CurrentRequirement) => void;
   onRunDecision: (id: string, requirement: CurrentRequirement) => void;
+  onExpandComparison: (comparisonId: string) => void;
   onRelax: (field: string) => void;
   onRelaxPair?: (conditionIds: string[], label: string) => void;
   onSend: (text: string) => void;
@@ -233,6 +235,32 @@ export function DecisionWorkspace({
               onToggleSavedTour={onToggleSavedTour}
               onAsk={onSend}
             />
+            {(comparison.soft_review?.remaining_tours ?? 0) > 0 && (
+              <div
+                className={styles.softReviewExpansion}
+                role="group"
+                aria-label={t('Đánh giá thêm tour', 'Expand tour review')}
+              >
+                <p>
+                  {t(
+                    `Đã đánh giá ${comparison.soft_review?.evaluated_tours ?? 0}/${comparison.soft_review?.eligible_tours ?? 0} tour đạt điều kiện.`,
+                    `Evaluated ${comparison.soft_review?.evaluated_tours ?? 0}/${comparison.soft_review?.eligible_tours ?? 0} eligible tours.`,
+                  )}
+                </p>
+                <button
+                  type="button"
+                  disabled={busy || !client || !agentSessionId || comparisonIsStale}
+                  onClick={() => onExpandComparison(comparison.id)}
+                >
+                  {busy
+                    ? t('Đang đánh giá thêm…', 'Evaluating more…')
+                    : t(
+                        `Đánh giá thêm ${Math.min(comparison.soft_review?.batch_limit ?? 15, comparison.soft_review?.remaining_tours ?? 0)} tour`,
+                        `Evaluate ${Math.min(comparison.soft_review?.batch_limit ?? 15, comparison.soft_review?.remaining_tours ?? 0)} more tours`,
+                      )}
+                </button>
+              </div>
+            )}
             {hasMetrics && (comparison.decision_options ?? []).length > 1 && (
               <OptionMatrix comparison={comparison} />
             )}
@@ -258,7 +286,12 @@ export function DecisionWorkspace({
             <DecisionTracePanel comparison={comparison} client={client} />
             {(comparison.assumptions ?? []).length > 0 && (
               <details className={styles.tracePanel}>
-                <summary>{t('Giả định & giới hạn — đọc trước khi tin', 'Assumptions & limits — read before trusting')}</summary>
+                <summary>
+                  {t(
+                    'Giả định & giới hạn — đọc trước khi tin',
+                    'Assumptions & limits — read before trusting',
+                  )}
+                </summary>
                 <ul className={styles.traceList}>
                   {(comparison.assumptions ?? []).map((assumption) => (
                     <li key={assumption}>{assumption}</li>
@@ -602,7 +635,7 @@ function CostScenarioResults({ scenario }: { scenario: CurrentCostScenario }) {
   );
 }
 
-function DecisionTracePanel({
+export function DecisionTracePanel({
   comparison,
   client,
 }: {
@@ -616,22 +649,42 @@ function DecisionTracePanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeCondition, setActiveCondition] = useState<string | null>(null);
+  const requestId = useRef(0);
 
   async function load(cursor?: string | null, conditionId?: string | null) {
-    if (!client || loading) return;
+    if (!client) return;
+    const currentRequestId = ++requestId.current;
     setLoading(true);
     setError('');
     try {
-      const next = await client.eliminatedOffers(comparison.id, cursor, 20, conditionId ?? undefined);
-      setPage((current) =>
-        cursor && current ? { ...next, items: [...current.items, ...next.items] } : next,
+      const next = await client.eliminatedOffers(
+        comparison.id,
+        cursor,
+        20,
+        conditionId ?? undefined,
       );
-      setActiveCondition(conditionId ?? null);
+      if (requestId.current === currentRequestId) {
+        setPage((current) =>
+          cursor && current ? { ...next, items: [...current.items, ...next.items] } : next,
+        );
+        setActiveCondition(conditionId ?? null);
+      }
     } catch {
-      setError(t('Không tải được danh sách tour bị loại.', 'Could not load excluded tours.'));
+      if (requestId.current === currentRequestId) {
+        setError(t('Không tải được danh sách tour bị loại.', 'Could not load excluded tours.'));
+      }
     } finally {
-      setLoading(false);
+      if (requestId.current === currentRequestId) setLoading(false);
     }
+  }
+
+  function collapse() {
+    requestId.current += 1;
+    setOpen(false);
+    setPage(null);
+    setActiveCondition(null);
+    setError('');
+    setLoading(false);
   }
 
   function inspectCondition(conditionId: string) {
@@ -747,6 +800,8 @@ function DecisionTracePanel({
                 <button
                   type="button"
                   disabled={!client}
+                  aria-expanded={false}
+                  aria-controls={`excluded-offers-${comparison.id}`}
                   onClick={() => {
                     setOpen(true);
                     void load();
@@ -758,22 +813,30 @@ function DecisionTracePanel({
                   )}
                 </button>
               ) : (
-                <>
-                  {activeCondition && (
-                    <p>
-                      {t('Đang lọc theo:', 'Filtered by:')} {criterionLabel(activeCondition)}{' '}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPage(null);
-                          setActiveCondition(null);
-                          void load();
-                        }}
-                      >
-                        {t('Xem tất cả', 'Show all')}
-                      </button>
-                    </p>
-                  )}
+                <div
+                  id={`excluded-offers-${comparison.id}`}
+                  className={styles.traceEliminatedContent}
+                >
+                  <div className={styles.traceEliminatedHeader}>
+                    {activeCondition && (
+                      <p className={styles.traceEliminatedFilter}>
+                        {t('Đang lọc theo:', 'Filtered by:')} {criterionLabel(activeCondition)}{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPage(null);
+                            setActiveCondition(null);
+                            void load();
+                          }}
+                        >
+                          {t('Xem tất cả', 'Show all')}
+                        </button>
+                      </p>
+                    )}
+                    <button type="button" aria-expanded={true} onClick={collapse}>
+                      {t('Thu gọn', 'Collapse')}
+                    </button>
+                  </div>
                   {page?.items.map((item) => (
                     <article key={item.offer.id}>
                       <strong>{item.tour_name}</strong>
@@ -799,6 +862,9 @@ function DecisionTracePanel({
                     </article>
                   ))}
                   {error && <p role="status">{error}</p>}
+                  {loading && !page && (
+                    <p role="status">{t('Đang tải danh sách…', 'Loading the list…')}</p>
+                  )}
                   {page?.next_cursor && (
                     <button
                       type="button"
@@ -808,7 +874,7 @@ function DecisionTracePanel({
                       {loading ? t('Đang tải…', 'Loading…') : t('Xem thêm', 'Load more')}
                     </button>
                   )}
-                </>
+                </div>
               )}
             </section>
           ) : (

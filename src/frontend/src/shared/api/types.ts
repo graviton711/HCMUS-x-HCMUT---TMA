@@ -166,6 +166,8 @@ export interface CurrentComparison {
   };
   candidates_considered: number;
   decision_trace?: CurrentDecisionTrace | null;
+  soft_review?: CurrentSoftReviewProgress | null;
+  expanded_from_comparison_id?: string | null;
   ranking_currencies?: string[];
   decision_views?: CurrentDecisionView[];
   metric_profiles?: CurrentMetricProfile[];
@@ -174,6 +176,15 @@ export interface CurrentComparison {
   relaxation_options?: CurrentRelaxationOption[];
   relaxation_pairs?: CurrentRelaxationPair[];
   assumptions?: string[];
+}
+
+export interface CurrentSoftReviewProgress {
+  eligible_tours: number;
+  evaluated_tours: number;
+  remaining_tours: number;
+  batch_limit: number;
+  is_sampled: boolean;
+  evaluated_tour_ids: string[];
 }
 
 export interface CurrentRelaxationExample {

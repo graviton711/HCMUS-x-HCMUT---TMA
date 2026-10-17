@@ -5,7 +5,7 @@ from __future__ import annotations
 from backend.decide.engine import compare
 from backend.errors import AppError
 from backend.input.pipeline import validate_requirement
-from backend.models import Comparison, Requirement, State, TourSnapshot
+from backend.models import Comparison, ExtractedTourFacts, Requirement, State, TourSnapshot
 from backend.normalize.snapshots import rows_to_snapshots
 from backend.settings import Settings
 
@@ -78,6 +78,10 @@ class TourWorkflows:
         requirement: Requirement,
         snapshots: list[TourSnapshot],
         soft_verdicts: dict[tuple[str, str], tuple[State, str, str]] | None = None,
+        *,
+        eligible_tour_ids: set[str] | None = None,
+        hydrate_tour_ids: set[str] | None = None,
+        metric_facts: dict[str, ExtractedTourFacts] | None = None,
     ) -> Comparison:
         """Compare a scan index, hydrating only eligible and displayed near-miss tours."""
         if not any(tour.detail_state == "index" for tour in snapshots):
@@ -86,12 +90,16 @@ class TourWorkflows:
                 snapshots,
                 cfg=self.settings.tuning.decide,
                 soft_verdicts=soft_verdicts,
+                metric_facts=metric_facts,
+                eligible_tour_ids=eligible_tour_ids,
             )
         preliminary = compare(requirement, snapshots, cfg=self.settings.tuning.decide)
-        needed_ids = {
-            candidate.tour_id
-            for candidate in [*preliminary.ranked, *preliminary.near_miss]
-        }
+        needed_ids = (
+            set(hydrate_tour_ids)
+            if hydrate_tour_ids is not None
+            else {candidate.tour_id for candidate in preliminary.ranked}
+        )
+        needed_ids.update(candidate.tour_id for candidate in preliminary.near_miss)
         missing = [
             tour for tour in snapshots
             if tour.id in needed_ids and tour.detail_state == "index"
@@ -103,6 +111,8 @@ class TourWorkflows:
                 snapshots,
                 cfg=self.settings.tuning.decide,
                 soft_verdicts=soft_verdicts,
+                metric_facts=metric_facts,
+                eligible_tour_ids=eligible_tour_ids,
             )
 
         details = rows_to_snapshots(
@@ -133,6 +143,8 @@ class TourWorkflows:
             [merged[tour.id] for tour in snapshots],
             cfg=self.settings.tuning.decide,
             soft_verdicts=soft_verdicts,
+            metric_facts=metric_facts,
+            eligible_tour_ids=eligible_tour_ids,
         )
 
 

@@ -17,7 +17,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from backend.agent.results import limit_comparison
 from backend.data.catalog import for_settings
 from backend.data.sessions import BaseStore, SessionStore
-from backend.decide.engine import compare, eval_hard, soft_review_candidates
+from backend.decide.engine import (
+    SOFT_REVIEW_BATCH_LIMIT,
+    compare,
+    eval_hard,
+    select_soft_review_candidates,
+    soft_review_candidates,
+)
 from backend.decide.metrics import fact_cache_id
 from backend.error_logging import log_app_error, log_unexpected_error
 from backend.errors import AppError
@@ -33,6 +39,7 @@ from backend.models import (
     MetricEvidence,
     Requirement,
     RouteLegFact,
+    SoftReviewProgress,
     State,
     TourSnapshot,
     uid,
@@ -245,6 +252,9 @@ class _RankingContext:
     comparison: Comparison
     candidates: list[tuple[TourSnapshot, str]]
     batches: list[list[tuple[TourSnapshot, str]]]
+    eligible_tours: int
+    evaluated_tour_ids: list[str]
+    expanded_from_comparison_id: str | None = None
     decision_run_id: str | None = None
     batch_index: int = 0
     verdicts: dict[tuple[str, str], tuple[State, str, str]] = field(default_factory=dict)
@@ -253,6 +263,19 @@ class _RankingContext:
 
 def _json(payload: Any) -> str:
     return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def _soft_review_progress(eligible_tours: int, evaluated_tour_ids: list[str]) -> SoftReviewProgress:
+    unique_ids = list(dict.fromkeys(evaluated_tour_ids))
+    evaluated = min(eligible_tours, len(unique_ids))
+    return SoftReviewProgress(
+        eligible_tours=eligible_tours,
+        evaluated_tours=evaluated,
+        remaining_tours=max(0, eligible_tours - evaluated),
+        batch_limit=SOFT_REVIEW_BATCH_LIMIT,
+        is_sampled=evaluated < eligible_tours,
+        evaluated_tour_ids=unique_ids,
+    )
 
 
 def _effective_raw_text(
@@ -685,6 +708,10 @@ class AgentTools:
         snapshot_comparison_id: Annotated[
             str, Field(description="Baseline comparison id for a what-if run; empty scans live.")
         ] = "",
+        expand_soft_review: Annotated[
+            bool,
+            Field(description="When true, review the next unevaluated batch from the retained comparison snapshot."),
+        ] = False,
         conversation_id: Annotated[
             str,
             Field(description="Conversation token from the chat header; checks quotes against "
@@ -732,6 +759,7 @@ class AgentTools:
             alternatives=structured_alternatives,
             assumptions=structured_assumptions,
         )
+        baseline = None
         if snapshot_comparison_id:
             store = self.result_store or SessionStore(self.settings.database_url)
             should_close = self.result_store is None
@@ -742,14 +770,97 @@ class AgentTools:
                     store.close()
             if baseline.id != snapshot_comparison_id:
                 raise AppError("SCENARIO_SNAPSHOT_MISMATCH", "Scenario scan snapshot mismatch.", 409)
-            comparison = self.workflows.comparison_on_snapshot(
-                requirement,
-                baseline.tour_snapshots,
-            ).model_copy(update={"scenario_source_comparison_id": baseline.id})
+            if expand_soft_review and baseline.requirement != requirement:
+                raise AppError(
+                    "SOFT_REVIEW_REQUIREMENT_MISMATCH",
+                    "A review expansion must use the original comparison criteria.",
+                    409,
+                )
+            snapshots = baseline.tour_snapshots
         else:
-            comparison = self.workflows.comparison(requirement, self.settings.supabase_scan_limit)
+            if expand_soft_review:
+                raise AppError(
+                    "SOFT_REVIEW_SNAPSHOT_REQUIRED",
+                    "Review expansion requires the retained comparison snapshot.",
+                    422,
+                )
+            snapshots = self.workflows.snapshots(self.settings.supabase_scan_limit)
+
+        evaluated_tour_ids = list(
+            baseline.soft_review.evaluated_tour_ids
+            if expand_soft_review and baseline and baseline.soft_review
+            else []
+        )
+        evaluated_id_set = set(evaluated_tour_ids)
+        soft_condition_ids = {condition.id for condition in requirement.soft()}
+        prior_verdicts: dict[tuple[str, str], tuple[State, str, str]] = {}
+        if expand_soft_review and baseline:
+            prior_verdicts = {
+                (item.offer_id, item.condition_id): (item.state, item.quote, item.reason)
+                for item in baseline.evaluations
+                if item.condition_id in soft_condition_ids
+            }
+
+        hard_comparison = compare(requirement, snapshots, cfg=self.settings.tuning.decide)
+        all_candidates = soft_review_candidates(
+            requirement, snapshots, hard_comparison.evaluations
+        )
+        eligible_tour_ids = {tour.id for tour, _offer_id in all_candidates}
+        if evaluated_id_set - eligible_tour_ids:
+            raise AppError(
+                "SOFT_REVIEW_SNAPSHOT_MISMATCH",
+                "The saved review state does not match the eligible tours in this snapshot.",
+                409,
+            )
+        selected_candidates = select_soft_review_candidates(
+            requirement,
+            all_candidates,
+            excluded_tour_ids=evaluated_id_set,
+        )
+        selected_ids = {tour.id for tour, _offer_id in selected_candidates}
+        previously_evaluated = [
+            candidate for candidate in all_candidates if candidate[0].id in evaluated_id_set
+        ]
+        metric_facts = self._load_metric_fact_cache([*previously_evaluated, *selected_candidates])
+        comparison = self.workflows.comparison_on_snapshot(
+            requirement,
+            snapshots,
+            soft_verdicts=prior_verdicts,
+            eligible_tour_ids=evaluated_id_set,
+            hydrate_tour_ids=evaluated_id_set | selected_ids,
+            metric_facts=metric_facts,
+        )
+        comparison = comparison.model_copy(update={
+            "scenario_source_comparison_id": baseline.id if baseline else None,
+            "expanded_from_comparison_id": baseline.id if expand_soft_review and baseline else None,
+            "soft_review": SoftReviewProgress(
+                eligible_tours=len(all_candidates),
+                evaluated_tours=len(evaluated_id_set),
+                remaining_tours=max(0, len(all_candidates) - len(evaluated_id_set)),
+                batch_limit=SOFT_REVIEW_BATCH_LIMIT,
+                is_sampled=len(evaluated_id_set) < len(all_candidates),
+                evaluated_tour_ids=evaluated_tour_ids,
+            ),
+        })
+        hydrated_candidates_by_id = {
+            tour.id: (tour, offer_id)
+            for tour, offer_id in soft_review_candidates(
+                requirement, comparison.tour_snapshots, comparison.evaluations
+            )
+        }
+        selected_candidates = [
+            hydrated_candidates_by_id[tour.id]
+            for tour, _offer_id in selected_candidates
+            if tour.id in hydrated_candidates_by_id
+        ]
         return self._comparison_payload(
-            requirement, comparison, decision_run_id=decision_run_id or None
+            requirement,
+            comparison,
+            decision_run_id=decision_run_id or None,
+            review_candidates=selected_candidates,
+            eligible_tours=len(all_candidates),
+            evaluated_tour_ids=evaluated_tour_ids,
+            expanded_from_comparison_id=(baseline.id if expand_soft_review and baseline else None),
         )
 
     def draft_requirement(
@@ -980,11 +1091,21 @@ class AgentTools:
                 cfg=self.settings.tuning.decide,
                 soft_verdicts=context.verdicts,
                 metric_facts=context.metric_facts,
+                eligible_tour_ids=set(context.evaluated_tour_ids)
+                | {tour.id for tour, _offer_id in context.candidates},
             )
             if context.comparison.scenario_source_comparison_id:
                 comparison = comparison.model_copy(update={
                     "scenario_source_comparison_id": context.comparison.scenario_source_comparison_id,
                 })
+            evaluated_ids = list(dict.fromkeys([
+                *context.evaluated_tour_ids,
+                *(tour.id for tour, _offer_id in context.candidates),
+            ]))
+            comparison = comparison.model_copy(update={
+                "expanded_from_comparison_id": context.expanded_from_comparison_id,
+                "soft_review": _soft_review_progress(context.eligible_tours, evaluated_ids),
+            })
             self._ranking_contexts.pop(context_id, None)
             if context.decision_run_id:
                 self._save_decision_result(context.decision_run_id, comparison)
@@ -1018,6 +1139,11 @@ class AgentTools:
             "batch_index": context.batch_index + 1,
             "batch_count": len(context.batches),
             "review_candidate_count": len(context.candidates),
+            "eligible_tours": context.eligible_tours,
+            "evaluated_tours": len(context.evaluated_tour_ids),
+            "remaining_tours": max(0, context.eligible_tours - len(context.evaluated_tour_ids)),
+            "batch_limit": SOFT_REVIEW_BATCH_LIMIT,
+            "is_sampled": len(context.evaluated_tour_ids) < context.eligible_tours,
             "soft_conditions": [
                 {
                     "id": item.id,
@@ -1033,19 +1159,34 @@ class AgentTools:
         self,
         requirement: Requirement,
         comparison: Comparison,
+        *,
+        review_candidates: list[tuple[TourSnapshot, str]],
+        eligible_tours: int,
+        evaluated_tour_ids: list[str],
+        expanded_from_comparison_id: str | None,
         additional: dict[str, Any] | None = None,
         decision_run_id: str | None = None,
     ) -> str:
-        review_candidates = soft_review_candidates(
-            requirement, comparison.tour_snapshots, comparison.evaluations
-        )
         payload: dict[str, Any] = {
             "requirement": requirement.model_dump(mode="json"),
             "scanned_tours": len(comparison.tour_snapshots),
             "scan_limit": self.settings.supabase_scan_limit,
         }
+        progress = _soft_review_progress(eligible_tours, evaluated_tour_ids)
+        comparison = comparison.model_copy(update={
+            "expanded_from_comparison_id": expanded_from_comparison_id,
+            "soft_review": progress,
+        })
         if review_candidates:
-            cached_facts = self._load_metric_fact_cache(review_candidates)
+            reviewed_id_set = set(evaluated_tour_ids)
+            prior_candidates = [
+                candidate
+                for candidate in soft_review_candidates(
+                    requirement, comparison.tour_snapshots, comparison.evaluations
+                )
+                if candidate[0].id in reviewed_id_set
+            ]
+            cached_facts = self._load_metric_fact_cache([*prior_candidates, *review_candidates])
             candidates_to_review = [
                 pair for pair in review_candidates
                 if requirement.soft() or pair[0].id not in cached_facts
@@ -1053,16 +1194,28 @@ class AgentTools:
             batches = _review_batches(candidates_to_review)
             if not batches:
                 scenario_source_id = comparison.scenario_source_comparison_id
+                final_evaluated_ids = list(dict.fromkeys([
+                    *evaluated_tour_ids,
+                    *(tour.id for tour, _offer_id in review_candidates),
+                ]))
+                prior_verdicts = {
+                    (item.offer_id, item.condition_id): (item.state, item.quote, item.reason)
+                    for item in comparison.evaluations
+                    if item.condition_id in {condition.id for condition in requirement.soft()}
+                }
                 comparison = compare(
                     requirement,
                     comparison.tour_snapshots,
                     cfg=self.settings.tuning.decide,
+                    soft_verdicts=prior_verdicts,
                     metric_facts=cached_facts,
+                    eligible_tour_ids=set(final_evaluated_ids),
                 )
-                if scenario_source_id:
-                    comparison = comparison.model_copy(update={
-                        "scenario_source_comparison_id": scenario_source_id,
-                    })
+                comparison = comparison.model_copy(update={
+                    "scenario_source_comparison_id": scenario_source_id,
+                    "expanded_from_comparison_id": expanded_from_comparison_id,
+                    "soft_review": _soft_review_progress(eligible_tours, final_evaluated_ids),
+                })
                 if decision_run_id:
                     self._save_decision_result(decision_run_id, comparison)
                     return _json(self._decision_receipt(decision_run_id, comparison))
@@ -1080,11 +1233,22 @@ class AgentTools:
                 batches=batches,
                 decision_run_id=decision_run_id,
                 metric_facts=cached_facts,
+                eligible_tours=eligible_tours,
+                evaluated_tour_ids=evaluated_tour_ids,
+                expanded_from_comparison_id=expanded_from_comparison_id,
+                verdicts={
+                    (item.offer_id, item.condition_id): (item.state, item.quote, item.reason)
+                    for item in comparison.evaluations
+                    if item.condition_id in {condition.id for condition in requirement.soft()}
+                },
             )
             with self._ranking_context_lock:
                 self._ranking_contexts[context_id] = context
             payload["soft_review"] = self._soft_review_payload(context)
         else:
+            comparison = comparison.model_copy(update={
+                "soft_review": progress,
+            })
             if decision_run_id:
                 self._save_decision_result(decision_run_id, comparison)
                 return _json(self._decision_receipt(decision_run_id, comparison))

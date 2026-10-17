@@ -417,6 +417,92 @@ def soft_review_candidates(
     return [representative[key] for key in sorted(representative)]
 
 
+SOFT_REVIEW_BATCH_LIMIT = 15
+
+
+def select_soft_review_candidates(
+    req: Requirement,
+    candidates: list[tuple[TourSnapshot, str]],
+    *,
+    excluded_tour_ids: set[str] | None = None,
+    limit: int = SOFT_REVIEW_BATCH_LIMIT,
+) -> list[tuple[TourSnapshot, str]]:
+    """Select a stable, diverse next batch from hard-pass tours."""
+    excluded = excluded_tour_ids or set()
+    pool = [item for item in candidates if item[0].id not in excluded]
+    if limit <= 0 or not pool:
+        return []
+
+    ranked = rank(req, candidates, {})
+    positions = {candidate.tour_id: index for index, candidate in enumerate(ranked)}
+    pool.sort(key=lambda item: (positions.get(item[0].id, len(positions)), item[0].id))
+
+    price_groups: dict[str, list[tuple[float, str, str]]] = {}
+    for tour, offer_id in candidates:
+        offer = next((item for item in tour.offers if item.id == offer_id), None)
+        if offer and offer.price is not None and offer.currency.strip():
+            currency = offer.currency.strip().upper()
+            price_groups.setdefault(currency, []).append((offer.price, tour.id, offer_id))
+    price_quartiles: dict[tuple[str, str], int] = {}
+    for currency, rows in price_groups.items():
+        rows.sort(key=lambda item: (item[0], item[1], item[2]))
+        count = len(rows)
+        for index, (_price, tour_id, _offer_id) in enumerate(rows):
+            price_quartiles[(currency, tour_id)] = min(3, index * 4 // count)
+
+    def features(item: tuple[TourSnapshot, str]) -> tuple[str | None, ...]:
+        tour, offer_id = item
+        offer = next((value for value in tour.offers if value.id == offer_id), None)
+        supplier = tour.supplier.strip().casefold() or None
+        if tour.route_observed and tour.route:
+            route = "route:" + "|".join(value.strip().casefold() for value in tour.route if value.strip())
+        else:
+            route = "dest:" + "|".join(sorted(value.strip().casefold() for value in tour.destinations if value.strip()))
+        route = route if route not in {"route:", "dest:"} else None
+        month = offer.departure_date[:7] if offer and len(offer.departure_date) >= 7 else None
+        duration = tour.duration_days if tour.duration_days is not None else (
+            tour.duration_nights + 1 if tour.duration_nights is not None else None
+        )
+        duration_key = str(duration) if duration is not None else None
+        currency = offer.currency.strip().upper() if offer and offer.currency.strip() else None
+        quartile = price_quartiles.get((currency, tour.id)) if currency else None
+        price_group = f"{currency}:q{quartile}" if quartile is not None else None
+        return supplier, route, month, duration_key, price_group
+
+    feature_by_id = {tour.id: features((tour, offer_id)) for tour, offer_id in candidates}
+    seen: list[set[str]] = [set() for _ in range(5)]
+
+    def mark_seen(item: tuple[TourSnapshot, str]) -> None:
+        for feature_index, feature in enumerate(feature_by_id[item[0].id]):
+            if feature is not None:
+                seen[feature_index].add(feature)
+
+    for item in candidates:
+        if item[0].id in excluded:
+            mark_seen(item)
+
+    selected = [pool.pop(0)]
+    mark_seen(selected[0])
+
+    while pool and len(selected) < limit:
+        best_index = min(
+            range(len(pool)),
+            key=lambda index: (
+                -sum(
+                    feature is not None and feature not in seen[feature_index]
+                    for feature_index, feature in enumerate(feature_by_id[pool[index][0].id])
+                ),
+                positions.get(pool[index][0].id, len(positions)),
+                pool[index][0].id.casefold(),
+                pool[index][0].id,
+            ),
+        )
+        candidate = pool.pop(best_index)
+        selected.append(candidate)
+        mark_seen(candidate)
+    return selected
+
+
 def _ranking_order(req: Requirement) -> list[RankingKey]:
     if req.ranking is not None:
         return req.ranking.order_by
@@ -1294,6 +1380,25 @@ def _compare_candidates(
             return compared if item.field == "price" and left_offer.currency.upper() != right_offer.currency.upper() else (
                 compared if item.direction == "asc" else -compared
             )
+    if left_offer.currency.strip().upper() == right_offer.currency.strip().upper():
+        left_price = _candidate_value("price", left_tour, left_offer, 0)
+        right_price = _candidate_value("price", right_tour, right_offer, 0)
+        if left_price is not None and right_price is not None:
+            compared = _compare_values(left_price, right_price)
+            if compared:
+                return compared
+
+    left_date = _candidate_value("departure_date", left_tour, left_offer, 0)
+    right_date = _candidate_value("departure_date", right_tour, right_offer, 0)
+    if left_date is None and right_date is not None:
+        return 1
+    if right_date is None and left_date is not None:
+        return -1
+    if left_date is not None and right_date is not None:
+        compared = _compare_values(left_date, right_date)
+        if compared:
+            return compared
+
     left_key = (left_tour.id, left_id)
     right_key = (right_tour.id, right_id)
     return 0 if left_key == right_key else (-1 if left_key < right_key else 1)
@@ -1354,9 +1459,15 @@ def compare(
     cfg: DecideCfg,
     soft_verdicts: dict[tuple[str, str], tuple[State, str, str]] | None = None,
     metric_facts: dict[str, ExtractedTourFacts] | None = None,
+    eligible_tour_ids: set[str] | None = None,
 ) -> Comparison:
     evals = hard_filter(req, tours)
-    surviving = passing_offers(req, tours, evals)
+    all_surviving = passing_offers(req, tours, evals)
+    surviving = (
+        all_surviving
+        if eligible_tour_ids is None
+        else [item for item in all_surviving if item[0].id in eligible_tour_ids]
+    )
     verdicts = soft_verdicts or {}
     pass_ids = {offer_id for _, offer_id in surviving}
     evaluations = list(evals)

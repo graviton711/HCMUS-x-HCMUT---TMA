@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { getNgrokDomain } from '../scripts/ngrok-config.mjs';
 
 export default defineConfig({
   test: {
@@ -16,6 +17,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5173,
+    allowedHosts: [getNgrokDomain()],
     proxy: Object.fromEntries(
       ['/health', '/sessions', '/catalog', '/requirements', '/comparisons', '/history', '/agent'].map(
         (path) => [

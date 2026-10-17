@@ -10,8 +10,17 @@ from sample_rows import StaticCatalog
 from backend.agent.mcp_server import AgentTools, QueryConditionInput, create_server
 from backend.agent.results import limit_comparison
 from backend.data.sessions import SessionStore
+from backend.decide.engine import select_soft_review_candidates
 from backend.errors import AppError
-from backend.models import Comparison, Evaluation, OfferSnapshot, RankedCandidate, TourRow, TourSnapshot
+from backend.models import (
+    Comparison,
+    Evaluation,
+    OfferSnapshot,
+    RankedCandidate,
+    Requirement,
+    TourRow,
+    TourSnapshot,
+)
 from backend.workflows import TourWorkflows
 
 
@@ -55,6 +64,71 @@ def _score_soft(tools, context_id, verdicts):
         if comparison is not None:
             result["comparison"] = comparison.model_dump(mode="json")
     return result
+
+
+@pytest.mark.parametrize("count", [0, 1, 15, 16])
+def test_soft_review_sample_cardinality_and_stability(count):
+    candidates = []
+    for index in range(count):
+        tour_id = f"tour-{count - index:02d}"
+        offer_id = f"offer-{count - index:02d}"
+        tour = TourSnapshot(
+            id=tour_id,
+            supplier=f"Supplier {index % 3}",
+            destinations=[f"Destination {index % 4}"],
+            duration_days=3,
+            offers=[OfferSnapshot(
+                id=offer_id,
+                tour_id=tour_id,
+                departure_date=f"2027-{index % 12 + 1:02d}-01",
+                price=1_000_000 + index * 10_000,
+                currency="VND",
+            )],
+        )
+        candidates.append((tour, offer_id))
+    requirement = Requirement(
+        id="req_sampler",
+        ranking={"order_by": [{"field": "duration_days", "direction": "asc"}]},
+    )
+
+    first = select_soft_review_candidates(requirement, candidates)
+    second = select_soft_review_candidates(requirement, candidates)
+
+    assert len(first) == min(15, count)
+    assert [tour.id for tour, _offer_id in first] == [tour.id for tour, _offer_id in second]
+    assert len({tour.id for tour, _offer_id in first}) == len(first)
+    if count:
+        assert first[0][0].id == f"tour-{count:02d}"
+
+
+def test_soft_review_ranking_ties_prefer_comparable_price_then_departure_date():
+    candidates = []
+    for tour_id, offer_id, departure_date in [
+        ("a-later", "offer-a", "2027-05-01"),
+        ("z-earlier", "offer-z", "2027-04-01"),
+    ]:
+        candidates.append((
+            TourSnapshot(
+                id=tour_id,
+                duration_days=3,
+                offers=[OfferSnapshot(
+                    id=offer_id,
+                    tour_id=tour_id,
+                    departure_date=departure_date,
+                    price=1_000_000,
+                    currency="VND",
+                )],
+            ),
+            offer_id,
+        ))
+    requirement = Requirement(
+        id="req_tie_break",
+        ranking={"order_by": [{"field": "duration_days", "direction": "asc"}]},
+    )
+
+    ranked = select_soft_review_candidates(requirement, candidates)
+
+    assert [tour.id for tour, _offer_id in ranked] == ["z-earlier", "a-later"]
 
 
 class _RecordingCatalog:
@@ -410,6 +484,110 @@ def test_soft_review_covers_every_hard_pass_tour_not_just_top_five(settings):
     assert next_batch["batch_count"] == 2
     assert next_batch["review_candidate_count"] == 7
     assert len(next_batch["candidates"]) == 2
+
+
+def test_soft_review_limits_each_group_and_expands_from_the_same_snapshot(settings):
+    class ManyTours:
+        def list_tours(self, limit):
+            return [TourRow(
+                provider={"display_name": f"Supplier {index % 4}"},
+                tour={
+                    "record_key": f"tour-{index}",
+                    "tour_name": f"Tour {index}",
+                    "destinations": ["Đà Lạt"],
+                    "duration_days": 2 + index % 3,
+                    "itinerary": f"Lịch trình tour {index}",
+                    "price_type": "fixed",
+                },
+                offers=[{
+                    "record_key": f"offer-{index}",
+                    "price": 1_000_000 + index * 100_000,
+                    "currency": "VND",
+                    "departure_date": f"2027-{index % 12 + 1:02d}-01",
+                }],
+            ) for index in range(20)][:limit]
+
+    catalog = ManyTours()
+    tools = AgentTools(settings, catalog, TourWorkflows(settings, catalog))
+    request = {
+        "raw_text": "Đà Lạt, thích thiên nhiên",
+        "travelers": 1,
+        "ranking": {"order_by": [{"field": "price", "direction": "desc"}]},
+        "conditions": [
+            {"id": "h1", "field": "destination", "operator": "contains", "value": "Đà Lạt",
+             "strength": "hard", "quote": "Đà Lạt"},
+            {"id": "s1", "field": "preference", "operator": "contains", "value": "thiên nhiên",
+             "strength": "soft", "quote": "thiên nhiên", "weight_percent": 100},
+        ],
+    }
+
+    first_run = f"dec_{token_hex(16)}"
+    first = json.loads(tools.query_tours(decision_run_id=first_run, **request))
+    first_context = tools._ranking_contexts[first["soft_review"]["context_id"]]
+    first_tour_ids = [tour.id for tour, _offer_id in first_context.candidates]
+    assert first["soft_review"]["eligible_tours"] == 20
+    assert first["soft_review"]["review_candidate_count"] == 15
+    assert len(first_tour_ids) == 15
+    assert len(set(first_tour_ids)) == 15
+    assert first_tour_ids[0] == "tour-19"
+    assert len({tour.supplier for tour, _offer_id in first_context.candidates}) > 1
+    assert len({tour.offers[0].departure_date[:7] for tour, _offer_id in first_context.candidates}) > 1
+    assert len({tour.duration_days for tour, _offer_id in first_context.candidates}) > 1
+
+    while first.get("soft_review"):
+        context = tools._ranking_contexts[first["soft_review"]["context_id"]]
+        batch = context.batches[context.batch_index]
+        first = _score_soft(tools, context.id, [
+            {"offer_id": offer_id, "condition_id": "s1", "verdict": "unknown"}
+            for _tour, offer_id in batch
+        ])
+    baseline = Comparison.model_validate(first["comparison"])
+    assert baseline.soft_review is not None
+    assert baseline.soft_review.evaluated_tours == 15
+    assert baseline.soft_review.remaining_tours == 5
+    assert baseline.decision_trace is not None
+    assert baseline.decision_trace.scanned_tours == 20
+    assert baseline.decision_trace.eligible_tours == 20
+
+    owner = SessionStore(settings.database_url)
+    owner_id = owner.create_session(3600)["id"]
+    owner.save_decision_snapshot(baseline, owner_id)
+    expansion_run = f"dec_{token_hex(16)}"
+    owner.save_scenario_snapshot_handoff(expansion_run, baseline)
+    expansion = json.loads(tools.query_tours(
+        decision_run_id=expansion_run,
+        snapshot_comparison_id=baseline.id,
+        expand_soft_review=True,
+        requirement_id=baseline.requirement.id,
+        **request,
+    ))
+    expansion_context = tools._ranking_contexts[expansion["soft_review"]["context_id"]]
+    next_tour_ids = [tour.id for tour, _offer_id in expansion_context.candidates]
+    assert expansion["soft_review"]["eligible_tours"] == 20
+    assert expansion["soft_review"]["evaluated_tours"] == 15
+    assert expansion["soft_review"]["remaining_tours"] == 5
+    assert len(next_tour_ids) == 5
+    assert set(first_tour_ids).isdisjoint(next_tour_ids)
+
+    while expansion.get("soft_review"):
+        context = tools._ranking_contexts[expansion["soft_review"]["context_id"]]
+        batch = context.batches[context.batch_index]
+        expansion = _score_soft(tools, context.id, [
+            {"offer_id": offer_id, "condition_id": "s1", "verdict": "unknown"}
+            for _tour, offer_id in batch
+        ])
+    expanded = Comparison.model_validate(expansion["comparison"])
+    assert expanded.expanded_from_comparison_id == baseline.id
+    assert expanded.soft_review is not None
+    assert expanded.soft_review.evaluated_tours == 20
+    assert expanded.soft_review.remaining_tours == 0
+    assert len(expanded.ranked) == 20
+    assert expanded.decision_trace is not None
+    assert expanded.decision_trace.scanned_tours == 20
+    assert expanded.decision_trace.eligible_tours == 20
+    assert baseline.soft_review.evaluated_tours == 15
+    assert {item.tour_id for item in baseline.ranked} == set(first_tour_ids)
+    owner.close()
 
 
 def test_score_soft_accepts_verbatim_quote_for_hard_pass_offer(settings):

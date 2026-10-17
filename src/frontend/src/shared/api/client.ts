@@ -14,6 +14,24 @@ import type {
 
 type Fetcher = typeof fetch;
 const defaultBase = () => (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '';
+
+/**
+ * ngrok free tunnels intercept browser-like GET requests with an interstitial page instead of
+ * forwarding them; the skip header bypasses the intercept. Only ngrok origins get it so local
+ * dev, Render and Vercel traffic stays untouched.
+ */
+const NGROK_HOST = /(^|\.)ngrok(-free)?\.(dev|app|io)$/iu;
+
+function isNgrokOrigin(origin: string): boolean {
+  if (!origin) return false;
+  try {
+    return NGROK_HOST.test(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
+
 const object = (value: unknown): Record<string, unknown> | null =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -22,6 +40,7 @@ const object = (value: unknown): Record<string, unknown> | null =>
 /** The backend API client. Mutations are not retried because the API has no idempotency contract. */
 export class CurrentBackendClient {
   private readonly baseUrl: string;
+  private readonly ngrokHeaders: Record<string, string>;
 
   constructor(
     private readonly token?: string,
@@ -29,6 +48,9 @@ export class CurrentBackendClient {
     private readonly fetcher: Fetcher = globalThis.fetch.bind(globalThis),
   ) {
     this.baseUrl = baseUrl.replace(/\/$/u, '');
+    const origin =
+      this.baseUrl || (typeof window === 'undefined' ? '' : window.location.origin);
+    this.ngrokHeaders = isNgrokOrigin(origin) ? { 'ngrok-skip-browser-warning': 'true' } : {};
   }
 
   private async request<T>(
@@ -36,7 +58,10 @@ export class CurrentBackendClient {
     method: 'GET' | 'POST' = 'GET',
     body?: unknown,
   ): Promise<T> {
-    const headers: Record<string, string> = { Accept: 'application/json' };
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      ...this.ngrokHeaders,
+    };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     let response: Response;
@@ -88,15 +113,25 @@ export class CurrentBackendClient {
     );
   }
 
-  criteriaScenario(
-    comparisonId: string,
-    agentSessionId: string,
-    requirement: CurrentRequirement,
-  ) {
+  criteriaScenario(comparisonId: string, agentSessionId: string, requirement: CurrentRequirement) {
     return this.request<CurrentAgentResponse>(
       `/comparisons/${encodeURIComponent(comparisonId)}/scenarios`,
       'POST',
       { kind: 'criteria', agent_session_id: agentSessionId, requirement },
+    );
+  }
+
+  expandComparisonStream(
+    comparisonId: string,
+    agentSessionId: string,
+    onEvent: (event: CurrentAgentProgressEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<CurrentAgentResponse> {
+    return this.agentStream(
+      `/comparisons/${encodeURIComponent(comparisonId)}/expand`,
+      { agent_session_id: agentSessionId },
+      onEvent,
+      signal,
     );
   }
 
@@ -157,20 +192,18 @@ export class CurrentBackendClient {
     const headers: Record<string, string> = {
       Accept: 'text/event-stream',
       'Content-Type': 'application/json',
+      ...this.ngrokHeaders,
     };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     let response: Response;
     try {
-      response = await this.fetcher(
-        `${this.baseUrl}${path}`,
-        {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(body),
-          credentials: 'omit',
-          signal,
-        },
-      );
+      response = await this.fetcher(`${this.baseUrl}${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        credentials: 'omit',
+        signal,
+      });
     } catch (cause) {
       if (signal?.aborted) throw cause;
       throw new CurrentApiError('NETWORK_ERROR', 'Không kết nối được backend.', 0);

@@ -8,6 +8,8 @@ from sample_rows import StaticCatalog
 from backend.agent.runner import OpenCodeRunner
 from backend.agent.service import AgentService
 from backend.api import create_app
+from backend.data.sessions import SessionStore
+from backend.models import Comparison, SoftReviewProgress
 
 
 def _client(tmp_path, **overrides):
@@ -147,6 +149,103 @@ def test_criteria_scenario_uses_baseline_snapshot_without_replacing_it(tmp_path,
     unchanged = client.get(f"/comparisons/{baseline['id']}", headers=headers).json()["comparison"]
     assert unchanged["id"] == baseline["id"]
     assert unchanged["requirement"] == baseline["requirement"]
+
+
+def test_soft_review_expand_stream_is_owner_scoped_and_idempotent(tmp_path, monkeypatch):
+    async def fake_stream(
+        self, owner_id, agent_session_id, requirement,
+        snapshot_comparison_id=None, expand_soft_review=False,
+    ):
+        assert owner_id
+        assert agent_session_id
+        assert expand_soft_review is True
+        child = Comparison(
+            id="cmp_expanded",
+            requirement=requirement,
+            scenario_source_comparison_id=snapshot_comparison_id,
+            expanded_from_comparison_id=snapshot_comparison_id,
+            soft_review=SoftReviewProgress(
+                eligible_tours=20,
+                evaluated_tours=20,
+                remaining_tours=0,
+                evaluated_tour_ids=[f"tour-{index}" for index in range(20)],
+            ),
+        )
+        self.store.save_comparison(child, owner_id)
+        self.store.save_decision_snapshot(child, owner_id)
+        yield {"type": "progress", "status": "working"}
+        yield {
+            "type": "result",
+            "response": {"assistant_text": "", "comparison": child.model_dump(mode="json")},
+        }
+
+    monkeypatch.setattr(AgentService, "stream_decision", fake_stream)
+    monkeypatch.setattr(OpenCodeRunner, "_executable", lambda _self: "opencode")
+    client = _client(tmp_path, opencode_server_url="http://127.0.0.1:4098")
+    session = client.post("/sessions").json()
+    headers = {"Authorization": f"Bearer {session['token']}"}
+    requirement = client.post(
+        "/requirements", headers=headers, json={"form": {"destinations": ["Da Lat"]}}
+    ).json()["requirement"]
+    baseline_data = client.post(
+        "/comparisons", headers=headers, json={"requirement_id": requirement["id"]}
+    ).json()["comparison"]
+    baseline = Comparison.model_validate(baseline_data).model_copy(update={
+        "soft_review": SoftReviewProgress(
+            eligible_tours=20,
+            evaluated_tours=15,
+            remaining_tours=5,
+            evaluated_tour_ids=[f"tour-{index}" for index in range(15)],
+        ),
+    })
+    store = SessionStore(f"sqlite:///{tmp_path / 'api.db'}")
+    owner_id = session["session_id"]
+    store.save_comparison(baseline, owner_id)
+    store.save_decision_snapshot(baseline, owner_id)
+    store.close()
+    agent_id = client.post("/agent/sessions", headers=headers).json()["agent_session_id"]
+
+    response = client.post(
+        f"/comparisons/{baseline.id}/expand",
+        headers={**headers, "Accept": "text/event-stream"},
+        json={"agent_session_id": agent_id},
+    )
+    assert response.status_code == 200
+    assert "event: result" in response.text
+    current = client.get(f"/comparisons/{baseline.id}", headers=headers).json()["comparison"]
+    assert current["id"] == baseline.id
+    assert current["soft_review"]["evaluated_tours"] == 15
+
+    duplicate = client.post(
+        f"/comparisons/{baseline.id}/expand",
+        headers={**headers, "Accept": "text/event-stream"},
+        json={"agent_session_id": agent_id},
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["comparison"]["id"] == "cmp_expanded"
+
+    store = SessionStore(f"sqlite:///{tmp_path / 'api.db'}")
+    orphan = baseline.model_copy(update={"id": "cmp_without_snapshot"})
+    store.save_comparison(orphan, owner_id)
+    store.close()
+    unavailable = client.post(
+        f"/comparisons/{orphan.id}/expand",
+        headers=headers,
+        json={"agent_session_id": agent_id},
+    )
+    assert unavailable.status_code == 409
+    assert unavailable.json()["error"]["code"] == "SOFT_REVIEW_SNAPSHOT_UNAVAILABLE"
+
+    other = client.post("/sessions").json()
+    foreign = client.post(
+        f"/comparisons/{baseline.id}/expand",
+        headers={
+            "Authorization": f"Bearer {other['token']}",
+            "Accept": "text/event-stream",
+        },
+        json={"agent_session_id": agent_id},
+    )
+    assert foreign.status_code == 404
 
 
 def test_free_text_is_not_interpreted_without_explicit_fields(tmp_path):

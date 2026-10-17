@@ -130,6 +130,83 @@ class BaseStore:
             self._load("decision_snapshot", f"snapshot_{comparison_id}", owner_session_id)
         )
 
+    def claim_soft_review_expansion(self, comparison_id: str, owner_session_id: str) -> bool:
+        """Atomically allow one expansion from a comparison snapshot."""
+        cursor = self._execute(
+            self._sql(
+                f"INSERT INTO {self.records_table}"
+                " (id, kind, payload, created_at, owner_session_id)"
+                " VALUES (?, 'soft_review_expansion', ?, ?, ?)"
+                " ON CONFLICT (id) DO NOTHING"
+            ),
+            (
+                f"soft_expansion_{comparison_id}",
+                json.dumps({"child_comparison_id": None}, separators=(",", ":")),
+                now_vn_iso(),
+                owner_session_id,
+            ),
+        )
+        self._commit()
+        return getattr(cursor, "rowcount", 0) == 1
+
+    def get_soft_review_expansion(
+        self, comparison_id: str, owner_session_id: str
+    ) -> dict[str, str | None] | None:
+        rows = self._query(
+            self._sql(
+                f"SELECT payload FROM {self.records_table}"
+                " WHERE id = ? AND kind = 'soft_review_expansion' AND owner_session_id = ?"
+            ),
+            (f"soft_expansion_{comparison_id}", owner_session_id),
+        )
+        if not rows:
+            return None
+        try:
+            payload = json.loads(str(rows[0][0]))
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise AppError("RECORD_INVALID", "Invalid soft-review expansion record.", 500) from exc
+        if not isinstance(payload, dict):
+            raise AppError("RECORD_INVALID", "Invalid soft-review expansion record.", 500)
+        child_id = payload.get("child_comparison_id")
+        if child_id is not None and not isinstance(child_id, str):
+            raise AppError("RECORD_INVALID", "Invalid soft-review expansion record.", 500)
+        return {"child_comparison_id": child_id}
+
+    def complete_soft_review_expansion(
+        self, comparison_id: str, owner_session_id: str, child_comparison_id: str
+    ) -> None:
+        cursor = self._execute(
+            self._sql(
+                f"UPDATE {self.records_table} SET payload = ?, created_at = ?"
+                " WHERE id = ? AND kind = 'soft_review_expansion'"
+                " AND owner_session_id = ? AND payload = ?"
+            ),
+            (
+                json.dumps({"child_comparison_id": child_comparison_id}, separators=(",", ":")),
+                now_vn_iso(),
+                f"soft_expansion_{comparison_id}",
+                owner_session_id,
+                json.dumps({"child_comparison_id": None}, separators=(",", ":")),
+            ),
+        )
+        self._commit()
+        if getattr(cursor, "rowcount", 0) != 1:
+            raise AppError("SOFT_REVIEW_EXPANSION_CONFLICT", "This review expansion is no longer active.", 409)
+
+    def release_soft_review_expansion(self, comparison_id: str, owner_session_id: str) -> None:
+        self._execute(
+            self._sql(
+                f"DELETE FROM {self.records_table} WHERE id = ?"
+                " AND kind = 'soft_review_expansion' AND owner_session_id = ? AND payload = ?"
+            ),
+            (
+                f"soft_expansion_{comparison_id}",
+                owner_session_id,
+                json.dumps({"child_comparison_id": None}, separators=(",", ":")),
+            ),
+        )
+        self._commit()
+
     def save_scenario_snapshot_handoff(self, run_id: str, comparison: Comparison) -> None:
         self._save(
             "scenario_snapshot_handoff",

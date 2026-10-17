@@ -118,6 +118,28 @@ function currentComparison() {
         note: 'Pareto giữa giá công bố và điểm ưu tiên.',
       },
     ],
+    decision_options: ['cheapest'].map((objective) => ({
+      tour_id: 'tour-dalat',
+      offer_id: 'offer-dalat',
+      objective,
+      title: 'Option supported by source data',
+      reason: 'The source supports this choice.',
+      tradeoffs: [],
+      metric_comparisons: [
+        {
+          key: 'group_total',
+          value: 6_500_000,
+          reference_median: 7_000_000,
+          unit: 'VND',
+          currency: 'VND',
+          scope: 'Published group total',
+          state: 'observed',
+          relation: 'favorable',
+          higher_is_better: false,
+          evidence: [],
+        },
+      ],
+    })),
   };
 }
 
@@ -187,7 +209,9 @@ async function mockBackend(
       }
       return json({
         assistant_text: 'Mình đã chuẩn bị bản tiêu chí để bạn xem lại trước khi so tour.',
-        tool_calls: toolCalls.length ? toolCalls : [{ name: 'draft_requirement', status: 'completed' }],
+        tool_calls: toolCalls.length
+          ? toolCalls
+          : [{ name: 'draft_requirement', status: 'completed' }],
         requirement: currentComparison().requirement,
         decision_draft: currentComparison().requirement,
       });
@@ -209,7 +233,9 @@ async function startChat(page: Page) {
   await expect(page.getByLabel('Nhắn cho TourLens')).toBeVisible();
 }
 
-test('guest reviews a brief, compares decision views, and restores the result', async ({ page }) => {
+test('guest reviews a brief, compares decision views, and restores the result', async ({
+  page,
+}) => {
   const backend = await mockBackend(page, false, [
     { name: 'catalog_facets', status: 'success' },
     { name: 'draft_requirement', status: 'completed' },
@@ -227,12 +253,14 @@ test('guest reviews a brief, compares decision views, and restores the result', 
   await expect(page.getByRole('button', { name: 'So sánh tour' })).toBeEnabled();
   await page.getByRole('spinbutton', { name: 'ngân sách — Bắt buộc' }).fill('7000000');
   await page.getByRole('button', { name: 'So sánh tour' }).click();
-  await expect(page.getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'Các phương án để cân nhắc' })
+      .getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' }),
+  ).toBeVisible();
   await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
   await expect(page.getByText('1 tour đã quét', { exact: true })).toBeVisible();
-  await expect(
-    page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' }),
-  ).toHaveCount(2);
+  await expect(page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' })).toHaveCount(2);
 
   await expect
     .poll(() =>
@@ -251,21 +279,27 @@ test('guest reviews a brief, compares decision views, and restores the result', 
     conditions: { field: string; value: unknown; quote: string }[];
     raw_text: string;
   };
-  const reviewedBudget = reviewedRequirement.conditions.find((condition) => condition.field === 'budget_max');
+  const reviewedBudget = reviewedRequirement.conditions.find(
+    (condition) => condition.field === 'budget_max',
+  );
   expect(reviewedBudget?.value).toBe(7_000_000);
   expect(reviewedBudget?.quote).toBe('7000000');
   expect(reviewedRequirement.raw_text).toContain('7000000');
   expect(legacyRequests).toEqual([]);
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
   await expect(
-    page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' }),
-  ).toHaveCount(2);
+    page
+      .getByRole('region', { name: 'Các phương án để cân nhắc' })
+      .getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' }),
+  ).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
+  await expect(page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' })).toHaveCount(2);
 });
 
-test('desktop decision workspace remains within the canvas and splitter is keyboard-resizable', async ({ page }) => {
+test('desktop decision workspace remains within the canvas and splitter is keyboard-resizable', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1680, height: 1000 });
   await mockBackend(page);
   await startChat(page);
@@ -279,11 +313,34 @@ test('desktop decision workspace remains within the canvas and splitter is keybo
   await splitter.focus();
   await page.keyboard.press('ArrowRight');
   await expect(splitter).toHaveAttribute('aria-valuenow', String(initialSplit + 2));
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('tourlens:decision-split:v1')))
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem('tourlens:decision-split:v1')))
     .toBe(String((initialSplit + 2) / 100));
 
   await page.locator('footer[class*="brief-footer"] button.btn-primary').click();
   await expect(page.locator('[role="tablist"] [role="tab"]').first()).toBeVisible();
+  const metricRow = page.locator('[class*="decision-metric-comparisons"] > div').first();
+  const metricLabel = metricRow.locator('strong');
+  const metricValue = metricRow.locator('span');
+  await expect(metricLabel).toBeVisible();
+  const wideMetricLayout = await Promise.all([
+    metricLabel.boundingBox(),
+    metricValue.boundingBox(),
+  ]);
+  expect(wideMetricLayout[0]?.width ?? 0).toBeGreaterThan(80);
+  expect(Math.abs((wideMetricLayout[0]?.y ?? 0) - (wideMetricLayout[1]?.y ?? 0))).toBeLessThan(2);
+  expect(wideMetricLayout[1]?.x ?? 0).toBeGreaterThan(wideMetricLayout[0]?.x ?? 0);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('[class*="workspace-switcher"] button').nth(1).click();
+  await expect
+    .poll(async () => {
+      const [label, value] = await Promise.all([
+        metricLabel.boundingBox(),
+        metricValue.boundingBox(),
+      ]);
+      return Boolean(label && value && value.y > label.y && Math.abs(value.x - label.x) < 2);
+    })
+    .toBe(true);
   const matrix = page.locator('details[class*="decision-matrix"]');
   await matrix.locator('summary').click();
   const matrixGrid = matrix.locator('[class*="decision-matrix-grid"]');
@@ -298,6 +355,36 @@ test('desktop decision workspace remains within the canvas and splitter is keybo
     page: document.documentElement.scrollWidth,
   }));
   expect(dimensions.page).toBeLessThanOrEqual(dimensions.viewport + 1);
+});
+
+test('workspace header controls stay hit-testable at fullscreen desktop size and by keyboard', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await mockBackend(page);
+  await startChat(page);
+
+  const sidebarToggle = page.locator('.session-bar button.icon-button').first();
+  const savedTours = page.locator('.session-bar .session-saved');
+  for (const selector of ['.session-bar button.icon-button', '.session-bar .session-saved']) {
+    const hitsControl = await page.locator(selector).evaluate((element, targetSelector) => {
+      const rect = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return Boolean(hit?.closest(targetSelector));
+    }, selector);
+    expect(hitsControl).toBe(true);
+  }
+
+  await expect(sidebarToggle).toHaveAttribute('aria-expanded', 'true');
+  await sidebarToggle.click();
+  await expect(sidebarToggle).toHaveAttribute('aria-expanded', 'false');
+  await sidebarToggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(sidebarToggle).toHaveAttribute('aria-expanded', 'true');
+
+  await savedTours.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toBeVisible();
 });
 
 test('expired guest starts a new session and resends the draft once', async ({ page }) => {
@@ -390,7 +477,9 @@ test('tool progress expands by keyboard and respects dark mode and reduced motio
 
   await expect(page.getByRole('heading', { name: 'Kiểm tra tiêu chí chuyến đi' })).toBeVisible();
 
-  const disclosure = page.locator('details').filter({ hasText: 'Kiểm tra lựa chọn có trong dữ liệu' });
+  const disclosure = page
+    .locator('details')
+    .filter({ hasText: 'Kiểm tra lựa chọn có trong dữ liệu' });
   const summary = disclosure.locator('summary');
   await expect(summary).toBeVisible();
   await summary.focus();
@@ -401,7 +490,11 @@ test('tool progress expands by keyboard and respects dark mode and reduced motio
   await expect(disclosure).toContainText('Chuẩn bị bản tiêu chí để bạn xem');
 
   await page.getByRole('button', { name: 'So sánh tour' }).click();
-  await expect(page.getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'Các phương án để cân nhắc' })
+      .getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' }),
+  ).toBeVisible();
 
   const lightSurface = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--paper').trim(),

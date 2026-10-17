@@ -416,6 +416,15 @@ class DecisionTrace(BaseModel):
     snapshot_available: bool = False
 
 
+class SoftReviewProgress(BaseModel):
+    eligible_tours: int = 0
+    evaluated_tours: int = 0
+    remaining_tours: int = 0
+    batch_limit: int = 15
+    is_sampled: bool = False
+    evaluated_tour_ids: list[str] = Field(default_factory=list)
+
+
 class Analysis(BaseModel):
     hidden_costs: list[str] = Field(default_factory=list)
     conditions: list[str] = Field(default_factory=list)
@@ -434,6 +443,8 @@ class Comparison(BaseModel):
     candidates_considered: int = 0
     decision_trace: DecisionTrace | None = None
     scenario_source_comparison_id: str | None = None
+    expanded_from_comparison_id: str | None = None
+    soft_review: SoftReviewProgress | None = None
     ranking_currencies: list[str] = Field(default_factory=list)
     decision_views: list[DecisionView] = Field(default_factory=list)
     metric_profiles: list[MetricProfile] = Field(default_factory=list)

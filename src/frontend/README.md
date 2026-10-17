@@ -4,7 +4,13 @@ UI React + TypeScript + Vite cho `src/backend`. Backend contract là nguồn chu
 
 ## Kiến trúc
 
-Chạy giao diện local từ repo root bằng `uv run tour-frontend dev`. Lệnh dự án chuyển tiếp sang script `dev` của package này qua Corepack/pnpm; cài dependency vẫn dùng `pnpm.cmd --dir src/frontend install`.
+Chạy giao diện local từ repo root bằng `uv run tour-frontend dev`. Lệnh dự án chuyển tiếp sang script `dev` của package này qua Corepack/pnpm. Trên Linux cài dependency bằng `corepack pnpm --dir src/frontend install`; trên Windows dùng `pnpm.cmd --dir src/frontend install`.
+
+## Chạy toàn bộ dịch vụ qua ngrok
+
+Trong repo clone trên Linux, thêm `NGROK_AUTH_TOKEN` vào `.env` ở repo root rồi cài dependency như trên. `corepack pnpm --dir src/frontend dev:all` khởi động backend, Codex gateway, Vite và tunnel ngrok cùng lúc; URL tunnel được in trong terminal. Mặc định dùng domain hiện tại `unharping-preascetic-alonzo.ngrok-free.dev`; đặt `NGROK_DOMAIN` trong `.env` để thay bằng domain đã cấp cho tài khoản. Vite chỉ cho phép đúng domain cấu hình.
+
+Client API tự thêm header `ngrok-skip-browser-warning` cho mọi request đi qua domain ngrok: tunnel free chặn fetch GET bằng trang interstitial regardless Accept header, và fetch của app dùng `credentials: 'omit'` nên không bao giờ đính kèm cookie chặn trang cảnh báo. Lượt mở trang đầu tiên vẫn cần bấm "Visit Site" một lần theo chính sách ngrok free (giới hạn của plan, không tránh được).
 
 Dùng cấu trúc feature-sliced gọn. Dependency source chỉ chảy xuống: `app → pages → features → entities → shared`; một layer được bỏ qua nhưng không được import từ layer cao hơn hay slice ngang hàng. Chỉ giữ layer nào có trách nhiệm thật trong app này.
 

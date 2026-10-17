@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --config config/vite.config.ts --host 127.0.0.1",
-    "dev:all": "concurrently --names backend,codex,web --prefix-colors magenta,cyan,green \"uv run --no-sync python -m backend.cli serve --reload\" \"uv run --no-sync python -m backend.codex_cli serve\" \"corepack pnpm dev\"",
+    "dev:all": "concurrently --names backend,codex,web,ngrok --prefix-colors magenta,cyan,green,yellow \"uv run --no-sync python -m backend.cli serve --reload\" \"uv run --no-sync python -m backend.codex_cli serve\" \"corepack pnpm dev\" \"node scripts/dev-ngrok.mjs\"",
     "predev:all": "node scripts/clean-dev.mjs",
     "build": "tsc -b config/tsconfig.json && vite build --config config/vite.config.ts",
     "preview": "vite preview --host 127.0.0.1",
@@ -25,6 +25,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "@ngrok/ngrok": "^1.5.0",
     "@eslint/js": "^9.39.0",
     "@playwright/test": "^1.58.0",
     "@tailwindcss/vite": "^4.3.3",

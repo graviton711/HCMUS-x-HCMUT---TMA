@@ -29,4 +29,4 @@ export type ChatMsg =
       requirement: CurrentRequirement;
       status: 'draft' | 'running' | 'complete';
     }
-  | { id: string; kind: 'error'; text: string; expired?: boolean };
+  | { id: string; kind: 'error'; text: string; expired?: boolean; origin?: 'init' };

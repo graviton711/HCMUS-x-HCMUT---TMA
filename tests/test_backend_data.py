@@ -2,7 +2,9 @@
 
 import hashlib
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -138,6 +140,35 @@ def test_agent_session_mapping_reuses_records_and_is_owner_scoped(settings):
     assert exc.value.status == 404
     assert store.list_history(owner) == ([], False)
     store.close()
+
+
+def test_soft_review_expansion_claim_is_atomic_and_idempotent(settings):
+    first = SessionStore(settings.database_url)
+    second = SessionStore(settings.database_url)
+    owner = first.create_session(3600)["id"]
+    other = first.create_session(3600)["id"]
+    barrier = Barrier(2)
+
+    def claim(store):
+        barrier.wait()
+        return store.claim_soft_review_expansion("cmp_parent", owner)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(claim, (first, second)))
+    assert sorted(results) == [False, True]
+    assert first.get_soft_review_expansion("cmp_parent", owner) == {"child_comparison_id": None}
+    assert first.get_soft_review_expansion("cmp_parent", other) is None
+
+    first.complete_soft_review_expansion("cmp_parent", owner, "cmp_child")
+    assert second.get_soft_review_expansion("cmp_parent", owner) == {
+        "child_comparison_id": "cmp_child",
+    }
+    first.release_soft_review_expansion("cmp_parent", owner)
+    assert first.get_soft_review_expansion("cmp_parent", owner) == {
+        "child_comparison_id": "cmp_child",
+    }
+    first.close()
+    second.close()
 def test_conversation_turns_round_trip_and_trim_oldest_first(settings):
     store = SessionStore(settings.database_url)
     store.save_conversation_turn("agt_conv", "first message " + "x" * 7900)

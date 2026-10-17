@@ -404,6 +404,101 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "total": total,
         }
 
+    @app.post("/comparisons/{cid}/expand")
+    async def expand_comparison(cid: str, body: dict[str, Any], request: Request):
+        owner_id = owner_session(request)
+        if owner_id is None:
+            raise AppError("SESSION_REQUIRED", "A guest access session is required to expand a comparison.", 401)
+        comparison = store.get_comparison(cid, owner_id)
+        progress = comparison.soft_review
+        if progress is None:
+            raise AppError(
+                "SOFT_REVIEW_UNAVAILABLE",
+                "This comparison does not contain a resumable soft-review sample. Rerun it first.",
+                409,
+            )
+        agent_session_id = body.get("agent_session_id")
+        if not isinstance(agent_session_id, str) or not agent_session_id:
+            raise AppError("SOFT_REVIEW_EXPANSION_INVALID", "An agent session is required.", 422)
+        store.get_agent_session(agent_session_id, owner_id)
+        try:
+            store.get_decision_snapshot(cid, owner_id)
+        except AppError as exc:
+            if exc.code != "NOT_FOUND":
+                raise
+            raise AppError(
+                "SOFT_REVIEW_SNAPSHOT_UNAVAILABLE",
+                "This comparison has no retained scan snapshot. Rerun it before evaluating more tours.",
+                409,
+            ) from exc
+
+        if not store.claim_soft_review_expansion(cid, owner_id):
+            existing = store.get_soft_review_expansion(cid, owner_id)
+            child_id = existing.get("child_comparison_id") if existing else None
+            if child_id:
+                child = store.get_comparison(child_id, owner_id)
+                return {"assistant_text": "", "comparison": child.model_dump(mode="json")}
+            raise AppError(
+                "SOFT_REVIEW_EXPANSION_IN_PROGRESS",
+                "Another request is already evaluating the next tour group.",
+                409,
+                retryable=True,
+            )
+
+        if progress.remaining_tours <= 0:
+            store.release_soft_review_expansion(cid, owner_id)
+            raise AppError("SOFT_REVIEW_EXHAUSTED", "All eligible tours have already been evaluated.", 409)
+
+        async def stream_events():
+            completed = False
+            try:
+                async for event in agent.stream_decision(
+                    owner_id,
+                    agent_session_id,
+                    comparison.requirement,
+                    snapshot_comparison_id=cid,
+                    expand_soft_review=True,
+                ):
+                    event_type = event.get("type", "progress")
+                    payload = (
+                        event.get("response", {})
+                        if event_type == "result"
+                        else {key: value for key, value in event.items() if key != "type"}
+                    )
+                    if event_type == "result" and isinstance(payload, dict):
+                        child = payload.get("comparison")
+                        child_id = child.get("id") if isinstance(child, dict) else None
+                        if isinstance(child_id, str) and child_id:
+                            store.complete_soft_review_expansion(cid, owner_id, child_id)
+                            completed = True
+                    data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                    yield f"event: {event_type}\ndata: {data}\n\n"
+            except AppError as exc:
+                log_app_error(exc, transport="sse", operation="comparison_expand")
+                data = json.dumps(
+                    {"code": exc.code, "message": exc.message},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+                yield f"event: error\ndata: {data}\n\n"
+            except Exception as exc:
+                log_unexpected_error(exc, transport="sse", operation="comparison_expand")
+                data = json.dumps(
+                    {"code": "INTERNAL_ERROR", "message": "An internal error occurred."},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+                yield f"event: error\ndata: {data}\n\n"
+            finally:
+                if not completed:
+                    store.release_soft_review_expansion(cid, owner_id)
+
+        return StreamingResponse(
+            stream_events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+        )
+
     @app.post("/comparisons/{cid}/scenarios")
     async def run_comparison_scenario(
         cid: str, body: dict[str, Any], request: Request

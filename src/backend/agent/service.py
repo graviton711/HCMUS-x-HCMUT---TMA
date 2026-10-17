@@ -154,10 +154,15 @@ class AgentService:
         local_id: str,
         requirement: Requirement,
         snapshot_comparison_id: str | None = None,
+        expand_soft_review: bool = False,
     ) -> dict[str, Any]:
         response: dict[str, Any] | None = None
         async for event in self.stream_decision(
-            owner_id, local_id, requirement, snapshot_comparison_id=snapshot_comparison_id
+            owner_id,
+            local_id,
+            requirement,
+            snapshot_comparison_id=snapshot_comparison_id,
+            expand_soft_review=expand_soft_review,
         ):
             if event.get("type") == "result" and isinstance(event.get("response"), dict):
                 response = event["response"]
@@ -176,6 +181,7 @@ class AgentService:
         local_id: str,
         requirement: Requirement,
         snapshot_comparison_id: str | None = None,
+        expand_soft_review: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
         if not _LOCAL_ID.fullmatch(local_id):
             raise AppError("AGENT_SESSION_INVALID", "Invalid agent session ID.", 400)
@@ -186,6 +192,12 @@ class AgentService:
                 raise AppError(
                     "SCENARIO_SNAPSHOT_UNAVAILABLE",
                     "The original scan snapshot is unavailable. Rerun the original comparison first.",
+                    409,
+                )
+            if expand_soft_review and snapshot.requirement != requirement:
+                raise AppError(
+                    "SOFT_REVIEW_REQUIREMENT_MISMATCH",
+                    "A review expansion must use the original comparison criteria.",
                     409,
                 )
             self.store.save_scenario_snapshot_handoff(decision_run_id, snapshot)
@@ -200,6 +212,20 @@ class AgentService:
                 "JSON or claim completion before the tools finish. "
                 "Do not ask for more information unless a tool reports a real validation error.\n"
                 f"DECISION_RUN_ID={decision_run_id}\n"
+                f"REQUIREMENT_JSON={payload}"
+            )
+        elif expand_soft_review:
+            message = (
+                "[SOFT REVIEW EXPANSION]\n"
+                "Continue the existing immutable comparison using its retained scan snapshot. "
+                "Call query_tours with the exact requirement and decision_run_id below, set the exact "
+                "snapshot_comparison_id, and set expand_soft_review=true. Do not rescan the catalog, "
+                "change criteria, or re-evaluate tours already scored in this comparison. Evaluate every "
+                "candidate returned in the next soft_review batch using score_soft. The backend will "
+                "merge earlier validated verdicts and re-rank all evaluated tours into a new comparison "
+                "version; do not repeat the full JSON or claim completion before the tools finish.\n"
+                f"DECISION_RUN_ID={decision_run_id}\n"
+                f"SNAPSHOT_COMPARISON_ID={snapshot_comparison_id}\n"
                 f"REQUIREMENT_JSON={payload}"
             )
         else:
@@ -231,6 +257,7 @@ class AgentService:
                     expected_requirement=requirement,
                     decision_run_id=decision_run_id,
                     snapshot_comparison_id=snapshot_comparison_id,
+                    expand_soft_review=expand_soft_review,
                 ):
                     yield event
         finally:
@@ -250,6 +277,7 @@ class AgentService:
         expected_requirement: Requirement | None = None,
         decision_run_id: str | None = None,
         snapshot_comparison_id: str | None = None,
+        expand_soft_review: bool = False,
     ) -> AsyncIterator[dict[str, Any]]:
         operation = "decision" if expected_requirement is not None else "message"
         _log.info("agent_turn_started operation=%s", operation)
@@ -373,13 +401,15 @@ class AgentService:
                             "The agent returned a comparison for different criteria. Please run the reviewed brief again.",
                             502,
                         )
-                    if (
-                        snapshot_comparison_id is not None
-                        and comparison.scenario_source_comparison_id != snapshot_comparison_id
-                    ):
+                    snapshot_mismatch = (
+                        comparison.expanded_from_comparison_id != snapshot_comparison_id
+                        if expand_soft_review
+                        else comparison.scenario_source_comparison_id != snapshot_comparison_id
+                    )
+                    if snapshot_comparison_id is not None and snapshot_mismatch:
                         raise AppError(
                             "SCENARIO_SNAPSHOT_MISMATCH",
-                            "The agent returned a scenario from a different scan snapshot.",
+                            "The agent returned a comparison from a different scan snapshot.",
                             502,
                         )
                     final_requirement = requirement
@@ -399,7 +429,7 @@ class AgentService:
             if persisted is None:
                 raise
             final_requirement, final_comparison = self._validate_decision_result(
-                persisted, expected_requirement, snapshot_comparison_id
+                persisted, expected_requirement, snapshot_comparison_id, expand_soft_review
             )
         finally:
             _log.info(
@@ -414,7 +444,7 @@ class AgentService:
             persisted = self.store.pop_decision_result(decision_run_id)
             if persisted is not None:
                 final_requirement, final_comparison = self._validate_decision_result(
-                    persisted, expected_requirement, snapshot_comparison_id
+                    persisted, expected_requirement, snapshot_comparison_id, expand_soft_review
                 )
 
         response: dict[str, Any] = {
@@ -474,6 +504,7 @@ class AgentService:
         comparison: Comparison,
         expected_requirement: Requirement,
         snapshot_comparison_id: str | None = None,
+        expand_soft_review: bool = False,
     ) -> tuple[Requirement, Comparison]:
         if comparison.requirement != expected_requirement:
             raise AppError(
@@ -481,13 +512,15 @@ class AgentService:
                 "The completed comparison does not match the reviewed criteria.",
                 502,
             )
-        if (
-            snapshot_comparison_id is not None
-            and comparison.scenario_source_comparison_id != snapshot_comparison_id
-        ):
+        snapshot_mismatch = (
+            comparison.expanded_from_comparison_id != snapshot_comparison_id
+            if expand_soft_review
+            else comparison.scenario_source_comparison_id != snapshot_comparison_id
+        )
+        if snapshot_comparison_id is not None and snapshot_mismatch:
             raise AppError(
                 "SCENARIO_SNAPSHOT_MISMATCH",
-                "The completed scenario does not use the requested scan snapshot.",
+                "The completed comparison does not use the requested scan snapshot.",
                 502,
             )
         return comparison.requirement, comparison
@@ -592,6 +625,8 @@ def _tool_progress_message(name: str, value: dict[str, Any]) -> str:
     if name == "draft_requirement":
         return "Chuẩn bị bản điều kiện để bạn xem"
     if name == "query_tours":
+        if value.get("expand_soft_review") is True:
+            return "Đánh giá nhóm tour tiếp theo trên snapshot đã lưu"
         conditions = value.get("conditions")
         summaries = [
             item for item in (_condition_activity(condition) for condition in conditions[:3])

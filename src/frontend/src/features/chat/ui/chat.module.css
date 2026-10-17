@@ -1699,8 +1699,8 @@
 
 .decision-metric-comparisons > div {
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  align-items: baseline;
+  grid-template-columns: minmax(6.5rem, 0.85fr) minmax(0, 1.15fr);
+  align-items: start;
   gap: 3px 10px;
   padding-top: 7px;
   border-top: 1px solid var(--line);
@@ -1708,7 +1708,9 @@
 
 .decision-metric-comparisons > div > strong {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .decision-metric-comparisons > div > span {
@@ -1734,13 +1736,18 @@
   border-left: 2px solid var(--line);
 }
 
-@container decision-choice (max-width: 340px) {
+@container decision-choice (max-width: 420px) {
   .decision-metric-comparisons > div {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
   }
 
+  .decision-metric-comparisons > div > strong {
+    grid-column: 1;
+  }
+
   .decision-metric-comparisons > div > span {
+    grid-column: 1;
     text-align: left;
   }
 }

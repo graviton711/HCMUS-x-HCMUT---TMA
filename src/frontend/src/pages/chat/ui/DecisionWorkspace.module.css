@@ -241,6 +241,72 @@
   gap: 10px;
 }
 
+.traceEliminatedContent {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.traceEliminatedHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.traceEliminatedFilter {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.softReviewExpansion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 14px);
+  background: var(--paper);
+}
+
+.softReviewExpansion p {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.softReviewExpansion button {
+  flex: 0 0 auto;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--on-accent, white);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.softReviewExpansion button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@container decision-panel (max-width: 520px) {
+  .softReviewExpansion {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .softReviewExpansion button {
+    width: 100%;
+  }
+}
+
 .traceEliminated article {
   display: grid;
   gap: 5px;
