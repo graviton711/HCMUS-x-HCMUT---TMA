@@ -13,8 +13,10 @@ import { usePreferences } from '../../../shared/preferences';
 import {
   METRIC_NAMES,
   METRIC_RELATIONS,
+  PRIORITY_LABELS,
   conditionState,
   conditionText,
+  evaluationsForOffer,
   failedDetailsForOffer,
   fieldLabel,
   formatMetricValue,
@@ -62,6 +64,184 @@ function metricNumber(profile: CurrentMetricProfile, key: string, nested?: strin
   const metric = profile.metrics[key];
   const value = nested ? metricObject(profile, key)[nested] : metric?.value;
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** Leader reference for gain/loss deltas; money deltas stay within one currency. */
+interface TourReference {
+  offerId: string;
+  price: number | null;
+  currency: string;
+  legs: number | null;
+  refundDays: number | null;
+}
+
+function tourReference(
+  comparison: CurrentComparison,
+  entry: { tour_id: string; offer_id: string } | undefined,
+): TourReference | null {
+  if (!entry) return null;
+  const tour = comparison.tour_snapshots.find((item) => item.id === entry.tour_id);
+  const offer = tour?.offers.find((item) => item.id === entry.offer_id);
+  if (!offer) return null;
+  const profile = (comparison.metric_profiles ?? []).find(
+    (item) => item.tour_id === entry.tour_id && item.offer_id === entry.offer_id,
+  );
+  return {
+    offerId: offer.id,
+    price: offer.price,
+    currency: (offer.currency || '').toUpperCase(),
+    legs: profile ? metricNumber(profile, 'route_complexity', 'explicit_legs') : null,
+    refundDays: profile ? metricNumber(profile, 'cancellation_flexibility') : null,
+  };
+}
+
+interface ReviewItem {
+  key: string;
+  label: string;
+  quote: string;
+  state: CurrentEvaluation['state'];
+  priority?: string | null;
+}
+
+/**
+ * Gains (pass) and losses (fail/unknown) for one offer: shared criteria plus the
+ * offer's best OR branch, soft preferences always included. No cross-product.
+ */
+function reviewItemsForOffer(
+  comparison: CurrentComparison,
+  offerId: string,
+  t: (vi: string, en: string) => string,
+): { gains: ReviewItem[]; losses: ReviewItem[] } {
+  const seen = new Set<string>();
+  const items: ReviewItem[] = [];
+  const push = ({
+    evaluation,
+    condition,
+  }: {
+    evaluation: CurrentEvaluation;
+    condition: CurrentCondition | null;
+  }) => {
+    if (seen.has(evaluation.condition_id)) return;
+    seen.add(evaluation.condition_id);
+    const isSoft = condition?.strength === 'soft';
+    const label = condition
+      ? isSoft
+        ? String(condition.value)
+        : `${fieldLabel(condition.field, t)}: ${conditionText(condition.operator, condition.value, t)}`
+      : evaluation.condition_id;
+    items.push({
+      key: evaluation.condition_id,
+      label,
+      quote: evaluation.quote,
+      state: evaluation.state,
+      priority: condition?.priority ?? null,
+    });
+  };
+  relevantEvaluationsForOffer(comparison, offerId).forEach(push);
+  evaluationsForOffer(comparison, offerId)
+    .filter(({ condition }) => condition?.strength === 'soft')
+    .forEach(push);
+  const priorityRank = (value?: string | null) =>
+    value === 'high' ? 0 : value === 'medium' ? 1 : value === 'low' ? 2 : 3;
+  const gains = items
+    .filter((item) => item.state === 'pass')
+    .sort(
+      (left, right) =>
+        Number(Boolean(left.priority)) - Number(Boolean(right.priority)) ||
+        priorityRank(left.priority) - priorityRank(right.priority),
+    );
+  const losses = items
+    .filter((item) => item.state !== 'pass')
+    .sort(
+      (left, right) =>
+        Number(Boolean(left.priority)) - Number(Boolean(right.priority)) ||
+        Number(left.state !== 'fail') - Number(right.state !== 'fail'),
+    );
+  return { gains, losses };
+}
+
+/** Plain-language deltas against the leading tour; unpriced items never join a total. */
+function tourDeltas(
+  comparison: CurrentComparison,
+  tourId: string,
+  offerId: string,
+  reference: TourReference | null,
+  locale: string,
+  t: (vi: string, en: string) => string,
+): string[] {
+  if (!reference) return [];
+  const isLeader = reference.offerId === offerId;
+  const tour = comparison.tour_snapshots.find((item) => item.id === tourId);
+  const offer = tour?.offers.find((item) => item.id === offerId);
+  if (!offer) return [];
+  const deltas: string[] = [];
+  const formatMoney = (value: number, currency: string) =>
+    `${value.toLocaleString(locale === 'vi' ? 'vi-VN' : 'en-GB')} ${currency}`;
+  const currency = (offer.currency || '').toUpperCase();
+  if (
+    !isLeader &&
+    currency &&
+    currency === reference.currency &&
+    offer.price != null &&
+    reference.price != null &&
+    offer.price !== reference.price
+  ) {
+    const diff = offer.price - reference.price;
+    deltas.push(
+      diff > 0
+        ? t(
+            `Giá cao hơn tour dẫn đầu ${formatMoney(diff, currency)}`,
+            `Costs ${formatMoney(diff, currency)} more than the leader`,
+          )
+        : t(
+            `Giá thấp hơn tour dẫn đầu ${formatMoney(Math.abs(diff), currency)}`,
+            `Costs ${formatMoney(Math.abs(diff), currency)} less than the leader`,
+          ),
+    );
+  }
+  const profile = (comparison.metric_profiles ?? []).find(
+    (item) => item.tour_id === tourId && item.offer_id === offerId,
+  );
+  if (!profile) return deltas;
+  const legs = metricNumber(profile, 'route_complexity', 'explicit_legs');
+  if (!isLeader && legs != null && reference.legs != null && legs !== reference.legs) {
+    deltas.push(
+      legs > reference.legs
+        ? t(
+            `Thêm ${legs - reference.legs} chặng được nêu`,
+            `${legs - reference.legs} more stated legs`,
+          )
+        : t(
+            `Ít hơn ${reference.legs - legs} chặng được nêu`,
+            `${reference.legs - legs} fewer stated legs`,
+          ),
+    );
+  }
+  const refund = metricNumber(profile, 'cancellation_flexibility');
+  if (!isLeader && refund != null && reference.refundDays != null && refund !== reference.refundDays) {
+    deltas.push(
+      refund > reference.refundDays
+        ? t(
+            `Hủy linh hoạt hơn ${refund - reference.refundDays} ngày`,
+            `Cancellation window ${refund - reference.refundDays} days wider`,
+          )
+        : t(
+            `Hủy kém linh hoạt hơn ${reference.refundDays - refund} ngày`,
+            `Cancellation window ${reference.refundDays - refund} days narrower`,
+          ),
+    );
+  }
+  const unpriced =
+    profile.cost.unpriced_exclusions.length + profile.cost.optional_or_conditional.length;
+  if (unpriced > 0) {
+    deltas.push(
+      t(
+        `${unpriced} khoản chưa định giá — không cộng vào tổng`,
+        `${unpriced} unpriced items — not added to the total`,
+      ),
+    );
+  }
+  return deltas;
 }
 
 function formatCostExposure(
@@ -136,6 +316,145 @@ function EvaluationRow({
   );
 }
 
+function VerdictHero({
+  comparison,
+  top,
+  viewKind,
+}: {
+  comparison: CurrentComparison;
+  top: { tour_id: string; offer_id: string; score?: number };
+  viewKind?: CurrentDecisionView['kind'];
+}) {
+  const { t, locale } = usePreferences();
+  const tour = comparison.tour_snapshots.find((item) => item.id === top.tour_id);
+  const offer = tour?.offers.find((item) => item.id === top.offer_id);
+  if (!tour || !offer) return null;
+  const shared = comparison.requirement.conditions.filter(
+    (condition) => condition.strength === 'hard',
+  );
+  const alternatives = comparison.requirement.alternatives ?? [];
+  const states = new Map(
+    comparison.evaluations
+      .filter((item) => item.offer_id === top.offer_id)
+      .map((item) => [item.condition_id, item.state]),
+  );
+  const sharedPassed = shared.filter(
+    (condition) => states.get(condition.id) === 'pass',
+  ).length;
+  const branch = alternatives
+    .map((alternative) => {
+      const branchStates = alternative.conditions.map(
+        (condition) => states.get(condition.id) ?? 'unknown',
+      );
+      return {
+        alternative,
+        failed: branchStates.filter((state) => state === 'fail').length,
+        passed: branchStates.filter((state) => state === 'pass').length,
+      };
+    })
+    .sort(
+      (left, right) =>
+        left.failed - right.failed ||
+        right.passed - left.passed ||
+        left.alternative.id.localeCompare(right.alternative.id),
+    )[0];
+  const useBranch =
+    sharedPassed === shared.length && branch != null && branch.failed === 0;
+  const hardPassed = sharedPassed + (useBranch ? branch!.passed : 0);
+  const hardTotal =
+    shared.length + (useBranch ? branch!.alternative.conditions.length : 0);
+  const soft = comparison.requirement.conditions.filter(
+    (condition) => condition.strength === 'soft',
+  );
+  const softPassed = soft.filter((condition) => states.get(condition.id) === 'pass').length;
+  const high = soft.filter((condition) => condition.priority === 'high');
+  const highPassed = high.filter((condition) => states.get(condition.id) === 'pass').length;
+  const firstLoss = reviewItemsForOffer(comparison, top.offer_id, t).losses[0];
+  const topProfile = (comparison.metric_profiles ?? []).find(
+    (item) => item.tour_id === top.tour_id && item.offer_id === top.offer_id,
+  );
+  const topUnpriced = topProfile
+    ? topProfile.cost.unpriced_exclusions.length + topProfile.cost.optional_or_conditional.length
+    : 0;
+  const reasons: Record<CurrentDecisionView['kind'], [string, string]> = {
+    cheapest: [
+      'Giá công bố thấp nhất trong nhóm đạt điều kiện',
+      'Lowest published price among qualifying tours',
+    ],
+    best_fit: ['Khớp các ưu tiên của bạn nhất', 'Fits your stated priorities best'],
+    experience_rich: ['Nhiều hoạt động được nêu nhất', 'Most stated activities'],
+    fewest_legs: ['Ít chặng được nêu nhất', 'Fewest stated route legs'],
+    cancellation_flexible: [
+      'Điều khoản hủy linh hoạt nhất',
+      'Most flexible cancellation terms',
+    ],
+    included_value: ['Bao gồm nhiều hạng mục nhất', 'Most included services'],
+    balanced: ['Cân bằng nhất giữa các tiêu chí', 'Most balanced across criteria'],
+  };
+  const reasonText = viewKind
+    ? t(...reasons[viewKind])
+    : t('Xếp đầu theo yêu cầu của bạn', 'Ranks first for your criteria');
+  const priceLabel = priceText(offer.price, offer.currency, locale, t);
+  const hardOk = hardTotal > 0 && hardPassed === hardTotal;
+  return (
+    <section
+      className={styles['verdict-hero']}
+      aria-label={t('Kết luận nhanh', 'Quick verdict')}
+    >
+      <span className={styles['verdict-kicker']}>{t('KẾT LUẬN', 'VERDICT')}</span>
+      <h3 className={styles['verdict-title']}>
+        {t('Tour khuyên cho bạn:', 'Recommended tour:')}{' '}
+        <strong>{tour.name || tour.id}</strong>
+      </h3>
+      <p className={styles['verdict-reason']}>
+        {reasonText} · {priceLabel}
+      </p>
+      <ul className={styles['verdict-lines']}>
+        <li data-ok={hardOk}>
+          <span aria-hidden="true">{hardOk ? '✓' : '⚠'}</span>
+          {hardTotal > 0
+            ? t(
+                `Điều kiện bắt buộc: đạt ${hardPassed}/${hardTotal}`,
+                `Must-have criteria: ${hardPassed}/${hardTotal} met`,
+              )
+            : t('Không khai báo điều kiện bắt buộc', 'No must-have criteria declared')}
+        </li>
+        {soft.length > 0 && (
+          <li data-ok={softPassed === soft.length}>
+            <span aria-hidden="true">{softPassed === soft.length ? '✓' : '⚠'}</span>
+            {high.length > 0
+              ? t(
+                  `Ưu tiên: khớp ${softPassed}/${soft.length} · mức Cao ${highPassed}/${high.length}`,
+                  `Priorities: ${softPassed}/${soft.length} met · high level ${highPassed}/${high.length}`,
+                )
+              : t(
+                  `Ưu tiên: khớp ${softPassed}/${soft.length}`,
+                  `Priorities: ${softPassed}/${soft.length} met`,
+                )}
+          </li>
+        )}
+        <li data-ok={!firstLoss && topUnpriced === 0}>
+          <span aria-hidden="true">{firstLoss || topUnpriced > 0 ? '⚠' : '✓'}</span>
+          {firstLoss
+            ? t(
+                `Chấp nhận: ${firstLoss.label} (${firstLoss.state === 'unknown' ? t('chưa rõ', 'unknown') : t('không đạt', 'failed')})`,
+                `Accepted: ${firstLoss.label} (${firstLoss.state === 'unknown' ? 'unknown' : 'failed'})`,
+              )
+            : topUnpriced > 0
+              ? t(
+                  `Chấp nhận: ${topUnpriced} khoản chưa định giá — không cộng vào tổng`,
+                  `Accepted: ${topUnpriced} unpriced items — not added to the total`,
+                )
+              : t(
+                  'Chấp nhận: chưa thấy điểm mất rõ ràng',
+                  'Accepted: no clear trade-off found',
+                )}
+        </li>
+      </ul>
+    </section>
+  );
+}
+
 function TourCard({
   comparison,
   tourId,
@@ -146,6 +465,8 @@ function TourCard({
   selectedForCompare,
   compareDisabled,
   isSaved,
+  reference,
+  isLeader,
   onToggleCompare,
   onToggleSaved,
 }: {
@@ -158,6 +479,8 @@ function TourCard({
   selectedForCompare: boolean;
   compareDisabled: boolean;
   isSaved: boolean;
+  reference?: TourReference | null;
+  isLeader?: boolean;
   onToggleCompare: () => void;
   onToggleSaved?: () => void;
 }) {
@@ -173,6 +496,12 @@ function TourCard({
   const failedCount = failed.filter(({ evaluation }) => evaluation.state === 'fail').length;
   const unknownCount = failed.filter(({ evaluation }) => evaluation.state === 'unknown').length;
   const priceLabel = priceText(offer.price, offer.currency, locale, t);
+  const review = reviewItemsForOffer(comparison, offer.id, t);
+  const deltas = tourDeltas(comparison, tourId, offerId, reference ?? null, locale, t);
+  const gainItems = review.gains.slice(0, 4);
+  const lossItems = review.losses.slice(0, 3);
+  const hiddenGains = review.gains.length - gainItems.length;
+  const hiddenLosses = review.losses.length - lossItems.length;
   const label = missing
     ? t(
         `Gần đạt · ${failedCount} không đạt, ${unknownCount} chưa rõ`,
@@ -205,7 +534,12 @@ function TourCard({
           >
             {label}
           </span>
-          <span className={styles['tour-rank']}>#{index + 1}</span>
+          <span className={styles['tour-flags']}>
+            {isLeader && (
+              <span className={styles['tour-leader']}>{t('Hợp nhất', 'Top pick')}</span>
+            )}
+            <span className={styles['tour-rank']}>#{index + 1}</span>
+          </span>
         </div>
         {decisionScore !== undefined && (
           <p className={styles['decision-score']}>
@@ -217,19 +551,6 @@ function TourCard({
           {tour.supplier || t('Chưa rõ nhà cung cấp', 'Supplier not listed')}
         </p>
       </div>
-
-      {missing && failed.length > 0 && (
-        <p className={styles['tour-blocked']}>
-          {t('Điều kiện còn vướng:', 'Criteria to review:')}{' '}
-          {failed
-            .map(({ evaluation, condition }) => {
-              const stateText =
-                evaluation.state === 'unknown' ? t('chưa rõ', 'unknown') : t('không đạt', 'failed');
-              return `${condition ? fieldLabel(condition.field, t) : evaluation.condition_id} (${stateText})`;
-            })
-            .join(', ')}
-        </p>
-      )}
 
       <dl className={styles['tour-facts']}>
         <div>
@@ -252,6 +573,81 @@ function TourCard({
           </dd>
         </div>
       </dl>
+
+      <div className={styles['tour-gainloss']}>
+          <section data-kind="gain">
+            <h4>
+              <span aria-hidden="true">✓</span> {t('Được', 'Gains')}
+            </h4>
+            {gainItems.length > 0 ? (
+              <ul>
+                {gainItems.map((item) => (
+                  <li key={item.key}>
+                    <span>{item.label}</span>
+                    {item.priority && (
+                      <em className={styles['priority-chip']}>
+                        {t(...(PRIORITY_LABELS[item.priority] ?? PRIORITY_LABELS.medium))}
+                      </em>
+                    )}
+                    {item.quote && (
+                      <small className={styles['gainloss-quote']}>“{item.quote}”</small>
+                    )}
+                  </li>
+                ))}
+                {hiddenGains > 0 && (
+                  <li className={styles['gainloss-more']}>
+                    +{hiddenGains}{' '}
+                    {t(
+                      'mục nữa trong “Vì sao xếp hạng này”',
+                      'more under “Why this ranking”',
+                    )}
+                  </li>
+                )}
+              </ul>
+            ) : (
+              <p>{t('Chưa có điều kiện nào đạt được xác nhận.', 'No confirmed matches yet.')}</p>
+            )}
+          </section>
+          <section data-kind="loss">
+            <h4>
+              <span aria-hidden="true">⚠</span>{' '}
+              {missing
+                ? t('Còn vướng', 'Still blocked')
+                : t('Mất / Chấp nhận', 'Losses / accepted')}
+            </h4>
+            {lossItems.length > 0 || deltas.length > 0 ? (
+              <ul>
+                {lossItems.map((item) => (
+                  <li key={item.key}>
+                    <span>{item.label}</span>
+                    <b>
+                      {item.state === 'unknown' ? t('chưa rõ', 'unknown') : t('không đạt', 'failed')}
+                    </b>
+                    {item.quote && (
+                      <small className={styles['gainloss-quote']}>“{item.quote}”</small>
+                    )}
+                  </li>
+                ))}
+                {hiddenLosses > 0 && (
+                  <li className={styles['gainloss-more']}>
+                    +{hiddenLosses}{' '}
+                    {t(
+                      'mục nữa trong “Vì sao xếp hạng này”',
+                      'more under “Why this ranking”',
+                    )}
+                  </li>
+                )}
+                {deltas.map((delta) => (
+                  <li key={delta} className={styles['gainloss-delta']}>
+                    <span>{delta}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>{t('Chưa thấy điểm mất đáng chú ý.', 'No notable trade-offs found.')}</p>
+            )}
+          </section>
+        </div>
 
       {details.length > 0 && (
         <details className={`${styles.evidence} disclosure`}>
@@ -405,6 +801,7 @@ export function ResultCards({
   const worst = mostFailedField(comparison);
   const empty = ranked.length === 0 && nearMiss.length === 0;
   const customOrder = softConditions.some((condition) => (weights[condition.id] ?? 1) !== 1);
+  const leaderReference = tourReference(comparison, ranked[0]);
 
   if ((comparison.decision_views?.length ?? 0) >= 3) {
     return (
@@ -494,6 +891,8 @@ export function ResultCards({
       className={styles.result}
       aria-label={t('Kết quả so sánh tour', 'Tour comparison results')}
     >
+      {ranked.length > 0 && <VerdictHero comparison={comparison} top={ranked[0]} />}
+
       <div className={styles['result-summary']}>
         <p className="muted" role="status">
           {empty
@@ -681,6 +1080,8 @@ export function ResultCards({
                   offerId={entry.offer_id}
                   index={index}
                   missing={false}
+                  reference={leaderReference}
+                  isLeader={index === 0}
                   selectedForCompare={selected.some(
                     (item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id,
                   )}
@@ -719,6 +1120,7 @@ export function ResultCards({
                 offerId={entry.offer_id}
                 index={index}
                 missing
+                reference={leaderReference}
                 selectedForCompare={selected.some(
                   (item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id,
                 )}
@@ -1101,6 +1503,7 @@ function DecisionViews({  comparison,
     (candidate) => !comparison.ranked.some((ranked) => ranked.tour_id === candidate.tour_id),
   );
   const worst = mostFailedField(comparison);
+  const nearReference = tourReference(comparison, entries[0]);
   const labels: Record<CurrentDecisionView['kind'], [string, string]> = {
     cheapest: ['Giá thấp nhất', 'Lowest published price'],
     best_fit: ['Hợp ưu tiên nhất', 'Best fit'],
@@ -1184,6 +1587,10 @@ function DecisionViews({  comparison,
           )}
         </span>
       </header>
+
+      {activeView && entries.length > 0 && (
+        <VerdictHero comparison={comparison} top={entries[0]} viewKind={activeView.kind} />
+      )}
 
       {(comparison.decision_options ?? []).length > 0 && (
         <section
@@ -1294,6 +1701,12 @@ function DecisionViews({  comparison,
       )}
 
       {activeView && (
+        <p className={styles['decision-tabs-caption']}>
+          {t('Kết luận và xếp hạng theo:', 'Verdict and ranking by:')}
+        </p>
+      )}
+
+      {activeView && (
         <div
           className={styles['decision-tabs']}
           role="tablist"
@@ -1339,11 +1752,13 @@ function DecisionViews({  comparison,
         </p>
       ) : entries.length > 0 ? (
         <div className={styles['decision-option-groups']}>
-          {entryGroups.map((group) => (
-            <section
-              className={styles['decision-option-group']}
-              key={group.currency || activeView.kind}
-            >
+          {entryGroups.map((group) => {
+            const reference = tourReference(comparison, group.entries[0]);
+            return (
+              <section
+                className={styles['decision-option-group']}
+                key={group.currency || activeView.kind}
+              >
               {group.currency && <h3>{group.currency}</h3>}
               <div className={styles['result-grid']}>
                 {group.entries.map((entry, index) => (
@@ -1354,6 +1769,8 @@ function DecisionViews({  comparison,
                     offerId={entry.offer_id}
                     index={index}
                     missing={false}
+                    reference={reference}
+                    isLeader={index === 0}
                     decisionScore={activeView.kind === 'best_fit' ? entry.score : undefined}
                     selectedForCompare={selected.some(
                       (item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id,
@@ -1375,7 +1792,8 @@ function DecisionViews({  comparison,
                 ))}
               </div>
             </section>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <>
@@ -1499,7 +1917,14 @@ function DecisionViews({  comparison,
                           <div key={`${entry.offer_id}-${condition.id}`}>
                             <dt>
                               {String(condition.value)}
-                              <span>{condition.weight_percent ?? 0}%</span>
+                              <span>
+                                {condition.priority
+                                  ? t(
+                                      ...(PRIORITY_LABELS[condition.priority] ??
+                                        PRIORITY_LABELS.medium),
+                                    )
+                                  : `${condition.weight_percent ?? 0}%`}
+                              </span>
                             </dt>
                             <dd>
                               <span className={styles['matrix-state']} data-state={state}>
@@ -1567,6 +1992,7 @@ function DecisionViews({  comparison,
                 offerId={entry.offer_id}
                 index={index}
                 missing
+                reference={nearReference}
                 selectedForCompare={selected.some(
                   (item) => item.tourId === entry.tour_id && item.offerId === entry.offer_id,
                 )}

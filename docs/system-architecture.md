@@ -43,6 +43,8 @@ Scenario điều kiện chạy lại hard filter trên snapshot gốc; scenario 
 
 - `/` là route chính cho hội thoại và quyết định. `/tours` chỉ là URL tương thích, chuyển về `/` và giữ `session`.
 - Phiên đang hoạt động có chat/progress và Decision Workspace song song trên desktop; mobile dùng hai tab và composer luôn khả dụng. Đây là cách trình bày cùng pipeline, không tạo API quyết định thứ hai.
+- Workspace chia bước: Yêu cầu → Kết quả → Phương án → Kịch bản → Minh bạch. Bước chỉ xuất hiện khi có dữ liệu; panel được giữ mounted khi ẩn để không mất trạng thái kịch bản; comparison mới tự mở bước Kết quả.
+- Bước Kết quả mở đầu bằng thẻ Kết luận: tour khuyên theo góc nhìn đang chọn, một câu lý do ngắn và ba dòng trạng thái (điều kiện bắt buộc, ưu tiên, điểm phải chấp nhận). Mỗi thẻ tour có hai cột Được / Mất so với tour dẫn đầu (chênh giá, chặng, mốc hủy, khoản chưa định giá) và giữ quote nguồn.
 - Local transcript lưu artifact `decision_draft` và `comparison`. Workspace dựng trạng thái từ chúng, không parse nội dung assistant; session cũ chỉ có `requirementId`/`comparisonId` được hydrate qua endpoint hiện tại.
 - Kết quả chỉ hiện hành khi requirement của comparison khớp Brief đã review. Nếu Brief thay đổi, comparison cũ vẫn được giữ và gắn trạng thái cũ.
 - Cả hai pane dùng design tokens, typography, surfaces và state colors hiện có; không tạo palette/font riêng.
@@ -58,7 +60,7 @@ Scenario điều kiện chạy lại hard filter trên snapshot gốc; scenario 
 | `backend/decide` | Hard filter, kiểm tra structured evidence, metric vector, weighted fit, objective views/Pareto, near-miss | LLM, HTTP, storage |
 | `backend/workflows` | Ghép input/catalog/normalize/decide, quản lý scan context và batch | UI hoặc giao thức HTTP |
 | `backend/api` | Auth owner, route, SSE/JSON envelope | Logic ra quyết định |
-| `frontend` | Draft review, trọng số, decision workspace, saved tours | Truy cập database hoặc tự suy eligibility |
+| `frontend` | Draft review, mức ưu tiên, decision workspace theo bước, saved tours | Truy cập database hoặc tự suy eligibility |
 | `ingest` | Xuất bản catalog, giữ giá/basis/tuổi/phụ thu ở cấp offer | Chạy trong request demo |
 
 ## Quy tắc kỹ thuật

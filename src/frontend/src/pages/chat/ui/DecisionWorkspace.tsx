@@ -20,6 +20,8 @@ import {
 import styles from './DecisionWorkspace.module.css';
 import { OptionMatrix } from './OptionMatrix';
 
+type WorkspaceTabId = 'brief' | 'results' | 'options' | 'scenario' | 'trace';
+
 export function DecisionWorkspace({
   messages,
   busy,
@@ -121,6 +123,34 @@ export function DecisionWorkspace({
             : t('Chờ bạn duyệt', 'Review needed')
           : t('Chưa có bản yêu cầu', 'No brief yet');
 
+  const tabs: { id: WorkspaceTabId; label: string }[] = [];
+  if (activeDraft) tabs.push({ id: 'brief', label: t('Yêu cầu', 'Brief') });
+  if (comparison) tabs.push({ id: 'results', label: t('Kết quả', 'Results') });
+  if (comparison && hasMetrics && (comparison.decision_options ?? []).length > 1)
+    tabs.push({ id: 'options', label: t('Phương án', 'Options') });
+  if (comparison && comparison.decision_trace?.snapshot_available)
+    tabs.push({ id: 'scenario', label: t('Kịch bản', 'Scenarios') });
+  if (comparison) tabs.push({ id: 'trace', label: t('Minh bạch', 'Transparency') });
+
+  const [activeTab, setActiveTab] = useState<WorkspaceTabId | null>(null);
+  const lastResultId = useRef<string | null>(null);
+  const comparisonId = comparison?.id ?? null;
+  useEffect(() => {
+    if (comparisonId && lastResultId.current !== comparisonId) {
+      lastResultId.current = comparisonId;
+      setActiveTab('results');
+    }
+  }, [comparisonId]);
+  const activeTabId = tabs.some((tab) => tab.id === activeTab)
+    ? activeTab
+    : (tabs[0]?.id ?? null);
+  const activeIndex = tabs.findIndex((tab) => tab.id === activeTabId);
+
+  function moveTab(delta: number) {
+    const next = tabs[activeIndex + delta];
+    if (next) setActiveTab(next.id);
+  }
+
   return (
     <aside className={styles.root} aria-labelledby="decision-workspace-title">
       <header className={styles.header}>
@@ -167,146 +197,226 @@ export function DecisionWorkspace({
           </section>
         )}
 
-        {activeDraft && (
-          <>
-            {archivedDraft && !isCurrentDraft && (
-              <p className={styles.inlineStatus} role="status">
-                {t(
-                  'Đang xem bản yêu cầu cũ. Bản này chỉ để đối chiếu lịch sử.',
-                  'Viewing an older brief for reference.',
-                )}
-              </p>
-            )}
-            <DecisionBrief
-              message={activeDraft}
-              busy={busy || !clientReady || !isCurrentDraft}
-              onChange={(requirement) => onUpdateDecisionDraft(activeDraft.id, requirement)}
-              onRun={(requirement) => onRunDecision(activeDraft.id, requirement)}
-            />
-          </>
-        )}
-
-        {staleComparison && !comparison && (
-          <p className={styles.inlineStatus} role="status">
-            {t(
-              'Điều kiện đã đổi nên kết quả trước không còn là kết quả hiện hành.',
-              'The criteria changed, so the previous comparison is no longer current.',
-            )}{' '}
-            <button type="button" onClick={() => onOpenArtifact(latestComparison!.id)}>
-              {t('Mở kết quả cũ', 'Open earlier result')}
-            </button>
-          </p>
-        )}
-
-        {comparison && (
-          <>
-            {comparisonIsStale && (
-              <p className={styles.inlineStatus} role="status">
-                {t(
-                  'Kết quả này dùng điều kiện khác với bản đang duyệt; không dùng để xác nhận lựa chọn hiện tại.',
-                  'This result uses different criteria from the current brief and is not current.',
-                )}
-              </p>
-            )}
-            {!hasMetrics && (
-              <div className={styles.inlineStatus} role="status">
-                <p>
-                  {t(
-                    'Đây là kết quả cũ, chưa có bộ metric và bằng chứng chi tiết mới.',
-                    'This older result does not include the newer metric and evidence details.',
-                  )}
-                </p>
-                {activeDraft && isCurrentDraft && (
-                  <button
-                    type="button"
-                    disabled={busy || !clientReady}
-                    onClick={() => onRunDecision(activeDraft.id, activeDraft.requirement)}
-                  >
-                    {t('Chạy lại với bộ tiêu chí hiện tại', 'Rerun with current criteria')}
-                  </button>
-                )}
-              </div>
-            )}
-            <ResultCards
-              comparison={comparison}
-              busy={busy || comparisonIsStale || !hasMetrics}
-              onRelax={onRelax}
-              isSavedTour={isSavedTour}
-              onToggleSavedTour={onToggleSavedTour}
-              onAsk={onSend}
-            />
-            {(comparison.soft_review?.remaining_tours ?? 0) > 0 && (
-              <div
-                className={styles.softReviewExpansion}
-                role="group"
-                aria-label={t('Đánh giá thêm tour', 'Expand tour review')}
+        {tabs.length > 1 && activeTabId && (
+          <div className={styles.tabs}>
+            <div className={styles['tabs-stepper']}>
+              <button
+                type="button"
+                className={styles['tabs-step']}
+                disabled={activeIndex <= 0}
+                onClick={() => moveTab(-1)}
               >
-                <p>
-                  {t(
-                    `Đã đánh giá ${comparison.soft_review?.evaluated_tours ?? 0}/${comparison.soft_review?.eligible_tours ?? 0} tour đạt điều kiện.`,
-                    `Evaluated ${comparison.soft_review?.evaluated_tours ?? 0}/${comparison.soft_review?.eligible_tours ?? 0} eligible tours.`,
-                  )}
-                </p>
+                <Icon name="chevron" size={14} className={styles['tabs-step-back']} />
+                <span>{t('Quay lại', 'Back')}</span>
+              </button>
+              <span className={styles['tabs-current']} aria-live="polite">
+                {tabs[activeIndex]?.label}
+                <small>
+                  {activeIndex + 1}/{tabs.length}
+                </small>
+              </span>
+              <button
+                type="button"
+                className={styles['tabs-step']}
+                disabled={activeIndex >= tabs.length - 1}
+                onClick={() => moveTab(1)}
+              >
+                <span>{t('Tiếp theo', 'Next')}</span>
+                <Icon name="chevron" size={14} className={styles['tabs-step-next']} />
+              </button>
+            </div>
+            <div
+              className={styles['tabs-dots']}
+              role="tablist"
+              aria-label={t('Các bước của không gian quyết định', 'Decision workspace steps')}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                event.preventDefault();
+                const delta = event.key === 'ArrowRight' ? 1 : -1;
+                const next = (activeIndex + delta + tabs.length) % tabs.length;
+                const target = tabs[next];
+                if (target) setActiveTab(target.id);
+              }}
+            >
+              {tabs.map((tab, index) => (
                 <button
+                  key={tab.id}
                   type="button"
-                  disabled={busy || !client || !agentSessionId || comparisonIsStale}
-                  onClick={() => onExpandComparison(comparison.id)}
-                >
-                  {busy
-                    ? t('Đang đánh giá thêm…', 'Evaluating more…')
-                    : t(
-                        `Đánh giá thêm ${Math.min(comparison.soft_review?.batch_limit ?? 15, comparison.soft_review?.remaining_tours ?? 0)} tour`,
-                        `Evaluate ${Math.min(comparison.soft_review?.batch_limit ?? 15, comparison.soft_review?.remaining_tours ?? 0)} more tours`,
-                      )}
-                </button>
-              </div>
-            )}
-            {hasMetrics && (comparison.decision_options ?? []).length > 1 && (
-              <OptionMatrix comparison={comparison} />
-            )}
-            {comparison.decision_trace?.snapshot_available && (
-              <ScenarioWorkbench
-                comparison={comparison}
-                client={client}
-                agentSessionId={agentSessionId}
-                busy={busy}
-                activeDraftId={activeDraft?.id ?? null}
-                onApply={(requirement) => {
-                  if (activeDraft) onUpdateDecisionDraft(activeDraft.id, requirement);
-                }}
-                onRunDecision={(requirement) => {
-                  if (activeDraft) onRunDecision(activeDraft.id, requirement);
-                }}
-                onRelax={onRelax}
-                onSend={onSend}
-                isSavedTour={isSavedTour}
-                onToggleSavedTour={onToggleSavedTour}
-              />
-            )}
-            <DecisionTracePanel comparison={comparison} client={client} />
-            {(comparison.assumptions ?? []).length > 0 && (
-              <details className={styles.tracePanel}>
-                <summary>
-                  {t(
-                    'Giả định & giới hạn — đọc trước khi tin',
-                    'Assumptions & limits — read before trusting',
-                  )}
-                </summary>
-                <ul className={styles.traceList}>
-                  {(comparison.assumptions ?? []).map((assumption) => (
-                    <li key={assumption}>{assumption}</li>
-                  ))}
-                </ul>
-                <p className={styles.traceNote}>
-                  {t(
-                    'Bạn quyết định cuối cùng — kiểm chứng giá cuối với nhà cung cấp trước khi đặt.',
-                    'You decide in the end — verify the final price with the provider before booking.',
-                  )}
-                </p>
-              </details>
-            )}
-          </>
+                  role="tab"
+                  aria-selected={tab.id === activeTabId}
+                  aria-controls={`workspace-panel-${tab.id}`}
+                  id={`workspace-tab-${tab.id}`}
+                  className={styles['tabs-dot']}
+                  aria-label={`${tab.label} (${index + 1}/${tabs.length})`}
+                  onClick={() => setActiveTab(tab.id)}
+                />
+              ))}
+            </div>
+          </div>
         )}
+
+        <div className={styles.panels}>
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              id={`workspace-panel-${tab.id}`}
+              role="tabpanel"
+              aria-labelledby={`workspace-tab-${tab.id}`}
+              className={styles.panel}
+              hidden={tab.id !== activeTabId}
+            >
+              {tab.id === 'brief' && activeDraft && (
+                <>
+                  {archivedDraft && !isCurrentDraft && (
+                    <p className={styles.inlineStatus} role="status">
+                      {t(
+                        'Đang xem bản yêu cầu cũ. Bản này chỉ để đối chiếu lịch sử.',
+                        'Viewing an older brief for reference.',
+                      )}
+                    </p>
+                  )}
+                  <DecisionBrief
+                    message={activeDraft}
+                    busy={busy || !clientReady || !isCurrentDraft}
+                    onChange={(requirement) => onUpdateDecisionDraft(activeDraft.id, requirement)}
+                    onRun={(requirement) => onRunDecision(activeDraft.id, requirement)}
+                  />
+                  {staleComparison && !comparison && (
+                    <p className={styles.inlineStatus} role="status">
+                      {t(
+                        'Điều kiện đã đổi nên kết quả trước không còn là kết quả hiện hành.',
+                        'The criteria changed, so the previous comparison is no longer current.',
+                      )}{' '}
+                      <button
+                        type="button"
+                        onClick={() => onOpenArtifact(latestComparison!.id)}
+                      >
+                        {t('Mở kết quả cũ', 'Open earlier result')}
+                      </button>
+                    </p>
+                  )}
+                </>
+              )}
+
+              {tab.id === 'results' && comparison && (
+                <>
+                  {comparisonIsStale && (
+                    <p className={styles.inlineStatus} role="status">
+                      {t(
+                        'Kết quả này dùng điều kiện khác với bản đang duyệt; không dùng để xác nhận lựa chọn hiện tại.',
+                        'This result uses different criteria from the current brief and is not current.',
+                      )}
+                    </p>
+                  )}
+                  {!hasMetrics && (
+                    <div className={styles.inlineStatus} role="status">
+                      <p>
+                        {t(
+                          'Đây là kết quả cũ, chưa có bộ metric và bằng chứng chi tiết mới.',
+                          'This older result does not include the newer metric and evidence details.',
+                        )}
+                      </p>
+                      {activeDraft && isCurrentDraft && (
+                        <button
+                          type="button"
+                          disabled={busy || !clientReady}
+                          onClick={() => onRunDecision(activeDraft.id, activeDraft.requirement)}
+                        >
+                          {t('Chạy lại với bộ tiêu chí hiện tại', 'Rerun with current criteria')}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  <ResultCards
+                    comparison={comparison}
+                    busy={busy || comparisonIsStale || !hasMetrics}
+                    onRelax={onRelax}
+                    isSavedTour={isSavedTour}
+                    onToggleSavedTour={onToggleSavedTour}
+                    onAsk={onSend}
+                  />
+                  {(comparison.soft_review?.remaining_tours ?? 0) > 0 && (
+                    <div
+                      className={styles.softReviewExpansion}
+                      role="group"
+                      aria-label={t('Đánh giá thêm tour', 'Expand tour review')}
+                    >
+                      <p>
+                        {t(
+                          `Đã đánh giá ${comparison.soft_review?.evaluated_tours ?? 0}/${comparison.soft_review?.eligible_tours ?? 0} tour đạt điều kiện.`,
+                          `Evaluated ${comparison.soft_review?.evaluated_tours ?? 0}/${comparison.soft_review?.eligible_tours ?? 0} eligible tours.`,
+                        )}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={busy || !client || !agentSessionId || comparisonIsStale}
+                        onClick={() => onExpandComparison(comparison.id)}
+                      >
+                        {busy
+                          ? t('Đang đánh giá thêm…', 'Evaluating more…')
+                          : t(
+                              `Đánh giá thêm ${Math.min(comparison.soft_review?.batch_limit ?? 15, comparison.soft_review?.remaining_tours ?? 0)} tour`,
+                              `Evaluate ${Math.min(comparison.soft_review?.batch_limit ?? 15, comparison.soft_review?.remaining_tours ?? 0)} more tours`,
+                            )}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {tab.id === 'options' && comparison && (
+                <OptionMatrix comparison={comparison} />
+              )}
+
+              {tab.id === 'scenario' && comparison && (
+                <ScenarioWorkbench
+                  comparison={comparison}
+                  client={client}
+                  agentSessionId={agentSessionId}
+                  busy={busy}
+                  activeDraftId={activeDraft?.id ?? null}
+                  onApply={(requirement) => {
+                    if (activeDraft) onUpdateDecisionDraft(activeDraft.id, requirement);
+                  }}
+                  onRunDecision={(requirement) => {
+                    if (activeDraft) onRunDecision(activeDraft.id, requirement);
+                  }}
+                  onRelax={onRelax}
+                  onSend={onSend}
+                  isSavedTour={isSavedTour}
+                  onToggleSavedTour={onToggleSavedTour}
+                />
+              )}
+
+              {tab.id === 'trace' && comparison && (
+                <>
+                  <DecisionTracePanel comparison={comparison} client={client} />
+                  {(comparison.assumptions ?? []).length > 0 && (
+                    <details className={styles.tracePanel}>
+                      <summary>
+                        {t(
+                          'Giả định & giới hạn — đọc trước khi tin',
+                          'Assumptions & limits — read before trusting',
+                        )}
+                      </summary>
+                      <ul className={styles.traceList}>
+                        {(comparison.assumptions ?? []).map((assumption) => (
+                          <li key={assumption}>{assumption}</li>
+                        ))}
+                      </ul>
+                      <p className={styles.traceNote}>
+                        {t(
+                          'Bạn quyết định cuối cùng — kiểm chứng giá cuối với nhà cung cấp trước khi đặt.',
+                          'You decide in the end — verify the final price with the provider before booking.',
+                        )}
+                      </p>
+                    </details>
+                  )}
+                </>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </aside>
   );

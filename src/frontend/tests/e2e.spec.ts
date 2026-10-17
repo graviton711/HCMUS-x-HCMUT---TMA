@@ -259,6 +259,7 @@ test('guest reviews a brief, compares decision views, and restores the result', 
       .getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' }),
   ).toBeVisible();
   await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
+  await expect(page.getByText(/Tour khuyên cho bạn:/)).toBeVisible();
   await expect(page.getByText('1 tour đã quét', { exact: true })).toBeVisible();
   await expect(page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' })).toHaveCount(2);
 
@@ -294,6 +295,7 @@ test('guest reviews a brief, compares decision views, and restores the result', 
       .getByRole('heading', { name: 'Tour Đà Lạt cuối tuần' }),
   ).toBeVisible();
   await expect(page.getByRole('tab', { name: /Giá thấp nhất/ })).toBeVisible();
+  await expect(page.getByText(/Tour khuyên cho bạn:/)).toBeVisible();
   await expect(page.locator('details').filter({ hasText: 'Đã kiểm tra 2 bước' })).toHaveCount(2);
 });
 
@@ -319,6 +321,11 @@ test('desktop decision workspace remains within the canvas and splitter is keybo
 
   await page.locator('footer[class*="brief-footer"] button.btn-primary').click();
   await expect(page.locator('[role="tablist"] [role="tab"]').first()).toBeVisible();
+  await expect(page.getByText(/Tour khuyên cho bạn:/)).toBeVisible();
+  await page.getByRole('tab', { name: /Minh bạch \(/ }).click();
+  await expect(page.getByText('Cách lọc')).toBeVisible();
+  await page.getByRole('tab', { name: /Kết quả \(/ }).click();
+  await expect(page.getByText(/Tour khuyên cho bạn:/)).toBeVisible();
   const metricRow = page.locator('[class*="decision-metric-comparisons"] > div').first();
   const metricLabel = metricRow.locator('strong');
   const metricValue = metricRow.locator('span');

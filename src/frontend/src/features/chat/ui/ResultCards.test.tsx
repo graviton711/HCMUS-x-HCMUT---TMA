@@ -206,6 +206,113 @@ const decisionComparison = {
   ],
 } satisfies CurrentComparison;
 
+const heroComparison = {
+  ...decisionComparison,
+  requirement: {
+    id: "req_test",
+    conditions: [
+      {
+        id: "cond-budget",
+        field: "budget_max",
+        operator: "lte",
+        value: 8_000_000,
+        strength: "hard",
+        quote: "8 triệu",
+      },
+      {
+        id: "cond-pref",
+        field: "preference",
+        operator: "contains",
+        value: "chèo thuyền",
+        strength: "soft",
+        priority: "high",
+        quote: "thích chèo thuyền",
+      },
+    ],
+    missing: [],
+    raw_text: "Mộc Châu",
+    travelers: 1,
+  },
+  ranked: [
+    { tour_id: "tour-a", offer_id: "offer-a-1", score: 90 },
+    { tour_id: "tour-b", offer_id: "offer-b-1", score: 70 },
+  ],
+  tour_snapshots: [
+    comparison.tour_snapshots[0],
+    {
+      ...comparison.tour_snapshots[0],
+      id: "tour-b",
+      name: "Tour Mộc Châu 2 ngày",
+      offers: [
+        {
+          ...comparison.tour_snapshots[0].offers[0],
+          id: "offer-b-1",
+          tour_id: "tour-b",
+          price: 6_200_000,
+        },
+      ],
+    },
+  ],
+  evaluations: [
+    {
+      offer_id: "offer-a-1",
+      condition_id: "cond-budget",
+      state: "pass",
+      quote: "5.000.000đ trọn gói",
+      reason_code: "ok",
+      reason: "Trong ngân sách",
+    },
+    {
+      offer_id: "offer-a-1",
+      condition_id: "cond-pref",
+      state: "pass",
+      quote: "Có chèo thuyền Kayak",
+      reason_code: "ok",
+      reason: "Khớp",
+    },
+    {
+      offer_id: "offer-b-1",
+      condition_id: "cond-budget",
+      state: "pass",
+      quote: "6.200.000đ trọn gói",
+      reason_code: "ok",
+      reason: "Trong ngân sách",
+    },
+    {
+      offer_id: "offer-b-1",
+      condition_id: "cond-pref",
+      state: "unknown",
+      quote: "",
+      reason_code: "no_evidence",
+      reason: "Chưa rõ",
+    },
+  ],
+  decision_views: decisionComparison.decision_views.map((view) =>
+    view.kind === "best_fit" || view.kind === "cheapest" || view.kind === "balanced"
+      ? {
+          ...view,
+          candidates: [
+            { tour_id: "tour-a", offer_id: "offer-a-1", score: 90 },
+            { tour_id: "tour-b", offer_id: "offer-b-1", score: 70 },
+          ],
+        }
+      : view,
+  ),
+  metric_profiles: [
+    decisionComparison.metric_profiles[0],
+    {
+      ...decisionComparison.metric_profiles[0],
+      tour_id: "tour-b",
+      offer_id: "offer-b-1",
+      cost: {
+        ...decisionComparison.metric_profiles[0].cost,
+        listed_price: 6_200_000,
+        group_total_calculated: 6_200_000,
+      },
+    },
+  ],
+} satisfies CurrentComparison;
+
 afterEach(cleanup);
 
 describe("ResultCards", () => {
@@ -218,6 +325,9 @@ describe("ResultCards", () => {
 
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(screen.getByRole("status").textContent).toContain("1 tour đạt đủ");
+    expect(screen.getByText(/Tour khuyên cho bạn:/)).toBeTruthy();
+    expect(screen.getByText(/Xếp đầu theo yêu cầu của bạn/)).toBeTruthy();
+    expect(screen.getByText("Không khai báo điều kiện bắt buộc")).toBeTruthy();
   });
 
   it("renders the decision workspace and source-backed cost exposure for the eight metric views", () => {
@@ -242,7 +352,18 @@ describe("ResultCards", () => {
         .getByRole("tab", { name: /Nhiều trải nghiệm/ })
         .hasAttribute("disabled"),
     ).toBe(true);
-    expect(screen.getAllByText("Tour Mộc Châu")).toHaveLength(2);
+    expect(screen.getAllByText("Tour Mộc Châu")).toHaveLength(3);
+    expect(screen.getByText(/Tour khuyên cho bạn:/)).toBeTruthy();
+    expect(
+      screen.getByText(/Giá công bố thấp nhất trong nhóm đạt điều kiện/),
+    ).toBeTruthy();
+    expect(screen.getByText("Không khai báo điều kiện bắt buộc")).toBeTruthy();
+    expect(screen.getByText(/Chấp nhận: 1 khoản chưa định giá/)).toBeTruthy();
+    expect(screen.getByText("Được")).toBeTruthy();
+    expect(screen.getByText(/Mất \/ Chấp nhận/)).toBeTruthy();
+    expect(
+      screen.getAllByText(/1 khoản chưa định giá — không cộng vào tổng/).length,
+    ).toBeGreaterThan(0);
     expect(screen.getByText(/1 tour đã quét/)).toBeTruthy();
     expect(screen.getByText("Đánh đổi và chi phí cần kiểm tra")).toBeTruthy();
     expect(
@@ -254,5 +375,26 @@ describe("ResultCards", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /Cân bằng/ }));
     expect(screen.getByText("Pareto options.")).toBeTruthy();
+  });
+
+  it("shows the recommended tour with plain status and gain/loss checklists", () => {
+    render(
+      <PreferencesProvider>
+        <ResultCards comparison={heroComparison} busy={false} onRelax={() => {}} />
+      </PreferencesProvider>,
+    );
+
+    expect(screen.getByText(/Tour khuyên cho bạn:/)).toBeTruthy();
+    expect(screen.getByText(/Khớp các ưu tiên của bạn nhất/)).toBeTruthy();
+    expect(screen.getByText("Điều kiện bắt buộc: đạt 1/1")).toBeTruthy();
+    expect(screen.getByText("Ưu tiên: khớp 1/1 · mức Cao 1/1")).toBeTruthy();
+    expect(screen.getByText(/Chấp nhận: 1 khoản chưa định giá/)).toBeTruthy();
+
+    expect(screen.getByText("Hợp nhất")).toBeTruthy();
+    expect(screen.getAllByText(/5.000.000đ trọn gói/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Có chèo thuyền Kayak/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Cao").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/6.200.000đ trọn gói/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Giá cao hơn tour dẫn đầu 1.200.000 VND/)).toBeTruthy();
   });
 });

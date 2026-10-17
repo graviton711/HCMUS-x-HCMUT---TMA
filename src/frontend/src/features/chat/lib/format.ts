@@ -335,6 +335,13 @@ export const METRIC_RELATIONS: Record<string, [string, string]> = {
   unknown: ['Chưa đủ dữ kiện so sánh', 'Not enough evidence to compare'],
 };
 
+/** Soft-preference levels shared by the brief editor, matrix and result cards. */
+export const PRIORITY_LABELS: Record<string, [string, string]> = {
+  low: ['Thấp', 'Low'],
+  medium: ['Vừa', 'Medium'],
+  high: ['Cao', 'High'],
+};
+
 /** Format one option metric value exactly like the decision cards do. */
 export function formatMetricValue(
   metric: Pick<CurrentOptionMetricComparison, 'key' | 'value' | 'currency' | 'unit'>,

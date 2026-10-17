@@ -571,3 +571,127 @@
     padding: 6px 8px;
   }
 }
+
+/* Stepper: one visible step at a time; hidden panels stay mounted. */
+.tabs {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 14px);
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+}
+
+.tabs-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tabs-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.tabs-step:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tabs-step:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.tabs-step:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tabs-step-back {
+  transform: rotate(90deg);
+}
+
+.tabs-step .tabs-step-next {
+  transform: rotate(-90deg);
+}
+
+.tabs-current {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  text-align: center;
+}
+
+.tabs-current small {
+  color: var(--subtle);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabs-dots {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
+
+.tabs-dot {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tabs-dot::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 999px;
+  background: var(--line-strong, var(--line));
+  transition: inset var(--dur-fast) var(--ease);
+}
+
+.tabs-dot[aria-selected='true']::before {
+  inset: 4px;
+  background: var(--accent);
+}
+
+.tabs-dot:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.panels,
+.panel {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.panel[hidden] {
+  display: none;
+}
