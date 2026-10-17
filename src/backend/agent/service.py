@@ -13,7 +13,7 @@ from backend.agent.results import json_candidates, limit_comparison
 from backend.agent.runner import OpenCodeRunner, raise_for_error_event
 from backend.data.sessions import BaseStore
 from backend.errors import AppError
-from backend.models import Comparison, Requirement
+from backend.models import Comparison, Requirement, materialize_priority_weights
 from backend.settings import Settings
 from shared import get_logger
 
@@ -725,6 +725,16 @@ def _requirement_draft(value: dict[str, Any]) -> Requirement | None:
         requirement = Requirement.model_validate(raw)
     except (TypeError, ValueError):
         return None
+    soft = requirement.soft()
+    if soft and any(condition.priority is not None for condition in soft):
+        weights = materialize_priority_weights(requirement.conditions)
+        requirement = requirement.model_copy(update={
+            "conditions": [
+                condition.model_copy(update={"weight_percent": weights[condition.id]})
+                if condition.strength == "soft" else condition
+                for condition in requirement.conditions
+            ],
+        })
     soft = requirement.soft()
     if soft and (
         any(condition.weight_percent is None for condition in soft)

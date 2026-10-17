@@ -1371,7 +1371,7 @@
 
 .brief-condition-field input,
 .brief-condition-field select,
-.brief-weight-input input {
+.brief-weight select {
   width: 100%;
   min-width: 0;
   height: 40px;
@@ -1386,28 +1386,9 @@
 
 .brief-condition-field input:focus-visible,
 .brief-condition-field select:focus-visible,
-.brief-weight-input input:focus-visible {
+.brief-weight select:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
-}
-
-.brief-weight-input {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.brief-weight-input input {
-  padding-right: 27px;
-  font-variant-numeric: tabular-nums;
-}
-
-.brief-weight-input > span {
-  position: absolute;
-  right: 10px;
-  color: var(--subtle);
-  font-size: var(--text-xs);
-  pointer-events: none;
 }
 
 .brief-remove {
@@ -2026,7 +2007,8 @@
   }
 
   .brief-condition-field input,
-  .brief-weight-input input {
+  .brief-condition-field select,
+  .brief-weight select {
     height: 38px;
     padding-inline: 8px;
   }

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 State = Literal["pass", "partial", "fail", "unknown"]
 Strength = Literal["hard", "soft"]
+Priority = Literal["low", "medium", "high"]
 PriceBasis = Literal["exact", "from", "contact", "unknown"]
 Freshness = Literal["fresh", "stale", "unknown"]
 MetricState = Literal["observed", "partial", "unknown"]
@@ -28,6 +29,76 @@ class Condition(BaseModel):
     strength: Strength = "hard"
     quote: str = ""
     weight_percent: int | None = Field(default=None, ge=0, le=100)
+    priority: Priority | None = None
+
+
+# Soft-preference ladder: a priority level maps to a 1:3:9 basis (one notch is
+# three times the next). One of each level materializes to 69/23/8.
+_PRIORITY_BASIS: dict[str, int] = {"low": 1, "medium": 3, "high": 9}
+_LEVEL_ORDER: tuple[str, ...] = ("high", "medium", "low")
+_DEFAULT_LEVEL = "medium"
+
+
+def _largest_remainder(total: int, basis: Sequence[int]) -> list[int]:
+    """Integer apportionment of `total` proportional to `basis` (fractions by
+    size, ties keep input order)."""
+    basis_total = sum(basis)
+    exact = [
+        value * total / basis_total if basis_total else total / len(basis)
+        for value in basis
+    ]
+    allocated = [int(value) for value in exact]
+    remainder = total - sum(allocated)
+    order = sorted(
+        range(len(basis)),
+        key=lambda index: (-(exact[index] - allocated[index]), index),
+    )
+    for index in order[:remainder]:
+        allocated[index] += 1
+    return allocated
+
+
+def materialize_priority_weights(conditions: Sequence[Condition]) -> dict[str, int]:
+    """Soft conditions with `priority` -> integer weight map summing to 100.
+
+    Conditions without `priority` default to `medium`. Per the contract: group
+    totals are apportioned first (largest remainder, ties favor higher levels,
+    monotone Cao >= Vua >= Thap), then each group is split equally inside (+/-1
+    between members). Explicit `weight_percent` values are overwritten; a lone
+    soft condition gets 100 regardless of level. No output means no soft
+    condition carries a priority and legacy weight handling applies.
+    """
+    soft = [condition for condition in conditions if condition.strength == "soft"]
+    if not soft or all(condition.priority is None for condition in soft):
+        return {}
+    if len(soft) == 1:
+        return {soft[0].id: 100}
+    weights: dict[str, int] = {}
+    groups: dict[str, list[Condition]] = {level: [] for level in _LEVEL_ORDER}
+    for condition in soft:
+        groups[condition.priority or _DEFAULT_LEVEL].append(condition)
+    basis_by_level = {
+        level: sum(_PRIORITY_BASIS[level] for _ in items)
+        for level, items in groups.items()
+        if items
+    }
+    active = [level for level in _LEVEL_ORDER if basis_by_level.get(level)]
+    level_basis = [basis_by_level[level] for level in active]
+    level_totals = dict(zip(active, _largest_remainder(100, level_basis)))
+    # Largest-remainder rounding can invert adjacent group totals; a one-point
+    # transfer toward the higher level (via equality output) keeps the ladder.
+    for index, level in enumerate(active[:-1]):
+        below = active[index + 1]
+        while level_totals[below] > level_totals[level] and level_totals[below] > 0:
+            level_totals[below] -= 1
+            level_totals[level] += 1
+    for level in active:
+        members = groups[level]
+        for condition, weight in zip(members, _largest_remainder(
+            level_totals[level], [_PRIORITY_BASIS[level]] * len(members),
+        )):
+            weights[condition.id] = weight
+    return weights
 
 
 class RankingKey(BaseModel):

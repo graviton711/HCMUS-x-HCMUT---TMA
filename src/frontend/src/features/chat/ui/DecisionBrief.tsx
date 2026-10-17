@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import type { CurrentCondition, CurrentRequirement } from '../../../shared/api';
 import { usePreferences } from '../../../shared/preferences';
 import { display, fieldLabel } from '../lib/format';
 import type { ChatMsg } from '../model/types';
-import { normalizeWeights, reallocateWeight } from '../lib/weightAllocation';
+import { normalizeWeights, allocateByPriority } from '../lib/weightAllocation';
 import styles from './chat.module.css';
 
 export function DecisionBrief({
@@ -19,7 +19,6 @@ export function DecisionBrief({
 }) {
   const { t } = usePreferences();
   const editStartValues = useRef<Record<string, string>>({});
-  const [weightDrafts, setWeightDrafts] = useState<Record<string, string>>({});
   const requirement = message.requirement;
   const alternatives = requirement.alternatives ?? [];
   const allConditions = [
@@ -37,10 +36,7 @@ export function DecisionBrief({
         (condition.weight_percent ?? -1) >= 0 &&
         (condition.weight_percent ?? 101) <= 100,
     ) &&
-      total === 100 &&
-      Object.values(weightDrafts).every(
-        (value) => /^\d+$/u.test(value) && Number(value) >= 0 && Number(value) <= 100,
-      ));
+      total === 100);
   const valuesValid =
     allConditions.every((condition) => {
       if (!condition.quote.trim() || !requirement.raw_text.includes(condition.quote)) return false;
@@ -143,7 +139,9 @@ export function DecisionBrief({
       }))
       .filter((alternative) => alternative.conditions.length > 0);
     const remainingSoft = conditions.filter((condition) => condition.strength === 'soft');
-    const normalized = normalizeWeights(remainingSoft);
+    const normalized = remainingSoft.some((condition) => condition.priority)
+      ? allocateByPriority(remainingSoft)
+      : normalizeWeights(remainingSoft);
     onChange({
       ...requirement,
       alternatives: nextAlternatives,
@@ -156,45 +154,44 @@ export function DecisionBrief({
           : condition,
       ),
     });
-    setWeightDrafts((current) => {
-      const next = { ...current };
-      delete next[id];
-      return next;
-    });
   }
 
   function divideEvenly() {
-    const weights = normalizeWeights(soft);
+    const levels = new Map(soft.map((condition) => [condition.id, 'medium' as const]));
+    const materialized = allocateByPriority(
+      soft.map((condition) => ({ id: condition.id, priority: 'medium' as const })),
+    );
     onChange({
       ...requirement,
       conditions: requirement.conditions.map((condition) =>
         condition.strength === 'soft'
-          ? { ...condition, weight_percent: weights.get(condition.id) ?? 0 }
+          ? {
+              ...condition,
+              priority: levels.get(condition.id) ?? 'medium',
+              weight_percent: materialized.get(condition.id) ?? 0,
+            }
           : condition,
       ),
     });
-    setWeightDrafts({});
   }
 
-  function changeWeight(condition: CurrentCondition, raw: string) {
-    setWeightDrafts((current) => ({ ...current, [condition.id]: raw }));
-    if (!/^\d+$/u.test(raw)) return;
-    const proposed = Number(raw);
-    const weights = reallocateWeight(soft, condition.id, proposed);
-    if (!weights) return;
+  function changePriority(conditionId: string, level: 'low' | 'medium' | 'high') {
+    const levels = new Map(soft.map((item) => [item.id, item.priority ?? 'medium']));
+    levels.set(conditionId, level);
+    const weights = allocateByPriority(
+      soft.map((item) => ({ id: item.id, priority: levels.get(item.id) ?? 'medium' })),
+    );
     onChange({
       ...requirement,
       conditions: requirement.conditions.map((item) =>
-        item.strength === 'soft' ? { ...item, weight_percent: weights.get(item.id) ?? 0 } : item,
+        item.strength === 'soft'
+          ? {
+              ...item,
+              priority: levels.get(item.id) ?? 'medium',
+              weight_percent: weights.get(item.id) ?? item.weight_percent ?? 0,
+            }
+          : item,
       ),
-    });
-  }
-
-  function finishWeightEdit(id: string) {
-    setWeightDrafts((current) => {
-      const next = { ...current };
-      delete next[id];
-      return next;
     });
   }
 
@@ -329,23 +326,31 @@ export function DecisionBrief({
         {condition.strength === 'soft' && (
           <label className={styles['brief-weight']}>
             <span>{t('Trọng số', 'Weight')}</span>
-            <span className={styles['brief-weight-input']}>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="1"
-                value={weightDrafts[condition.id] ?? condition.weight_percent ?? ''}
-                disabled={busy || message.status === 'running' || soft.length === 1}
-                aria-label={t(
-                  `Trọng số ${String(condition.value)}`,
-                  `Weight for ${String(condition.value)}`,
-                )}
-                onChange={(event) => changeWeight(condition, event.target.value)}
-                onBlur={() => finishWeightEdit(condition.id)}
-              />
-              <span>%</span>
-            </span>
+            <select
+              value={condition.priority ?? 'medium'}
+              disabled={busy || message.status === 'running'}
+              aria-label={t(
+                `Trọng số ${String(condition.value)}`,
+                `Weight for ${String(condition.value)}`,
+              )}
+              title={t(
+                'Thấp ≈ 8%, Vừa ≈ 23%, Cao ≈ 69% điểm khi có một tiêu chí mỗi mức.',
+                'Low ≈ 8%, medium ≈ 23%, high ≈ 69% of points with one criterion per level.',
+              )}
+              onChange={(event) =>
+                changePriority(condition.id, event.target.value as 'low' | 'medium' | 'high')
+              }
+            >
+              {[
+                ['medium', t('Vừa', 'Medium')],
+                ['high', t('Cao', 'High')],
+                ['low', t('Thấp', 'Low')],
+              ].map(([value, optionLabel]) => (
+                <option value={value} key={value}>
+                  {optionLabel}
+                </option>
+              ))}
+            </select>
           </label>
         )}
         <button

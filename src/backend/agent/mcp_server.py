@@ -42,6 +42,7 @@ from backend.models import (
     SoftReviewProgress,
     State,
     TourSnapshot,
+    materialize_priority_weights,
     uid,
 )
 from backend.settings import Settings
@@ -90,6 +91,14 @@ class QueryConditionInput(BaseModel):
         ge=0,
         le=100,
         description="User-reviewed weight for a soft preference; all soft weights must total 100.",
+    )
+    priority: Literal["low", "medium", "high"] | None = Field(
+        default=None,
+        description="Preferred level for a soft preference: low/medium/high. When any soft "
+        "condition carries priority, the system derives weight_percent from the 1:3:9 "
+        "ladder (69/23/8 for one of each); explicit weight_percent is then overwritten. "
+        "Use priority when the user said how much they care, weight_percent only for "
+        "exact user-stated percentages.",
     )
 
 
@@ -679,8 +688,9 @@ class AgentTools:
         raw_text: Annotated[str, Field(description="Verbatim user message for this turn.")],
         conditions: Annotated[
             list[QueryConditionInput],
-            Field(description="Shared conditions: hard filters plus soft preferences with "
-                  "weight_percent summing to 100 when present."),
+            Field(description="Shared conditions: hard filters plus soft preferences carrying "
+                  "`priority` (low/medium/high, weights derived by the system) or "
+                  "`weight_percent` summing to 100 when present."),
         ],
         decision_run_id: Annotated[
             str, Field(description="Opaque run id from the reviewed-decision instruction (dec_ + 32 hex).")
@@ -937,14 +947,23 @@ class AgentTools:
         )
         soft = requirement.soft()
         if soft:
-            base, remainder = divmod(100, len(soft))
-            weights = {
-                item.id: base + (1 if index < remainder else 0)
-                for index, item in enumerate(soft)
-            }
+            if any(item.priority is not None for item in soft):
+                weights = materialize_priority_weights(requirement.conditions)
+                levels = {item.id: item.priority or "medium" for item in soft}
+            else:
+                # Legacy draft: equal split, expressed as default-ladder levels so the
+                # UI opens in priority mode (all-medium materializes to the same split).
+                base, remainder = divmod(100, len(soft))
+                weights = {
+                    item.id: base + (1 if index < remainder else 0)
+                    for index, item in enumerate(soft)
+                }
+                levels = {item.id: "medium" for item in soft}
             requirement = requirement.model_copy(update={
                 "conditions": [
-                    item.model_copy(update={"weight_percent": weights[item.id]})
+                    item.model_copy(update={
+                        "weight_percent": weights[item.id], "priority": levels[item.id],
+                    })
                     if item.strength == "soft" else item
                     for item in requirement.conditions
                 ],
@@ -1149,6 +1168,7 @@ class AgentTools:
                     "id": item.id,
                     "preference": item.value,
                     "weight_percent": item.weight_percent,
+                    "priority": item.priority,
                 }
                 for item in context.requirement.soft()
             ],

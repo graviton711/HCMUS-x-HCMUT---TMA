@@ -202,6 +202,74 @@ def test_bundled_soft_preference_is_rejected():
         ], require_weights=True)
 
 
+def test_priority_materializes_to_1_3_9_ladder():
+    raw = "thích thiên nhiên, biển và xe riêng"
+    requirement = validate_requirement(raw, [
+        {"id": "s1", "field": "preference", "operator": "contains", "value": "thiên nhiên",
+         "strength": "soft", "quote": "thiên nhiên", "priority": "high"},
+        {"id": "s2", "field": "preference", "operator": "contains", "value": "biển",
+         "strength": "soft", "quote": "biển", "priority": "medium"},
+        {"id": "s3", "field": "preference", "operator": "contains", "value": "xe riêng",
+         "strength": "soft", "quote": "xe riêng", "priority": "low"},
+    ], require_weights=True)
+    weights = {item.value: item.weight_percent for item in requirement.soft()}
+    assert weights == {"thiên nhiên": 69, "biển": 23, "xe riêng": 8}
+
+
+def test_priority_defaults_missing_levels_to_medium_and_overrides_weights():
+    raw = "thích thiên nhiên, biển"
+    requirement = validate_requirement(raw, [
+        {"id": "s1", "field": "preference", "operator": "contains", "value": "thiên nhiên",
+         "strength": "soft", "quote": "thiên nhiên", "priority": "high"},
+        {"id": "s2", "field": "preference", "operator": "contains", "value": "biển",
+         "strength": "soft", "quote": "biển", "weight_percent": 90},
+    ], require_weights=True)
+    weights = {item.value: (item.weight_percent, item.priority) for item in requirement.soft()}
+    # explicit weight_percent is overridden; missing priority stays unset in the
+    # payload but computes as medium (9:3 -> 75/25)
+    assert weights == {"thiên nhiên": (75, "high"), "biển": (25, None)}
+
+
+def test_priority_on_hard_condition_is_rejected():
+    raw = "Đà Lạt"
+    with pytest.raises(AppError, match="Only soft preferences can have a priority"):
+        validate_requirement(raw, [
+            {**condition("destination", "đà lạt", "Đà Lạt"), "priority": "high"},
+        ])
+
+
+def test_model_level_ladder_helpers():
+    from backend.models import Condition, materialize_priority_weights
+
+    ladder = [
+        Condition(id="a", field="preference", value="thien nhien", strength="soft", priority="high"),
+        Condition(id="b", field="preference", value="bien", strength="soft", priority="high"),
+        Condition(id="c", field="preference", value="xe rieng", strength="soft", priority="low"),
+    ]
+    weights = materialize_priority_weights(ladder)
+    assert sum(weights.values()) == 100
+    # same level members are equal within +/-1 and lead the lower level
+    assert weights["a"] + weights["b"] == 95
+    assert all(weights[level] >= weights["c"] for level in ("a", "b"))
+    # all-equal levels divide evenly (legacy behaviour)
+    equal = materialize_priority_weights([
+        Condition(id="a", field="preference", value="x", strength="soft", priority="medium"),
+        Condition(id="b", field="preference", value="y", strength="soft", priority="medium"),
+        Condition(id="c", field="preference", value="z", strength="soft", priority="medium"),
+    ])
+    assert sum(equal.values()) == 100
+    assert max(equal.values()) - min(equal.values()) <= 1
+    # no priority -> empty map (legacy weight handling)
+    assert materialize_priority_weights([
+        Condition(id="a", field="preference", value="x", strength="soft", weight_percent=100),
+    ]) == {}
+    # hard conditions are ignored
+    assert materialize_priority_weights([
+        Condition(id="h", field="destination", value="da lat", priority=None),
+        Condition(id="s", field="preference", value="bien", strength="soft", priority="high"),
+    ]) == {"s": 100}
+
+
 def test_single_clause_soft_preference_passes():
     raw = "có xe di chuyển"
     req = validate_requirement(raw, [

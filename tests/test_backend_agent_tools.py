@@ -442,7 +442,47 @@ def test_draft_requirement_does_not_query_catalog_and_assigns_equal_weights(sett
 
     assert result["requirement_draft"]["conditions"][0]["weight_percent"] == 50
     assert result["requirement_draft"]["conditions"][1]["weight_percent"] == 50
+    assert result["requirement_draft"]["conditions"][0]["priority"] == "medium"
+    assert result["requirement_draft"]["conditions"][1]["priority"] == "medium"
     assert catalog.limits == []
+
+
+def test_draft_requirement_materializes_priority_ladder(settings):
+    catalog = _RecordingCatalog()
+    tools = AgentTools(settings, catalog, TourWorkflows(settings, catalog))
+    result = json.loads(tools.draft_requirement(
+        raw_text="Thích thiên nhiên, biển, không thích xe riêng",
+        travelers=1,
+        conditions=[
+            {"id": "s1", "field": "preference", "operator": "contains", "value": "thiên nhiên",
+             "strength": "soft", "quote": "thiên nhiên", "priority": "high"},
+            {"id": "s2", "field": "preference", "operator": "contains", "value": "biển",
+             "strength": "soft", "quote": "biển", "priority": "medium"},
+            {"id": "s3", "field": "preference", "operator": "contains", "value": "xe riêng",
+             "strength": "soft", "quote": "không thích xe riêng", "priority": "low"},
+        ],
+    ))
+
+    weights = {item["value"]: item["weight_percent"]
+               for item in result["requirement_draft"]["conditions"]}
+    assert weights == {"thiên nhiên": 69, "biển": 23, "xe riêng": 8}
+    assert catalog.limits == []
+
+
+def test_query_accepts_priority_without_explicit_weights(settings):
+    catalog = _RecordingCatalog()
+    tools = AgentTools(settings, catalog, TourWorkflows(settings, catalog))
+    result = _query(tools,
+        raw_text="Thích thiên nhiên",
+        travelers=1,
+        conditions=[{"id": "s1", "field": "preference", "operator": "contains",
+                     "value": "thiên nhiên", "strength": "soft", "quote": "thiên nhiên",
+                     "priority": "high"}],
+    )
+
+    soft_conditions = result["soft_review"]["soft_conditions"]
+    assert soft_conditions[0]["weight_percent"] == 100
+    assert soft_conditions[0]["priority"] == "high"
 
 
 def test_soft_review_covers_every_hard_pass_tour_not_just_top_five(settings):

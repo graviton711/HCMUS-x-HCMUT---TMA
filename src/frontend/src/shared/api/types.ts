@@ -51,6 +51,7 @@ export interface CurrentCondition {
   strength: 'hard' | 'soft';
   quote: string;
   weight_percent?: number | null;
+  priority?: 'low' | 'medium' | 'high' | null;
 }
 
 export interface CurrentRequirement {

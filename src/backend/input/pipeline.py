@@ -16,6 +16,7 @@ from backend.models import (
     Requirement,
     RequirementAlternative,
     RequirementAssumption,
+    materialize_priority_weights,
     uid,
 )
 from shared.text import fold_vi
@@ -130,6 +131,8 @@ def validate_requirement(
                     )
             elif condition.weight_percent is not None:
                 raise _invalid("Only soft preferences can have a weight.")
+            elif condition.priority is not None:
+                raise _invalid("Only soft preferences can have a priority.")
             else:
                 _validate_hard(condition)
             parsed.append(condition)
@@ -219,6 +222,10 @@ def validate_requirement(
         parsed_assumptions.append(assumption)
 
     soft_conditions = [condition for condition in cleaned if condition.strength == "soft"]
+    if any(condition.priority is not None for condition in soft_conditions):
+        weights = materialize_priority_weights(cleaned)
+        for condition in soft_conditions:
+            condition.weight_percent = weights[condition.id]
     if require_weights and soft_conditions:
         weights = [condition.weight_percent for condition in soft_conditions]
         if any(weight is None for weight in weights) or sum(weight or 0 for weight in weights) != 100:
